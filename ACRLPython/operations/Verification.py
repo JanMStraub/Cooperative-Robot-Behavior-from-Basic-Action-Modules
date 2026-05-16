@@ -20,28 +20,14 @@ from .SpatialPredicates import evaluate_predicate
 from .WorldState import get_world_state
 from .Base import BasicOperation, OperationResult
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
 
 
-# ============================================================================
-# Data Structures
-# ============================================================================
-
-
 @dataclass
 class PredicateViolation:
-    """
-    Record of a predicate that failed verification.
-
-    Attributes:
-        predicate: The predicate expression that failed
-        reason: Why it failed
-        severity: "error" (blocks execution) or "warning" (allowed but risky)
-        recovery_suggestions: List of actions to fix the violation
-    """
+    """Record of a predicate that failed verification."""
 
     predicate: str
     reason: str
@@ -51,16 +37,7 @@ class PredicateViolation:
 
 @dataclass
 class VerificationResult:
-    """
-    Result of verification check.
-
-    Attributes:
-        success: True if all checks passed
-        violations: List of failed predicates
-        warnings: List of risky but allowed conditions
-        checked_predicates: List of all predicates that were checked
-        execution_allowed: True if operation can proceed despite warnings
-    """
+    """Result of a verification check."""
 
     success: bool
     violations: List[PredicateViolation] = field(default_factory=list)
@@ -75,7 +52,6 @@ class VerificationResult:
         severity: str = "error",
         suggestions: Optional[List[str]] = None,
     ):
-        """Add a violation to the result."""
         violation = PredicateViolation(
             predicate=predicate,
             reason=reason,
@@ -90,7 +66,6 @@ class VerificationResult:
             self.warnings.append(violation)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for serialization."""
         return {
             "success": self.success,
             "execution_allowed": self.execution_allowed,
@@ -116,11 +91,6 @@ class VerificationResult:
         }
 
 
-# ============================================================================
-# Predicate Parser
-# ============================================================================
-
-
 class PredicateParser:
     """
     Parser for predicate expressions in preconditions/postconditions.
@@ -138,19 +108,7 @@ class PredicateParser:
 
     @staticmethod
     def parse(predicate_str: str) -> Optional[Tuple[str, List[str]]]:
-        """
-        Parse predicate string into (predicate_name, parameter_names).
-
-        Args:
-            predicate_str: Predicate expression like "target_within_reach(robot_id, x, y, z)"
-
-        Returns:
-            (predicate_name, [param1_name, param2_name, ...]) or None if invalid
-
-        Example:
-            >>> PredicateParser.parse("target_within_reach(robot_id, x, y, z)")
-            ("target_within_reach", ["robot_id", "x", "y", "z"])
-        """
+        """Parse predicate string into (name, [param_names]) or None if invalid."""
         match = PredicateParser.PREDICATE_PATTERN.match(predicate_str.strip())
         if not match:
             return None
@@ -158,7 +116,6 @@ class PredicateParser:
         predicate_name = match.group(1)
         params_str = match.group(2).strip()
 
-        # Parse parameters (comma-separated, may have spaces)
         if params_str:
             param_names = [p.strip() for p in params_str.split(",")]
         else:
@@ -170,32 +127,12 @@ class PredicateParser:
     def resolve_parameters(
         param_names: List[str], operation_params: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        Resolve parameter names to actual values from operation parameters.
-
-        Args:
-            param_names: List of parameter names from predicate
-            operation_params: Actual operation parameters
-
-        Returns:
-            Dictionary mapping parameter names to values
-
-        Example:
-            >>> param_names = ["robot_id", "x", "y", "z"]
-            >>> operation_params = {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}
-            >>> PredicateParser.resolve_parameters(param_names, operation_params)
-            {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}
-        """
+        """Resolve parameter names to values from operation_params dict."""
         resolved = {}
         for param_name in param_names:
             resolved[param_name] = operation_params.get(param_name, None)
 
         return resolved
-
-
-# ============================================================================
-# Operation Verifier
-# ============================================================================
 
 
 class OperationVerifier:
@@ -207,39 +144,20 @@ class OperationVerifier:
     """
 
     def __init__(self):
-        """Initialize the verifier."""
         self.world_state = get_world_state()
 
     def verify_preconditions(
         self, operation: BasicOperation, params: Dict[str, Any], world_state=None
     ) -> VerificationResult:
-        """
-        Verify operation preconditions before execution.
-
-        Args:
-            operation: The operation to verify
-            params: Operation parameters
-            world_state: Optional WorldState instance (uses global if None)
-
-        Returns:
-            VerificationResult with success status and any violations
-
-        Example:
-            >>> verifier = OperationVerifier()
-            >>> result = verifier.verify_preconditions(move_op, {"robot_id": "Robot1", "x": 0.3, ...})
-            >>> if not result.success:
-            ...     print("Preconditions failed:", result.violations)
-        """
+        """Verify operation preconditions before execution."""
         if world_state is None:
             world_state = self.world_state
 
         result = VerificationResult(success=True)
 
-        # Check each precondition
         for precondition in operation.preconditions:
             result.checked_predicates.append(precondition)
 
-            # Parse the precondition
             parsed = PredicateParser.parse(precondition)
             if parsed is None:
                 # Malformed predicate — log warning and record as a violation so callers
@@ -260,7 +178,6 @@ class OperationVerifier:
 
             predicate_name, param_names = parsed
 
-            # Resolve parameter values
             predicate_params = PredicateParser.resolve_parameters(param_names, params)
 
             # Skip predicate if required params are missing or still hold unresolved
@@ -268,8 +185,10 @@ class OperationVerifier:
             required_names = [p for p in param_names if p != "world_state"]
             missing_params = [p for p in required_names if p not in predicate_params]
             unresolved_params = [
-                p for p in required_names
-                if p in predicate_params and isinstance(predicate_params[p], str)
+                p
+                for p in required_names
+                if p in predicate_params
+                and isinstance(predicate_params[p], str)
                 and predicate_params[p].startswith("$")
             ]
             if missing_params or unresolved_params:
@@ -280,17 +199,14 @@ class OperationVerifier:
                 )
                 continue
 
-            # Add world_state to parameters
             predicate_params["world_state"] = world_state
 
-            # Evaluate the predicate
             try:
                 is_valid, reason = evaluate_predicate(
                     predicate_name, **predicate_params
                 )
 
                 if not is_valid:
-                    # Precondition failed
                     result.add_violation(
                         predicate=precondition,
                         reason=reason,
@@ -324,29 +240,12 @@ class OperationVerifier:
         params: Dict[str, Any],
         world_state=None,
     ) -> VerificationResult:
-        """
-        Verify operation postconditions after execution.
-
-        Args:
-            operation: The operation that was executed
-            operation_result: Result from operation execution
-            params: Operation parameters that were used
-            world_state: Optional WorldState instance
-
-        Returns:
-            VerificationResult with success status and any violations
-
-        Example:
-            >>> result = verifier.verify_postconditions(move_op, op_result, params)
-            >>> if not result.success:
-            ...     print("Postconditions violated:", result.violations)
-        """
+        """Verify operation postconditions after execution."""
         if world_state is None:
             world_state = self.world_state
 
         result = VerificationResult(success=True)
 
-        # If operation failed, postconditions are expected to fail
         if not operation_result.success:
             result.add_violation(
                 predicate="operation_succeeded",
@@ -361,11 +260,9 @@ class OperationVerifier:
             )
             return result
 
-        # Check each postcondition
         for postcondition in operation.postconditions:
             result.checked_predicates.append(postcondition)
 
-            # Parse the postcondition
             parsed = PredicateParser.parse(postcondition)
             if parsed is None:
                 # Malformed predicate — log warning and record as a violation so callers
@@ -386,7 +283,6 @@ class OperationVerifier:
 
             predicate_name, param_names = parsed
 
-            # Resolve parameter values
             predicate_params = PredicateParser.resolve_parameters(param_names, params)
 
             # Skip if required params are unresolved (e.g. runtime variable refs)
@@ -401,14 +297,12 @@ class OperationVerifier:
 
             predicate_params["world_state"] = world_state
 
-            # Evaluate the predicate
             try:
                 is_valid, reason = evaluate_predicate(
                     predicate_name, **predicate_params
                 )
 
                 if not is_valid:
-                    # Postcondition failed - may indicate operation didn't complete as expected
                     result.add_violation(
                         predicate=postcondition,
                         reason=reason,
@@ -435,20 +329,7 @@ class OperationVerifier:
     def _suggest_recovery_for_predicate(
         self, predicate_name: str, failure_reason: str, params: Dict[str, Any]
     ) -> List[str]:
-        """
-        Generate recovery suggestions for a failed predicate.
-
-        Uses WorldState to provide context-aware suggestions based on current
-        robot positions, object locations, and workspace allocations.
-
-        Args:
-            predicate_name: Name of failed predicate
-            failure_reason: Why it failed
-            params: Operation parameters
-
-        Returns:
-            List of recovery suggestions
-        """
+        """Generate context-aware recovery suggestions using WorldState for a failed predicate."""
         suggestions = []
 
         if predicate_name == "target_within_reach":
@@ -559,9 +440,7 @@ class OperationVerifier:
         return suggestions
 
 
-# ============================================================================
 # Utility Functions
-# ============================================================================
 
 
 def quick_verify_operation(

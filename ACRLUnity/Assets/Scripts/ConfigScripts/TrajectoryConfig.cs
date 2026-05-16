@@ -26,9 +26,6 @@ namespace Configuration
         public float maxAcceleration = 1.0f;
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Validate configuration values to ensure consistency.
-        /// </summary>
         private void OnValidate()
         {
             // Ensure all gain components are positive

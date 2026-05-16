@@ -21,9 +21,7 @@ from typing import Optional
 
 from .Base import OperationResult
 
-# ---------------------------------------------------------------------------
 # Workspace bounds — single source of truth
-# ---------------------------------------------------------------------------
 
 WORKSPACE_X: tuple = (-0.65, 0.65)
 WORKSPACE_Y: tuple = (0.0, 0.7)
@@ -31,22 +29,11 @@ WORKSPACE_Z: tuple = (-0.5, 0.5)
 SPEED_RANGE: tuple = (0.1, 2.0)
 APPROACH_OFFSET_RANGE: tuple = (0.0, 0.1)
 
-
-# ---------------------------------------------------------------------------
 # Validators
-# ---------------------------------------------------------------------------
 
 
 def validate_robot_id(robot_id: str) -> Optional[OperationResult]:
-    """
-    Validate that robot_id is a non-empty string.
-
-    Args:
-        robot_id: Robot identifier to validate.
-
-    Returns:
-        None if valid, OperationResult error otherwise.
-    """
+    """Validate that robot_id is a non-empty string."""
     if not robot_id or not isinstance(robot_id, str):
         return OperationResult.error_result(
             "INVALID_ROBOT_ID",
@@ -60,17 +47,7 @@ def validate_robot_id(robot_id: str) -> Optional[OperationResult]:
 
 
 def validate_xyz(x: float, y: float, z: float) -> Optional[OperationResult]:
-    """
-    Validate that x/y/z coordinates are within the robot workspace.
-
-    Args:
-        x: X coordinate in metres.
-        y: Y coordinate in metres.
-        z: Z coordinate in metres.
-
-    Returns:
-        None if valid, OperationResult error for the first out-of-range axis.
-    """
+    """Validate x/y/z coordinates are within robot workspace bounds."""
     if not (WORKSPACE_X[0] <= x <= WORKSPACE_X[1]):
         return OperationResult.error_result(
             "INVALID_X_COORDINATE",
@@ -102,15 +79,7 @@ def validate_xyz(x: float, y: float, z: float) -> Optional[OperationResult]:
 
 
 def validate_speed(speed: float) -> Optional[OperationResult]:
-    """
-    Validate that speed is within the legal multiplier range.
-
-    Args:
-        speed: Speed multiplier to validate.
-
-    Returns:
-        None if valid, OperationResult error otherwise.
-    """
+    """Validate speed multiplier is within legal range."""
     if not (SPEED_RANGE[0] <= speed <= SPEED_RANGE[1]):
         return OperationResult.error_result(
             "INVALID_SPEED",
@@ -124,15 +93,7 @@ def validate_speed(speed: float) -> Optional[OperationResult]:
 
 
 def validate_approach_offset(offset: float) -> Optional[OperationResult]:
-    """
-    Validate that approach_offset is within the legal range.
-
-    Args:
-        offset: Approach offset in metres to validate.
-
-    Returns:
-        None if valid, OperationResult error otherwise.
-    """
+    """Validate approach offset (metres) is within legal range."""
     if not (APPROACH_OFFSET_RANGE[0] <= offset <= APPROACH_OFFSET_RANGE[1]):
         return OperationResult.error_result(
             "INVALID_APPROACH_OFFSET",

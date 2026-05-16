@@ -30,7 +30,6 @@ class SingletonBase:
     _singleton_lock = threading.RLock()
 
     def __new__(cls):
-        """Return the singleton instance, creating it on first call."""
         if cls._instance is None:
             with cls._singleton_lock:
                 if cls._instance is None:
@@ -40,7 +39,6 @@ class SingletonBase:
         return cls._instance
 
     def __init__(self):
-        """Guard-wrapped init: delegates to _singleton_init() exactly once."""
         if self._singleton_initialized:
             return
         with self._singleton_lock:
@@ -50,5 +48,4 @@ class SingletonBase:
             self._singleton_init()
 
     def _singleton_init(self):
-        """Override in subclasses to perform one-time initialisation."""
         pass

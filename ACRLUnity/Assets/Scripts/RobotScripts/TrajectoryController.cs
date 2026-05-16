@@ -30,11 +30,6 @@ namespace Robotics
         private Vector3 _cachedTargetAcceleration;
         private float _lastUpdateTime = -1f;
 
-        /// <summary>
-        /// Creates a new trajectory controller with specified PD gains
-        /// </summary>
-        /// <param name="positionGains">Position gain (K_p) per axis</param>
-        /// <param name="velocityGains">Velocity gain (K_d) per axis for damping</param>
         public TrajectoryController(
             Vector3? positionGains = null,
             Vector3? velocityGains = null,
@@ -48,9 +43,6 @@ namespace Robotics
             _maxAcceleration = maxAcceleration ?? 1.0f;
         }
 
-        /// <summary>
-        /// Set PD gains for trajectory tracking
-        /// </summary>
         public void SetGains(Vector3 positionGains, Vector3 velocityGains)
         {
             _positionGains = positionGains;
@@ -110,10 +102,6 @@ namespace Robotics
             return (_cachedTargetPosition, _cachedTargetVelocity, _cachedTargetAcceleration);
         }
 
-        /// <summary>
-        /// Calculate distance traveled at given time along trapezoidal velocity profile.
-        /// Matches the calculation in RobotController.
-        /// </summary>
         private float CalculateDistanceFromTime(float time, VelocityProfile profile)
         {
             if (profile == null)
@@ -187,9 +175,6 @@ namespace Robotics
             return posCorrection + velCorrection;
         }
 
-        /// <summary>
-        /// Get tangent direction to path at specified distance
-        /// </summary>
         private Vector3 GetPathTangent(CartesianPath path, float distance)
         {
             if (path.waypoints.Count < 2)
@@ -214,9 +199,6 @@ namespace Robotics
             ).normalized;
         }
 
-        /// <summary>
-        /// Get acceleration from velocity profile at specified time/distance
-        /// </summary>
         private Vector3 GetAccelerationFromProfile(
             VelocityProfile profile,
             float time,
@@ -243,9 +225,6 @@ namespace Robotics
             return direction * accelScalar;
         }
 
-        /// <summary>
-        /// Reset cached state (call when starting new trajectory)
-        /// </summary>
         public void Reset()
         {
             _lastUpdateTime = -1f;
@@ -254,9 +233,6 @@ namespace Robotics
             _cachedTargetAcceleration = Vector3.zero;
         }
 
-        /// <summary>
-        /// Get current cached target velocity (for external use)
-        /// </summary>
         public Vector3 GetCachedTargetVelocity()
         {
             return _cachedTargetVelocity;

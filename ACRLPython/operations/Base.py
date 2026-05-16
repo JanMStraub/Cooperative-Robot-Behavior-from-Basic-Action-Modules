@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Basic Operations Foundation
-============================
-
-This module provides the base classes and data structures for defining robot
-operations that can be executed through the Unity robot control system.
-
-Operations are structured with rich metadata for RAG retrieval and LLM consumption.
-"""
+"""Base classes and data structures for robot operations (RAG metadata + execution)."""
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Callable
@@ -16,7 +8,6 @@ import json
 
 
 class OperationComplexity(Enum):
-    """Complexity levels for operations"""
 
     ATOMIC = "atomic"  # Single action, cannot be decomposed
     BASIC = "basic"  # Simple coordinated action
@@ -25,7 +16,6 @@ class OperationComplexity(Enum):
 
 
 class OperationCategory(Enum):
-    """Functional categories for operations"""
 
     PERCEPTION = "perception"  # Vision and sensing operations
     NAVIGATION = "navigation"  # Movement and positioning
@@ -37,18 +27,6 @@ class OperationCategory(Enum):
 
 @dataclass
 class OperationParameter:
-    """
-    Definition of an operation parameter.
-
-    Attributes:
-        name: Parameter name (used in function calls)
-        type: Python type as string (e.g., "float", "str", "bool")
-        description: Human-readable description for LLM
-        required: Whether parameter is mandatory
-        default: Default value if not required
-        valid_range: Optional tuple of (min, max) for numeric parameters
-        valid_values: Optional list of valid values for enum-like parameters
-    """
 
     name: str
     type: str
@@ -59,7 +37,6 @@ class OperationParameter:
     valid_values: Optional[List[Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
         return {
             "name": self.name,
             "type": self.type,
@@ -71,19 +48,11 @@ class OperationParameter:
         }
 
     def validate(self, value: Any) -> tuple[bool, Optional[str]]:
-        """
-        Validate a parameter value.
-
-        Returns:
-            (is_valid, error_message)
-        """
-        # Check required
+        """Validate value; returns (is_valid, error_message)."""
         if self.required and value is None:
             return False, f"Parameter '{self.name}' is required"
 
-        # Check valid values (enum-like validation)
-        # Normalize the string "None" to Python None (LLMs sometimes emit the
-        # string literal instead of JSON null when the prompt uses repr()).
+        # Normalise string "None" → Python None (LLMs sometimes emit the literal instead of JSON null).
         if value == "None":
             value = None
         if self.valid_values and value is not None:
@@ -94,7 +63,6 @@ class OperationParameter:
                     f"Parameter '{self.name}' value '{value}' not in valid values: {valid_str}",
                 )
 
-        # Check range for numeric types
         if self.valid_range and value is not None:
             if isinstance(value, (int, float)):
                 min_val, max_val = self.valid_range
@@ -109,25 +77,16 @@ class OperationParameter:
 
 @dataclass
 class OperationResult:
-    """
-    Standardized result structure for all operations.
-
-    Attributes:
-        success: True if operation completed successfully
-        result: Operation-specific result data (if successful)
-        error: Error information (if failed)
-    """
 
     success: bool
     result: Optional[Dict[str, Any]] = None
     error: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
         return {"success": self.success, "result": self.result, "error": self.error}
 
     def __getitem__(self, key: str) -> Any:
-        """Support dictionary-style access for backward compatibility"""
+        """Dict-style access for backward compat."""
         if key == "success":
             return self.success
         elif key == "result":
@@ -138,19 +97,16 @@ class OperationResult:
             raise KeyError(f"Invalid key: {key}")
 
     def __contains__(self, key: str) -> bool:
-        """Support 'in' operator for backward compatibility"""
         return key in ("success", "result", "error")
 
     @staticmethod
     def success_result(result_data: Dict[str, Any]) -> "OperationResult":
-        """Create a success result"""
         return OperationResult(success=True, result=result_data, error=None)
 
     @staticmethod
     def error_result(
         error_code: str, message: str, recovery_suggestions: List[str]
     ) -> "OperationResult":
-        """Create an error result"""
         return OperationResult(
             success=False,
             result=None,
@@ -164,29 +120,7 @@ class OperationResult:
 
 @dataclass
 class ParameterFlow:
-    """
-    Defines how data flows from one operation's output to another's input.
-
-    This enables automatic parameter chaining, where the output of one operation
-    (e.g., detected object coordinates) can be used as input to another operation (e.g., move_to_coordinate).
-
-    Attributes:
-        source_operation: Operation ID that produces the output
-        source_output_key: Key in the source operation's result dict
-        target_operation: Operation ID that consumes the input
-        target_input_param: Parameter name in the target operation
-        description: Human-readable explanation of the data flow
-        transform: Optional transformation function name (e.g., "meters_to_mm")
-
-    Example:
-        ParameterFlow(
-            source_operation="detect_object_stereo",
-            source_output_key="x",
-            target_operation="move_to_coordinate",
-            target_input_param="x",
-            description="Object X coordinate for robot positioning"
-        )
-    """
+    """Data flow link from one operation's output to another's input (enables automatic parameter chaining)."""
 
     source_operation: str
     source_output_key: str
@@ -196,7 +130,6 @@ class ParameterFlow:
     transform: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
         return {
             "source_operation": self.source_operation,
             "source_output_key": self.source_output_key,
@@ -209,41 +142,7 @@ class ParameterFlow:
 
 @dataclass
 class OperationRelationship:
-    """
-    Rich relationship metadata for an operation.
-
-    Extends basic relationship lists with explanations, parameter flows,
-    and temporal ordering hints to help LLMs understand operation sequences.
-
-    Attributes:
-        operation_id: The operation this relationship describes
-        required_operations: Operations that must exist/complete first
-        required_reasons: Why each required operation is needed (op_id -> reason)
-        commonly_paired_with: Operations often used together
-        pairing_reasons: Why operations are paired (op_id -> reason)
-        mutually_exclusive_with: Operations that conflict with this one
-        exclusion_reasons: Why operations are exclusive (op_id -> reason)
-        parameter_flows: Data connections from/to other operations
-        typical_before: Operations typically executed before this one
-        typical_after: Operations typically executed after this one
-        coordination_requirements: Multi-robot coordination constraints
-
-    Example:
-        OperationRelationship(
-            operation_id="detect_object_stereo",
-            commonly_paired_with=["move_to_coordinate", "control_gripper"],
-            pairing_reasons={
-                "move_to_coordinate": "Move robot to detected object position",
-                "control_gripper": "Grasp object after positioning"
-            },
-            typical_before=["move_to_coordinate"],
-            parameter_flows=[
-                ParameterFlow("detect_object_stereo", "x", "move_to_coordinate", "x", "X coordinate"),
-                ParameterFlow("detect_object_stereo", "y", "move_to_coordinate", "y", "Y coordinate"),
-                ParameterFlow("detect_object_stereo", "z", "move_to_coordinate", "z", "Z coordinate")
-            ]
-        )
-    """
+    """Rich relationship metadata (required ops, pairings, flows, temporal hints) for LLM planning."""
 
     operation_id: str
     required_operations: List[str] = field(default_factory=list)
@@ -258,7 +157,6 @@ class OperationRelationship:
     coordination_requirements: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
         return {
             "operation_id": self.operation_id,
             "required_operations": self.required_operations,
@@ -276,16 +174,7 @@ class OperationRelationship:
 
 @dataclass
 class BasicOperation:
-    """
-    Complete definition of a basic operation that can be retrieved by RAG.
-
-    This class combines:
-    - Rich natural language descriptions for LLM understanding
-    - Technical specifications (parameters, pre/postconditions)
-    - Performance metadata for decision making
-    - Relationship information for task planning
-    - Executable implementation function
-    """
+    """Complete operation definition: NL descriptions, parameters, performance metadata, relationships, implementation."""
 
     # Identity
     operation_id: str
@@ -320,15 +209,6 @@ class BasicOperation:
     implementation: Optional[Callable] = None
 
     def execute(self, **kwargs) -> OperationResult:
-        """
-        Execute the operation with given parameters.
-
-        Args:
-            **kwargs: Operation parameters
-
-        Returns:
-            OperationResult with success status and data
-        """
         if self.implementation is None:
             return OperationResult.error_result(
                 error_code="NOT_IMPLEMENTED",
@@ -336,9 +216,8 @@ class BasicOperation:
                 recovery_suggestions=["Contact developer to implement this operation"],
             )
 
-        # Clamp numeric parameters to valid_range before validation so that
-        # sub-millimeter floating-point noise from stereo detection does not
-        # cause spurious range errors (e.g. y=-0.0007 when range is [0.0, 0.7]).
+        # Clamp to valid_range (0.1mm tolerance) — prevents spurious errors from stereo depth noise
+        # e.g. y=-0.0007 when valid range is [0.0, 0.7].
         CLAMP_EPSILON = 1e-4  # 0.1 mm tolerance
         for param in self.parameters:
             if param.valid_range and param.name in kwargs:
@@ -350,12 +229,10 @@ class BasicOperation:
                     elif max_val < value <= max_val + CLAMP_EPSILON:
                         kwargs[param.name] = max_val
 
-        # Validate parameters
         validation_error = self.validate_parameters(kwargs)
         if validation_error:
             return validation_error
 
-        # Execute implementation
         try:
             result = self.implementation(**kwargs)
 
@@ -387,12 +264,7 @@ class BasicOperation:
             )
 
     def validate_parameters(self, kwargs: Dict[str, Any]) -> Optional[OperationResult]:
-        """
-        Validate operation parameters.
-
-        Returns:
-            OperationResult with error if validation fails, None if valid
-        """
+        """Validate parameters. Returns error OperationResult or None if valid."""
         for param in self.parameters:
             value = kwargs.get(param.name)
             is_valid, error_msg = param.validate(value)
@@ -415,13 +287,7 @@ class BasicOperation:
         return None
 
     def to_rag_document(self) -> str:
-        """
-        Convert operation to a rich text document optimized for RAG retrieval.
-
-        Includes rich relationship metadata and parameter flow information
-        to help LLMs understand operation sequencing and data dependencies.
-        """
-        # Build basic document sections
+        """Convert to rich text document for RAG retrieval (includes relationships and parameter flows)."""
         doc = f"""
                 OPERATION: {self.name} (ID: {self.operation_id})
                 Category: {self.category.value} | Complexity: {self.complexity.value}
@@ -454,7 +320,6 @@ class BasicOperation:
                 {chr(10).join(f"- {mode}" for mode in self.failure_modes)}
               """
 
-        # Add enhanced relationship information if available
         if self.relationships:
             doc += "\n\n                OPERATION RELATIONSHIPS:\n"
 
@@ -507,7 +372,6 @@ class BasicOperation:
         return doc
 
     def to_json(self) -> str:
-        """Convert to JSON for structured storage."""
         data: Dict[str, Any] = {
             "operation_id": self.operation_id,
             "name": self.name,

@@ -33,16 +33,6 @@ namespace Robotics.Grasp
         private readonly bool _enableInitializationValidation;
         private readonly string _logPrefix = "[GRASP_IK_FILTER]";
 
-        /// <summary>
-        /// Initialize IK filter with robot configuration.
-        /// </summary>
-        /// <param name="config">Grasp planning configuration</param>
-        /// <param name="joints">Robot joint articulation bodies</param>
-        /// <param name="ikReferenceFrame">IK coordinate frame (MUST be stationary relative to joints)</param>
-        /// <param name="endEffector">End effector transform</param>
-        /// <param name="ikConfig">IK configuration (contains damping factor and other IK parameters)</param>
-        /// <param name="enableDebugLogging">Enable debug logging (disable in production)</param>
-        /// <param name="enableInitializationValidation">Enable FK validation during initialization (recommended for first-time setup)</param>
         /// <remarks>
         /// IMPORTANT: This implementation assumes the robot base is stationary.
         /// The kinematic structure (joint positions, rotations, axes) is cached relative to ikReferenceFrame
@@ -170,9 +160,6 @@ namespace Robotics.Grasp
             }
         }
 
-        /// <summary>
-        /// Validate end-effector offset to catch common configuration errors.
-        /// </summary>
         private void ValidateEndEffectorOffset()
         {
             float eeOffsetMagnitude = _endEffectorLocalOffset.magnitude;
@@ -258,9 +245,6 @@ namespace Robotics.Grasp
         /// Returns only candidates that pass both distance check and IK validation.
         /// Zero GC allocations during filtering (uses pre-allocated buffers).
         /// </summary>
-        /// <param name="candidates">Candidates to filter</param>
-        /// <param name="currentGripperPosition">Current gripper position (world space)</param>
-        /// <returns>List of validated candidates with IK scores</returns>
         public List<GraspCandidate> FilterCandidates(
             List<GraspCandidate> candidates,
             Vector3 currentGripperPosition
@@ -316,7 +300,6 @@ namespace Robotics.Grasp
         /// Validate candidate with full IK solver.
         /// Uses seeded IK (pre-grasp solution seeds grasp solution) for better performance.
         /// </summary>
-        /// <param name="candidate">Candidate to validate (modified in-place)</param>
         private void ValidateWithIK(GraspCandidate candidate)
         {
             CaptureCurrentJointAngles(_bufferJointAngles);
@@ -370,9 +353,6 @@ namespace Robotics.Grasp
             }
         }
 
-        /// <summary>
-        /// Fills the buffer with current actual robot angles.
-        /// </summary>
         private void CaptureCurrentJointAngles(float[] buffer)
         {
             for (int i = 0; i < _jointCount; i++)
@@ -386,10 +366,6 @@ namespace Robotics.Grasp
         /// Attempt to solve IK for a target pose.
         /// Uses pre-allocated buffers to avoid GC allocations.
         /// </summary>
-        /// <param name="targetPosition">Target position (world space)</param>
-        /// <param name="targetRotation">Target rotation (world space)</param>
-        /// <param name="seedAngles">Initial joint angles (buffer will be modified)</param>
-        /// <returns>IK result with success flag and quality metrics</returns>
         private IKResult AttemptIK(
             Vector3 targetPosition,
             Quaternion targetRotation,
@@ -498,9 +474,6 @@ namespace Robotics.Grasp
         /// Optimized Forward Kinematics using Vector3/Quaternion math.
         /// Calculates everything directly in IK Frame space.
         /// </summary>
-        /// <param name="jointAngles">Joint angles in radians</param>
-        /// <param name="jointInfosOut">Pre-allocated buffer for joint positions and axes in IK frame</param>
-        /// <returns>End-effector state in IK frame</returns>
         private IKState ComputeForwardKinematicsInIKFrame(
             float[] jointAngles,
             JointInfo[] jointInfosOut
@@ -535,12 +508,6 @@ namespace Robotics.Grasp
             return new IKState(currentPos, currentRot * _endEffectorLocalRotationOffset);
         }
 
-        /// <summary>
-        /// Compute IK quality score from validation results.
-        /// </summary>
-        /// <param name="preGraspResult">Pre-grasp IK result</param>
-        /// <param name="graspResult">Grasp IK result</param>
-        /// <returns>Quality score (0-1, higher is better)</returns>
         private float ComputeIKQualityScore(IKResult preGraspResult, IKResult graspResult)
         {
             float avgIterations = (preGraspResult.iterations + graspResult.iterations) * 0.5f;
@@ -584,8 +551,6 @@ namespace Robotics.Grasp
         /// Compute manipulability index using optimized inline calculations.
         /// Uses Frobenius norm as proxy for full Yoshikawa manipulability.
         /// </summary>
-        /// <param name="jointAngles">Joint configuration</param>
-        /// <returns>Manipulability score (0-1, higher is better)</returns>
         private float ComputeManipulability(float[] jointAngles)
         {
             IKState state = ComputeForwardKinematicsInIKFrame(jointAngles, _bufferJointInfos);
@@ -615,8 +580,6 @@ namespace Robotics.Grasp
         /// Compute joint limit proximity score.
         /// Penalizes configurations where joints are near their limits.
         /// </summary>
-        /// <param name="jointAngles">Joint configuration</param>
-        /// <returns>Joint limit score (0-1, higher = farther from limits)</returns>
         private float ComputeJointLimitScore(float[] jointAngles)
         {
             float totalScore = 0f;
@@ -653,9 +616,6 @@ namespace Robotics.Grasp
         /// Quick validation of a single candidate (used for best-candidate selection).
         /// NOTE: Modifies candidate in-place if IK validation is performed.
         /// </summary>
-        /// <param name="candidate">Candidate to validate (modified in-place)</param>
-        /// <param name="currentGripperPosition">Current gripper position</param>
-        /// <returns>True if candidate is reachable</returns>
         public bool IsReachable(GraspCandidate candidate, Vector3 currentGripperPosition)
         {
             if (
@@ -673,9 +633,6 @@ namespace Robotics.Grasp
         }
     }
 
-    /// <summary>
-    /// Result of IK validation attempt.
-    /// </summary>
     internal struct IKResult
     {
         public bool success;

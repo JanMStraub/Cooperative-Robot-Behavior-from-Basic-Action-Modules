@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for CommandParser.py
-
-Tests the command parser for multi-command sequences including:
-- LLM-based command parsing with LM Studio
-- Regex fallback when LLM unavailable
-- Parameter extraction accuracy
-- Compound command splitting
-- Variable interpolation
-- Error handling for ambiguous/malformed commands
-- Edge cases (empty, very long, Unicode)
-"""
+"""Unit tests for CommandParser.py"""
 
 import pytest
 import json
@@ -19,19 +8,11 @@ import requests
 
 from orchestrators.CommandParser import CommandParser, get_command_parser
 
-# ============================================================================
 # Fixtures
-# ============================================================================
 
 
 @pytest.fixture
 def command_parser(monkeypatch):
-    """
-    Create a CommandParser instance for testing.
-
-    Returns:
-        CommandParser instance with RAG disabled (for faster tests)
-    """
     # Disable RAG to avoid initialization issues
     parser = CommandParser(use_rag=False)
     parser.rag = None  # Ensure RAG is not initialized
@@ -40,12 +21,6 @@ def command_parser(monkeypatch):
 
 @pytest.fixture
 def mock_lm_studio_response():
-    """
-    Create a mock LM Studio response for testing.
-
-    Returns:
-        Mock response object with JSON structure
-    """
     response = Mock(spec=requests.Response)
     response.status_code = 200
     response.json = Mock(
@@ -85,12 +60,6 @@ def mock_lm_studio_response():
 
 @pytest.fixture
 def mock_registry():
-    """
-    Create a mock operation registry for testing.
-
-    Returns:
-        Mock OperationRegistry with get_operation_by_name
-    """
     from operations.Base import (
         BasicOperation,
         OperationCategory,
@@ -159,9 +128,7 @@ def mock_registry():
     return registry
 
 
-# ============================================================================
 # Test Class: LLM Parsing
-# ============================================================================
 
 
 class TestCommandParserLLM:
@@ -170,7 +137,6 @@ class TestCommandParserLLM:
     def test_parse_simple_move_command(
         self, command_parser, mock_lm_studio_response, mock_registry
     ):
-        """Test parsing a simple move command using LLM."""
         with patch("requests.post", return_value=mock_lm_studio_response):
             with patch.object(command_parser, "registry", mock_registry):
                 result = command_parser.parse(
@@ -182,7 +148,6 @@ class TestCommandParserLLM:
                 assert result["commands"][0]["operation"] == "move_to_coordinate"
 
     def test_parse_gripper_command(self, command_parser, mock_registry):
-        """Test parsing a gripper command using LLM."""
         llm_response = Mock(spec=requests.Response)
         llm_response.status_code = 200
         llm_response.json = Mock(
@@ -218,7 +183,6 @@ class TestCommandParserLLM:
                 assert result["commands"][0]["params"]["open_gripper"] is True
 
     def test_parse_detection_command(self, command_parser, mock_registry):
-        """Test parsing a detection command using LLM."""
         llm_response = Mock(spec=requests.Response)
         llm_response.status_code = 200
         llm_response.json = Mock(
@@ -262,7 +226,6 @@ class TestCommandParserLLM:
     def test_parse_compound_command(
         self, command_parser, mock_lm_studio_response, mock_registry
     ):
-        """Test parsing compound commands (multiple operations)."""
         with patch("requests.post", return_value=mock_lm_studio_response):
             with patch.object(command_parser, "registry", mock_registry):
                 result = command_parser.parse(
@@ -337,16 +300,13 @@ class TestCommandParserLLM:
                 assert result["commands"][0]["operation"] == "move_to_coordinate"
 
 
-# ============================================================================
 # Test Class: Regex Fallback
-# ============================================================================
 
 
 class TestCommandParserRegex:
     """Test regex-based command parsing (fallback mode)."""
 
     def test_regex_parse_move_to_coordinate(self, command_parser, mock_registry):
-        """Test regex parsing of move to coordinate command."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser._parse_with_regex(
                 "move to (0.3, 0.2, 0.1)", "Robot1"
@@ -359,7 +319,6 @@ class TestCommandParserRegex:
             assert result["commands"][0]["params"]["z"] == 0.1
 
     def test_regex_parse_detect_object(self, command_parser, mock_registry):
-        """Test regex parsing of detect object command."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser._parse_with_regex("detect the blue cube", "Robot1")
 
@@ -368,7 +327,6 @@ class TestCommandParserRegex:
             assert result["commands"][0]["params"]["color"] == "blue"
 
     def test_regex_parse_control_gripper_close(self, command_parser, mock_registry):
-        """Test regex parsing of close gripper command."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser._parse_with_regex("close the gripper", "Robot1")
 
@@ -377,7 +335,6 @@ class TestCommandParserRegex:
             assert result["commands"][0]["params"]["open_gripper"] is False
 
     def test_regex_parse_control_gripper_open(self, command_parser, mock_registry):
-        """Test regex parsing of open gripper command."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser._parse_with_regex("open gripper", "Robot1")
 
@@ -398,16 +355,12 @@ class TestCommandParserRegex:
             assert result["commands"][1]["operation"] == "control_gripper"
 
 
-# ============================================================================
 # Test Class: Parameter Extraction
-# ============================================================================
 
 
 class TestCommandParserParameters:
-    """Test parameter extraction accuracy."""
 
     def test_extract_coordinates_from_text(self, command_parser, mock_registry):
-        """Test extracting coordinates from various text formats."""
         test_cases = [
             ("move to (0.3, 0.2, 0.1)", (0.3, 0.2, 0.1)),
             ("move to x=0.3, y=0.2, z=0.1", (0.3, 0.2, 0.1)),
@@ -424,7 +377,6 @@ class TestCommandParserParameters:
                 assert result["commands"][0]["params"]["z"] == expected[2]
 
     def test_extract_color_and_object_type(self, command_parser, mock_registry):
-        """Test extracting color from detection commands."""
         test_cases = [
             ("detect the red cube", "red"),
             ("detect the blue object", "blue"),
@@ -439,7 +391,6 @@ class TestCommandParserParameters:
                     assert result["commands"][0]["params"]["color"] == expected_color
 
     def test_extract_robot_id(self, command_parser, mock_registry):
-        """Test robot_id is correctly assigned to all operations."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser._parse_with_regex(
                 "move to (0.3, 0.2, 0.1)", "CustomRobot"
@@ -449,16 +400,13 @@ class TestCommandParserParameters:
             assert result["commands"][0]["params"]["robot_id"] == "CustomRobot"
 
 
-# ============================================================================
 # Test Class: Error Handling
-# ============================================================================
 
 
 class TestCommandParserErrors:
     """Test error handling for invalid/ambiguous commands."""
 
     def test_parse_empty_command(self, command_parser):
-        """Test parsing empty command string."""
         result = command_parser.parse("", robot_id="Robot1")
 
         assert result["success"] is False
@@ -471,7 +419,6 @@ class TestCommandParserErrors:
         assert result["success"] is False
 
     def test_parse_very_long_command(self, command_parser, mock_registry):
-        """Test parsing very long command string."""
         long_command = "move to (0.3, 0.2, 0.1) " + "and then move again " * 50
 
         with patch.object(command_parser, "registry", mock_registry):
@@ -545,13 +492,10 @@ class TestCommandParserErrors:
                 assert "error" in result or result["success"] is True
 
 
-# ============================================================================
 # Test Class: Variable Handling
-# ============================================================================
 
 
 class TestCommandParserVariables:
-    """Test variable interpolation and passing."""
 
     def test_variable_interpolation_single(self, command_parser, mock_registry):
         """Test detecting and moving to variable reference ($target)."""
@@ -568,13 +512,10 @@ class TestCommandParserVariables:
             assert result["commands"][1]["params"]["position"] == "$target"
 
 
-# ============================================================================
 # Test Class: Integration
-# ============================================================================
 
 
 class TestCommandParserIntegration:
-    """Integration tests for command parser."""
 
     def test_get_command_parser_singleton(self):
         """Test get_command_parser returns singleton instance."""
@@ -584,7 +525,6 @@ class TestCommandParserIntegration:
         assert parser1 is parser2
 
     def test_get_supported_patterns(self, command_parser):
-        """Test get_supported_patterns returns documentation."""
         patterns = command_parser.get_supported_patterns()
 
         assert isinstance(patterns, list)
@@ -592,7 +532,6 @@ class TestCommandParserIntegration:
         assert any("move" in pattern.lower() for pattern in patterns)
 
     def test_full_command_flow_with_validation(self, command_parser, mock_registry):
-        """Test full command parsing flow with operation validation."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser.parse(
                 "move to (0.3, 0.2, 0.1) and close gripper",
@@ -609,18 +548,12 @@ class TestCommandParserIntegration:
                 assert cmd["params"]["robot_id"] == "Robot1"
 
 
-# ============================================================================
 # Test Class: LLM Fallback Validation
-# ============================================================================
 
-
-# ============================================================================
 # Test Class: Multi-Robot Command Disambiguation
-# ============================================================================
 
 
 class TestMultiRobotCommands:
-    """Test parsing commands for multiple robots."""
 
     @pytest.fixture
     def command_parser(self):
@@ -640,7 +573,6 @@ class TestMultiRobotCommands:
         return registry
 
     def test_multi_robot_explicit_ids(self, command_parser, mock_registry):
-        """Test commands with explicit robot IDs for each operation."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser.parse(
                 "Robot1 move to (0.3, 0.2, 0.1), Robot2 move to (0.5, 0.3, 0.2)",
@@ -657,7 +589,6 @@ class TestMultiRobotCommands:
                 assert cmd2["params"]["robot_id"] in ["Robot1", "Robot2"]
 
     def test_broadcast_command_all_robots(self, command_parser, mock_registry):
-        """Test broadcast command to all robots."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser.parse(
                 "all robots close gripper", robot_id="Robot1", use_llm=False
@@ -671,7 +602,6 @@ class TestMultiRobotCommands:
                 assert cmd["operation"] == "control_gripper"
 
     def test_sequential_multi_robot_operations(self, command_parser, mock_registry):
-        """Test sequential operations for multiple robots."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser.parse(
                 "Robot1 close gripper, then Robot2 close gripper",
@@ -685,7 +615,6 @@ class TestMultiRobotCommands:
                 assert result["commands"][1]["operation"] == "control_gripper"
 
     def test_ambiguous_robot_reference(self, command_parser, mock_registry):
-        """Test handling of ambiguous robot references."""
         with patch.object(command_parser, "registry", mock_registry):
             # "the robot" without specifying which one
             result = command_parser.parse(
@@ -699,13 +628,10 @@ class TestMultiRobotCommands:
                 assert result["commands"][0]["params"]["robot_id"] == "Robot1"
 
 
-# ============================================================================
 # Test Class: Variable Substitution Edge Cases
-# ============================================================================
 
 
 class TestVariableSubstitution:
-    """Test variable substitution in command parsing."""
 
     @pytest.fixture
     def command_parser(self):
@@ -726,7 +652,6 @@ class TestVariableSubstitution:
         return registry
 
     def test_undefined_variable_reference(self, command_parser, mock_registry):
-        """Test reference to undefined variable."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser.parse(
                 "move to $undefined_target", robot_id="Robot1", use_llm=False
@@ -756,7 +681,6 @@ class TestVariableSubstitution:
                 assert len(result["commands"]) == 2
 
     def test_nested_variable_substitution(self, command_parser, mock_registry):
-        """Test nested variable references."""
         with patch.object(command_parser, "registry", mock_registry):
             # This is an edge case - variable referring to another variable
             result = command_parser.parse(
@@ -769,7 +693,6 @@ class TestVariableSubstitution:
             assert result is not None
 
     def test_special_characters_in_variable_names(self, command_parser, mock_registry):
-        """Test variable names with special characters."""
         with patch.object(command_parser, "registry", mock_registry):
             # Test various special characters
             test_cases = [
@@ -784,7 +707,6 @@ class TestVariableSubstitution:
                 assert result is not None
 
     def test_variable_in_coordinate(self, command_parser, mock_registry):
-        """Test using variable as part of coordinate."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser.parse(
                 "detect cube -> $x, move to ($x, 0.2, 0.1)",
@@ -797,7 +719,6 @@ class TestVariableSubstitution:
             assert result is not None
 
     def test_empty_variable_assignment(self, command_parser, mock_registry):
-        """Test empty variable assignment."""
         with patch.object(command_parser, "registry", mock_registry):
             result = command_parser.parse(
                 "detect cube -> $", robot_id="Robot1", use_llm=False
@@ -807,6 +728,4 @@ class TestVariableSubstitution:
             assert result is not None
 
 
-# ============================================================================
 # Test Class: Complex Command Chains
-# ============================================================================

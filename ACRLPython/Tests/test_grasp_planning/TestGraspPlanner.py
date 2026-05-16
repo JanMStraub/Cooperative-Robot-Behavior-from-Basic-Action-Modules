@@ -38,14 +38,12 @@ class TestGraspPlanner:
         return GraspPlanner(config)
 
     def test_planner_initialization(self):
-        """Test planner initializes correctly."""
         planner = GraspPlanner()
         assert planner.config is not None
         assert planner.generator is not None
         assert planner.scorer is not None
 
     def test_plan_grasp_returns_best_candidate(self, planner):
-        """Test that plan_grasp returns a valid candidate."""
         object_position = (0.0, 0.05, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -66,7 +64,6 @@ class TestGraspPlanner:
         assert best_grasp.approach_type in ["top", "front", "side"]
 
     def test_plan_grasp_with_preferred_approach(self, planner):
-        """Test planning with preferred approach."""
         object_position = (0.0, 0.05, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -87,7 +84,6 @@ class TestGraspPlanner:
         assert best_grasp.approach_type == "top"
 
     def test_plan_grasp_respects_min_score(self, planner):
-        """Test that plan_grasp respects minimum score threshold."""
         object_position = (0.0, 0.05, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -108,7 +104,6 @@ class TestGraspPlanner:
         assert best_grasp is None
 
     def test_plan_grasp_with_unreachable_object(self, planner):
-        """Test planning for object far from gripper."""
         object_position = (10.0, 10.0, 10.0)  # Very far
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -130,7 +125,6 @@ class TestGraspPlanner:
             assert best_grasp.ik_score < 0.5
 
     def test_plan_multi_grasp(self, planner):
-        """Test planning multiple grasp candidates."""
         object_position = (0.0, 0.05, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -153,7 +147,6 @@ class TestGraspPlanner:
         assert candidates[1].total_score >= candidates[2].total_score
 
     def test_get_statistics(self, planner):
-        """Test getting statistics about candidates."""
         object_position = (0.0, 0.05, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -179,7 +172,6 @@ class TestGraspPlanner:
         assert "approach_counts" in stats
 
     def test_fast_planner_generates_fewer_candidates(self, fast_planner, planner):
-        """Test that fast planner generates fewer candidates."""
         # Fast planner should have fewer candidates per approach
         assert (
             fast_planner.config.candidates_per_approach
@@ -187,7 +179,6 @@ class TestGraspPlanner:
         )
 
     def test_precise_planner_generates_more_candidates(self, precise_planner, planner):
-        """Test that precise planner generates more candidates."""
         # Precise planner should have more candidates per approach
         assert (
             precise_planner.config.candidates_per_approach
@@ -195,7 +186,6 @@ class TestGraspPlanner:
         )
 
     def test_object_rotation_affects_candidates(self, planner):
-        """Test that object rotation affects grasp candidates."""
         object_position = (0.0, 0.05, 0.0)
         object_size = (0.05, 0.05, 0.05)
         robot_id = "Robot1"
@@ -232,7 +222,6 @@ class TestGraspPlanner:
             )
 
     def test_different_object_sizes(self, planner):
-        """Test planning for different object sizes."""
         object_position = (0.0, 0.05, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         robot_id = "Robot1"
@@ -266,7 +255,6 @@ class TestGraspPlanner:
         assert small_grasp.approach_distance != large_grasp.approach_distance
 
     def test_gripper_rotation_affects_scoring(self, planner):
-        """Test that current gripper rotation affects candidate scoring."""
         object_position = (0.0, 0.05, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -311,7 +299,6 @@ class TestGraspPlannerEdgeCases:
     """Test edge cases and error handling."""
 
     def test_empty_object_size(self):
-        """Test with very small object size."""
         planner = GraspPlanner()
 
         best_grasp = planner.plan_grasp(
@@ -327,7 +314,6 @@ class TestGraspPlannerEdgeCases:
         assert best_grasp is not None or best_grasp is None  # Both valid
 
     def test_negative_min_score(self):
-        """Test with negative minimum score threshold."""
         planner = GraspPlanner()
 
         best_grasp = planner.plan_grasp(

@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""
-Multi-Robot Coordination Safety Verifier
-=========================================
-
-This module provides safety verification for multi-robot operations,
-ensuring robots don't collide, conflict over resources, or deadlock.
-
-Checks performed:
-- Path collision detection
-- Workspace conflict detection
-- Object access conflicts
-- Deadlock prevention
-"""
+"""Safety verification for multi-robot operations: collision, workspace conflict, object conflict, deadlock."""
 
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
@@ -36,29 +24,14 @@ from .WorldState import get_world_state
 from .SpatialPredicates import robots_will_collide, is_in_shared_zone
 from .Base import OperationCategory
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
 
 
-# ============================================================================
-# Data Structures
-# ============================================================================
-
-
 @dataclass
 class CoordinationIssue:
-    """
-    A coordination safety issue detected.
-
-    Attributes:
-        issue_type: Type of issue ("collision", "workspace_conflict", "object_conflict", "deadlock")
-        severity: "blocking" (prevents execution) or "warning" (risky but allowed)
-        description: Human-readable description
-        affected_robots: List of robot IDs involved
-        resolution_suggestions: How to resolve the issue
-    """
+    """A coordination safety issue detected."""
 
     issue_type: str
     severity: str
@@ -69,16 +42,7 @@ class CoordinationIssue:
 
 @dataclass
 class CoordinationCheckResult:
-    """
-    Result of multi-robot safety check.
-
-    Attributes:
-        safe: True if no blocking issues found
-        issues: List of coordination issues detected
-        warnings: List of warnings (non-blocking)
-        checked_robots: List of robots that were checked
-        recommendations: General recommendations for safer execution
-    """
+    """Result of multi-robot safety check."""
 
     safe: bool = True
     issues: List[CoordinationIssue] = field(default_factory=list)
@@ -87,7 +51,6 @@ class CoordinationCheckResult:
     recommendations: List[str] = field(default_factory=list)
 
     def add_issue(self, issue: CoordinationIssue):
-        """Add an issue to the result."""
         if issue.severity == "blocking":
             self.issues.append(issue)
             self.safe = False
@@ -95,7 +58,7 @@ class CoordinationCheckResult:
             self.warnings.append(issue)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for serialization."""
+        """Serialize to dictionary."""
         return {
             "safe": self.safe,
             "issues": [
@@ -123,11 +86,6 @@ class CoordinationCheckResult:
         }
 
 
-# ============================================================================
-# Coordination Verifier
-# ============================================================================
-
-
 class CoordinationVerifier:
     """
     Verifier for multi-robot coordination safety.
@@ -140,7 +98,6 @@ class CoordinationVerifier:
     """
 
     def __init__(self):
-        """Initialize the coordination verifier."""
         self.world_state = get_world_state()
 
     def verify_multi_robot_safety(
@@ -150,31 +107,7 @@ class CoordinationVerifier:
         params: Dict[str, Any],
         world_state=None,
     ) -> CoordinationCheckResult:
-        """
-        Verify safety of operation in multi-robot context.
-
-        Checks if the planned operation will conflict with other robots
-        currently operating or with pending operations.
-
-        Args:
-            robot_id: ID of robot planning to execute operation
-            operation_category: Category of operation (NAVIGATION, MANIPULATION, etc.)
-            params: Operation parameters (including target positions)
-            world_state: Optional WorldState instance
-
-        Returns:
-            CoordinationCheckResult with safety status and detected issues
-
-        Example:
-            >>> verifier = CoordinationVerifier()
-            >>> result = verifier.verify_multi_robot_safety(
-            ...     "Robot1",
-            ...     OperationCategory.NAVIGATION,
-            ...     {"x": 0.3, "y": 0.2, "z": 0.1}
-            ... )
-            >>> if not result.safe:
-            ...     print("Coordination issues:", result.issues)
-        """
+        """Check if planned operation conflicts with other robots or pending operations."""
         if world_state is None:
             world_state = self.world_state
 

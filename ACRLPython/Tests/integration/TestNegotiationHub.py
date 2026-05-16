@@ -31,9 +31,7 @@ from orchestrators.SequenceExecutor import SequenceExecutor
 from core.Imports import get_negotiation_hub
 import config.Negotiation as neg_config
 
-# ============================================================================
 # Helpers
-# ============================================================================
 
 
 def _mock_llm_response(content):
@@ -44,16 +42,13 @@ def _mock_llm_response(content):
     return mock_resp
 
 
-# ============================================================================
 # Config Tests
-# ============================================================================
 
 
 class TestNegotiationConfig:
     """Tests for config/Negotiation.py defaults and env overrides."""
 
     def test_default_values(self):
-        """Test default config values are set correctly."""
         assert NEGOTIATION_ENABLED is False
         assert MAX_NEGOTIATION_ROUNDS == 3
         assert AGENT_LLM_TIMEOUT == 30.0
@@ -66,7 +61,6 @@ class TestNegotiationConfig:
         assert MAX_PLAN_LENGTH == 50
 
     def test_collaboration_keywords_coverage(self):
-        """Test that collaboration keywords cover common phrases."""
         expected_keywords = [
             "both",
             "together",
@@ -81,7 +75,6 @@ class TestNegotiationConfig:
 
     @patch.dict(os.environ, {"NEGOTIATION_ENABLED": "false"})
     def test_env_override_disabled(self):
-        """Test that NEGOTIATION_ENABLED can be disabled via env var."""
         importlib.reload(neg_config)
 
         assert neg_config.NEGOTIATION_ENABLED is False
@@ -92,7 +85,6 @@ class TestNegotiationConfig:
 
     @patch.dict(os.environ, {"MAX_NEGOTIATION_ROUNDS": "5"})
     def test_env_override_rounds(self):
-        """Test that MAX_NEGOTIATION_ROUNDS can be overridden via env var."""
         importlib.reload(neg_config)
 
         assert neg_config.MAX_NEGOTIATION_ROUNDS == 5
@@ -101,30 +93,25 @@ class TestNegotiationConfig:
         importlib.reload(neg_config)
 
 
-# ============================================================================
 # Robot LLM Agent Tests
-# ============================================================================
 
 
 class TestRobotLLMAgent:
     """Tests for agents/RobotLLMAgent.py."""
 
     def test_agent_creation(self):
-        """Test agent initialization with robot config."""
         agent = RobotLLMAgent("Robot1")
         assert agent.robot_id == "Robot1"
         assert agent.base_position == (-0.475, 0.0, 0.0)
         assert agent.workspace == "left_workspace"
 
     def test_agent_creation_robot2(self):
-        """Test agent initialization for Robot2."""
         agent = RobotLLMAgent("Robot2")
         assert agent.robot_id == "Robot2"
         assert agent.base_position == (0.475, 0.0, 0.0)
         assert agent.workspace == "right_workspace"
 
     def test_build_agent_context(self):
-        """Test context string includes robot identity and world state."""
         agent = RobotLLMAgent("Robot1")
         world_state = {
             "robots": {
@@ -150,7 +137,6 @@ class TestRobotLLMAgent:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_analyze_task(self, mock_post):
-        """Test task analysis with mocked LLM."""
         mock_post.return_value = _mock_llm_response(
             json.dumps(
                 {
@@ -180,7 +166,6 @@ class TestRobotLLMAgent:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_propose_plan(self, mock_post):
-        """Test plan proposal with mocked LLM."""
         mock_post.return_value = _mock_llm_response(
             json.dumps(
                 {
@@ -237,7 +222,6 @@ class TestRobotLLMAgent:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_accept(self, mock_post):
-        """Test proposal evaluation (accept)."""
         mock_post.return_value = _mock_llm_response(
             json.dumps(
                 {
@@ -270,7 +254,6 @@ class TestRobotLLMAgent:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_reject(self, mock_post):
-        """Test proposal evaluation (reject with concerns)."""
         mock_post.return_value = _mock_llm_response(
             json.dumps(
                 {
@@ -310,7 +293,6 @@ class TestRobotLLMAgent:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_llm_connection_error_fallback(self, mock_post):
-        """Test graceful handling of LLM connection error."""
         mock_post.side_effect = req.exceptions.ConnectionError()
 
         agent = RobotLLMAgent("Robot1")
@@ -319,7 +301,6 @@ class TestRobotLLMAgent:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_json_extraction_from_markdown(self, mock_post):
-        """Test JSON extraction from markdown code block."""
         mock_post.return_value = _mock_llm_response(
             "Here is the analysis:\n```json\n"
             '{"can_contribute": true, "capabilities": ["test"], '
@@ -333,9 +314,7 @@ class TestRobotLLMAgent:
         assert analysis.confidence == 0.6
 
 
-# ============================================================================
 # Negotiation Hub Tests
-# ============================================================================
 
 
 class TestNegotiationHub:
@@ -353,7 +332,6 @@ class TestNegotiationHub:
 
     @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     def test_needs_negotiation_keyword(self):
-        """Test collaboration keyword detection."""
         hub = NegotiationHub()
         assert hub.needs_negotiation("Both robots lift the cube together") is True
         assert hub.needs_negotiation("Cooperate to move the object") is True
@@ -374,7 +352,6 @@ class TestNegotiationHub:
 
     @patch.dict(os.environ, {"NEGOTIATION_ENABLED": "false"})
     def test_needs_negotiation_disabled(self):
-        """Test negotiation disabled via config."""
         importlib.reload(neg_config)
 
         NegotiationHub._instance = None
@@ -399,7 +376,6 @@ class TestNegotiationHub:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_negotiate_success(self, mock_post):
-        """Test successful negotiation with mocked LLM."""
         # Set up LLM responses for analysis, proposal, and evaluation
         responses = [
             # Robot1 analysis
@@ -494,7 +470,6 @@ class TestNegotiationHub:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_negotiate_no_consensus(self, mock_post):
-        """Test negotiation failure when robots reject proposals."""
         # Analysis responses (both can contribute)
         analysis_response = _mock_llm_response(
             json.dumps(
@@ -602,23 +577,19 @@ class TestNegotiationHub:
         assert result.state in (NegotiationState.TIMEOUT, NegotiationState.FAILED)
 
 
-# ============================================================================
 # Negotiation Verifier Tests
-# ============================================================================
 
 
 class TestNegotiationVerifier:
     """Tests for operations/NegotiationVerifier.py."""
 
     def test_empty_plan(self):
-        """Test empty plan is invalid."""
         verifier = NegotiationVerifier()
         result = verifier.verify_plan([])
         assert result.valid is False
         assert any("Empty" in e for e in result.errors)
 
     def test_valid_plan(self):
-        """Test a valid simple plan passes verification."""
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -638,7 +609,6 @@ class TestNegotiationVerifier:
         assert len(result.errors) == 0
 
     def test_unmatched_wait_for_signal(self):
-        """Test unmatched wait_for_signal is detected."""
         commands = [
             {
                 "operation": "wait_for_signal",
@@ -676,7 +646,6 @@ class TestNegotiationVerifier:
         assert len(signal_errors) == 0
 
     def test_variable_used_before_definition(self):
-        """Test variable usage before definition is detected."""
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -697,7 +666,6 @@ class TestNegotiationVerifier:
         assert any("$target" in e and "before definition" in e for e in result.errors)
 
     def test_variable_defined_then_used(self):
-        """Test variable defined before usage passes."""
         commands = [
             {
                 "operation": "detect_object_stereo",
@@ -797,7 +765,6 @@ class TestNegotiationVerifier:
         assert len(spatial_errors) == 0
 
     def test_collision_parallel_targets_with_position_tuple(self):
-        """Test collision is still caught when targets are expressed as position lists."""
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -818,13 +785,10 @@ class TestNegotiationVerifier:
         assert result.safety_check is False
 
 
-# ============================================================================
 # Integration Tests
-# ============================================================================
 
 
 class TestSequenceExecutorNegotiation:
-    """Tests for negotiation integration in SequenceExecutor."""
 
     def setup_method(self):
         """Reset singleton between tests."""
@@ -839,7 +803,6 @@ class TestSequenceExecutorNegotiation:
     @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     @patch("agents.RobotLLMAgent.requests.post")
     def test_negotiate_if_needed_triggers_for_collaboration(self, mock_post):
-        """Test that collaboration commands trigger negotiation."""
         # Mock LLM responses for full negotiation
         responses = [
             # Robot1 analysis
@@ -925,7 +888,6 @@ class TestSequenceExecutorNegotiation:
         assert result[0]["operation"] == "move_to_coordinate"
 
     def test_negotiate_if_needed_handles_import_error(self):
-        """Test graceful handling when negotiation module unavailable."""
         executor = SequenceExecutor(check_completion=False, enable_verification=False)
 
         # Even if import fails internally, should return None gracefully
@@ -934,9 +896,7 @@ class TestSequenceExecutorNegotiation:
             assert result is None
 
 
-# ============================================================================
 # Core Imports Tests
-# ============================================================================
 
 
 class TestCoreImportsNegotiation:
@@ -948,14 +908,12 @@ class TestCoreImportsNegotiation:
 
     @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     def test_get_negotiation_hub_returns_hub(self):
-        """Test get_negotiation_hub returns a NegotiationHub instance."""
         hub = get_negotiation_hub()
         assert hub is not None
         assert isinstance(hub, NegotiationHub)
 
     @patch.dict(os.environ, {"NEGOTIATION_ENABLED": "false"})
     def test_get_negotiation_hub_disabled(self):
-        """Test get_negotiation_hub returns None when disabled."""
         importlib.reload(neg_config)
 
         hub = get_negotiation_hub()
@@ -965,9 +923,7 @@ class TestCoreImportsNegotiation:
         importlib.reload(neg_config)
 
 
-# ============================================================================
 # Bug Fix Regression Tests
-# ============================================================================
 
 
 class TestBugFixes:
@@ -976,8 +932,6 @@ class TestBugFixes:
     def setup_method(self):
         """Reset singleton between tests."""
         NegotiationHub._instance = None
-
-    # ------------------------------------------------------------------ BUG 1
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_llm_failure_rejects(self, mock_post):
@@ -1022,8 +976,6 @@ class TestBugFixes:
             evaluation.accept is False
         ), "Unparseable LLM JSON must produce accept=False, not auto-accept"
 
-    # ------------------------------------------------------------------ BUG 2
-
     def test_validate_before_normalize_catches_missing_operation(self):
         """BUG 2: Validation must run on raw commands, catching missing 'operation' fields."""
         hub = NegotiationHub()
@@ -1042,8 +994,6 @@ class TestBugFixes:
         assert any(
             "operation" in e.lower() or "empty" in e.lower() for e in errors
         ), f"Expected error about missing 'operation', got: {errors}"
-
-    # ------------------------------------------------------------------ BUG 3
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_analysis_refreshed_on_round_2(self, mock_post):
@@ -1122,8 +1072,6 @@ class TestBugFixes:
             call_count >= 6
         ), f"Expected ≥6 LLM calls (analysis re-run each round), got {call_count}"
 
-    # ------------------------------------------------------------------ BUG 4
-
     @patch("agents.RobotLLMAgent.requests.post")
     def test_propose_plan_includes_operations_in_prompt(self, mock_post):
         """BUG 4: propose_plan must include available operations in the LLM prompt."""
@@ -1191,8 +1139,6 @@ class TestBugFixes:
             for rec in caplog.records
         ), "Missing available_operations must produce a WARNING log"
 
-    # ------------------------------------------------------------------ BUG 5
-
     def test_workspace_label_robot1(self):
         """BUG 5: Robot1 (left_workspace) must return left-side label via config, not substring."""
         agent = RobotLLMAgent("Robot1")
@@ -1211,8 +1157,6 @@ class TestBugFixes:
         label = agent._get_workspace_label()
         # Must not raise; content varies but must be a non-empty string
         assert isinstance(label, str) and len(label) > 0
-
-    # ------------------------------------------------------------------ BUG 7
 
     def test_signal_without_waiter_logs_warning(self, caplog):
         """BUG 7: A signal with no matching wait_for_signal must log a WARNING."""

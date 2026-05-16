@@ -23,10 +23,6 @@ namespace Robotics.Grasp
 
         private readonly string _logPrefix = "[GRASP_COLLISION_FILTER]";
 
-        /// <summary>
-        /// Initialize collision filter with configuration.
-        /// </summary>
-        /// <param name="config">Grasp planning configuration</param>
         public GraspCollisionFilter(GraspConfig config)
         {
             _config = config;
@@ -171,12 +167,6 @@ namespace Robotics.Grasp
             return true;
         }
 
-        /// <summary>
-        /// Check if retreat path is collision-free.
-        /// </summary>
-        /// <param name="candidate">Candidate with retreat position</param>
-        /// <param name="targetObject">Target object to exclude</param>
-        /// <returns>True if retreat path is clear</returns>
         private bool CheckRetreatPath(GraspCandidate candidate, GameObject targetObject)
         {
             Vector3 start = candidate.graspPosition;
@@ -241,13 +231,6 @@ namespace Robotics.Grasp
             return false;
         }
 
-        /// <summary>
-        /// Generate waypoints along a path.
-        /// </summary>
-        /// <param name="start">Start position</param>
-        /// <param name="end">End position</param>
-        /// <param name="count">Number of waypoints (including start and end)</param>
-        /// <returns>Array of waypoint positions</returns>
         private Vector3[] GenerateWaypoints(Vector3 start, Vector3 end, int count)
         {
             count = Mathf.Max(2, count);
@@ -262,12 +245,6 @@ namespace Robotics.Grasp
             return waypoints;
         }
 
-        /// <summary>
-        /// Check if a single candidate has collision-free approach.
-        /// </summary>
-        /// <param name="candidate">Candidate to validate</param>
-        /// <param name="targetObject">Target object to exclude</param>
-        /// <returns>True if collision-free</returns>
         public bool IsCollisionFree(GraspCandidate candidate, GameObject targetObject = null)
         {
             if (!_config.enableCollisionChecking)

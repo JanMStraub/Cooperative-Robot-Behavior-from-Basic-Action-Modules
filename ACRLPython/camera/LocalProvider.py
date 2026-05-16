@@ -20,22 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 class LocalProvider(CameraProvider):
-    """
-    Concrete camera provider backed by cv2.VideoCapture.
-
-    Captures frames from locally attached USB or RealSense cameras.
-    The primary device_id provides the RGB (and left stereo) feed;
-    an optional secondary_device_id provides the right stereo channel.
-    """
+    """Camera provider backed by cv2.VideoCapture for USB/RealSense cameras."""
 
     def __init__(self, device_id: int = 0, secondary_device_id: Optional[int] = None):
-        """
-        Initialise the local camera provider.
-
-        Args:
-            device_id: OpenCV VideoCapture device index for the primary camera.
-            secondary_device_id: Optional second camera index for stereo capture.
-        """
         self._device_id = device_id
         self._secondary_device_id = secondary_device_id
         self._cap_primary = None
@@ -81,11 +68,7 @@ class LocalProvider(CameraProvider):
         return self._read_frame(self._cap_primary)
 
     def get_stereo_pair(self) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """
-        Return a stereo pair (left, right) by reading both cameras simultaneously.
-
-        Returns None if either camera is unavailable.
-        """
+        """Return stereo pair by reading both cameras; None if either unavailable."""
         left = self._read_frame(self._cap_primary)
         right = self._read_frame(self._cap_secondary)
         if left is not None and right is not None:
@@ -93,16 +76,10 @@ class LocalProvider(CameraProvider):
         return None
 
     def get_depth_frame(self) -> Optional[np.ndarray]:
-        """
-        Return a depth map.
-
-        Not yet implemented for generic USB cameras.
-        Wire in pyrealsense2 or another depth SDK here for Phase 4.
-        """
+        """Not yet implemented; wire in pyrealsense2 for Phase 4."""
         return None
 
     def __del__(self):
-        """Release VideoCapture handles on garbage collection."""
         if self._cap_primary:
             self._cap_primary.release()
         if self._cap_secondary:

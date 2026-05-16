@@ -19,11 +19,9 @@ To skip these tests in CI:
 import pytest
 import time
 
-from backend_client import BackendClient, backend_available, port_open  # type: ignore[import]
+from BackendClient import BackendClient, backend_available, port_open  # type: ignore[import]
 
-# ---------------------------------------------------------------------------
 # Availability check
-# ---------------------------------------------------------------------------
 
 
 def _port_open(port: int, timeout: float = 2.0) -> bool:
@@ -39,8 +37,6 @@ def is_unity_available() -> bool:
     We probe via raw sockets so the check works from any process, regardless of
     whether the backend singleton is initialised in this process.
 
-    Returns:
-        True if both backend ports are reachable, False otherwise.
     """
     return backend_available()
 
@@ -51,16 +47,12 @@ SKIP_REASON = (
     "Start Unity and backend servers to run these tests."
 )
 
-
-# ---------------------------------------------------------------------------
 # Test classes
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not UNITY_AVAILABLE, reason=SKIP_REASON)
 class TestUnityCommandExecution:
-    """Test real command execution with Unity via SequenceServer."""
 
     def test_connection_to_command_server(self):
         """Verify direct TCP connection to the CommandServer (port 5007)."""
@@ -130,7 +122,6 @@ class TestUnityCommandExecution:
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not UNITY_AVAILABLE, reason=SKIP_REASON)
 class TestUnityImageCapture:
-    """Test real image capture from Unity cameras."""
 
     def test_connection_to_image_server(self):
         """Verify direct TCP connection to the ImageServer (port 5006)."""
@@ -229,7 +220,6 @@ class TestUnityProtocolCompatibility:
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not UNITY_AVAILABLE, reason=SKIP_REASON)
 class TestUnityObjectDetection:
-    """Test real object detection with the Unity scene."""
 
     def test_real_object_detection(self):
         """Detect objects in the Unity scene using on-demand stereo capture.

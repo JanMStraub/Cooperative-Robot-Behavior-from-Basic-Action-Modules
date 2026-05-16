@@ -9,12 +9,7 @@ class Rotation(scipy.spatial.transform.Rotation):
 
 
 class Transform(object):
-    """Rigid spatial transform between coordinate systems in 3D space.
-
-    Attributes:
-        rotation (scipy.spatial.transform.Rotation)
-        translation (np.ndarray)
-    """
+    """Rigid spatial transform between coordinate systems in 3D space."""
 
     def __init__(self, rotation, translation):
         assert isinstance(rotation, scipy.spatial.transform.Rotation)

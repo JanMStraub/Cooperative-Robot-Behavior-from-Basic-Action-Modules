@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-camera/__init__.py - Camera Provider Factory
-
-Provides get_camera_provider(env) which returns the correct concrete
-CameraProvider adapter for the given execution environment.
-
-Usage (via core.Imports — prefer that over importing directly):
-    from core.Imports import get_camera_provider
-    cam = get_camera_provider()
-"""
+"""Camera provider factory."""
 
 from typing import TYPE_CHECKING
 
@@ -26,11 +17,7 @@ def get_camera_provider(env: str = "sim") -> "CameraProvider":
     On the first call the correct adapter is instantiated and cached.
     Subsequent calls always return the same instance.
 
-    Args:
-        env: "sim" (default) for Unity ImageStorage, "real" for local USB/RealSense.
 
-    Returns:
-        Concrete CameraProvider adapter.
     """
     global _instance
     if _instance is None:

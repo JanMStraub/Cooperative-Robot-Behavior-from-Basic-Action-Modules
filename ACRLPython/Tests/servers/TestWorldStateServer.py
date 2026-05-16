@@ -15,7 +15,6 @@ from core.UnityProtocol import UnityProtocol
 
 
 class TestWorldStateServer(unittest.TestCase):
-    """Test WorldStateServer functionality."""
 
     @classmethod
     def setUpClass(cls):
@@ -54,24 +53,16 @@ class TestWorldStateServer(unittest.TestCase):
         return client
 
     def _send_world_state(self, client: socket.socket, state_data: dict) -> None:
-        """
-        Send a world state update to the server.
-
-        Args:
-            client: Connected socket
-            state_data: World state dictionary
-        """
+        """Send a world state update to the server."""
         # encode_status_response expects a dict, not a JSON string
         message = UnityProtocol.encode_status_response(state_data, request_id=0)
         client.sendall(message)
 
     def test_server_starts_and_stops(self):
-        """Test that server can start and stop cleanly."""
         # Server is already running from setUpClass
         self.assertTrue(self.server.is_running())
 
     def test_receive_world_state_update(self):
-        """Test receiving a world state update."""
         # Create test world state
         world_state = {
             "type": "world_state_update",
@@ -116,7 +107,6 @@ class TestWorldStateServer(unittest.TestCase):
         self.assertEqual(latest_state["timestamp"], 123.45)
 
     def test_get_robot_state(self):
-        """Test retrieving specific robot state."""
         world_state = {
             "type": "world_state_update",
             "robots": [
@@ -164,7 +154,6 @@ class TestWorldStateServer(unittest.TestCase):
         self.assertIsNone(robot3)
 
     def test_get_object_state(self):
-        """Test retrieving specific object state."""
         world_state = {
             "type": "world_state_update",
             "robots": [],
@@ -208,7 +197,6 @@ class TestWorldStateServer(unittest.TestCase):
         self.assertIsNone(green_cube)
 
     def test_get_all_ids(self):
-        """Test retrieving all robot and object IDs."""
         world_state = {
             "type": "world_state_update",
             "robots": [
@@ -241,7 +229,6 @@ class TestWorldStateServer(unittest.TestCase):
         self.assertIn("Sphere1", object_ids)
 
     def test_statistics(self):
-        """Test server statistics tracking."""
         # Get initial stats
         stats = self.server.get_statistics()
         initial_count = stats["updates_received"]

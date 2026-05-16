@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Tests for CommandParser Knowledge Graph Integration
-=====================================================
-
-Validates that _get_spatial_context():
-- Returns empty string when KG is disabled
-- Returns empty string when the query engine is unavailable
-- Formats reachable objects and nearby robots correctly
-- Caps the reachable object list at 5 entries
-- Suppresses all exceptions and degrades gracefully
-"""
+"""Tests for CommandParser Knowledge Graph Integration"""
 
 import unittest
 from unittest.mock import MagicMock, patch
@@ -192,7 +182,9 @@ class TestCommandParserKG(unittest.TestCase):
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
             patch("core.Imports.get_graph_query_engine", return_value=mock_qe),
         ):
-            result = parser._get_spatial_context("Robot1", command_text="handoff red_cube to Robot2")
+            result = parser._get_spatial_context(
+                "Robot1", command_text="handoff red_cube to Robot2"
+            )
 
         self.assertIn("Handoff red_cube with Robot2", result)
         self.assertIn("r1=0.40m", result)
@@ -306,7 +298,9 @@ class TestCommandParserBetweenPrompt(unittest.TestCase):
         with patch("orchestrators.CommandParser.RAGSystem", MagicMock()):
             from orchestrators.CommandParser import _PromptBuilder
 
-            builder = _PromptBuilder(registry=MagicMock(), workflow_registry=MagicMock(), rag=None)
+            builder = _PromptBuilder(
+                registry=MagicMock(), workflow_registry=MagicMock(), rag=None
+            )
             return builder.build("place between blue and red cube", robot_id)
 
     def test_between_section_header_present(self):

@@ -43,37 +43,17 @@ namespace PythonCommunication
 
         protected override string LogPrefix => "[AUTORT_MANAGER]";
 
-        /// <summary>
-        /// List of pending tasks (read-only)
-        /// </summary>
         public List<ProposedTask> PendingTasks => _pendingTasks;
 
-        /// <summary>
-        /// Is continuous loop running?
-        /// </summary>
         public bool LoopRunning => _loopRunning;
 
-        /// <summary>
-        /// Current status message
-        /// </summary>
         public string StatusMessage => _statusMessage;
 
-        /// <summary>
-        /// AutoRT configuration
-        /// </summary>
         public AutoRTConfig Config => _config;
 
-        /// <summary>
-        /// Event fired when tasks are received from Python
-        /// </summary>
         public event Action<List<ProposedTask>> OnTasksReceived;
 
-        /// <summary>
-        /// Event fired when loop status changes
-        /// </summary>
         public event Action<bool> OnLoopStatusChanged;
-
-        #region Singleton & Init
 
         protected override void Awake()
         {
@@ -104,10 +84,6 @@ namespace PythonCommunication
             _statusMessage = "Disconnected";
             Debug.Log($"{LogPrefix} Cleared {staleCount} stale pending tasks on disconnect");
         }
-
-        #endregion
-
-        #region Public API - Task Generation
 
         /// <summary>
         /// Manually trigger task generation (one-shot).
@@ -175,10 +151,6 @@ namespace PythonCommunication
                 return false;
             }
         }
-
-        #endregion
-
-        #region Public API - Continuous Loop
 
         /// <summary>
         /// Start continuous task generation loop in Python backend.
@@ -253,10 +225,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Stop continuous task generation loop.
-        /// </summary>
-        /// <returns>True if request sent successfully</returns>
         public bool StopLoop()
         {
             if (!IsConnected)
@@ -301,10 +269,6 @@ namespace PythonCommunication
                 return false;
             }
         }
-
-        #endregion
-
-        #region Public API - Task Approval
 
         /// <summary>
         /// Approve and execute a task (sends to Python for execution).
@@ -376,19 +340,12 @@ namespace PythonCommunication
             Debug.Log($"{LogPrefix} Rejected task: {task.task_id}");
         }
 
-        /// <summary>
-        /// Clear all pending tasks.
-        /// </summary>
         public void ClearPendingTasks()
         {
             int count = _pendingTasks.Count;
             _pendingTasks.Clear();
             Debug.Log($"{LogPrefix} Cleared {count} pending tasks");
         }
-
-        #endregion
-
-        #region Protocol Implementation
 
         /// <summary>
         /// Receive and decode AutoRT response from Python.
@@ -465,9 +422,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Extract request_id from response for correlation.
-        /// </summary>
         protected override uint GetResponseRequestId(AutoRTResponse response)
         {
             return response?.request_id ?? 0;
@@ -547,7 +501,5 @@ namespace PythonCommunication
                 _statusMessage = $"Processing error: {e.Message}";
             }
         }
-
-        #endregion
     }
 }

@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
-"""
-Tests for OperationIndexer.refresh_index()
-==========================================
-
-Covers:
-- Empty store: all current operations are added
-- Pre-populated store: already-indexed IDs are skipped
-- Returns the same store object (mutates in place)
-- No-op when all IDs already present: no embeddings generated, store unchanged
-- Saves to disk when save=True and RAG_AUTO_SAVE_INDEX=True
-- Does not save when save=False
-- Preserves existing metadata on already-indexed entries
-- Context documents (workspace_layout etc.) skipped if already indexed
-- New operations added after a prior full index are picked up by refresh
-
-All network calls (EmbeddingGenerator, OperationRegistry) are mocked.
-"""
+"""Tests for OperationIndexer.refresh_index()"""
 
 import numpy as np
 import pytest
@@ -24,9 +8,7 @@ from unittest.mock import MagicMock, patch
 from rag.vector_store import VectorStore
 from rag.Indexer import OperationIndexer
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _unit(n: int) -> np.ndarray:
@@ -106,10 +88,7 @@ CONTEXT_DOC_IDS = {
     "context_parallel_execution",
 }
 
-
-# ---------------------------------------------------------------------------
 # Empty-store behaviour
-# ---------------------------------------------------------------------------
 
 
 class TestRefreshIndexEmptyStore:
@@ -151,9 +130,7 @@ class TestRefreshIndexEmptyStore:
         assert len(texts) == 1 + len(CONTEXT_DOC_IDS)
 
 
-# ---------------------------------------------------------------------------
 # Skip already-indexed IDs
-# ---------------------------------------------------------------------------
 
 
 class TestRefreshIndexSkipsExisting:
@@ -222,9 +199,7 @@ class TestRefreshIndexSkipsExisting:
         assert len(texts) == 1
 
 
-# ---------------------------------------------------------------------------
 # Returns same store object
-# ---------------------------------------------------------------------------
 
 
 class TestRefreshIndexReturnValue:
@@ -251,9 +226,7 @@ class TestRefreshIndexReturnValue:
         assert "op_001" in result.operation_ids
 
 
-# ---------------------------------------------------------------------------
 # Persistence (save/no-save)
-# ---------------------------------------------------------------------------
 
 
 class TestRefreshIndexSave:
@@ -299,9 +272,7 @@ class TestRefreshIndexSave:
         mock_save.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # Metadata preservation
-# ---------------------------------------------------------------------------
 
 
 class TestRefreshIndexMetadataPreservation:
@@ -355,9 +326,7 @@ class TestRefreshIndexMetadataPreservation:
         assert op_entry["metadata"]["execution_count"] == 7
 
 
-# ---------------------------------------------------------------------------
 # Workflow handling
-# ---------------------------------------------------------------------------
 
 
 class TestRefreshIndexWorkflows:

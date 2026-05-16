@@ -20,7 +20,7 @@ KG_OBJECTS = (
 KG_ROBOT_NEARBY = "Robot2"
 
 
-def get_tasks() -> List[str]:
+def get_tasks(config=None) -> List[str]:
     """
     Return NL tasks that exercise spatial/handoff reasoning.
 
@@ -28,8 +28,6 @@ def get_tasks() -> List[str]:
     LLM should reference the exact object IDs from KG_OBJECTS. Without it,
     the LLM has only the command text and may hallucinate object identifiers.
 
-    Returns:
-        List of natural language task strings.
     """
 
     return [
@@ -48,8 +46,6 @@ def populate_synthetic_kg(robot_id: str) -> None:
     Adds all KG_OBJECTS as reachable ObjectNodes spread across the workspace,
     and adds KG_ROBOT_NEARBY as a RobotNode 0.5m away.
 
-    Args:
-        robot_id: ID of the robot performing the tasks.
     """
     from knowledge_graph._singleton import get_knowledge_graph
 
@@ -70,9 +66,12 @@ def populate_synthetic_kg(robot_id: str) -> None:
     for obj_id, pos in zip(KG_OBJECTS, positions):
         color = obj_id.split("_")[0]
         kg.add_node(obj_id, node_type="object", color=color, position=pos)
-        kg.add_edge(robot_id, obj_id, "CAN_REACH", distance=round(
-            (pos[0] ** 2 + pos[1] ** 2 + pos[2] ** 2) ** 0.5, 2
-        ))
+        kg.add_edge(
+            robot_id,
+            obj_id,
+            "CAN_REACH",
+            distance=round((pos[0] ** 2 + pos[1] ** 2 + pos[2] ** 2) ** 0.5, 2),
+        )
 
     kg.add_node(KG_ROBOT_NEARBY, node_type="robot", position=(0.5, 0.0, 0.0))
     kg.add_edge(robot_id, KG_ROBOT_NEARBY, "NEAR", distance=0.5)

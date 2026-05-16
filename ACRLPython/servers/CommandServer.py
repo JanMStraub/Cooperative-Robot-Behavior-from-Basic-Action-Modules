@@ -1,14 +1,7 @@
 #!/usr/bin/env python3
-"""
-CommandServer.py - Bidirectional command and results server
 
-Consolidates ResultsServer and StatusServer into a single bidirectional server.
-- Sends commands to Unity (move, gripper, status queries)
-- Receives completion callbacks from Unity
-- Broadcasts results to all connected clients
 
-Port: 5007
-"""
+"""Bidirectional command and results server (port 5007). Sends commands to Unity, receives completion callbacks."""
 
 import itertools
 import socket
@@ -19,7 +12,6 @@ import time
 from typing import Dict, Any, Optional, List
 from queue import Queue, Empty
 
-# Import config
 try:
     from config.Servers import (
         DEFAULT_HOST,
@@ -37,7 +29,6 @@ except ImportError:
     )
     from ..core.LoggingSetup import get_logger
 
-# Import base classes
 try:
     from core.TCPServerBase import TCPServerBase, ServerConfig
     from core.UnityProtocol import UnityProtocol
@@ -49,11 +40,7 @@ logger = get_logger(__name__)
 
 
 class CommandBroadcaster:
-    """
-    Singleton for sending commands and receiving completions.
-
-    Replaces both ResultsBroadcaster and StatusResponseHandler with a unified interface.
-    """
+    """Singleton for sending commands to Unity and receiving completion callbacks."""
 
     _instance = None
     _lock = threading.RLock()
@@ -72,7 +59,6 @@ class CommandBroadcaster:
         return cls._instance
 
     def _init(self):
-        """Initialize the broadcaster."""
         self._server: Optional["CommandServer"] = None
         self._result_queue: List[Dict] = []
         self._completion_queues: Dict[int, Queue] = {}
@@ -93,32 +79,17 @@ class CommandBroadcaster:
         self._robot_clients: Dict[str, Any] = {}  # robot_id -> client socket
 
     def set_server(self, server: "CommandServer"):
-        """Set the server instance for broadcasting."""
         self._server = server
 
     def send_command(self, command: Dict[str, Any], request_id: int = 0) -> bool:
-        """
-        Send a command to all connected Unity clients.
-
-        Args:
-            command: Command dictionary
-            request_id: Request ID for correlation
-
-        Returns:
-            True if sent successfully
-        """
+        """Send command to all connected Unity clients. Returns True if sent."""
         if self._server is None:
             logger.warning("CommandBroadcaster not initialized")
             return False
 
         try:
-            # Add request_id to command
             command["request_id"] = request_id
-
-            # Encode message
             message = UnityProtocol.encode_result_message(command, request_id)
-
-            # Broadcast to all clients
             sent_count = self._server.broadcast_to_all_clients(message)
 
             if sent_count == 0:

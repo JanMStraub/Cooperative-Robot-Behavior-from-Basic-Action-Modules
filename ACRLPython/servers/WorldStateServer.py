@@ -1,23 +1,7 @@
 #!/usr/bin/env python3
 """
-WorldStateServer - Receives robot and object state updates from Unity.
-
-Dedicated streaming server that receives unsolicited world state broadcasts
-from Unity's WorldStatePublisher on port 5009. Keeps world state updates
-separate from command/response traffic to prevent message correlation conflicts.
-
-Architecture:
-- Port 5009: One-way stream (Unity → Python)
-- Message Type: STATUS_RESPONSE (0x04) with requestId=0
-- No responses sent back to Unity (pure receive-only)
-
-Usage:
-    server = WorldStateServer()
-    server.start()
-
-    # Get latest state
-    state = server.get_latest_state()
-    print(f"Robots: {len(state['robots'])}, Objects: {len(state['objects'])}")
+WorldStateServer — receives unsolicited world state broadcasts from Unity's WorldStatePublisher
+on port 5009. One-way stream (Unity → Python), no responses sent back.
 """
 
 import json
@@ -52,12 +36,6 @@ class WorldStateServer(TCPServerBase):
     """
 
     def __init__(self, config: Optional[ServerConfig] = None):
-        """
-        Initialize WorldStateServer.
-
-        Args:
-            config: Server configuration (default: port 5009, host 0.0.0.0)
-        """
         if config is None:
             config = ServerConfig(host=DEFAULT_HOST, port=WORLD_STATE_PORT)
         super().__init__(config)
@@ -74,14 +52,6 @@ class WorldStateServer(TCPServerBase):
         self._last_update_time = None
 
     def handle_client_connection(self, client: socket.socket, address: tuple) -> None:
-        """
-        Handle incoming world state update from Unity.
-        Runs in dedicated client thread.
-
-        Args:
-            client: Connected client socket
-            address: Client address tuple (host, port)
-        """
         try:
             while self.is_running():
                 # Read Protocol V2 header: [Type:1][RequestId:4]
@@ -153,34 +123,13 @@ class WorldStateServer(TCPServerBase):
             logger.info(f"Client {address} disconnected")
 
     def register_update_callback(self, callback) -> None:
-        """
-        Register a callback to be invoked on each state update.
-
-        The callback will be called with the state update dictionary as argument.
-        Multiple callbacks can be registered.
-
-        Args:
-            callback: Callable that accepts a Dict parameter (state_update)
-
-        Example:
-            >>> def on_update(state):
-            >>>     print(f"Robots: {len(state.get('robots', []))}")
-            >>> server.register_update_callback(on_update)
-        """
+        """Register a callback(state_update: Dict) invoked on each state update."""
         self._on_state_update_callbacks.append(callback)
         logger.debug(
             f"Registered state update callback: {callback.__name__ if hasattr(callback, '__name__') else repr(callback)}"
         )
 
     def _update_world_state(self, state_update: Dict) -> None:
-        """
-        Update latest world state snapshot (thread-safe).
-
-        Invokes all registered callbacks after updating state.
-
-        Args:
-            state_update: World state update dictionary from Unity
-        """
         import time
 
         with self._state_lock:
@@ -196,26 +145,12 @@ class WorldStateServer(TCPServerBase):
                 logger.error(f"State update callback error: {e}", exc_info=True)
 
     def get_latest_state(self) -> Optional[Dict]:
-        """
-        Get latest world state snapshot (thread-safe).
-
-        Returns:
-            World state dictionary with 'robots', 'objects', 'timestamp' keys,
-            or None if no state received yet.
-        """
+        """Get latest world state snapshot (thread-safe). Returns None if no state received yet."""
         with self._state_lock:
             return self._latest_state.copy() if self._latest_state else None
 
     def get_robot_state(self, robot_id: str) -> Optional[Dict]:
-        """
-        Get state of specific robot (thread-safe).
-
-        Args:
-            robot_id: Robot identifier (e.g., "Robot1")
-
-        Returns:
-            Robot state dictionary or None if not found
-        """
+        """Get state of specific robot (thread-safe). Returns None if not found."""
         with self._state_lock:
             if not self._latest_state:
                 return None
@@ -228,15 +163,7 @@ class WorldStateServer(TCPServerBase):
             return None
 
     def get_object_state(self, object_id: str) -> Optional[Dict]:
-        """
-        Get state of specific object (thread-safe).
-
-        Args:
-            object_id: Object identifier (e.g., "RedCube")
-
-        Returns:
-            Object state dictionary or None if not found
-        """
+        """Get state of specific object (thread-safe). Returns None if not found."""
         with self._state_lock:
             if not self._latest_state:
                 return None
@@ -249,12 +176,7 @@ class WorldStateServer(TCPServerBase):
             return None
 
     def get_all_robot_ids(self) -> List[str]:
-        """
-        Get list of all known robot IDs (thread-safe).
-
-        Returns:
-            List of robot IDs
-        """
+        """Get all known robot IDs (thread-safe)."""
         with self._state_lock:
             if not self._latest_state:
                 return []
@@ -263,12 +185,7 @@ class WorldStateServer(TCPServerBase):
             return [robot.get("robot_id") for robot in robots if "robot_id" in robot]
 
     def get_all_object_ids(self) -> List[str]:
-        """
-        Get list of all known object IDs (thread-safe).
-
-        Returns:
-            List of object IDs
-        """
+        """Get all known object IDs (thread-safe)."""
         with self._state_lock:
             if not self._latest_state:
                 return []
@@ -277,12 +194,6 @@ class WorldStateServer(TCPServerBase):
             return [obj.get("object_id") for obj in objects if "object_id" in obj]
 
     def get_statistics(self) -> Dict:
-        """
-        Get server statistics.
-
-        Returns:
-            Dictionary with 'updates_received', 'last_update_time' keys
-        """
         with self._state_lock:
             return {
                 "updates_received": self._updates_received,

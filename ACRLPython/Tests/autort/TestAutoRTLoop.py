@@ -92,9 +92,7 @@ def sample_task():
     )
 
 
-# ============================================================================
 # Initialization Tests
-# ============================================================================
 
 
 def test_orchestrator_init_defaults():
@@ -145,9 +143,7 @@ def test_orchestrator_autonomous_overrides_human_in_loop():
             assert orchestrator.human_in_loop is False
 
 
-# ============================================================================
 # Scene Capture Tests
-# ============================================================================
 
 
 def test_capture_scene_stereo_detection(mock_config, mock_registry, mock_world_state):
@@ -275,9 +271,7 @@ def test_capture_scene_deduplicates_objects(mock_config, mock_registry):
                             assert len(scene.objects) == 1
 
 
-# ============================================================================
 # Task Execution Tests
-# ============================================================================
 
 
 def test_execute_task_converts_to_sequence_format(mock_config, sample_task):
@@ -327,9 +321,7 @@ def test_execute_task_handles_errors(mock_config, sample_task):
                         assert "error" in result
 
 
-# ============================================================================
 # Full Iteration Tests
-# ============================================================================
 
 
 def test_run_one_iteration_no_objects_skips(mock_config):
@@ -409,9 +401,7 @@ def test_run_one_iteration_full_success(mock_config, sample_scene, sample_task):
     mock_orchestrator.task_selector.update_history.assert_called_once()
 
 
-# ============================================================================
 # Human Approval Tests
-# ============================================================================
 
 
 def test_request_approval_accepts_y(mock_config, sample_task):
@@ -447,9 +437,7 @@ def test_request_approval_handles_eof(mock_config, sample_task):
                 assert approved_task is None
 
 
-# ============================================================================
 # Loop Control Tests
-# ============================================================================
 
 
 def test_stop_stops_loop(mock_config):

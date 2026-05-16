@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-AutoRT Module - Autonomous Task Generation System
-
-Public API for AutoRT task generation and execution.
-Based on Google DeepMind's AutoRT paper.
-"""
+"""AutoRT autonomous task generation system."""
 
 from autort.DataModels import (
     GroundedObject,

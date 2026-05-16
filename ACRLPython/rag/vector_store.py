@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Vector Store for RAG System
-============================
-
-In-memory vector storage with pickle-based persistence and cosine similarity search.
-"""
+"""In-memory vector store with pickle-based persistence and cosine similarity search."""
 
 from typing import List, Dict, Any, Optional
 import pickle
@@ -13,7 +8,6 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from .ConfidenceScorer import apply_confidence_boosting, get_category_min_score
 
-# Import config
 try:
     from config.Rag import (
         RAG_MIN_SIMILARITY_SCORE,
@@ -29,22 +23,15 @@ except ImportError:
         RAG_EMBEDDING_DIMENSION,
     )
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
 
 
 class VectorStore:
-    """
-    In-memory vector store with cosine similarity search.
-
-    Stores operation embeddings with metadata and provides efficient
-    similarity search functionality.
-    """
+    """In-memory vector store with cosine similarity search."""
 
     def __init__(self):
-        """Initialize empty vector store"""
         self.vectors: np.ndarray = np.array([])  # Shape: (n_ops, embedding_dim)
         self.operation_ids: List[str] = []
         self.metadata: List[Dict[str, Any]] = []
@@ -58,23 +45,7 @@ class VectorStore:
     def add_operation(
         self, operation_id: str, embedding: np.ndarray, metadata: Dict[str, Any]
     ):
-        """
-        Add an operation to the vector store.
-
-        Args:
-            operation_id: Unique operation identifier
-            embedding: Embedding vector
-            metadata: Operation metadata (name, category, etc.)
-
-        Example:
-            >>> store = VectorStore()
-            >>> embedding = np.array([0.1, 0.2, 0.3])
-            >>> store.add_operation(
-            ...     "op_001",
-            ...     embedding,
-            ...     {"name": "move_to_coordinate", "category": "navigation"}
-            ... )
-        """
+        """Add an operation embedding and metadata to the store."""
         with self._lock:
             # Set embedding dimension on first add; validate against config
             if self.embedding_dimension is None:
@@ -93,7 +64,6 @@ class VectorStore:
                     f"Embedding dimension mismatch: expected {self.embedding_dimension}, got {len(embedding)}"
                 )
 
-            # Add to lists
             self.operation_ids.append(operation_id)
             self.metadata.append(metadata)
 
@@ -132,29 +102,7 @@ class VectorStore:
         query_text: str = "",
         enable_confidence: bool = True,
     ) -> List[Dict[str, Any]]:
-        """
-        Search for similar operations using cosine similarity.
-
-        Args:
-            query_embedding: Query embedding vector
-            top_k: Number of results to return
-            min_score: Minimum similarity score to include
-            category_filter: Filter by operation category
-            complexity_filter: Filter by operation complexity
-            query_text: Original query for confidence scoring
-            enable_confidence: Whether to apply confidence scoring
-
-        Returns:
-            List of dicts with keys: operation_id, score, metadata, confidence
-
-        Example:
-            >>> store = VectorStore()
-            >>> # ... add operations ...
-            >>> query = np.array([0.15, 0.25, 0.35])
-            >>> results = store.search(query, top_k=3)
-            >>> results[0]['operation_id']
-            'op_001'
-        """
+        """Search for similar operations using cosine similarity."""
         with self._lock:
             self._flush_pending_vectors()
 
@@ -175,10 +123,8 @@ class VectorStore:
                 similarities = cosine_similarity(query, self.vectors)[0]
             similarities = np.nan_to_num(similarities, nan=0.0, posinf=1.0, neginf=0.0)
 
-            # Create results with metadata
             results = []
             for idx, score in enumerate(similarities):
-                # Apply filters
                 if (
                     category_filter
                     and self.metadata[idx].get("category") != category_filter
@@ -209,10 +155,8 @@ class VectorStore:
                     }
                 )
 
-            # Sort by score descending
             results.sort(key=lambda x: x["score"], reverse=True)
 
-            # Apply confidence scoring if enabled
             if enable_confidence and RAG_ENABLE_CONFIDENCE_SCORING and results:
                 results = apply_confidence_boosting(
                     results,
@@ -221,19 +165,10 @@ class VectorStore:
                     complexity_filter=complexity_filter,
                 )
 
-            # Return top-k
             return results[:top_k]
 
     def get_operation(self, operation_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get operation by ID.
-
-        Args:
-            operation_id: Operation identifier
-
-        Returns:
-            Dict with operation_id, embedding, metadata or None if not found
-        """
+        """Return operation by ID, or None if not found."""
         with self._lock:
             self._flush_pending_vectors()
             try:
@@ -247,18 +182,7 @@ class VectorStore:
                 return None
 
     def save(self, file_path: Optional[str] = None):
-        """
-        Save vector store to pickle file.
-
-        Args:
-            file_path: Path to save file (default from config)
-
-        Example:
-            >>> store = VectorStore()
-            >>> # ... add operations ...
-            >>> store.save()
-            Saved vector store to .rag_index.pkl
-        """
+        """Save vector store to pickle file."""
         path = file_path or RAG_VECTOR_STORE_PATH
 
         with self._lock:
@@ -279,19 +203,7 @@ class VectorStore:
 
     @classmethod
     def load(cls, file_path: Optional[str] = None) -> "VectorStore":
-        """
-        Load vector store from pickle file.
-
-        Args:
-            file_path: Path to load file (default from config)
-
-        Returns:
-            Loaded VectorStore instance
-
-        Example:
-            >>> store = VectorStore.load()
-            Loaded vector store from .rag_index.pkl (5 operations)
-        """
+        """Load vector store from pickle file, or return empty store if not found."""
         path = file_path or RAG_VECTOR_STORE_PATH
 
         try:
@@ -317,16 +229,7 @@ class VectorStore:
     def update_operation_metadata(
         self, operation_id: str, metadata_update: Dict[str, Any]
     ) -> bool:
-        """
-        Merge new fields into the metadata of an existing operation.
-
-        Args:
-            operation_id: Operation identifier to update
-            metadata_update: Dict of fields to merge into the existing metadata
-
-        Returns:
-            True if the operation was found and updated, False otherwise
-        """
+        """Merge new fields into the metadata of an existing operation."""
         with self._lock:
             try:
                 idx = self.operation_ids.index(operation_id)
@@ -336,12 +239,7 @@ class VectorStore:
                 return False
 
     def get_stats(self) -> Dict[str, Any]:
-        """
-        Get statistics about the vector store.
-
-        Returns:
-            Dict with num_operations, embedding_dimension, categories, etc.
-        """
+        """Return statistics about the vector store."""
         with self._lock:
             categories = {}
             complexities = {}
@@ -372,7 +270,6 @@ class VectorStore:
             logger.info("Cleared vector store")
 
     def __len__(self) -> int:
-        """Return number of operations in store"""
         with self._lock:
             return len(self.operation_ids)
 

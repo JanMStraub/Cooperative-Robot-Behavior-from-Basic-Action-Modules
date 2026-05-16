@@ -63,7 +63,6 @@ class TestGraspEndToEnd:
 
     @pytest.mark.slow
     def test_grasp_object_full_pipeline_success(self, mock_unity_connection):
-        """Test grasp operation sends command successfully (async mode)."""
         # Async mode - command is sent without waiting for Unity response
         mock_unity_connection.send_command.return_value = True
 
@@ -92,7 +91,6 @@ class TestGraspEndToEnd:
 
     @pytest.mark.slow
     def test_grasp_with_custom_parameters(self, mock_unity_connection):
-        """Test grasp with custom approach vector and distances."""
         mock_unity_connection.send_command.return_value = True
 
         result = grasp_object(
@@ -115,7 +113,6 @@ class TestGraspEndToEnd:
 
     @pytest.mark.slow
     def test_grasp_planning_failure_scenarios(self, mock_unity_connection):
-        """Test command send failure scenario."""
         # Test command send failure
         mock_unity_connection.send_command.return_value = False
 
@@ -131,7 +128,6 @@ class TestGraspEndToEnd:
 
     @pytest.mark.slow
     def test_grasp_with_all_approach_types(self, mock_unity_connection):
-        """Test grasp execution with all supported approach types."""
         approach_types = ["auto", "top", "front", "side"]
         mock_unity_connection.send_command.return_value = True
 
@@ -146,7 +142,6 @@ class TestGraspEndToEnd:
 
     @pytest.mark.slow
     def test_grasp_retreat_motion(self, mock_unity_connection):
-        """Test grasp with and without retreat motion."""
         mock_unity_connection.send_command.return_value = True
 
         # Test with retreat enabled
@@ -237,7 +232,7 @@ class TestGraspEndToEnd:
 
 def _is_sequence_server_available() -> bool:
     """Check if the SequenceServer (port 5008) is reachable."""
-    from backend_client import port_open  # type: ignore[import]
+    from BackendClient import port_open  # type: ignore[import]
 
     return port_open(5008, timeout=1.0)
 
@@ -248,7 +243,7 @@ _SKIP_REASON_SEQ = (
 )
 
 # Import the shared BackendClient from the helpers package.
-from backend_client import BackendClient as _BackendClient  # type: ignore[import]
+from BackendClient import BackendClient as _BackendClient  # type: ignore[import]
 
 
 @pytest.mark.integration

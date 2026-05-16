@@ -1,17 +1,8 @@
 #!/usr/bin/env python3
 """
-Collaborative Manipulation Operations (Level 5)
-================================================
+Collaborative Manipulation Operations (Level 5): stabilize_object (ATOMIC).
 
-This module implements ATOMIC Level 5 operations from the thesis exposé:
-- stabilize_object: Hold object stable while partner manipulates (ATOMIC)
-
-REMOVED (non-atomic):
-- stabilize_and_manipulate_collaboratively: Use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN
-
-These operations enable the most advanced multi-robot collaboration
-requiring tight coordination and force control.
-All operations are atomic - the LLM chains them to create complex workflows.
+Non-atomic stabilize_and_manipulate_collaboratively removed — use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN.
 """
 
 import time
@@ -28,30 +19,14 @@ from .Base import (
     OperationRelationship,
 )
 
-# Configure logging
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Knowledge Graph helpers
-# ============================================================================
 
 
 def _kg_both_robots_can_reach(object_id: str, robot_id: str) -> Optional[str]:
     """
-    Check whether the KG reports that at least two robots can reach the object.
+    Check KG reachability — returns warning string if <2 robots can reach object, else None.
 
-    Returns a warning string if the reachable set is populated but contains
-    fewer than two robots (suggesting the stabilizing robot's partner cannot
-    reach). Returns None when the check passes or the KG is unavailable/empty
-    (empty list = KG not yet populated = no false negatives at startup).
-
-    Args:
-        object_id: The object to check reachability for.
-        robot_id: The robot requesting the check (for log context).
-
-    Returns:
-        Warning string if fewer than 2 robots can reach the object, else None.
+    Empty reachable set = KG not yet populated; treated as pass to avoid false negatives at startup.
     """
     try:
         from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
@@ -78,11 +53,6 @@ def _kg_both_robots_can_reach(object_id: str, robot_id: str) -> Optional[str]:
         return None
 
 
-# ============================================================================
-# Implementation: stabilize_object - Object stabilization
-# ============================================================================
-
-
 def stabilize_object(
     robot_id: str,
     object_id: str,
@@ -91,33 +61,8 @@ def stabilize_object(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """
-    Stabilize (hold) an object while another robot manipulates it.
-
-    This operation commands a robot to grasp and hold an object stable,
-    providing support for another robot to perform manipulation tasks
-    (e.g., insertion, assembly, precision placement).
-
-    Args:
-        robot_id: ID of the stabilizing robot
-        object_id: ID of the object to stabilize
-        duration_ms: Duration to hold stable (milliseconds)
-        force_limit: Maximum grip force (Newtons)
-        request_id: Optional request ID for tracking
-        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
-
-    Returns:
-        OperationResult with stabilization activation confirmation
-
-    Example:
-        >>> # Robot1 holds object stable for 5 seconds
-        >>> result = stabilize_object("Robot1", "LargeCube", duration_ms=5000)
-
-        >>> # Robot1 stabilizes while Robot2 manipulates
-        >>> stabilize_object("Robot1", "AssemblyPart", duration_ms=10000)
-    """
+    """Hold object stable while partner robot manipulates. Force control handled Unity-side."""
     try:
-        # Validate robot_id
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
@@ -125,7 +70,6 @@ def stabilize_object(
                 ["Provide a valid robot ID"],
             )
 
-        # Validate object_id
         if not object_id or not isinstance(object_id, str):
             return OperationResult.error_result(
                 "INVALID_OBJECT_ID",
@@ -133,7 +77,6 @@ def stabilize_object(
                 ["Provide a valid object ID"],
             )
 
-        # Validate duration_ms
         if not (100 <= duration_ms <= 30000):
             return OperationResult.error_result(
                 "INVALID_DURATION",
@@ -141,7 +84,6 @@ def stabilize_object(
                 ["Use duration between 100ms and 30000ms (30s)"],
             )
 
-        # Validate force_limit
         if not (1.0 <= force_limit <= 50.0):
             return OperationResult.error_result(
                 "INVALID_FORCE_LIMIT",
@@ -149,12 +91,10 @@ def stabilize_object(
                 ["Use force limit between 1N and 50N"],
             )
 
-        # KG reachability advisory (non-blocking — graph may be stale at startup)
         kg_warning = _kg_both_robots_can_reach(object_id, robot_id)
         if kg_warning:
             logger.warning(kg_warning)
 
-        # Determine whether to use ROS or TCP path
         _use_ros = use_ros
         if _use_ros is None:
             try:
@@ -164,16 +104,13 @@ def stabilize_object(
             except ImportError:
                 _use_ros = False
 
-        # Note: Stabilization requires force control and continuous holding
-        # This is best handled by Unity's force control system (TCP path)
-        # ROS could handle initial positioning, but force feedback loops are Unity-side
+        # Stabilisation needs continuous force feedback loops → Unity TCP path always
         if _use_ros:
             logger.info(
                 "Stabilization force control via ROS not yet implemented - using Unity direct control"
             )
             _use_ros = False
 
-        # Construct command (TCP path)
         command = {
             "command_type": "stabilize_object",
             "robot_id": robot_id,
@@ -221,9 +158,7 @@ def stabilize_object(
         )
 
 
-# ============================================================================
 # REMOVED: stabilize_and_manipulate_collaboratively
-# ============================================================================
 # This operation was REMOVED because it is non-atomic (combines grasp + hold + manipulate).
 # For collaborative manipulation workflows, see operations/WorkflowPatterns.py for the
 # STABILIZE_MANIPULATE_PATTERN showing how to chain atomic operations.
@@ -243,16 +178,9 @@ def stabilize_object(
 # Robot1 releases when done:
 # 5. wait_for_signal(robot1, "manipulation_complete")
 # 6. control_gripper(robot1, open=True)
-# ============================================================================
-
-
-# ============================================================================
-# BasicOperation Definitions
-# ============================================================================
 
 
 def create_stabilize_object_operation() -> BasicOperation:
-    """Create the BasicOperation definition for stabilize_object."""
     return BasicOperation(
         operation_id="collaborative_stabilize_001",
         name="stabilize_object",
@@ -341,18 +269,6 @@ def create_stabilize_object_operation() -> BasicOperation:
         implementation=stabilize_object,
     )
 
-
-# ============================================================================
-# REMOVED: create_stabilize_and_manipulate_operation
-# ============================================================================
-# The stabilize_and_manipulate_collaboratively operation was removed because it
-# is non-atomic. See WorkflowPatterns.py for STABILIZE_MANIPULATE_PATTERN.
-# ============================================================================
-
-
-# ============================================================================
-# Create operation instances for export
-# ============================================================================
 
 STABILIZE_OBJECT_OPERATION = create_stabilize_object_operation()
 # STABILIZE_AND_MANIPULATE_OPERATION removed - use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN instead

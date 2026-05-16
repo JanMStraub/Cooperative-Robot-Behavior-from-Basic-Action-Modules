@@ -37,16 +37,7 @@ class TaskSelector:
         """
         Select a task from approved candidates.
 
-        Args:
-            candidates: List of approved tasks
-            strategy: Selection strategy
-                - "balanced": Mix novel and practiced tasks
-                - "explore": Prioritize untried tasks
-                - "exploit": Prioritize high-success tasks
-                - "random": Random selection
 
-        Returns:
-            Selected task or None if no candidates
         """
         if not candidates:
             return None
@@ -127,9 +118,6 @@ class TaskSelector:
         """
         Record task outcome for future selection.
 
-        Args:
-            task: The executed task
-            result: Execution result with at least 'success' key
         """
         key = self._task_key(task)
         with self._history_lock:

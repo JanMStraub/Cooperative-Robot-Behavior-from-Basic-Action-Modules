@@ -143,9 +143,7 @@ def valid_task_json():
     )
 
 
-# ============================================================================
 # Initialization Tests
-# ============================================================================
 
 
 def test_task_generator_init(mock_config, mock_registry):
@@ -158,9 +156,7 @@ def test_task_generator_init(mock_config, mock_registry):
             assert generator._operations_summary_cache is None
 
 
-# ============================================================================
 # JSON Parsing Tests
-# ============================================================================
 
 
 def test_parse_llm_response_valid_list(mock_config, mock_registry, valid_task_json):
@@ -249,9 +245,7 @@ def test_parse_llm_response_invalid_schema(mock_config, mock_registry):
                 generator._parse_llm_response(invalid_schema)
 
 
-# ============================================================================
 # Operation Validation Tests
-# ============================================================================
 
 
 def test_validate_operations_valid(mock_config, mock_registry):
@@ -297,9 +291,7 @@ def test_validate_operations_invalid(mock_config, mock_registry):
             assert generator._validate_operations(task) is False
 
 
-# ============================================================================
 # Operations Summary Tests
-# ============================================================================
 
 
 def test_get_operations_summary_caching(mock_config, mock_registry):
@@ -339,9 +331,7 @@ def test_get_operations_summary_format(mock_config, mock_registry):
             assert "velocity" in summary  # Optional param appears in summary
 
 
-# ============================================================================
 # Retry Logic Tests
-# ============================================================================
 
 
 def test_generate_tasks_retry_on_json_error(
@@ -409,9 +399,7 @@ def test_generate_tasks_fails_after_max_retries(
             )
 
 
-# ============================================================================
 # Task Generation Integration Tests
-# ============================================================================
 
 
 def test_generate_tasks_filters_invalid_operations(

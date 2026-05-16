@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-Shared pytest fixtures for tests
-"""
 
 import sys
 from pathlib import Path
@@ -17,9 +14,7 @@ import numpy as np
 import socket
 from unittest.mock import Mock, MagicMock
 
-# ---------------------------------------------------------------------------
 # Singleton reset utility
-# ---------------------------------------------------------------------------
 
 
 def _reset_singleton(module_path: str, class_name: str) -> None:
@@ -29,9 +24,6 @@ def _reset_singleton(module_path: str, class_name: str) -> None:
     Silent on ImportError or AttributeError so it is safe to call even when
     the module has not been imported yet or the class name has changed.
 
-    Args:
-        module_path: Dotted import path of the module (e.g. 'servers.CommandServer').
-        class_name: Name of the class whose ``_instance`` to reset.
     """
     try:
         mod = importlib.import_module(module_path)
@@ -52,12 +44,6 @@ _ALL_SINGLETONS = [
 
 @pytest.fixture
 def mock_socket():
-    """
-    Create a mock socket object for testing network code
-
-    Returns:
-        Mock socket with common socket methods
-    """
     sock = Mock(spec=socket.socket)
     sock.recv = Mock(return_value=b"test_data")
     sock.sendall = Mock(return_value=None)
@@ -71,12 +57,6 @@ def mock_socket():
 
 @pytest.fixture
 def sample_image():
-    """
-    Create a sample RGB image for testing
-
-    Returns:
-        Numpy array representing a 640x480 RGB image
-    """
     # Create a simple gradient image
     image = np.zeros((480, 640, 3), dtype=np.uint8)
     image[:, :, 0] = np.linspace(0, 255, 640, dtype=np.uint8)  # Red gradient
@@ -87,12 +67,6 @@ def sample_image():
 
 @pytest.fixture
 def sample_red_cube_image():
-    """
-    Create a test image with a red cube for object detection testing
-
-    Returns:
-        Numpy array with a red square in the center (proper BGR format)
-    """
     image = np.zeros((480, 640, 3), dtype=np.uint8)
     # Add a red cube with proper BGR values
     # Red in BGR = (0, 0, 255)
@@ -102,12 +76,6 @@ def sample_red_cube_image():
 
 @pytest.fixture
 def sample_blue_cube_image():
-    """
-    Create a test image with a blue cube for object detection testing
-
-    Returns:
-        Numpy array with a blue square in the center (proper BGR format)
-    """
     image = np.zeros((480, 640, 3), dtype=np.uint8)
     # Add a blue cube with proper BGR values
     # Blue in BGR = (255, 0, 0)
@@ -117,12 +85,6 @@ def sample_blue_cube_image():
 
 @pytest.fixture
 def sample_stereo_pair():
-    """
-    Create a sample stereo image pair for depth estimation testing
-
-    Returns:
-        Tuple of (left_image, right_image)
-    """
     # Create identical images for simplicity (real stereo would have disparity)
     left = np.zeros((480, 640, 3), dtype=np.uint8)
     left[200:280, 270:370, 2] = 255  # Red cube in left image
@@ -136,12 +98,6 @@ def sample_stereo_pair():
 
 @pytest.fixture
 def server_config():
-    """
-    Create a test server configuration
-
-    Returns:
-        ServerConfig instance with test settings
-    """
     from core.TCPServerBase import ServerConfig
 
     return ServerConfig(
@@ -155,12 +111,6 @@ def server_config():
 
 @pytest.fixture
 def detection_result_dict():
-    """
-    Create a sample detection result dictionary
-
-    Returns:
-        Dict representing a detection result
-    """
     return {
         "success": True,
         "camera_id": "test_camera",
@@ -181,12 +131,6 @@ def detection_result_dict():
 
 @pytest.fixture
 def llm_result_dict():
-    """
-    Create a sample LLM result dictionary
-
-    Returns:
-        Dict representing an LLM analysis result
-    """
     return {
         "success": True,
         "response": "I see a red cube on the table.",
@@ -204,12 +148,7 @@ def llm_result_dict():
 
 @pytest.fixture
 def mock_lmstudio_client():
-    """
-    Create a mock LM Studio (OpenAI-compatible) client for testing
-
-    Returns:
-        Mock OpenAI client with mocked chat.completions.create method
-    """
+    """Create a mock LM Studio (OpenAI-compatible) client for testing"""
     client = MagicMock()
 
     # Mock models.list() for connection testing
@@ -247,12 +186,6 @@ def cleanup_singletons():
 
 @pytest.fixture
 def mock_command_broadcaster():
-    """
-    Create a mock CommandBroadcaster for operation testing
-
-    Returns:
-        Mock CommandBroadcaster with send_command method
-    """
     broadcaster = Mock()
     broadcaster.send_command = Mock(return_value=True)
     broadcaster.wait_for_result = Mock(
@@ -263,15 +196,6 @@ def mock_command_broadcaster():
 
 @pytest.fixture
 def mock_unified_image_storage(sample_red_cube_image):
-    """
-    Create a mock UnifiedImageStorage for detection testing
-
-    Args:
-        sample_red_cube_image: Sample test image fixture
-
-    Returns:
-        Mock UnifiedImageStorage with get_single_image method
-    """
     storage = Mock()
     storage.get_single_image = Mock(return_value=sample_red_cube_image)
     storage.get_stereo_pair = Mock(
@@ -285,12 +209,6 @@ def mock_unified_image_storage(sample_red_cube_image):
 
 @pytest.fixture
 def mock_get_global_registry():
-    """
-    Create a mock operation registry for operations testing
-
-    Returns:
-        Mock function that returns a mock registry
-    """
     registry = Mock()
     # Mock common registry methods
     registry.get_operation = Mock(return_value=None)
@@ -302,9 +220,7 @@ def mock_get_global_registry():
     return _get_global_registry
 
 
-# ============================================================================
 # Global Auto-Mocking for Operations Testing
-# ============================================================================
 
 
 @pytest.fixture(autouse=False)
@@ -396,9 +312,6 @@ def patch_world_state():
     WorldState is imported inside functions with try/except, so we patch it at
     the operations.WorldState module level where it's actually imported from.
 
-    Returns:
-        Function that returns a context manager for patching WorldState
-
     Example:
         def test_detect_robot(mock_world_state_multi_robot, patch_world_state):
             with patch_world_state(mock_world_state_multi_robot):
@@ -423,9 +336,6 @@ def patch_yolo_detector():
 
     YOLODetector is imported inside functions, so we need to use patch() context manager.
 
-    Returns:
-        Function that returns a context manager for patching YOLODetector
-
     Example:
         def test_detect_field(patch_yolo_detector):
             mock_detector = Mock()
@@ -448,33 +358,16 @@ def patch_yolo_detector():
 
 @pytest.fixture
 def temp_output_dir(tmp_path):
-    """
-    Create a temporary output directory for test files
-
-    Args:
-        tmp_path: Pytest's built-in temporary directory fixture
-
-    Returns:
-        Path to temporary output directory
-    """
     output_dir = tmp_path / "test_output"
     output_dir.mkdir(exist_ok=True)
     return output_dir
 
 
-# ============================================================================
 # RAG System Fixtures
-# ============================================================================
 
 
 @pytest.fixture
 def mock_lmstudio_embeddings_client():
-    """
-    Create a mock LM Studio client for embedding generation
-
-    Returns:
-        Mock OpenAI client with mocked embeddings.create method
-    """
     client = MagicMock()
 
     # Mock embeddings.create() for embedding API
@@ -491,12 +384,6 @@ def mock_lmstudio_embeddings_client():
 
 @pytest.fixture
 def sample_operation():
-    """
-    Create a sample BasicOperation for testing
-
-    Returns:
-        Mock BasicOperation instance
-    """
     from operations.Base import OperationCategory, OperationComplexity
 
     op = Mock()
@@ -514,15 +401,6 @@ def sample_operation():
 
 @pytest.fixture
 def mock_operation_registry(sample_operation):
-    """
-    Create a mock operation registry with sample operations
-
-    Args:
-        sample_operation: Sample operation fixture
-
-    Returns:
-        Mock OperationRegistry instance
-    """
     registry = Mock()
     registry.get_all_operations = Mock(return_value=[sample_operation])
     registry.get_operation = Mock(return_value=sample_operation)
@@ -532,15 +410,6 @@ def mock_operation_registry(sample_operation):
 
 @pytest.fixture
 def temp_vector_store_path(tmp_path):
-    """
-    Create a temporary path for vector store persistence
-
-    Args:
-        tmp_path: Pytest's built-in temporary directory fixture
-
-    Returns:
-        Path to temporary vector store file
-    """
     return tmp_path / "test_vector_store.pkl"
 
 
@@ -584,19 +453,11 @@ def clean_registry():
     _cleanup()  # Clean after test
 
 
-# ============================================================================
 # Phase 2/3: Spatial Reasoning and Verification Fixtures
-# ============================================================================
 
 
 @pytest.fixture
 def mock_world_state():
-    """
-    Mock WorldState for testing predicates and verification
-
-    Returns:
-        Mock WorldState with sample robot status data
-    """
     world_state = Mock()
     world_state.get_robot_position = Mock(return_value=(0.3, 0.0, 0.1))
     world_state.get_robot_status = Mock(
@@ -615,12 +476,7 @@ def mock_world_state():
 
 @pytest.fixture
 def sample_robot_positions():
-    """
-    Sample robot base positions for testing
-
-    Returns:
-        Dict mapping robot IDs to base positions
-    """
+    """Sample robot base positions for testing"""
     return {
         "Robot1": (-0.3, 0.0, 0.0),
         "Robot2": (0.3, 0.0, 0.0),
@@ -629,12 +485,7 @@ def sample_robot_positions():
 
 @pytest.fixture
 def sample_operation_with_conditions():
-    """
-    BasicOperation with preconditions and postconditions for verification testing
-
-    Returns:
-        Mock BasicOperation instance with test conditions
-    """
+    """BasicOperation with preconditions and postconditions for verification testing"""
     from operations.Base import OperationCategory, OperationComplexity
 
     op = Mock()
@@ -667,12 +518,7 @@ def cleanup_world_state():
 
 @pytest.fixture
 def mock_world_state_with_objects():
-    """
-    Mock WorldState with sample objects for spatial operations testing
-
-    Returns:
-        Mock WorldState with objects registered
-    """
+    """Mock WorldState with sample objects for spatial operations testing"""
     world_state = Mock()
 
     # Sample objects
@@ -694,12 +540,7 @@ def mock_world_state_with_objects():
 
 @pytest.fixture
 def mock_world_state_multi_robot():
-    """
-    Mock WorldState with multiple robots for coordination testing
-
-    Returns:
-        Mock WorldState with 2 robots and state tracking
-    """
+    """Mock WorldState with multiple robots for coordination testing"""
     from operations.WorldState import RobotState
 
     world_state = Mock()
@@ -739,23 +580,13 @@ def mock_world_state_multi_robot():
 
 @pytest.fixture
 def sample_navigation_params():
-    """
-    Sample navigation operation parameters
-
-    Returns:
-        Dict with navigation parameters
-    """
+    """Sample navigation operation parameters"""
     return {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}
 
 
 @pytest.fixture
 def sample_manipulation_params():
-    """
-    Sample manipulation operation parameters
-
-    Returns:
-        Dict with manipulation parameters
-    """
+    """Sample manipulation operation parameters"""
     return {"robot_id": "Robot1", "object_id": "cube_01", "action": "grasp"}
 
 
@@ -778,9 +609,7 @@ def disable_yolo_detection():
     vision_cfg.USE_YOLO = original_use_yolo
 
 
-# ============================================================================
 # SYNCHRONIZATION OPERATION FIXTURES
-# ============================================================================
 
 
 @pytest.fixture
@@ -806,12 +635,7 @@ def cleanup_event_bus():
 
 @pytest.fixture
 def event_bus(cleanup_event_bus):
-    """
-    Provide a clean EventBus instance
-
-    Returns:
-        EventBus singleton instance with clean state
-    """
+    """Provide a clean EventBus instance"""
     from operations.SyncOperations import EventBus
 
     bus = EventBus()
@@ -821,25 +645,9 @@ def event_bus(cleanup_event_bus):
 
 @pytest.fixture
 def timing_helper():
-    """
-    Helper for timing verification with tolerance
-
-    Returns:
-        Function that verifies timing with configurable tolerance percentage
-    """
 
     def verify_timing(actual_ms, expected_ms, tolerance_percent=10):
-        """
-        Verify actual timing is within tolerance of expected
-
-        Args:
-            actual_ms: Actual duration in milliseconds
-            expected_ms: Expected duration in milliseconds
-            tolerance_percent: Tolerance as percentage (default 10%)
-
-        Returns:
-            True if within tolerance, False otherwise
-        """
+        """Verify actual timing is within tolerance of expected"""
         tolerance = expected_ms * (tolerance_percent / 100.0)
         return abs(actual_ms - expected_ms) <= tolerance
 
@@ -853,21 +661,10 @@ def thread_barrier():
 
     Ensures all threads start simultaneously to test race conditions.
 
-    Returns:
-        Function that creates threading.Barrier for coordinating thread starts
     """
     import threading
 
     def create_barrier(num_threads):
-        """
-        Create a barrier for synchronizing thread starts
-
-        Args:
-            num_threads: Number of threads to synchronize
-
-        Returns:
-            threading.Barrier instance
-        """
         return threading.Barrier(num_threads)
 
     return create_barrier
@@ -875,25 +672,14 @@ def thread_barrier():
 
 @pytest.fixture
 def thread_error_collector():
-    """
-    Thread-safe error collection for concurrent tests
-
-    Returns:
-        Tuple of (errors list, add_error function) for collecting errors
-        from multiple threads safely
-    """
+    """Thread-safe error collection for concurrent tests"""
     import threading
 
     errors = []
     lock = threading.Lock()
 
     def add_error(error):
-        """
-        Thread-safe error addition
-
-        Args:
-            error: Error to add to collection
-        """
+        """Thread-safe error addition"""
         with lock:
             errors.append(error)
 
@@ -902,26 +688,10 @@ def thread_error_collector():
 
 @pytest.fixture
 def async_executor():
-    """
-    Helper for executing functions in background threads
-
-    Returns:
-        Function that executes callable in daemon thread and returns thread object
-    """
     import threading
 
     def execute_async(func, *args, **kwargs):
-        """
-        Execute function in background daemon thread
-
-        Args:
-            func: Callable to execute
-            *args: Positional arguments for func
-            **kwargs: Keyword arguments for func
-
-        Returns:
-            Thread object (already started)
-        """
+        """Execute function in background daemon thread"""
         thread = threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True)
         thread.start()
         return thread
@@ -929,19 +699,12 @@ def async_executor():
     return execute_async
 
 
-# ============================================================================
 # Spatial Operations Fixtures
-# ============================================================================
 
 
 @pytest.fixture
 def mock_move(monkeypatch):
-    """
-    Mock move_to_coordinate function for spatial operations testing
-
-    Returns:
-        Mock function that simulates move_to_coordinate
-    """
+    """Mock move_to_coordinate function for spatial operations testing"""
     from operations.Base import OperationResult
 
     def _mock_move(**kwargs):
@@ -960,12 +723,7 @@ def mock_move(monkeypatch):
 
 @pytest.fixture
 def mock_get_ws(monkeypatch):
-    """
-    Mock get_world_state function for spatial operations testing
-
-    Returns:
-        Mock function that returns a mock world state
-    """
+    """Mock get_world_state function for spatial operations testing"""
     mock = Mock()
     # Auto-patch into SpatialOperations module
     monkeypatch.setattr("operations.SpatialOperations.get_world_state", mock)

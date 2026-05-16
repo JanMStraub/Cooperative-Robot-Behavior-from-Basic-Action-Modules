@@ -1,4 +1,3 @@
-"""Tests for cooperative WorldState extensions."""
 import pytest
 from operations.WorldState import WorldState, RobotState
 
@@ -44,6 +43,7 @@ class TestIntentAwareWorkspaceAllocation:
 
     def _get_region(self):
         from config.Robot import WORKSPACE_REGIONS
+
         ws = WorldState()
         # Release all allocations to ensure clean state
         for region in list(WORKSPACE_REGIONS.keys()):
@@ -142,8 +142,13 @@ class TestSupplementObjectFromUnity:
     def test_creates_new_object_when_not_in_worldstate(self):
         ws = WorldState()
         ws.supplement_object_from_unity(
-            "blue_cube", (2.0, 0.0, 0.0), color="blue", object_type="cube",
-            confidence=1.0, dimensions=(0.05, 0.05, 0.05), rotation=None,
+            "blue_cube",
+            (2.0, 0.0, 0.0),
+            color="blue",
+            object_type="cube",
+            confidence=1.0,
+            dimensions=(0.05, 0.05, 0.05),
+            rotation=None,
         )
         obj = self._get(ws, "blue_cube")
         assert obj is not None
@@ -152,10 +157,17 @@ class TestSupplementObjectFromUnity:
 
     def test_does_not_overwrite_vision_position(self):
         ws = WorldState()
-        ws.update_object_position("red_cube", (1.0, 0.0, 0.0), color="red", source="vision")
+        ws.update_object_position(
+            "red_cube", (1.0, 0.0, 0.0), color="red", source="vision"
+        )
         ws.supplement_object_from_unity(
-            "red_cube", (9.0, 9.0, 9.0), color="red", object_type="cube",
-            confidence=1.0, dimensions=(0.05, 0.05, 0.05), rotation=None,
+            "red_cube",
+            (9.0, 9.0, 9.0),
+            color="red",
+            object_type="cube",
+            confidence=1.0,
+            dimensions=(0.05, 0.05, 0.05),
+            rotation=None,
         )
         obj = self._get(ws, "red_cube")
         assert obj.position == (1.0, 0.0, 0.0)
@@ -163,10 +175,17 @@ class TestSupplementObjectFromUnity:
 
     def test_fills_missing_dimensions_for_vision_object(self):
         ws = WorldState()
-        ws.update_object_position("green_cube", (0.5, 0.0, 0.0), color="green", dimensions=None)
+        ws.update_object_position(
+            "green_cube", (0.5, 0.0, 0.0), color="green", dimensions=None
+        )
         ws.supplement_object_from_unity(
-            "green_cube", (9.0, 9.0, 9.0), color="green", object_type="cube",
-            confidence=1.0, dimensions=(0.05, 0.05, 0.05), rotation=None,
+            "green_cube",
+            (9.0, 9.0, 9.0),
+            color="green",
+            object_type="cube",
+            confidence=1.0,
+            dimensions=(0.05, 0.05, 0.05),
+            rotation=None,
         )
         obj = self._get(ws, "green_cube")
         assert obj.dimensions == (0.05, 0.05, 0.05)
@@ -174,15 +193,20 @@ class TestSupplementObjectFromUnity:
 
     def test_does_not_overwrite_existing_dimensions(self):
         ws = WorldState()
-        ws.update_object_position("red_cube", (1.0, 0.0, 0.0), dimensions=(0.03, 0.03, 0.03))
+        ws.update_object_position(
+            "red_cube", (1.0, 0.0, 0.0), dimensions=(0.03, 0.03, 0.03)
+        )
         ws.supplement_object_from_unity(
-            "red_cube", (9.0, 9.0, 9.0), dimensions=(0.99, 0.99, 0.99),
+            "red_cube",
+            (9.0, 9.0, 9.0),
+            dimensions=(0.99, 0.99, 0.99),
         )
         obj = self._get(ws, "red_cube")
         assert obj.dimensions == (0.03, 0.03, 0.03)
 
     def test_source_field_on_objectstate(self):
         from operations.WorldState import ObjectState
+
         obj = ObjectState(object_id="x", position=(0, 0, 0), source="vision")
         assert obj.source == "vision"
         obj2 = ObjectState(object_id="y", position=(0, 0, 0))

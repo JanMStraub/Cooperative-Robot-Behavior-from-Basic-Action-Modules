@@ -238,7 +238,6 @@ class TestYOLOIntegration:
         """Test that CubeDetector uses YOLO when enabled in config"""
         from vision.ObjectDetector import CubeDetector
 
-        # Setup mock
         mock_yolo_instance = Mock()
         mock_yolo_detector_class.return_value = mock_yolo_instance
 

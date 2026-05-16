@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test suite for KnowledgeGraph Core
-===================================
-
-Tests the NetworkX-based knowledge graph wrapper:
-- Node CRUD operations
-- Edge CRUD operations with types
-- Thread safety
-- GraphML save/load
-- Neighbor queries with edge type filtering
-"""
+"""Test suite for KnowledgeGraph Core"""
 
 import unittest
 import os
@@ -21,7 +11,6 @@ from knowledge_graph.Schema import RobotNode
 
 
 class TestKnowledgeGraphCore(unittest.TestCase):
-    """Test KnowledgeGraph core operations."""
 
     def setUp(self):
         """Create fresh graph for each test."""
@@ -32,7 +21,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.graph.clear()
 
     def test_add_node(self):
-        """Test adding nodes to graph."""
         self.graph.add_node("Robot1", node_type="robot", position=(-0.3, 0.2, 0.1))
 
         self.assertTrue(self.graph.has_node("Robot1"))
@@ -43,7 +31,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertEqual(node_attrs["position"], (-0.3, 0.2, 0.1))
 
     def test_add_node_with_schema(self):
-        """Test adding node using schema dataclass."""
         robot = RobotNode(
             node_id="Robot1", position=(-0.3, 0.2, 0.1), gripper_state="open"
         )
@@ -56,7 +43,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertEqual(node_attrs["gripper_state"], "open")
 
     def test_remove_node(self):
-        """Test removing nodes."""
         self.graph.add_node("Robot1", node_type="robot")
         self.assertTrue(self.graph.has_node("Robot1"))
 
@@ -70,12 +56,10 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertFalse(success)
 
     def test_get_node_nonexistent(self):
-        """Test getting nonexistent node returns None."""
         node_attrs = self.graph.get_node("NonexistentNode")
         self.assertIsNone(node_attrs)
 
     def test_add_edge(self):
-        """Test adding edges."""
         self.graph.add_node("Robot1", node_type="robot")
         self.graph.add_node("RedCube", node_type="object")
 
@@ -85,7 +69,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertIn("RedCube", neighbors)
 
     def test_add_multiple_edges_same_nodes(self):
-        """Test adding multiple edges between same nodes (MultiDiGraph)."""
         self.graph.add_node("Robot1", node_type="robot")
         self.graph.add_node("RedCube", node_type="object")
 
@@ -97,7 +80,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertIn("RedCube", neighbors)
 
     def test_remove_edge(self):
-        """Test removing edges."""
         self.graph.add_node("Robot1", node_type="robot")
         self.graph.add_node("RedCube", node_type="object")
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH")
@@ -109,7 +91,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertNotIn("RedCube", neighbors)
 
     def test_remove_edge_by_type(self):
-        """Test removing specific edge type."""
         self.graph.add_node("Robot1", node_type="robot")
         self.graph.add_node("RedCube", node_type="object")
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH")
@@ -124,7 +105,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertIn("RedCube", neighbors_near)
 
     def test_get_neighbors_filtered_by_edge_type(self):
-        """Test getting neighbors filtered by edge type."""
         self.graph.add_node("Robot1", node_type="robot")
         self.graph.add_node("RedCube", node_type="object")
         self.graph.add_node("BlueCube", node_type="object")
@@ -141,7 +121,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertNotIn("RedCube", grasped)
 
     def test_get_predecessors(self):
-        """Test getting predecessors (incoming edges)."""
         self.graph.add_node("Robot1", node_type="robot")
         self.graph.add_node("RedCube", node_type="object")
 
@@ -151,7 +130,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertIn("Robot1", predecessors)
 
     def test_get_all_nodes(self):
-        """Test getting all nodes."""
         self.graph.add_node("Robot1", node_type="robot")
         self.graph.add_node("Robot2", node_type="robot")
         self.graph.add_node("RedCube", node_type="object")
@@ -170,7 +148,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertIn("RedCube", objects)
 
     def test_node_and_edge_counts(self):
-        """Test getting node and edge counts."""
         self.assertEqual(self.graph.node_count(), 0)
         self.assertEqual(self.graph.edge_count(), 0)
 
@@ -182,7 +159,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertEqual(self.graph.edge_count(), 1)
 
     def test_clear(self):
-        """Test clearing graph."""
         self.graph.add_node("Robot1", node_type="robot")
         self.graph.add_node("RedCube", node_type="object")
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH")
@@ -193,7 +169,6 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertEqual(self.graph.edge_count(), 0)
 
     def test_get_stats(self):
-        """Test getting graph statistics."""
         self.graph.add_node("Robot1", node_type="robot")
         self.graph.add_node("Robot2", node_type="robot")
         self.graph.add_node("RedCube", node_type="object")
@@ -347,6 +322,7 @@ class TestCanReachPosition(unittest.TestCase):
         """Position within reach and no obstacles → reachable."""
         self._add_robot()
         from unittest.mock import patch as mpatch
+
         with mpatch(
             "knowledge_graph.QueryEngine.target_within_reach",
             return_value=(True, ""),
@@ -362,6 +338,7 @@ class TestCanReachPosition(unittest.TestCase):
         self._add_robot()
         # target_within_reach imported inside method; patch at import location
         from unittest.mock import patch as mpatch
+
         with mpatch(
             "operations.SpatialPredicates.target_within_reach",
             return_value=(False, "exceeds max reach"),
@@ -378,6 +355,7 @@ class TestCanReachPosition(unittest.TestCase):
         self.graph.add_node("obstacle", node_type="object", position=(-0.475, 0.0, 0.1))
 
         from unittest.mock import patch as mpatch
+
         with mpatch(
             "operations.SpatialPredicates.target_within_reach",
             return_value=(True, ""),
@@ -391,6 +369,7 @@ class TestCanReachPosition(unittest.TestCase):
         """When KG is disabled _check_placement_reachability returns 'kg_disabled'."""
         from unittest.mock import patch as mpatch
         import operations.GripperOperations as mod
+
         with mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", False):
             note = mod._check_placement_reachability("Robot1", 0.0, 0.06, 0.0)
         self.assertEqual(note, "kg_disabled")
@@ -398,19 +377,26 @@ class TestCanReachPosition(unittest.TestCase):
     def test_check_reachable_returns_reachable(self):
         """_check_placement_reachability returns 'reachable' when KG check passes."""
         from unittest.mock import patch as mpatch, MagicMock
+
         mock_qe = MagicMock()
         mock_qe.can_reach_position.return_value = {
-            "reachable": True, "reason": "", "within_reach": True, "path_blocked": False
+            "reachable": True,
+            "reason": "",
+            "within_reach": True,
+            "path_blocked": False,
         }
         import operations.GripperOperations as mod
-        with mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True), \
-             mpatch("core.Imports.get_graph_query_engine", return_value=mock_qe):
+
+        with mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True), mpatch(
+            "core.Imports.get_graph_query_engine", return_value=mock_qe
+        ):
             note = mod._check_placement_reachability("Robot1", 0.0, 0.06, 0.0)
         self.assertEqual(note, "reachable")
 
     def test_check_unreachable_logs_warning(self):
         """_check_placement_reachability returns 'unreachable:...' when check fails."""
         from unittest.mock import patch as mpatch, MagicMock
+
         mock_qe = MagicMock()
         mock_qe.can_reach_position.return_value = {
             "reachable": False,
@@ -419,20 +405,26 @@ class TestCanReachPosition(unittest.TestCase):
             "path_blocked": False,
         }
         import operations.GripperOperations as mod
-        with mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True), \
-             mpatch("core.Imports.get_graph_query_engine", return_value=mock_qe):
+
+        with mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True), mpatch(
+            "core.Imports.get_graph_query_engine", return_value=mock_qe
+        ):
             note = mod._check_placement_reachability("Robot1", 5.0, 5.0, 5.0)
         self.assertTrue(note.startswith("unreachable:"))
 
-    def test_result_includes_reachability_key(self, ):
+    def test_result_includes_reachability_key(
+        self,
+    ):
         """place_object success result includes reachability key."""
         from unittest.mock import patch as mpatch, MagicMock
+
         mock_bc = MagicMock()
         mock_bc.send_command = MagicMock(return_value=True)
         import operations.GripperOperations as mod
-        with mpatch("config.ROS.ROS_ENABLED", False), \
-             mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", False), \
-             mpatch.object(mod, "_get_command_broadcaster", return_value=mock_bc):
+
+        with mpatch("config.ROS.ROS_ENABLED", False), mpatch(
+            "config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", False
+        ), mpatch.object(mod, "_get_command_broadcaster", return_value=mock_bc):
             result = mod.place_object("Robot1", x=0.0, y=0.06, z=0.0)
         self.assertTrue(result.success)
         self.assertIn("reachability", result.result)

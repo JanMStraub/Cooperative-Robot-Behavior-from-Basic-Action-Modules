@@ -26,7 +26,6 @@ class TestPriority1_RAGWorkflowIntegration:
     """Test Priority 1: Workflow patterns are indexed and searchable in RAG."""
 
     def test_workflow_patterns_in_registry(self):
-        """Test that workflow patterns are registered."""
         workflow_registry = get_global_workflow_registry()
         patterns = workflow_registry.get_all_patterns()
 
@@ -40,7 +39,6 @@ class TestPriority1_RAGWorkflowIntegration:
         print(f"Expected workflow patterns present: {pattern_ids}")
 
     def test_workflows_in_rag_index(self):
-        """Test that workflow patterns are included in RAG index."""
         rag = RAGSystem()
 
         # Rebuild index to ensure workflows are included
@@ -105,7 +103,6 @@ class TestPriority1_RAGWorkflowIntegration:
             print("Workflow patterns are searchable in RAG")
 
     def test_workflow_search_returns_correct_metadata(self):
-        """Test that workflow search returns proper metadata."""
         rag = RAGSystem()
         results = rag.search("detect object and move to it", top_k=3)
 
@@ -130,7 +127,6 @@ class TestPriority2_AutomatedParameterFlow:
 
     @patch("operations.Registry.get_global_registry")
     def test_auto_capture_outputs(self, mock_registry):
-        """Test that operation outputs are automatically captured."""
         # Create mock operation with parameter flows
         mock_op = MagicMock()
         mock_op.operation_id = "detect_object_stereo"
@@ -226,7 +222,6 @@ class TestPriority3_UnifiedVerification:
     def test_unified_verification_combines_checks(
         self, mock_coord_verifier, mock_op_verifier
     ):
-        """Test that unified verification calls both verifiers."""
         # Create mock operation
         mock_op = MagicMock()
         mock_op.name = "move_to_coordinate"
@@ -269,7 +264,6 @@ class TestPriority3_UnifiedVerification:
 
     @patch("operations.Verification.OperationVerifier")
     def test_verification_blocks_on_precondition_failure(self, mock_verifier):
-        """Test that precondition failures block execution."""
         mock_op = MagicMock()
         mock_op.name = "move_to_coordinate"
 
@@ -305,7 +299,6 @@ class TestPriority3_UnifiedVerification:
     def test_verification_blocks_on_coordination_failure(
         self, mock_coord_verifier, mock_op_verifier
     ):
-        """Test that coordination failures block execution."""
         mock_op = MagicMock()
         mock_op.name = "move_to_coordinate"
         mock_op.category = MagicMock()
@@ -353,7 +346,6 @@ class TestEndToEndIntegration:
     """End-to-end integration tests combining all three priorities."""
 
     def test_all_priorities_in_sequence_executor(self):
-        """Test that SequenceExecutor has all three priority features."""
         executor = SequenceExecutor(enable_verification=True, check_completion=False)
 
         # Check Priority 1: RAG integration (indirect - via operations registry)

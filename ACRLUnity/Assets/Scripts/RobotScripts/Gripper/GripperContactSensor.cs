@@ -19,9 +19,6 @@ namespace Robotics
     /// </summary>
     public class GripperContactSensor : MonoBehaviour
     {
-        /// <summary>
-        /// Enum to identify which finger a collision belongs to
-        /// </summary>
         public enum FingerType
         {
             Left,
@@ -112,8 +109,6 @@ namespace Robotics
         /// Check if both fingers are in contact with the target object.
         /// Uses contact duration to filter transient collisions.
         /// </summary>
-        /// <param name="targetObject">Object to check contact with</param>
-        /// <returns>True if both fingers have stable contact with object</returns>
         public bool HasContact(GameObject targetObject)
         {
             if (targetObject == null)
@@ -144,7 +139,6 @@ namespace Robotics
         /// ⚠️ CRITICAL: Unity physics forces are noisy and can spike to infinity on impact.
         /// This method averages force over multiple frames for stable readings.
         /// </summary>
-        /// <returns>Average grasp force over last N frames (Newtons)</returns>
         public float EstimateGraspForce()
         {
             if (leftFinger == null || rightFinger == null)
@@ -163,9 +157,6 @@ namespace Robotics
         /// - Force above minimum threshold
         /// - Contact duration sufficient
         /// </summary>
-        /// <param name="targetObject">Object being grasped</param>
-        /// <param name="minForce">Minimum required force (default 5N)</param>
-        /// <returns>True if grasp is stable</returns>
         public bool IsGraspStable(GameObject targetObject, float minForce = 5f)
         {
             bool hasContact = HasContact(targetObject);
@@ -197,9 +188,6 @@ namespace Robotics
             return Mathf.Clamp(totalForce, 0f, 1000f);
         }
 
-        /// <summary>
-        /// Update force history with moving average window
-        /// </summary>
         private void UpdateForceHistory(float instantaneousForce)
         {
             int windowSize = _gripperConfig != null ? _gripperConfig.forceWindowSize : 5;
@@ -223,9 +211,6 @@ namespace Robotics
             _currentForceSum = 0f;
         }
 
-        /// <summary>
-        /// Get all objects currently in contact with gripper
-        /// </summary>
         public List<GameObject> GetContactedObjects()
         {
             var objects = new HashSet<GameObject>();
@@ -252,7 +237,8 @@ namespace Robotics
         /// </summary>
         public bool BothFingersContact(GameObject targetObject)
         {
-            if (targetObject == null) return false;
+            if (targetObject == null)
+                return false;
             bool leftTouching = _leftContacts.Any(c => c != null && c.gameObject == targetObject);
             bool rightTouching = _rightContacts.Any(c => c != null && c.gameObject == targetObject);
             return leftTouching && rightTouching;
@@ -314,10 +300,7 @@ namespace Robotics
             TrackContact(collider, false);
         }
 
-        /// <summary>
-        /// Check if a collider belongs to one of this gripper's fingers.
-        /// Used to filter self-collisions in legacy trigger callbacks.
-        /// </summary>
+        // Returns true for self-collisions (finger-to-finger) that should be ignored in legacy trigger callbacks.
         private bool IsFingerCollider(Collider collider)
         {
             if (collider == null)
@@ -333,9 +316,6 @@ namespace Robotics
             return false;
         }
 
-        /// <summary>
-        /// Track contact for a specific finger (called by forwarder)
-        /// </summary>
         private void TrackContact(Collider collider, FingerType finger, bool isContact)
         {
             if (collider == null)
@@ -436,9 +416,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Track contact per finger based on collider hierarchy (legacy method)
-        /// </summary>
         private void TrackContact(Collider collider, bool isContact)
         {
             if (collider == null)
@@ -505,9 +482,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Check if a transform is a child of a parent transform
-        /// </summary>
         private bool IsChildOf(Transform child, Transform parent)
         {
             if (child == null || parent == null)
@@ -523,9 +497,6 @@ namespace Robotics
             return false;
         }
 
-        /// <summary>
-        /// Cleanup on destroy
-        /// </summary>
         void OnDestroy()
         {
             _leftContacts.Clear();
@@ -534,9 +505,6 @@ namespace Robotics
             _forceHistory.Clear();
         }
 
-        /// <summary>
-        /// Visualize contact points in scene view
-        /// </summary>
         void OnDrawGizmos()
         {
             if (!debugLogging)

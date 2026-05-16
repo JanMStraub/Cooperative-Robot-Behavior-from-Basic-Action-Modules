@@ -98,9 +98,6 @@ namespace Robotics
 
         private const string _logPrefix = "[ROS_TRAJECTORY_SUBSCRIBER]";
 
-        /// <summary>
-        /// True while a trajectory is being executed.
-        /// </summary>
         public bool IsExecutingTrajectory { get; private set; }
 
         /// <summary>
@@ -161,9 +158,6 @@ namespace Robotics
             );
         }
 
-        /// <summary>
-        /// Callback when a JointTrajectory message arrives from ROS.
-        /// </summary>
         private void OnTrajectoryReceived(JointTrajectoryMsg msg)
         {
             if (msg.points == null || msg.points.Length == 0)
@@ -206,7 +200,11 @@ namespace Robotics
             {
                 for (int ji = 0; ji < msg.joint_names.Length; ji++)
                 {
-                    if (msg.points.Length == 0 || msg.points[0].positions == null || ji >= msg.points[0].positions.Length)
+                    if (
+                        msg.points.Length == 0
+                        || msg.points[0].positions == null
+                        || ji >= msg.points[0].positions.Length
+                    )
                         continue;
                     string jname = msg.joint_names[ji];
                     var sb = new System.Text.StringBuilder();
@@ -214,17 +212,21 @@ namespace Robotics
                     int step = Mathf.Max(1, msg.points.Length / 10);
                     for (int p = 0; p < msg.points.Length; p += step)
                         sb.Append($"{msg.points[p].positions[ji] * Mathf.Rad2Deg:F1} ");
-                    sb.Append($"[last:{msg.points[msg.points.Length-1].positions[ji] * Mathf.Rad2Deg:F1}]");
+                    sb.Append(
+                        $"[last:{msg.points[msg.points.Length - 1].positions[ji] * Mathf.Rad2Deg:F1}]"
+                    );
                     Debug.Log(sb.ToString());
 
                     // Flag any consecutive jump > 90° — indicates redundant-IK solution flip.
                     for (int p = 1; p < msg.points.Length; p++)
                     {
-                        double prev = msg.points[p-1].positions[ji] * Mathf.Rad2Deg;
-                        double cur  = msg.points[p].positions[ji]   * Mathf.Rad2Deg;
+                        double prev = msg.points[p - 1].positions[ji] * Mathf.Rad2Deg;
+                        double cur = msg.points[p].positions[ji] * Mathf.Rad2Deg;
                         double rawDelta = cur - prev;
                         if (System.Math.Abs(rawDelta) > 90.0)
-                            Debug.LogWarning($"{_logPrefix} {jname} LARGE JUMP at waypoint {p}: {prev:F1}° → {cur:F1}° (delta={rawDelta:F1}°)");
+                            Debug.LogWarning(
+                                $"{_logPrefix} {jname} LARGE JUMP at waypoint {p}: {prev:F1}° → {cur:F1}° (delta={rawDelta:F1}°)"
+                            );
                     }
                 }
             }
@@ -363,11 +365,15 @@ namespace Robotics
                 for (int j = 0; j < _jointIndexMap.Length; j++)
                 {
                     int idx = _jointIndexMap[j];
-                    float physDeg = _joints[idx].jointPosition.dofCount > 0
-                        ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : float.NaN;
+                    float physDeg =
+                        _joints[idx].jointPosition.dofCount > 0
+                            ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg
+                            : float.NaN;
                     float driveDeg = _joints[idx].xDrive.target;
-                    float firstDeg = (firstWaypoint != null && j < firstWaypoint.Length)
-                        ? (float)(firstWaypoint[j] * Mathf.Rad2Deg) : float.NaN;
+                    float firstDeg =
+                        (firstWaypoint != null && j < firstWaypoint.Length)
+                            ? (float)(firstWaypoint[j] * Mathf.Rad2Deg)
+                            : float.NaN;
                     string jointName = j < msg.joint_names.Length ? msg.joint_names[j] : $"j{j}";
                     float lo = _joints[idx].xDrive.lowerLimit;
                     float hi = _joints[idx].xDrive.upperLimit;
@@ -397,9 +403,12 @@ namespace Robotics
             // steps into longer synthesized segments. When timestamps are real (e.g. 0.5s each),
             // each segment already has a proper duration; applying stride would skip waypoints
             // that define the collision-free path shape MoveIt planned.
-            bool hasRealTimestamps = msg.points.Length > 1 &&
-                (msg.points[msg.points.Length - 1].time_from_start.sec > 0 ||
-                 msg.points[msg.points.Length - 1].time_from_start.nanosec > 0);
+            bool hasRealTimestamps =
+                msg.points.Length > 1
+                && (
+                    msg.points[msg.points.Length - 1].time_from_start.sec > 0
+                    || msg.points[msg.points.Length - 1].time_from_start.nanosec > 0
+                );
             int effectiveStride = hasRealTimestamps ? 1 : _waypointStride;
 
             if (hasRealTimestamps)
@@ -415,7 +424,8 @@ namespace Robotics
 
                     var targetPoint = msg.points[p];
                     double targetTime =
-                        targetPoint.time_from_start.sec + targetPoint.time_from_start.nanosec * 1e-9;
+                        targetPoint.time_from_start.sec
+                        + targetPoint.time_from_start.nanosec * 1e-9;
 
                     double rawSegmentDuration = targetTime - prevPointTime;
 
@@ -423,9 +433,10 @@ namespace Robotics
                     // timing matches MoveIt's plan. The first-segment correction (using actual
                     // physics state at coroutine start) absorbs residual lag from the previous
                     // trajectory.
-                    double[] fromPositions = (prevPoint != null && prevPoint.positions != null)
-                        ? prevPoint.positions
-                        : _startPositions;
+                    double[] fromPositions =
+                        (prevPoint != null && prevPoint.positions != null)
+                            ? prevPoint.positions
+                            : _startPositions;
 
                     // Wall-clock duration after applying speed scaling (e.g. 0.5x → 2x wall time).
                     double segmentDuration = rawSegmentDuration / _speedScaling;
@@ -495,7 +506,10 @@ namespace Robotics
                                     // and accumulates error it cannot recover from.
                                     double segMin = System.Math.Min(p0, p1Unwrapped);
                                     double segMax = System.Math.Max(p0, p1Unwrapped);
-                                    interpRad = System.Math.Max(segMin, System.Math.Min(segMax, interpRad));
+                                    interpRad = System.Math.Max(
+                                        segMin,
+                                        System.Math.Min(segMax, interpRad)
+                                    );
                                 }
                                 else
                                 {
@@ -504,9 +518,14 @@ namespace Robotics
 
                                 float targetDeg = (float)interpRad * Mathf.Rad2Deg;
                                 // Guard against NaN/Inf from degenerate interpolation inputs.
-                                if (!float.IsFinite(targetDeg)) continue;
+                                if (!float.IsFinite(targetDeg))
+                                    continue;
                                 ArticulationDrive drive = _joints[idx].xDrive;
-                                drive.target = Mathf.Clamp(targetDeg, drive.lowerLimit, drive.upperLimit);
+                                drive.target = Mathf.Clamp(
+                                    targetDeg,
+                                    drive.lowerLimit,
+                                    drive.upperLimit
+                                );
                                 _joints[idx].xDrive = drive;
                                 if (idx < _robotController.jointDriveTargets.Length)
                                     _robotController.jointDriveTargets[idx] = drive.target;
@@ -524,15 +543,26 @@ namespace Robotics
                         for (int j = 0; j < _jointIndexMap.Length; j++)
                         {
                             int idx = _jointIndexMap[j];
-                            float physDeg = _joints[idx].jointPosition.dofCount > 0
-                                ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : float.NaN;
+                            float physDeg =
+                                _joints[idx].jointPosition.dofCount > 0
+                                    ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg
+                                    : float.NaN;
                             float driveDeg = _joints[idx].xDrive.target;
-                            float plannedDeg = (targetPoint.positions != null && j < targetPoint.positions.Length)
-                                ? (float)(targetPoint.positions[j] * Mathf.Rad2Deg) : float.NaN;
-                            float plannedVelDeg = (targetPoint.velocities != null && j < targetPoint.velocities.Length)
-                                ? (float)(targetPoint.velocities[j] * Mathf.Rad2Deg) : float.NaN;
-                            float physVelDeg = _joints[idx].jointVelocity.dofCount > 0
-                                ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg : float.NaN;
+                            float plannedDeg =
+                                (targetPoint.positions != null && j < targetPoint.positions.Length)
+                                    ? (float)(targetPoint.positions[j] * Mathf.Rad2Deg)
+                                    : float.NaN;
+                            float plannedVelDeg =
+                                (
+                                    targetPoint.velocities != null
+                                    && j < targetPoint.velocities.Length
+                                )
+                                    ? (float)(targetPoint.velocities[j] * Mathf.Rad2Deg)
+                                    : float.NaN;
+                            float physVelDeg =
+                                _joints[idx].jointVelocity.dofCount > 0
+                                    ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg
+                                    : float.NaN;
                             float err = physDeg - plannedDeg;
                         }
                     }
@@ -563,8 +593,10 @@ namespace Robotics
                 for (int j = 0; j < _jointIndexMap.Length; j++)
                 {
                     int idx = _jointIndexMap[j];
-                    _startPositions[j] = _joints[idx].jointPosition.dofCount > 0
-                        ? _joints[idx].jointPosition[0] : 0.0;
+                    _startPositions[j] =
+                        _joints[idx].jointPosition.dofCount > 0
+                            ? _joints[idx].jointPosition[0]
+                            : 0.0;
                 }
 
                 // Build cumulative wall-clock end-times for each segment i.
@@ -579,12 +611,18 @@ namespace Robotics
                     double maxDisp = 0.0;
                     if (toPos != null && fromPos != null)
                     {
-                        for (int j = 0; j < _jointIndexMap.Length && j < toPos.Length && j < fromPos.Length; j++)
-                            maxDisp = Math.Max(maxDisp, Math.Abs(NormalizeAngleRad(toPos[j] - fromPos[j])));
+                        for (
+                            int j = 0;
+                            j < _jointIndexMap.Length && j < toPos.Length && j < fromPos.Length;
+                            j++
+                        )
+                            maxDisp = Math.Max(
+                                maxDisp,
+                                Math.Abs(NormalizeAngleRad(toPos[j] - fromPos[j]))
+                            );
                     }
-                    double segDur = maxDisp > 1e-6
-                        ? maxDisp / (_maxJointVelocity * 0.8)
-                        : Time.fixedDeltaTime;
+                    double segDur =
+                        maxDisp > 1e-6 ? maxDisp / (_maxJointVelocity * 0.8) : Time.fixedDeltaTime;
                     segDur /= _speedScaling;
                     cumulative += segDur;
                     _synthCumDurations[i] = cumulative;
@@ -604,30 +642,48 @@ namespace Robotics
                     int seg = N - 1;
                     for (int i = 0; i < N; i++)
                     {
-                        if (_synthCumDurations[i] > globalElapsed) { seg = i; break; }
+                        if (_synthCumDurations[i] > globalElapsed)
+                        {
+                            seg = i;
+                            break;
+                        }
                     }
 
                     double segEnd = _synthCumDurations[seg];
                     double segStart = seg == 0 ? 0.0 : _synthCumDurations[seg - 1];
                     double segDurLocal = segEnd - segStart;
-                    float t = segDurLocal > 1e-9
-                        ? Mathf.Clamp01((float)((globalElapsed - segStart) / segDurLocal))
-                        : 1f;
+                    float t =
+                        segDurLocal > 1e-9
+                            ? Mathf.Clamp01((float)((globalElapsed - segStart) / segDurLocal))
+                            : 1f;
 
-                    double[] fromPositions = (seg == 0) ? _startPositions : msg.points[seg - 1].positions;
+                    double[] fromPositions =
+                        (seg == 0) ? _startPositions : msg.points[seg - 1].positions;
                     double[] toPositions = msg.points[seg].positions;
 
                     // Shortest-path linear interpolation (Hermite skipped — velocities were for original 0.02s segments).
                     // NormalizeAngleRad ensures wrap-aware interpolation for ±π joints (e.g. joint_6).
                     if (toPositions != null && fromPositions != null)
                     {
-                        for (int j = 0; j < _jointIndexMap.Length && j < toPositions.Length && j < fromPositions.Length; j++)
+                        for (
+                            int j = 0;
+                            j < _jointIndexMap.Length
+                                && j < toPositions.Length
+                                && j < fromPositions.Length;
+                            j++
+                        )
                         {
                             int idx = _jointIndexMap[j];
-                            double interpRad = fromPositions[j] + NormalizeAngleRad(toPositions[j] - fromPositions[j]) * t;
+                            double interpRad =
+                                fromPositions[j]
+                                + NormalizeAngleRad(toPositions[j] - fromPositions[j]) * t;
                             float targetDeg = (float)interpRad * Mathf.Rad2Deg;
                             ArticulationDrive drive = _joints[idx].xDrive;
-                            drive.target = Mathf.Clamp(targetDeg, drive.lowerLimit, drive.upperLimit);
+                            drive.target = Mathf.Clamp(
+                                targetDeg,
+                                drive.lowerLimit,
+                                drive.upperLimit
+                            );
                             _joints[idx].xDrive = drive;
                             if (idx < _robotController.jointDriveTargets.Length)
                                 _robotController.jointDriveTargets[idx] = drive.target;
@@ -697,15 +753,26 @@ namespace Robotics
                     for (int j = 0; j < _jointIndexMap.Length; j++)
                     {
                         int idx = _jointIndexMap[j];
-                        float physDeg = _joints[idx].jointPosition.dofCount > 0
-                            ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : 0f;
-                        float velDeg = _joints[idx].jointVelocity.dofCount > 0
-                            ? Mathf.Abs(_joints[idx].jointVelocity[0]) * Mathf.Rad2Deg : 0f;
+                        float physDeg =
+                            _joints[idx].jointPosition.dofCount > 0
+                                ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg
+                                : 0f;
+                        float velDeg =
+                            _joints[idx].jointVelocity.dofCount > 0
+                                ? Mathf.Abs(_joints[idx].jointVelocity[0]) * Mathf.Rad2Deg
+                                : 0f;
                         float err = Mathf.Abs(physDeg - _joints[idx].xDrive.target);
                         if (err > NEAR_TARGET_DEG || velDeg > _settleVelocityThresholdDegPerSec)
-                        { allNear = false; break; }
+                        {
+                            allNear = false;
+                            break;
+                        }
                     }
-                    if (allNear) { nearTargetReached = true; break; }
+                    if (allNear)
+                    {
+                        nearTargetReached = true;
+                        break;
+                    }
                     yield return new WaitForFixedUpdate();
                 }
 
@@ -713,13 +780,22 @@ namespace Robotics
                 for (int j = 0; j < _jointIndexMap.Length; j++)
                 {
                     int idx = _jointIndexMap[j];
-                    float physDeg = _joints[idx].jointPosition.dofCount > 0
-                        ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : 0f;
-                    float velDeg = _joints[idx].jointVelocity.dofCount > 0
-                        ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg : 0f;
+                    float physDeg =
+                        _joints[idx].jointPosition.dofCount > 0
+                            ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg
+                            : 0f;
+                    float velDeg =
+                        _joints[idx].jointVelocity.dofCount > 0
+                            ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg
+                            : 0f;
                     float err = physDeg - _joints[idx].xDrive.target;
-                    if (Mathf.Abs(err) > NEAR_TARGET_DEG || Mathf.Abs(velDeg) > _settleVelocityThresholdDegPerSec)
-                        Debug.LogWarning($"{_logPrefix} joint_{j+1} unsettled: phys={physDeg:F1}° target={_joints[idx].xDrive.target:F1}° err={err:F1}° vel={velDeg:F1}°/s");
+                    if (
+                        Mathf.Abs(err) > NEAR_TARGET_DEG
+                        || Mathf.Abs(velDeg) > _settleVelocityThresholdDegPerSec
+                    )
+                        Debug.LogWarning(
+                            $"{_logPrefix} joint_{j + 1} unsettled: phys={physDeg:F1}° target={_joints[idx].xDrive.target:F1}° err={err:F1}° vel={velDeg:F1}°/s"
+                        );
                 }
             }
 
@@ -743,22 +819,27 @@ namespace Robotics
 #if UNITY_EDITOR
             // DEBUG: final physical state after settling
             {
-                JointTrajectoryPointMsg lastPoint = msg.points.Length > 0 ? msg.points[msg.points.Length - 1] : null;
+                JointTrajectoryPointMsg lastPoint =
+                    msg.points.Length > 0 ? msg.points[msg.points.Length - 1] : null;
                 for (int j = 0; j < _jointIndexMap.Length; j++)
                 {
                     int idx = _jointIndexMap[j];
-                    float physDeg = _joints[idx].jointPosition.dofCount > 0
-                        ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : float.NaN;
+                    float physDeg =
+                        _joints[idx].jointPosition.dofCount > 0
+                            ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg
+                            : float.NaN;
                     float driveDeg = _joints[idx].xDrive.target;
-                    float velDeg = _joints[idx].jointVelocity.dofCount > 0
-                        ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg : float.NaN;
-                    float plannedDeg = (lastPoint?.positions != null && j < lastPoint.positions.Length)
-                        ? (float)(lastPoint.positions[j] * Mathf.Rad2Deg) : float.NaN;
+                    float velDeg =
+                        _joints[idx].jointVelocity.dofCount > 0
+                            ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg
+                            : float.NaN;
+                    float plannedDeg =
+                        (lastPoint?.positions != null && j < lastPoint.positions.Length)
+                            ? (float)(lastPoint.positions[j] * Mathf.Rad2Deg)
+                            : float.NaN;
                 }
             }
 #endif
-
-
 
             // Only sync/clear the IK target when the control mode is ROS or Hybrid.
             bool isROSControlled =
@@ -790,16 +871,16 @@ namespace Robotics
             // Use "completed_with_timeout" when the arm did not fully settle so that the
             // Python side can apply an extra settle wait before planning the next move.
             string feedbackStatus = fullySettled ? "completed" : "completed_with_timeout";
-            PublishFeedback(feedbackStatus, $"Finished in {totalDuration:F2}s (settle: {settleStatus})");
+            PublishFeedback(
+                feedbackStatus,
+                $"Finished in {totalDuration:F2}s (settle: {settleStatus})"
+            );
 
             // Notify listeners
             _robotController.SetTargetReached(true);
             OnTrajectoryComplete?.Invoke(true);
         }
 
-        /// <summary>
-        /// Abort the currently executing trajectory.
-        /// </summary>
         public void AbortExecution()
         {
             if (_executionCoroutine != null)
@@ -836,9 +917,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Publish execution feedback to ROS.
-        /// </summary>
         private void PublishFeedback(string status, string message)
         {
             if (_ros == null)
@@ -876,7 +954,8 @@ namespace Robotics
         /// </summary>
         private void SetDriveTargets(double[] positions)
         {
-            if (positions == null) return;
+            if (positions == null)
+                return;
             for (int j = 0; j < _jointIndexMap.Length && j < positions.Length; j++)
             {
                 int idx = _jointIndexMap[j];
@@ -885,7 +964,11 @@ namespace Robotics
                 // Use shortest-path delta from current drive target to avoid snapping
                 // through 360° when a planned angle crosses the ±π boundary.
                 float shortDelta = Mathf.DeltaAngle(drive.target, rawDeg);
-                drive.target = Mathf.Clamp(drive.target + shortDelta, drive.lowerLimit, drive.upperLimit);
+                drive.target = Mathf.Clamp(
+                    drive.target + shortDelta,
+                    drive.lowerLimit,
+                    drive.upperLimit
+                );
                 _joints[idx].xDrive = drive;
                 if (idx < _robotController.jointDriveTargets.Length)
                     _robotController.jointDriveTargets[idx] = drive.target;

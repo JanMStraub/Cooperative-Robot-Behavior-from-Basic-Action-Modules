@@ -56,7 +56,6 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
     errors = []
     warnings_list = []
 
-    # If no config_dict provided, import from parent modules
     if config_dict is None:
         try:
             from . import Servers, Vision, Rag, Robot
@@ -71,9 +70,6 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
             errors.append("Failed to import config modules")
             return {"errors": errors, "warnings": warnings_list}
 
-    # ========================================================================
-    # Port Validations
-    # ========================================================================
     port_configs = [
         "STEREO_DETECTION_PORT",
         "COMMAND_SERVER_PORT",
@@ -90,9 +86,6 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
     if len(ports) != len(set(ports)):
         errors.append("Port conflict detected: Multiple servers assigned the same port")
 
-    # ========================================================================
-    # Threshold Validations (0.0-1.0)
-    # ========================================================================
     threshold_configs = {
         "YOLO_CONFIDENCE_THRESHOLD": (0.0, 1.0),
         "YOLO_IOU_THRESHOLD": (0.0, 1.0),
@@ -107,9 +100,6 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
             if not _validate_range(name, config_dict[name], min_val, max_val):
                 warnings_list.append(f"Threshold out of range: {name}")
 
-    # ========================================================================
-    # Positive Value Validations
-    # ========================================================================
     positive_configs = [
         "MIN_IMAGE_AGE",
         "MAX_IMAGE_AGE",
@@ -127,10 +117,6 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
     for name in positive_configs:
         if name in config_dict and not _validate_positive(name, config_dict[name]):
             warnings_list.append(f"Value must be positive: {name}")
-
-    # ========================================================================
-    # Logical Consistency Checks
-    # ========================================================================
 
     # MIN_IMAGE_AGE < MAX_IMAGE_AGE
     if "MIN_IMAGE_AGE" in config_dict and "MAX_IMAGE_AGE" in config_dict:
@@ -155,9 +141,6 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
                 "Consider using separate directories for better organization."
             )
 
-    # ========================================================================
-    # Report Results
-    # ========================================================================
     if errors:
         logger.error(f"Configuration validation found {len(errors)} errors:")
         for error in errors:

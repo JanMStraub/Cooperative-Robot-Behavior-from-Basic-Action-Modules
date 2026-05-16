@@ -1,25 +1,9 @@
 #!/usr/bin/env python3
 """
-Perception Refresh Loop
-=======================
+Background daemon that re-detects stale WorldState objects via stereo+YOLO.
 
-Background daemon that periodically re-detects stale objects in WorldState
-using stereo+YOLO (``detect_object_stereo``) so that object positions stay
-fresh without the operator explicitly running detection.
-
-When stereo images are unavailable, falls back to an LLM ``analyze_scene``
-call which refreshes *confidence* and *last_seen* but cannot supply depth
-(so position is not updated).
-
-Usage
------
-Start alongside all other servers in RunRobotController::
-
-    refresh = PerceptionRefreshLoop(world_state=get_world_state())
-    refresh.start()
-
-The loop runs as a daemon thread and is automatically stopped when the process
-exits.  Call ``stop()`` for a graceful shutdown.
+Falls back to LLM analyze_scene when stereo unavailable (refreshes confidence/last_seen
+but cannot update position). Start with PerceptionRefreshLoop(world_state).start().
 """
 
 import threading
@@ -40,13 +24,7 @@ _active_refresh_loop = None
 
 
 class PerceptionRefreshLoop:
-    """Background daemon that re-detects stale WorldState objects.
-
-    Attributes:
-        world_state: WorldState singleton to monitor and update.
-        refresh_interval: Seconds between each polling sweep.
-        stale_threshold: Objects with confidence below this value are refreshed.
-    """
+    """Background daemon that re-detects stale WorldState objects."""
 
     def __init__(
         self,
@@ -54,13 +32,7 @@ class PerceptionRefreshLoop:
         refresh_interval: float = _DEFAULT_REFRESH_INTERVAL,
         stale_threshold: float = _DEFAULT_STALE_THRESHOLD,
     ):
-        """Initialise the refresh loop (does not start the thread yet).
-
-        Args:
-            world_state: WorldState singleton instance.
-            refresh_interval: Seconds between sweeps.
-            stale_threshold: Confidence cutoff below which an object is refreshed.
-        """
+        """Does not start the thread — call start() separately."""
         self._world_state = world_state
         self._refresh_interval = refresh_interval
         self._stale_threshold = stale_threshold
@@ -89,14 +61,7 @@ class PerceptionRefreshLoop:
         )
 
     def trigger_anticipatory_refresh(self, object_ids: list) -> None:
-        """Queue object IDs for immediate re-detection on the next sweep.
-
-        Call this when a robot commits to moving toward an object so its
-        detection data is fresh before the robot arrives.
-
-        Args:
-            object_ids: List of object_id strings to refresh.
-        """
+        """Queue objects for re-detection on next sweep (call when robot commits to moving toward object)."""
         with self._anticipatory_lock:
             for oid in object_ids:
                 if oid not in self._anticipatory_queue:
@@ -122,14 +87,7 @@ class PerceptionRefreshLoop:
                 logger.error(f"PerceptionRefreshLoop sweep error: {exc}", exc_info=True)
 
     def _refresh_object_by_id(self, object_id: str) -> bool:
-        """Refresh a specific object by ID, looking up its color from WorldState.
-
-        Args:
-            object_id: Object identifier to refresh.
-
-        Returns:
-            True if detection succeeded.
-        """
+        """Refresh object by ID, looking up its color from WorldState. Returns True on success."""
         try:
             obj = self._world_state.get_object(object_id)
             if obj is None:
@@ -140,8 +98,7 @@ class PerceptionRefreshLoop:
             return False
 
     def _sweep(self) -> None:
-        """One sweep: drain anticipatory queue then find stale objects and re-detect."""
-        # High-priority: drain anticipatory queue first (robot intent-driven refreshes)
+        """Drain anticipatory queue (high-priority), then find and re-detect stale objects."""
         with self._anticipatory_lock:
             pending = list(self._anticipatory_queue)
             self._anticipatory_queue.clear()
@@ -167,15 +124,7 @@ class PerceptionRefreshLoop:
                 self._refresh_llm_fallback(color)
 
     def _collect_stale_colors(self) -> list:
-        """Return list of color labels for objects that need refreshing.
-
-        An object needs refreshing when:
-        - Its ``stale`` flag is True, OR
-        - Its ``confidence`` is below ``stale_threshold``.
-
-        Returns:
-            Deduplicated list of color strings.
-        """
+        """Return deduplicated color labels for objects with stale=True or confidence < threshold."""
         stale_colors = []
         seen = set()
         try:
@@ -196,17 +145,7 @@ class PerceptionRefreshLoop:
         return stale_colors
 
     def _refresh_stereo(self, color: str) -> bool:
-        """Attempt to re-detect ``color`` via stereo+YOLO.
-
-        In PERCEPTION_ONLY_MODE, uses cached images from ImageStorage rather than
-        requesting a fresh capture from Unity, avoiding a blocking command round-trip.
-
-        Args:
-            color: Object color label to search for.
-
-        Returns:
-            True if detection succeeded and WorldState was updated.
-        """
+        """Re-detect color via stereo+YOLO. In PERCEPTION_ONLY_MODE uses cached images (no Unity round-trip)."""
         try:
             from operations.VisionOperations import detect_object_stereo
 
@@ -226,15 +165,7 @@ class PerceptionRefreshLoop:
         return False
 
     def _refresh_llm_fallback(self, color: str) -> None:
-        """Fall back to LLM analyze_scene when stereo images are unavailable.
-
-        This does NOT update the object's world position (no depth information),
-        but resets the confidence and last_seen timestamp so the object is not
-        immediately evicted by the TTL logic.
-
-        Args:
-            color: Object color label to look for in the scene analysis.
-        """
+        """LLM analyze_scene fallback — resets confidence/last_seen but cannot update position (no depth)."""
         try:
             from operations.VisionOperations import analyze_scene
 

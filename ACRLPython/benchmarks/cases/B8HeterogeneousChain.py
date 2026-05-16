@@ -7,7 +7,6 @@ from typing import List, Tuple
 
 from ..config import BenchmarkConfig
 
-
 # Each robot runs: navigate → grasp+lift → place, targeting its own field.
 _ROBOT_CHAINS: dict[str, List[Tuple[str, str]]] = {
     "Robot1": [
@@ -33,12 +32,7 @@ def get_sub_tasks(cfg: BenchmarkConfig, task_count: int) -> List[Tuple[str, str]
     Robot1 targets field B; Robot2 targets field H.
     Cycles indefinitely up to task_count entries.
 
-    Args:
-        cfg: Benchmark configuration (robot_id unused; both robots driven).
-        task_count: Number of sub-tasks to return.
 
-    Returns:
-        List of (task_name, task_string) tuples for BenchmarkRunner._run_b8_chain.
     """
     result: List[Tuple[str, str]] = []
     chain_len = len(next(iter(_ROBOT_CHAINS.values())))

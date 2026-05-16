@@ -20,19 +20,13 @@ namespace Robotics.Grasp
 
         // Pre-allocated intermediate lists to avoid per-call heap allocations in PlanGrasp
         private readonly List<GraspCandidate> _ikValidCandidates = new List<GraspCandidate>(32);
-        private readonly List<GraspCandidate> _collisionFreeCandidates = new List<GraspCandidate>(32);
+        private readonly List<GraspCandidate> _collisionFreeCandidates = new List<GraspCandidate>(
+            32
+        );
         private readonly List<GraspCandidate> _rankedCandidates = new List<GraspCandidate>(32);
 
         private const string _logPrefix = "[GRASP_PLANNING_PIPELINE]";
 
-        /// <summary>
-        /// Initialize pipeline with robot configuration.
-        /// </summary>
-        /// <param name="config">Grasp planning configuration</param>
-        /// <param name="joints">Robot joint articulation bodies</param>
-        /// <param name="ikReferenceFrame">IK coordinate frame</param>
-        /// <param name="endEffector">End effector transform</param>
-        /// <param name="ikConfig">IK configuration (contains damping factor and other IK parameters)</param>
         public GraspPlanningPipeline(
             GraspConfig config,
             ArticulationBody[] joints,
@@ -57,13 +51,6 @@ namespace Robotics.Grasp
             _scorer = new GraspScorer(config);
         }
 
-        /// <summary>
-        /// Execute full planning pipeline to find best grasp candidate.
-        /// </summary>
-        /// <param name="targetObject">Object to grasp</param>
-        /// <param name="gripperPosition">Current gripper position</param>
-        /// <param name="options">Grasp options (approach override, etc.)</param>
-        /// <returns>Best grasp candidate, or null if no valid grasp found</returns>
         public GraspCandidate PlanGrasp(
             GameObject targetObject,
             Vector3 gripperPosition,
@@ -143,12 +130,14 @@ namespace Robotics.Grasp
             Quaternion currentGripperRotation =
                 _endEffector != null ? _endEffector.rotation : Quaternion.identity;
             _rankedCandidates.Clear();
-            _rankedCandidates.AddRange(_scorer.ScoreAndRank(
-                _collisionFreeCandidates,
-                objectSize,
-                gripperPosition,
-                currentGripperRotation
-            ));
+            _rankedCandidates.AddRange(
+                _scorer.ScoreAndRank(
+                    _collisionFreeCandidates,
+                    objectSize,
+                    gripperPosition,
+                    currentGripperRotation
+                )
+            );
 
             stopwatch.Stop();
             float elapsedMs = (float)stopwatch.Elapsed.TotalMilliseconds;
@@ -308,13 +297,6 @@ namespace Robotics.Grasp
             return best;
         }
 
-        /// <summary>
-        /// Plan grasp with detailed diagnostics (for debugging).
-        /// </summary>
-        /// <param name="targetObject">Object to grasp</param>
-        /// <param name="gripperPosition">Current gripper position</param>
-        /// <param name="options">Grasp options</param>
-        /// <returns>Planning result with diagnostics</returns>
         public GraspPlanningResult PlanGraspWithDiagnostics(
             GameObject targetObject,
             Vector3 gripperPosition,
@@ -381,14 +363,6 @@ namespace Robotics.Grasp
             return result;
         }
 
-        /// <summary>
-        /// Get top N grasp candidates (for multi-grasp attempts).
-        /// </summary>
-        /// <param name="targetObject">Object to grasp</param>
-        /// <param name="gripperPosition">Current gripper position</param>
-        /// <param name="count">Number of candidates to return</param>
-        /// <param name="options">Grasp options</param>
-        /// <returns>List of top candidates (best first)</returns>
         public List<GraspCandidate> PlanMultipleGrasps(
             GameObject targetObject,
             Vector3 gripperPosition,
@@ -437,11 +411,6 @@ namespace Robotics.Grasp
             return adaptiveCount;
         }
 
-        /// <summary>
-        /// Log approach type distribution for debugging.
-        /// </summary>
-        /// <param name="stage">Pipeline stage name</param>
-        /// <param name="candidates">Candidates to analyze</param>
         private void LogApproachDistribution(string stage, List<GraspCandidate> candidates)
         {
             int topCount = 0;
@@ -470,10 +439,6 @@ namespace Robotics.Grasp
             );
         }
 
-        /// <summary>
-        /// Log top 3 candidate scores for debugging.
-        /// </summary>
-        /// <param name="rankedCandidates">Sorted candidates</param>
         private void LogTopCandidatesScores(List<GraspCandidate> rankedCandidates)
         {
             int showCount = Mathf.Min(3, rankedCandidates.Count);
@@ -526,9 +491,6 @@ namespace Robotics.Grasp
 
         public GraspCandidate bestCandidate;
 
-        /// <summary>
-        /// Get summary string for logging.
-        /// </summary>
         public string GetSummary()
         {
             if (!success)

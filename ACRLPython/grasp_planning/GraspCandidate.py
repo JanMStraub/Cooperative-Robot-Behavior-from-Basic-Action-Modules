@@ -21,13 +21,6 @@ class GripperGeometry:
     Used to check if object fits between gripper fingers.
     All dimensions are in meters.
 
-    Attributes:
-        max_width: Maximum opening width of gripper fingers
-        finger_pad_width: Width of each gripper finger pad
-        finger_pad_depth: Depth of gripper finger pads
-        finger_length: Length of gripper finger
-        finger_width: Width of gripper finger
-        gripper_center_offset: Offset from wrist center to gripper center (x, y, z)
     """
 
     max_width: float = 0.08  # 8cm max opening
@@ -41,11 +34,7 @@ class GripperGeometry:
         """
         Check if an object of given size can be grasped by this gripper.
 
-        Args:
-            object_size: Size of the target object (width, height, depth) in meters
 
-        Returns:
-            True if object can fit between gripper fingers
         """
         min_dimension = min(object_size)
         max_dimension = max(object_size)
@@ -66,24 +55,6 @@ class GraspCandidate:
     Used in MoveIt2-inspired grasp planning pipeline for multi-criteria evaluation.
     All positions are in world coordinates (meters), rotations are quaternions (x, y, z, w).
 
-    Attributes:
-        pre_grasp_position: Position to approach from (x, y, z)
-        pre_grasp_rotation: Orientation at pre-grasp (x, y, z, w)
-        grasp_position: Final grasp position (x, y, z)
-        grasp_rotation: Final grasp orientation (x, y, z, w)
-        approach_type: Approach direction ("top", "front", "side")
-        retreat_position: Position to retreat to after grasp (x, y, z)
-        retreat_rotation: Orientation at retreat (x, y, z, w)
-        approach_distance: Distance from pre-grasp to grasp (meters)
-        grasp_depth: Depth of gripper penetration into object (meters)
-        contact_point_estimate: Estimated contact point (x, y, z)
-        approach_direction: Unit vector of approach direction (x, y, z)
-        antipodal_score: Antipodal grasp quality score [0, 1]
-        ik_validated: True if IK solution found
-        ik_score: IK quality score [0, 1]
-        collision_validated: True if collision-free
-        total_score: Weighted sum of all scores
-        use_simplified_execution: True to skip pre-grasp/retreat waypoints
     """
 
     pre_grasp_position: Tuple[float, float, float]
@@ -115,8 +86,6 @@ class GraspCandidate:
         """
         Check if candidate is valid (both IK and collision validated).
 
-        Returns:
-            True if candidate passed all validation checks
         """
         return self.ik_validated and self.collision_validated
 
@@ -134,15 +103,7 @@ class GraspCandidate:
         Calculates approach direction and distance automatically.
         Sets retreat position to 10cm beyond pre-grasp along approach direction.
 
-        Args:
-            pre_grasp: Pre-grasp position (x, y, z)
-            pre_grasp_rot: Pre-grasp rotation (x, y, z, w)
-            grasp: Grasp position (x, y, z)
-            grasp_rot: Grasp rotation (x, y, z, w)
-            approach: Approach type ("top", "front", "side")
 
-        Returns:
-            Initialized GraspCandidate
         """
         # Calculate approach direction (pre-grasp -> grasp)
         pre_grasp_np = np.array(pre_grasp)
@@ -183,8 +144,6 @@ class GraspCandidate:
         """
         Convert to dictionary for JSON serialization.
 
-        Returns:
-            Dictionary representation of the grasp candidate
         """
         return {
             "pre_grasp_position": {

@@ -23,7 +23,9 @@ namespace Simulation
         [SerializeField]
         private bool _enableLinkChecks = true;
 
-        [Tooltip("Override EE stop threshold in meters. 0 = use ProximityConstants.EE_STOP_THRESHOLD.")]
+        [Tooltip(
+            "Override EE stop threshold in meters. 0 = use ProximityConstants.EE_STOP_THRESHOLD."
+        )]
         [SerializeField]
         private float _eeStopOverride = 0f;
 
@@ -66,10 +68,14 @@ namespace Simulation
             }
 
             _eeStop = _eeStopOverride > 0f ? _eeStopOverride : ProximityConstants.EE_STOP_THRESHOLD;
-            _eeResume = _eeStop + (ProximityConstants.EE_RESUME_THRESHOLD - ProximityConstants.EE_STOP_THRESHOLD);
+            _eeResume =
+                _eeStop
+                + (ProximityConstants.EE_RESUME_THRESHOLD - ProximityConstants.EE_STOP_THRESHOLD);
             _linkStop = ProximityConstants.LINK_STOP_THRESHOLD;
 
-            Debug.Log($"{LOG} Initialized. EE stop={_eeStop:F3}m, resume={_eeResume:F3}m, linkChecks={_enableLinkChecks}");
+            Debug.Log(
+                $"{LOG} Initialized. EE stop={_eeStop:F3}m, resume={_eeResume:F3}m, linkChecks={_enableLinkChecks}"
+            );
         }
 
         private void FixedUpdate()
@@ -83,8 +89,8 @@ namespace Simulation
                 return;
 
             for (int i = 0; i < _cacheCount - 1; i++)
-                for (int j = i + 1; j < _cacheCount; j++)
-                    CheckPair(_cache[i], _cache[j]);
+            for (int j = i + 1; j < _cacheCount; j++)
+                CheckPair(_cache[i], _cache[j]);
         }
 
         /// <summary>
@@ -94,7 +100,8 @@ namespace Simulation
         {
             float eeDist = Vector3.Distance(
                 a.GetCurrentEndEffectorPosition(),
-                b.GetCurrentEndEffectorPosition());
+                b.GetCurrentEndEffectorPosition()
+            );
 
             bool violation = eeDist < _eeStop || (_enableLinkChecks && CheckLinks(a, b));
             bool resolved = eeDist >= _eeResume && (!_enableLinkChecks || !CheckLinks(a, b));
@@ -120,9 +127,7 @@ namespace Simulation
                 if (ja[idx] == null || jb[idx] == null)
                     continue;
 
-                float d = Vector3.Distance(
-                    ja[idx].transform.position,
-                    jb[idx].transform.position);
+                float d = Vector3.Distance(ja[idx].transform.position, jb[idx].transform.position);
 
                 if (d < _linkStop)
                     return true;

@@ -45,21 +45,8 @@ setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Internal quaternion math (pure NumPy, no scipy)
-# ---------------------------------------------------------------------------
-
-
 def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-    """Hamilton product of two quaternions stored as [x, y, z, w].
-
-    Args:
-        q1: First quaternion [x, y, z, w].
-        q2: Second quaternion [x, y, z, w].
-
-    Returns:
-        Product quaternion [x, y, z, w].
-    """
+    """Hamilton product of two quaternions [x, y, z, w]."""
     x1, y1, z1, w1 = q1
     x2, y2, z2, w2 = q2
     return np.array(
@@ -74,18 +61,7 @@ def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
 
 
 def _quat_rotate_vector(q: np.ndarray, v: np.ndarray) -> np.ndarray:
-    """Rotate 3-vector ``v`` by unit quaternion ``q`` ([x,y,z,w] convention).
-
-    Uses the double-cross formula:  v' = v + 2w(t) + 2(q_xyz × t)
-    where  t = q_xyz × v.
-
-    Args:
-        q: Unit quaternion [x, y, z, w].
-        v: 3D vector to rotate.
-
-    Returns:
-        Rotated 3D vector.
-    """
+    """Rotate 3-vector v by unit quaternion q [x,y,z,w]. Uses double-cross formula."""
     qvec = q[:3]
     w = q[3]
     t = 2.0 * np.cross(qvec, v)

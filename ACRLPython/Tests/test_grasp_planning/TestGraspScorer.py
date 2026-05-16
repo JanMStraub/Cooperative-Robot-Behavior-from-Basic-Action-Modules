@@ -21,7 +21,6 @@ from utils.QuaternionMath import quaternion_from_euler
 
 
 class TestGraspScorer:
-    """Test grasp scoring functionality."""
 
     @pytest.fixture
     def config(self):
@@ -45,12 +44,10 @@ class TestGraspScorer:
         )
 
     def test_scorer_initialization(self, config):
-        """Test scorer initializes correctly."""
         scorer = GraspScorer(config)
         assert scorer.config == config
 
     def test_score_and_rank_returns_sorted_list(self, scorer):
-        """Test that score_and_rank returns candidates sorted by score."""
         candidates = [
             GraspCandidate.create(
                 (0.0, 0.15, 0.0),
@@ -72,7 +69,6 @@ class TestGraspScorer:
         assert scores == sorted(scores, reverse=True)
 
     def test_ik_score_uses_validation_when_available(self, scorer):
-        """Test that IK score uses MoveIt validation when available."""
         candidate = GraspCandidate.create(
             (0.0, 0.15, 0.0),
             (0.0, 0.0, 0.0, 1.0),
@@ -124,7 +120,6 @@ class TestGraspScorer:
         assert close_candidate.ik_score > far_candidate.ik_score
 
     def test_approach_score_respects_weights(self, config, scorer):
-        """Test that approach score uses configured weights."""
         # Top approach has weight 1.2 by default
         top_candidate = GraspCandidate.create(
             (0.0, 0.15, 0.0),
@@ -156,7 +151,6 @@ class TestGraspScorer:
         assert side_candidate.total_score > 0
 
     def test_depth_score_gaussian_distribution(self, scorer):
-        """Test that depth score follows Gaussian distribution."""
         object_size = (0.05, 0.05, 0.05)
         avg_size = np.mean(object_size)
         target_depth = scorer.config.target_grasp_depth * avg_size
@@ -192,7 +186,6 @@ class TestGraspScorer:
         assert target_candidate.total_score > far_candidate.total_score
 
     def test_stability_score_gravity_alignment(self, scorer):
-        """Test that stability score considers gravity alignment."""
         # Downward approach (aligned with gravity)
         down_candidate = GraspCandidate.create(
             (0.0, 0.15, 0.0),
@@ -225,7 +218,6 @@ class TestGraspScorer:
         assert horizontal_candidate.total_score > 0
 
     def test_orientation_consistency_penalty(self, scorer):
-        """Test that orientation consistency penalizes large rotations."""
         # Same orientation as current
         same_candidate = GraspCandidate.create(
             (0.0, 0.15, 0.0),
@@ -259,7 +251,6 @@ class TestGraspScorer:
         assert same_candidate.total_score > flipped_candidate.total_score
 
     def test_filter_by_min_score(self, scorer):
-        """Test filtering candidates by minimum score."""
         candidates = []
         for i in range(5):
             candidate = GraspCandidate.create(
@@ -284,7 +275,6 @@ class TestGraspScorer:
         assert all(c.total_score >= min_score for c in filtered)
 
     def test_get_top_n(self, scorer):
-        """Test getting top N candidates."""
         candidates = []
         for i in range(10):
             candidate = GraspCandidate.create(
@@ -308,7 +298,6 @@ class TestGraspScorer:
         assert top_3[0].total_score >= top_3[1].total_score >= top_3[2].total_score
 
     def test_normalize_scores(self, scorer):
-        """Test score normalization."""
         candidates = []
         for i in range(5):
             candidate = GraspCandidate.create(
@@ -335,7 +324,6 @@ class TestGraspScorer:
         assert all(0.0 <= s <= 1.0 for s in scores)
 
     def test_all_scores_in_valid_range(self, scorer):
-        """Test that all score components are in valid range."""
         candidate = GraspCandidate.create(
             (0.0, 0.15, 0.0),
             (0.0, 0.0, 0.0, 1.0),

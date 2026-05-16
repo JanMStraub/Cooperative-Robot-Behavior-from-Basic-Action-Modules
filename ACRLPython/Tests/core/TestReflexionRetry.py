@@ -1,22 +1,10 @@
 #!/usr/bin/env python3
-"""
-Tests for Reflexion retry loop (Improvement 1).
-
-Covers:
-- parse_with_hint() injects hint into _PromptBuilder
-- _PromptBuilder.build() reflection_block appears in prompt when hint set
-- SequenceExecutor retries on failure and succeeds on corrected parse
-- SequenceExecutor stops after REFLEXION_MAX_RETRIES exhausted
-- Retry skipped when _original_text is absent (direct EXEC: path)
-- REFLEXION_MAX_RETRIES config var is readable
-"""
+"""Tests for Reflexion retry loop (Improvement 1)"""
 
 import pytest
 from unittest.mock import Mock, MagicMock, patch, call
 
-# ============================================================================
 # _PromptBuilder hint injection
-# ============================================================================
 
 
 class TestPromptBuilderHint:
@@ -49,9 +37,7 @@ class TestPromptBuilderHint:
         assert "=== HANDOFF RULE ===" in prompt_with_hint
 
 
-# ============================================================================
 # CommandParser.parse_with_hint()
-# ============================================================================
 
 
 class TestParseWithHint:
@@ -104,9 +90,7 @@ class TestParseWithHint:
         assert "error" in result
 
 
-# ============================================================================
 # SequenceExecutor Reflexion retry loop
-# ============================================================================
 
 
 class TestSequenceExecutorReflexion:

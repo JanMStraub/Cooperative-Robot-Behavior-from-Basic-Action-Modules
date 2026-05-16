@@ -46,12 +46,15 @@ namespace Robotics
         // Reusable timestamp to avoid allocating DateTime/TimeSpan/TimeMsg at 50Hz
         private readonly TimeMsg _rosTimestamp = new TimeMsg();
         private static readonly System.DateTime _unixEpoch = new System.DateTime(
-            1970, 1, 1, 0, 0, 0, System.DateTimeKind.Utc
+            1970,
+            1,
+            1,
+            0,
+            0,
+            0,
+            System.DateTimeKind.Utc
         );
 
-        /// <summary>
-        /// URDF joint names for the 6-DOF AR4 arm.
-        /// </summary>
         private static readonly string[] ArmJointNames =
         {
             "joint_1",
@@ -62,9 +65,6 @@ namespace Robotics
             "joint_6",
         };
 
-        /// <summary>
-        /// URDF joint names for the gripper.
-        /// </summary>
         private static readonly string[] GripperJointNames =
         {
             "gripper_jaw1_joint",
@@ -73,9 +73,6 @@ namespace Robotics
 
         private const string _logPrefix = "[ROS_JOINT_STATE_PUBLISHER]";
 
-        /// <summary>
-        /// Whether this publisher is actively publishing.
-        /// </summary>
         public bool IsPublishing { get; private set; }
 
         private void Start()
@@ -161,9 +158,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Gather current joint data and publish to ROS.
-        /// </summary>
         private void PublishJointState()
         {
             ArticulationBody[] joints = _robotController.robotJoints;
@@ -256,18 +250,12 @@ namespace Robotics
             return $"/{robotId}/{topicTemplate}";
         }
 
-        /// <summary>
-        /// Enable or disable publishing at runtime.
-        /// </summary>
         public void SetPublishing(bool enable)
         {
             IsPublishing = enable;
             Debug.Log($"{_logPrefix} Publishing {(enable ? "enabled" : "disabled")}");
         }
 
-        /// <summary>
-        /// Change the publish rate at runtime.
-        /// </summary>
         public void SetPublishRate(float hz)
         {
             _publishRate = Mathf.Clamp(hz, 1f, 100f);

@@ -87,10 +87,8 @@ namespace Simulation
             ArticulationBody,
             (Vector3 position, Quaternion rotation)
         > _initialRobotPoses = new Dictionary<ArticulationBody, (Vector3, Quaternion)>();
-        private Dictionary<
-            Rigidbody,
-            (Vector3 position, Quaternion rotation)
-        > _initialObjectPoses = new Dictionary<Rigidbody, (Vector3, Quaternion)>();
+        private Dictionary<Rigidbody, (Vector3 position, Quaternion rotation)> _initialObjectPoses =
+            new Dictionary<Rigidbody, (Vector3, Quaternion)>();
         private Coroutine _activeResetCoroutine;
 
         public event System.Action<SimulationState, SimulationState> OnStateChanged;
@@ -109,9 +107,6 @@ namespace Simulation
 
         private const string _logPrefix = "[SIMULATION_MANAGER]";
 
-        /// <summary>
-        /// Unity Awake callback - initializes singleton instance and simulation.
-        /// </summary>
         private void Awake()
         {
             if (Instance == null)
@@ -126,9 +121,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Initializes the simulation with default configuration and performance settings.
-        /// </summary>
         private void InitializeSimulation()
         {
             try
@@ -219,9 +211,7 @@ namespace Simulation
                         _initialObjectPoses[rb] = (rb.transform.position, rb.transform.rotation);
                 }
 
-                Debug.Log(
-                    $"{_logPrefix} Initialized: {totalRobots} robots found"
-                );
+                Debug.Log($"{_logPrefix} Initialized: {totalRobots} robots found");
 
                 if (config.autoStart)
                 {
@@ -238,9 +228,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Unity Update callback - guards against bad initialization state.
-        /// </summary>
         private void Update()
         {
             if (_initializationFailed || !IsRunning || _robotControllers == null)
@@ -249,10 +236,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Changes the simulation state and triggers state change event.
-        /// </summary>
-        /// <param name="newState">The new simulation state to transition to</param>
         private void ChangeState(SimulationState newState)
         {
             if (_currentState == newState)
@@ -266,10 +249,6 @@ namespace Simulation
             Debug.Log($"{_logPrefix} State: {_previousState} -> {newState}");
         }
 
-        /// <summary>
-        /// Handles simulation errors and optionally schedules a reset.
-        /// </summary>
-        /// <param name="errorMessage">The error message to log</param>
         private void HandleError(string errorMessage)
         {
             ChangeState(SimulationState.Error);
@@ -282,9 +261,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Starts the simulation and changes state to Running.
-        /// </summary>
         public void StartSimulation()
         {
             if (_currentState == SimulationState.Error)
@@ -298,9 +274,6 @@ namespace Simulation
             ChangeState(SimulationState.Running);
         }
 
-        /// <summary>
-        /// Pauses the simulation if currently running.
-        /// </summary>
         public void PauseSimulation()
         {
             if (IsRunning)
@@ -311,9 +284,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Resumes the simulation if currently paused.
-        /// </summary>
         public void ResumeSimulation()
         {
             if (IsPaused)
@@ -394,7 +364,8 @@ namespace Simulation
             foreach (var kvp in _initialObjectPoses)
             {
                 Rigidbody rb = kvp.Key;
-                if (rb == null) continue;
+                if (rb == null)
+                    continue;
                 rb.transform.SetParent(null, worldPositionStays: false);
                 rb.isKinematic = false;
                 rb.useGravity = true;
@@ -426,8 +397,6 @@ namespace Simulation
         /// Notifies the manager that a robot has reached or is moving towards its target.
         /// Works for both Unity IK and ROS trajectory paths.
         /// </summary>
-        /// <param name="robotId">The robot identifier</param>
-        /// <param name="reached">True if target is reached, false if still moving</param>
         public void NotifyTargetReached(string robotId, bool reached)
         {
             _robotTargetReached[robotId] = reached;
@@ -455,9 +424,6 @@ namespace Simulation
             return false;
         }
 
-        /// <summary>
-        /// Unity OnDestroy callback - cleans up singleton instance.
-        /// </summary>
         private void OnDestroy()
         {
             if (Instance == this)

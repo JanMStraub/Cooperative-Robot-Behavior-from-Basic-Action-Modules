@@ -25,7 +25,6 @@ class ROSHardwareInterface(RobotHardwareInterface):
     """
 
     def _bridge(self):
-        """Return the ROSBridge singleton."""
         from ros2.ROSBridge import ROSBridge
 
         return ROSBridge.get_instance()

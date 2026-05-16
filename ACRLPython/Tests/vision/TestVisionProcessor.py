@@ -31,12 +31,7 @@ class MockDetector:
     """Mock YOLO detector for testing"""
 
     def __init__(self, return_objects=None):
-        """
-        Initialize mock detector.
-
-        Args:
-            return_objects: List of DetectionObject to return, or None for empty
-        """
+        """Initialize mock detector."""
         self.return_objects = return_objects or []
         self.call_count = 0
         self.last_call_args = None

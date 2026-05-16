@@ -68,9 +68,6 @@ namespace Configuration
         public float objectDistanceThreshold = 0.1f;
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Validate configuration values to ensure consistency.
-        /// </summary>
         private void OnValidate()
         {
             // IK convergence parameters

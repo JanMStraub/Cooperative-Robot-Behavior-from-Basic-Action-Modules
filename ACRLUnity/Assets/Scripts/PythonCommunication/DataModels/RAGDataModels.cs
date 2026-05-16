@@ -2,10 +2,6 @@ using System;
 
 namespace PythonCommunication
 {
-    // ============================================================================
-    // RAG QUERY AND RESPONSE DATA MODELS
-    // ============================================================================
-
     /// <summary>
     /// Complete RAG query result from Python SequenceServer
     /// Contains semantic search results for robot operations
@@ -129,11 +125,7 @@ namespace PythonCommunication
         /// </summary>
         public static RagQueryFilters ForCategory(string category, float minScore = 0.5f)
         {
-            return new RagQueryFilters
-            {
-                category = category,
-                min_score = minScore
-            };
+            return new RagQueryFilters { category = category, min_score = minScore };
         }
 
         /// <summary>
@@ -141,11 +133,7 @@ namespace PythonCommunication
         /// </summary>
         public static RagQueryFilters ForComplexity(string complexity, float minScore = 0.5f)
         {
-            return new RagQueryFilters
-            {
-                complexity = complexity,
-                min_score = minScore
-            };
+            return new RagQueryFilters { complexity = complexity, min_score = minScore };
         }
 
         /// <summary>
@@ -177,7 +165,9 @@ namespace PythonCommunication
         /// <summary>
         /// Create query for navigation operations
         /// </summary>
-        public static (string query, RagQueryFilters filters) NavigationQuery(string taskDescription)
+        public static (string query, RagQueryFilters filters) NavigationQuery(
+            string taskDescription
+        )
         {
             return (taskDescription, RagQueryFilters.ForCategory(CATEGORY_NAVIGATION));
         }
@@ -185,7 +175,9 @@ namespace PythonCommunication
         /// <summary>
         /// Create query for manipulation operations
         /// </summary>
-        public static (string query, RagQueryFilters filters) ManipulationQuery(string taskDescription)
+        public static (string query, RagQueryFilters filters) ManipulationQuery(
+            string taskDescription
+        )
         {
             return (taskDescription, RagQueryFilters.ForCategory(CATEGORY_MANIPULATION));
         }
@@ -193,7 +185,9 @@ namespace PythonCommunication
         /// <summary>
         /// Create query for perception operations
         /// </summary>
-        public static (string query, RagQueryFilters filters) PerceptionQuery(string taskDescription)
+        public static (string query, RagQueryFilters filters) PerceptionQuery(
+            string taskDescription
+        )
         {
             return (taskDescription, RagQueryFilters.ForCategory(CATEGORY_PERCEPTION));
         }
@@ -201,7 +195,9 @@ namespace PythonCommunication
         /// <summary>
         /// Create query for basic operations only
         /// </summary>
-        public static (string query, RagQueryFilters filters) BasicOperationsQuery(string taskDescription)
+        public static (string query, RagQueryFilters filters) BasicOperationsQuery(
+            string taskDescription
+        )
         {
             return (taskDescription, RagQueryFilters.ForComplexity(COMPLEXITY_BASIC));
         }

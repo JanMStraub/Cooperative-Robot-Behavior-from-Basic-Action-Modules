@@ -1,19 +1,11 @@
 #!/usr/bin/env python3
-"""
-Field Detection Operations
-===========================
 
-This module provides field detection operations using YOLO model trained to
-recognize labeled fields (A, B, C, D, E, F, G, H, I).
 
-YOLO model returns class names like "fielda", "fieldb", etc. with 3D world
-coordinates from stereo detection.
-"""
+"""Field detection using YOLO (field_a–field_i classes) with stereo 3D coordinates."""
 
 import time
 import logging
 
-# Import from centralized lazy import system
 try:
     from ..core.Imports import get_unified_image_storage
 except ImportError:
@@ -41,13 +33,7 @@ except ImportError:
         ParameterFlow,
     )
 
-# Configure logging
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Implementation: detect_field - Detect field by label using YOLO
-# ============================================================================
 
 
 def detect_field(
@@ -57,34 +43,8 @@ def detect_field(
     confidence_threshold: float = 0.5,
     request_id: int = 0,
 ) -> OperationResult:
-    """
-    Detect a labeled field (A-I) using YOLO model and return 3D coordinates.
-
-    This operation uses the trained YOLO model (field_detector.onnx) to detect
-    labeled fields in the camera image. The YOLO model returns class names like
-    "fielda", "fieldb", etc., and stereo detection provides 3D world coordinates.
-
-    Args:
-        robot_id: Robot identifier (for context, not used in detection)
-        camera_id: Camera ID (e.g., "stereo", "main")
-        field_label: Field letter to detect (A-I), case-insensitive
-        confidence_threshold: Minimum detection confidence (0.0-1.0)
-
-    Returns:
-        OperationResult with field detection data including:
-        - field_label: Detected field letter (uppercase)
-        - center: 3D world coordinates (x, y, z) of field center
-        - bounds: Bounding box in image (x, y, w, h)
-        - confidence: Detection confidence score
-
-    Example:
-        >>> result = detect_field("Robot1", "D")
-        >>> if result.success:
-        ...     center = result.result["center"]
-        ...     print(f"Field D at: {center}")
-    """
+    """Detect a labeled field (A-I) with YOLO and return 3D world coordinates."""
     try:
-        # Validate robot_id
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
@@ -92,7 +52,6 @@ def detect_field(
                 ["Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')"],
             )
 
-        # Normalize field_label to lowercase for YOLO class name
         field_label_lower = field_label.strip().lower()
         if len(field_label_lower) != 1 or not field_label_lower.isalpha():
             return OperationResult.error_result(
@@ -101,16 +60,15 @@ def detect_field(
                 ["Provide field label as 'A', 'B', 'C', etc."],
             )
 
-        # Construct YOLO class name: "field_" + lowercase letter (matches trained model, e.g. "field_a")
-        yolo_class = f"field_{field_label_lower}"
+        yolo_class = (
+            f"field_{field_label_lower}"  # matches trained model: "field_a" etc.
+        )
 
-        # Import YOLO detector
         try:
             from vision.YOLODetector import YOLODetector
         except ImportError:
             from ..vision.YOLODetector import YOLODetector
 
-        # Get stereo images from storage
         image_storage = get_unified_image_storage()
         stereo_data = image_storage.get_latest_stereo_image()
 
@@ -134,7 +92,6 @@ def detect_field(
                 ["Check both stereo cameras are sending images"],
             )
 
-        # Extract typed camera config + pose from Unity stereo metadata
         try:
             from .StereoUtils import camera_config_from_metadata
         except ImportError:
@@ -145,7 +102,6 @@ def detect_field(
         camera_position = stereo_params.camera_position
         camera_rotation = stereo_params.camera_rotation
 
-        # Run YOLO detection with field class filter
         try:
             from config.Vision import YOLO_MODEL_PATH
         except ImportError:
@@ -173,11 +129,9 @@ def detect_field(
                 ],
             )
 
-        # Get first (best) detection
         detection = detections.detections[0]
 
-        # Extract field letter from YOLO class name ("field_a" → "A")
-        # DetectionObject stores class name in .color field for YOLO detections
+        # YOLO class stored in .color field; "field_a" → "A"
         detected_class = detection.color.lower()
         if not detected_class.startswith("field_"):
             return OperationResult.error_result(
@@ -186,9 +140,7 @@ def detect_field(
                 ["Verify YOLO model is correct field detector model"],
             )
 
-        detected_letter = detected_class[6:].upper()  # "field_g"[6:] = "g" → "G"
-
-        # Get 3D world position from stereo detection
+        detected_letter = detected_class[6:].upper()  # "field_g"[6:] → "G"
         world_position = detection.world_position
 
         if not world_position:
@@ -205,7 +157,6 @@ def detect_field(
             f"Detected field {detected_letter} at world position: {world_position}"
         )
 
-        # Convert world_position tuple (x, y, z) to dict for consistent API
         if isinstance(world_position, tuple) and len(world_position) == 3:
             center_dict = {
                 "x": world_position[0],
@@ -217,8 +168,7 @@ def detect_field(
         else:
             center_dict = {"x": 0.0, "y": 0.0, "z": 0.0}
 
-        # Persist field position to WorldState as object_type="field" so
-        # confidence decay (keyed on Unity object list) never evicts it.
+        # object_type="field" prevents confidence-decay eviction (fields are static landmarks).
         try:
             from core.Imports import get_world_state
 
@@ -241,7 +191,7 @@ def detect_field(
         return OperationResult.success_result(
             {
                 "field_label": detected_letter,
-                "center": center_dict,  # 3D world coordinates as dict
+                "center": center_dict,
                 "bounds": (
                     detection.bbox_x,
                     detection.bbox_y,
@@ -267,53 +217,25 @@ def detect_field(
         )
 
 
-# ============================================================================
-# Implementation: detect_all_fields - Detect all visible fields
-# ============================================================================
-
-
 def detect_all_fields(
     robot_id: str,
     camera_id: str = "stereo",
     confidence_threshold: float = 0.5,
     request_id: int = 0,
 ) -> OperationResult:
-    """
-    Detect all visible labeled fields in the image.
-
-    This operation detects all fields (A-I) visible in the camera view
-    and returns their positions.
-
-    Args:
-        robot_id: Robot identifier (for context)
-        camera_id: Camera ID (default: "stereo")
-        confidence_threshold: Minimum detection confidence (0.0-1.0)
-
-    Returns:
-        OperationResult with list of detected fields
-
-    Example:
-        >>> result = detect_all_fields("Robot1", "stereo")
-        >>> if result.success:
-        ...     fields = result.result["fields"]
-        ...     for field in fields:
-        ...         print(f"Field {field['label']} at {field['center']}")
-    """
+    """Detect all visible labeled fields (A-I) in the image and return their 3D positions."""
     try:
-        # Validate robot_id
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
                 ["Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')"],
             )
-        # Import YOLO detector
         try:
             from vision.YOLODetector import YOLODetector
         except ImportError:
             from ..vision.YOLODetector import YOLODetector
 
-        # Get stereo images
         image_storage = get_unified_image_storage()
         stereo_data = image_storage.get_latest_stereo_image()
 
@@ -333,7 +255,6 @@ def detect_all_fields(
                 ["Check both stereo cameras are active"],
             )
 
-        # Extract typed camera config + pose from Unity stereo metadata
         try:
             from .StereoUtils import camera_config_from_metadata
         except ImportError:
@@ -341,7 +262,6 @@ def detect_all_fields(
 
         stereo_params = camera_config_from_metadata(stereo_metadata)
 
-        # Run YOLO detection with all field classes (field_a-field_i)
         field_classes = [
             f"field_{chr(ord('a') + i)}" for i in range(9)
         ]  # field_a-field_i
@@ -371,11 +291,9 @@ def detect_all_fields(
                 }
             )
 
-        # Process all detections
         fields = []
         for detection in detections.detections:
-            # Extract field letter from class name
-            # DetectionObject stores class name in .color field for YOLO detections
+            # YOLO class stored in .color field
             detected_class = detection.color.lower()
             if detected_class.startswith("field_"):
                 field_letter = detected_class[6:].upper()  # "field_a" → "A"
@@ -427,13 +345,7 @@ def detect_all_fields(
         )
 
 
-# ============================================================================
-# BasicOperation Definitions
-# ============================================================================
-
-
 def create_detect_field_operation() -> BasicOperation:
-    """Create the BasicOperation definition for detect_field."""
     return BasicOperation(
         operation_id="perception_detect_field_004",
         name="detect_field",
@@ -539,7 +451,6 @@ def create_detect_field_operation() -> BasicOperation:
 
 
 def create_detect_all_fields_operation() -> BasicOperation:
-    """Create the BasicOperation definition for detect_all_fields."""
     return BasicOperation(
         operation_id="perception_detect_all_fields_006",
         name="detect_all_fields",
@@ -599,10 +510,6 @@ def create_detect_all_fields_operation() -> BasicOperation:
         implementation=detect_all_fields,
     )
 
-
-# ============================================================================
-# Create operation instances for export
-# ============================================================================
 
 DETECT_FIELD_OPERATION = create_detect_field_operation()
 DETECT_ALL_FIELDS_OPERATION = create_detect_all_fields_operation()

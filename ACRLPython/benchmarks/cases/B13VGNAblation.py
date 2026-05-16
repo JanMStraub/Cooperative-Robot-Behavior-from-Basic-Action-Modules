@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import List
 
+
 def get_tasks() -> List[str]:
     """
     Return NL grasp tasks for VGN vs geometric-fallback ablation.
@@ -14,8 +15,6 @@ def get_tasks() -> List[str]:
     top-down fallback.  Live mode reveals success-rate and timing differences;
     offline mode verifies the command-parse path works for both conditions.
 
-    Returns:
-        List of natural language task strings.
     """
     return [
         f"Robot2: Grasp red cube.",

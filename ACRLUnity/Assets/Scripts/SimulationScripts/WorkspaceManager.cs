@@ -23,9 +23,6 @@ namespace Simulation
             maxBounds = Vector3.Max(min, max);
         }
 
-        /// <summary>
-        /// Check if a position is within this region.
-        /// </summary>
         public bool ContainsPosition(Vector3 position)
         {
             return position.x >= minBounds.x
@@ -36,18 +33,11 @@ namespace Simulation
                 && position.z <= maxBounds.z;
         }
 
-        /// <summary>
-        /// Get center position of region.
-        /// </summary>
         public Vector3 GetCenter()
         {
             return (minBounds + maxBounds) / 2f;
         }
 
-        /// <summary>
-        /// Validate that bounds are properly configured.
-        /// </summary>
-        /// <returns>True if bounds are valid (min <= max for all axes)</returns>
         public bool ValidateBounds()
         {
             return minBounds.x <= maxBounds.x
@@ -55,9 +45,6 @@ namespace Simulation
                 && minBounds.z <= maxBounds.z;
         }
 
-        /// <summary>
-        /// Fix inverted bounds by swapping min/max values.
-        /// </summary>
         public void FixInvertedBounds()
         {
             Vector3 actualMin = Vector3.Min(minBounds, maxBounds);
@@ -89,20 +76,28 @@ namespace Simulation
         private List<WorkspaceRegion> _workspaceRegions = new List<WorkspaceRegion>();
 
         [Header("Safety Parameters")]
-        [Tooltip("Minimum distance to maintain between robot end effectors (meters). Mirrors MIN_ROBOT_SEPARATION in config/Robot.py.")]
+        [Tooltip(
+            "Minimum distance to maintain between robot end effectors (meters). Mirrors MIN_ROBOT_SEPARATION in config/Robot.py."
+        )]
         [SerializeField]
         private float _minRobotSeparation = 0.2f;
 
-        [Tooltip("Additional safety margin added to collision geometry (meters). Mirrors COLLISION_SAFETY_MARGIN in config/Robot.py.")]
+        [Tooltip(
+            "Additional safety margin added to collision geometry (meters). Mirrors COLLISION_SAFETY_MARGIN in config/Robot.py."
+        )]
         [SerializeField]
         private float _collisionSafetyMargin = 0.01f;
 
         [Header("Robot Base Positions")]
-        [Tooltip("Base position of Robot1 in world coordinates. Mirrors ROBOT_BASE_POSITIONS[Robot1] in config/Robot.py.")]
+        [Tooltip(
+            "Base position of Robot1 in world coordinates. Mirrors ROBOT_BASE_POSITIONS[Robot1] in config/Robot.py."
+        )]
         [SerializeField]
         private Vector3 _robot1BasePosition = new Vector3(-0.475f, 0f, 0f);
 
-        [Tooltip("Base position of Robot2 in world coordinates. Mirrors ROBOT_BASE_POSITIONS[Robot2] in config/Robot.py.")]
+        [Tooltip(
+            "Base position of Robot2 in world coordinates. Mirrors ROBOT_BASE_POSITIONS[Robot2] in config/Robot.py."
+        )]
         [SerializeField]
         private Vector3 _robot2BasePosition = new Vector3(0.475f, 0f, 0f);
 
@@ -112,9 +107,6 @@ namespace Simulation
 
         private const string LOG_PREFIX = "[WORKSPACE_MANAGER]";
 
-        /// <summary>
-        /// Initialize singleton instance.
-        /// </summary>
         private void Awake()
         {
             if (Instance == null)
@@ -130,9 +122,6 @@ namespace Simulation
         }
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Validate region bounds on inspector changes.
-        /// </summary>
         private void OnValidate()
         {
             ValidateAllRegionBounds();
@@ -166,9 +155,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Initialize default workspace regions if none configured.
-        /// </summary>
         private void InitializeWorkspaces()
         {
             ValidateAllRegionBounds();
@@ -218,11 +204,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Get all regions containing a specific position.
-        /// </summary>
-        /// <param name="position">World position to check</param>
-        /// <returns>New list of all regions containing position</returns>
         public List<WorkspaceRegion> GetRegionsAtPosition(Vector3 position)
         {
             List<WorkspaceRegion> matchingRegions = new List<WorkspaceRegion>();
@@ -261,11 +242,6 @@ namespace Simulation
             return resultBuffer.Count;
         }
 
-        /// <summary>
-        /// Get the smallest region containing a specific position.
-        /// </summary>
-        /// <param name="position">World position to check</param>
-        /// <returns>Smallest region containing position, or null</returns>
         public WorkspaceRegion GetRegionAtPosition(Vector3 position)
         {
             WorkspaceRegion smallestRegion = null;
@@ -305,21 +281,11 @@ namespace Simulation
             return null;
         }
 
-        /// <summary>
-        /// Get all workspace regions.
-        /// </summary>
-        /// <returns>List of all workspace regions</returns>
         public List<WorkspaceRegion> GetAllRegions()
         {
             return new List<WorkspaceRegion>(_workspaceRegions);
         }
 
-        /// <summary>
-        /// Check if two positions maintain minimum safe separation.
-        /// </summary>
-        /// <param name="pos1">First position</param>
-        /// <param name="pos2">Second position</param>
-        /// <returns>True if positions are safely separated</returns>
         public bool IsSafeSeparation(Vector3 pos1, Vector3 pos2)
         {
             float distance = Vector3.Distance(pos1, pos2);
@@ -334,8 +300,10 @@ namespace Simulation
         /// <returns>Base position in world coordinates, or Vector3.zero if unknown</returns>
         public Vector3 GetRobotBasePosition(string robotId)
         {
-            if (robotId == "Robot1") return _robot1BasePosition;
-            if (robotId == "Robot2") return _robot2BasePosition;
+            if (robotId == "Robot1")
+                return _robot1BasePosition;
+            if (robotId == "Robot2")
+                return _robot2BasePosition;
             Debug.LogWarning($"{LOG_PREFIX} Unknown robotId '{robotId}' in GetRobotBasePosition");
             return Vector3.zero;
         }
@@ -346,9 +314,6 @@ namespace Simulation
         /// </summary>
         public float CollisionSafetyMargin => _collisionSafetyMargin;
 
-        /// <summary>
-        /// Draw workspace regions in Scene view for visual debugging.
-        /// </summary>
         private void OnDrawGizmos()
         {
             if (_workspaceRegions == null || _workspaceRegions.Count == 0)
@@ -391,9 +356,6 @@ namespace Simulation
         }
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Add a workspace region (editor only).
-        /// </summary>
         public void AddRegion(string name, Vector3 min, Vector3 max, Color color)
         {
             var region = new WorkspaceRegion(name, min, max);
@@ -401,9 +363,6 @@ namespace Simulation
             _workspaceRegions.Add(region);
         }
 
-        /// <summary>
-        /// Remove a workspace region (editor only).
-        /// </summary>
         public void RemoveRegion(string name)
         {
             _workspaceRegions.RemoveAll(r => r.regionName == name);

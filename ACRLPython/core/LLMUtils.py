@@ -35,13 +35,11 @@ def extract_json(content: str) -> Optional[Dict]:
     Returns:
         Parsed dict, or None if the response could not be decoded.
     """
-    # Stage 1: direct parse
     try:
         return json.loads(content)
     except json.JSONDecodeError as e:
         logger.debug(f"Direct JSON parse failed: {e}")
 
-    # Stage 2: markdown code block
     json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
     if json_match:
         json_str = json_match.group(1).strip()
@@ -68,7 +66,6 @@ def extract_json(content: str) -> Optional[Dict]:
             except json.JSONDecodeError:
                 pass
 
-    # Stage 3: bare {…} regex
     json_match = re.search(r"\{.*?\}", content, re.DOTALL)
     if json_match:
         json_str = json_match.group(0)

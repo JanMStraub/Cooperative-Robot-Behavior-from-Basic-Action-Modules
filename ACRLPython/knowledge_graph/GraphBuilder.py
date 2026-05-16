@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""
-Knowledge Graph Builder
-=======================
-
-Builds and maintains the knowledge graph from WorldState updates.
-Registers as a WorldStateServer callback to keep graph synchronized.
-
-Key Responsibilities:
-- Create/update robot, object, and region nodes from WorldState
-- Compute and maintain spatial edges (CAN_REACH, NEAR, IN_REGION)
-- Update temporal edges (GRASPING, ALLOCATED)
-- Recompute edges when entities move
-"""
+"""Builds and maintains the knowledge graph from WorldState updates."""
 
 import math
 import time
@@ -22,7 +10,6 @@ from config.Robot import WORKSPACE_REGIONS, ROBOT_BASE_POSITIONS
 from .Core import KnowledgeGraph
 from .Schema import RobotNode, ObjectNode, RegionNode
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
@@ -32,20 +19,9 @@ from config.KnowledgeGraph import KG_NEAR_THRESHOLD as NEAR_THRESHOLD
 
 
 class GraphBuilder:
-    """
-    Builds and maintains knowledge graph from WorldState updates.
-
-    Automatically updates graph structure when WorldState changes via callback.
-    """
+    """Builds and maintains knowledge graph from WorldState updates via callback."""
 
     def __init__(self, graph: KnowledgeGraph, world_state: WorldState):
-        """
-        Initialize GraphBuilder.
-
-        Args:
-            graph: KnowledgeGraph instance to populate
-            world_state: WorldState instance to read from
-        """
         self._graph = graph
         self._world_state = world_state
         self._init_static_regions()
@@ -53,18 +29,12 @@ class GraphBuilder:
         logger.info("GraphBuilder initialized")
 
     def _init_static_regions(self):
-        """
-        Create static region nodes and ADJACENT_TO edges.
-
-        Regions are static (don't move), so create them once at initialization.
-        """
-        # Add region nodes
+        """Create static region nodes and ADJACENT_TO edges once at init."""
         for region_name, bounds in WORKSPACE_REGIONS.items():
             region_node = RegionNode(node_id=region_name, bounds=bounds)
             self._graph.add_node(region_node.node_id, **region_node.to_dict())
             logger.debug(f"Added static region node: {region_name}")
 
-        # Add ADJACENT_TO edges between neighboring regions
         adjacencies = [
             ("left_workspace", "shared_zone"),
             ("shared_zone", "right_workspace"),
@@ -76,7 +46,6 @@ class GraphBuilder:
             if region1 in WORKSPACE_REGIONS and region2 in WORKSPACE_REGIONS:
                 self._graph.add_edge(region1, region2, "ADJACENT_TO")
                 self._graph.add_edge(region2, region1, "ADJACENT_TO")
-                logger.debug(f"Added ADJACENT_TO edge: {region1} <-> {region2}")
 
     def _seed_robot_nodes(self):
         """
@@ -108,13 +77,8 @@ class GraphBuilder:
         """
         Lightweight callback fired by WorldState after a Python detection write.
 
-        Avoids a full graph rebuild: only refreshes the single object node and
-        recomputes spatial edges, keeping CAN_REACH / NEAR edges current without
-        waiting for the next Unity WorldStateServer packet.
-
-        Args:
-            object_id: The object that moved or was newly detected.
-            position: New world-space position (x, y, z).
+        Avoids full graph rebuild: refreshes single object node + spatial edges,
+        keeping CAN_REACH/NEAR current without waiting for next Unity packet.
         """
         try:
             obj_data = self._world_state.get_object_state(object_id)
@@ -139,17 +103,11 @@ class GraphBuilder:
             self._recompute_spatial_edges()
             logger.debug(f"KG updated from Python detection: {object_id} at {position}")
         except Exception as e:
-            logger.error(f"Error in on_object_updated for {object_id}: {e}", exc_info=True)
+            logger.error(
+                f"Error in on_object_updated for {object_id}: {e}", exc_info=True
+            )
 
     def on_state_update(self, state_data: Dict[str, Any]):
-        """
-        Callback invoked by WorldStateServer on each state update.
-
-        Rebuilds graph nodes and edges based on current world state.
-
-        Args:
-            state_data: World state update dictionary from Unity
-        """
         try:
             self._update_robot_nodes(state_data)
             self._update_object_nodes(state_data)
@@ -163,14 +121,6 @@ class GraphBuilder:
             logger.error(f"Error updating graph from state: {e}", exc_info=True)
 
     def _update_robot_nodes(self, state_data: Dict[str, Any]):
-        """
-        Update robot nodes from state data.
-
-        Creates or updates nodes for each robot in the state.
-
-        Args:
-            state_data: World state dictionary
-        """
         robots = state_data.get("robots", [])
 
         for robot_data in robots:
@@ -178,19 +128,16 @@ class GraphBuilder:
             if not robot_id:
                 continue
 
-            # Get robot from WorldState for full data
             robot_state = self._world_state.get_robot_state(robot_id)
             if not robot_state:
                 continue
 
-            # Determine workspace region
             workspace_region = None
             if robot_state.position:
                 workspace_region = self._world_state.get_region_for_position(
                     robot_state.position
                 )
 
-            # Create node
             robot_node = RobotNode(
                 node_id=robot_id,
                 position=robot_state.position,
@@ -199,23 +146,12 @@ class GraphBuilder:
                 is_moving=robot_state.is_moving,
                 timestamp=robot_state.timestamp,
             )
-
-            # Add or update node
             self._graph.add_node(robot_node.node_id, **robot_node.to_dict())
 
     def _update_object_nodes(self, state_data: Dict[str, Any]):
-        """
-        Update object nodes from state data.
-
-        Args:
-            state_data: World state dictionary
-        """
         objects = state_data.get("objects", [])
-
-        # Track seen objects for cleanup
         seen_object_ids = set()
-
-        # Build lookup dict once outside the loop — O(N) total instead of O(N²)
+        # Build lookup once — O(N) total instead of O(N²)
         world_objs_by_id = {o.object_id: o for o in self._world_state.get_all_objects()}
 
         for obj_data in objects:
@@ -230,13 +166,11 @@ class GraphBuilder:
 
             seen_object_ids.add(object_id)
 
-            # Get object from WorldState for full data
             obj_state = world_objs_by_id.get(object_id)
 
             if not obj_state:
                 continue
 
-            # Create node
             object_node = ObjectNode(
                 node_id=object_id,
                 position=obj_state.position,
@@ -248,11 +182,9 @@ class GraphBuilder:
                 stale=obj_state.stale,
                 timestamp=obj_state.timestamp,
             )
-
-            # Add or update node
             self._graph.add_node(object_node.node_id, **object_node.to_dict())
 
-        # Remove objects that are no longer in WorldState (TTL expired)
+        # Remove objects no longer in WorldState (TTL expired)
         current_object_nodes = self._graph.get_all_nodes(node_type="object")
         for obj_id in current_object_nodes:
             if obj_id not in seen_object_ids:
@@ -267,19 +199,10 @@ class GraphBuilder:
         return pos
 
     def _recompute_spatial_edges(self):
-        """
-        Recompute all spatial edges based on current positions.
-
-        Edges computed:
-        - CAN_REACH: Robot -> Object (if within reach and accessible)
-        - NEAR: Object <-> Object, Robot <-> Object (if distance < threshold)
-        - IN_REGION: Robot/Object -> Region (based on position)
-        """
         robots = self._graph.get_all_nodes(node_type="robot")
         objects = self._graph.get_all_nodes(node_type="object")
 
-        # Remove old spatial edges in a single locked batch operation to avoid
-        # the O(N²) overhead of per-pair remove_edge calls.
+        # Single locked batch removal avoids O(N²) per-pair remove_edge calls.
         self._graph.remove_edges_by_type(
             nodes=robots + objects, edge_types={"CAN_REACH", "NEAR"}
         )
@@ -350,7 +273,7 @@ class GraphBuilder:
             if not obj1_pos:
                 continue
 
-            for obj2_id in objects[i + 1:]:
+            for obj2_id in objects[i + 1 :]:
                 obj2_node = self._graph.get_node(obj2_id)
                 if not obj2_node:
                     continue
@@ -381,20 +304,13 @@ class GraphBuilder:
                 self._graph.add_edge(node_id, region, "IN_REGION")
 
     def _update_grasp_edges(self):
-        """
-        Update GRASPING edges based on object grasp state.
-
-        GRASPING edge: Robot -> Object (when robot has object grasped)
-        """
         robots = self._graph.get_all_nodes(node_type="robot")
         objects = self._graph.get_all_nodes(node_type="object")
 
-        # Clear old GRASPING edges
         for robot_id in robots:
             for obj_id in objects:
                 self._graph.remove_edge(robot_id, obj_id, edge_type="GRASPING")
 
-        # Add new GRASPING edges based on object state
         for obj_id in objects:
             obj_node = self._graph.get_node(obj_id)
             if not obj_node:
@@ -407,20 +323,13 @@ class GraphBuilder:
                 )
 
     def _update_allocation_edges(self):
-        """
-        Update ALLOCATED edges based on workspace allocation.
-
-        ALLOCATED edge: Region -> Robot (when region is allocated to robot)
-        """
         regions = list(WORKSPACE_REGIONS.keys())
         robots = self._graph.get_all_nodes(node_type="robot")
 
-        # Clear old ALLOCATED edges
         for region in regions:
             for robot_id in robots:
                 self._graph.remove_edge(region, robot_id, edge_type="ALLOCATED")
 
-        # Add new ALLOCATED edges
         for region in regions:
             owner = self._world_state.get_workspace_owner(region)
             if owner:

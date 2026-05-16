@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Per-Robot LLM Agent for Negotiation
-=====================================
-
-Each robot gets its own LLM agent that can:
-1. Analyze tasks from its perspective (capabilities, workspace, reachability)
-2. Propose coordinated plans with parallel groups and synchronization
-3. Evaluate counter-proposals from other robots
-
-The agent uses LM Studio for LLM inference, following the same pattern
-as CommandParser._parse_with_llm().
-"""
+"""Per-robot LLM agent for multi-robot negotiation (task analysis, plan proposal, evaluation)."""
 
 import json
 import logging
@@ -42,25 +31,9 @@ from config.Robot import (
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Data Classes
-# ============================================================================
-
-
 @dataclass
 class TaskAnalysis:
-    """
-    Result of a robot analyzing a task from its own perspective.
-
-    Attributes:
-        robot_id: Which robot performed the analysis
-        can_contribute: Whether this robot can help with the task
-        capabilities: What this robot can do for the task
-        constraints: Limitations (workspace, reach, current state)
-        suggested_role: What role this robot should play
-        requires_collaboration: Whether other robots are needed
-        confidence: Confidence in the analysis (0.0-1.0)
-    """
+    """Robot's self-assessment of a task."""
 
     robot_id: str
     can_contribute: bool = True
@@ -73,16 +46,7 @@ class TaskAnalysis:
 
 @dataclass
 class PlanProposal:
-    """
-    A proposed coordinated plan from a robot agent.
-
-    Attributes:
-        proposer_id: Robot that proposed this plan
-        reasoning: Why this plan was chosen
-        commands: List of commands in SequenceExecutor format
-        round_number: Which negotiation round this came from
-        estimated_duration_s: Estimated execution time
-    """
+    """Coordinated plan proposed by a robot agent."""
 
     proposer_id: str
     reasoning: str = ""
@@ -93,16 +57,7 @@ class PlanProposal:
 
 @dataclass
 class ProposalEvaluation:
-    """
-    A robot's evaluation of another robot's plan proposal.
-
-    Attributes:
-        evaluator_id: Robot that evaluated the proposal
-        accept: Whether the robot accepts the proposal
-        concerns: List of concerns about the proposal
-        suggested_changes: Modifications to improve the plan
-        confidence: Confidence in the evaluation (0.0-1.0)
-    """
+    """Robot's accept/reject verdict on a peer's plan proposal."""
 
     evaluator_id: str
     accept: bool = False
@@ -111,18 +66,8 @@ class ProposalEvaluation:
     confidence: float = 0.5
 
 
-# ============================================================================
-# Robot LLM Agent
-# ============================================================================
-
-
 class RobotLLMAgent:
-    """
-    Per-robot LLM agent for task analysis, plan proposal, and evaluation.
-
-    Each instance represents one robot's perspective and uses LM Studio
-    for reasoning about multi-robot coordination.
-    """
+    """Per-robot LLM agent for task analysis, plan proposal, and evaluation."""
 
     def __init__(
         self,
@@ -131,15 +76,6 @@ class RobotLLMAgent:
         model: Optional[str] = None,
         temperature: Optional[float] = None,
     ):
-        """
-        Initialize a robot LLM agent.
-
-        Args:
-            robot_id: ID of the robot this agent represents
-            lm_studio_url: LM Studio base URL (default from config)
-            model: Model name (default from config)
-            temperature: LLM temperature (default from config)
-        """
         self.robot_id = robot_id
         self.lm_studio_url = lm_studio_url or LMSTUDIO_BASE_URL
         self.model = model or DEFAULT_LMSTUDIO_MODEL
@@ -158,26 +94,14 @@ class RobotLLMAgent:
         world_state_snapshot: Dict[str, Any],
         available_operations: List[str],
     ) -> TaskAnalysis:
-        """
-        Phase 1: Analyze a task from this robot's perspective.
-
-        Determines what this robot can contribute, its constraints,
-        and whether collaboration is needed.
-
-        Args:
-            task: Natural language task description
-            world_state_snapshot: Current world state
-            available_operations: List of available operation names
-
-        Returns:
-            TaskAnalysis with this robot's assessment
-        """
+        """Phase 1: Analyze task from this robot's perspective."""
         context = self._build_agent_context(world_state_snapshot)
         ops_str = ", ".join(available_operations)
 
         workspace_side = self._get_workspace_label()
         system_prompt = (
-            SYSTEM_PROMPT_BASE + f" You are {self.robot_id}, the {workspace_side} robot arm. Analyze tasks from your own spatial perspective and only claim capabilities within your workspace bounds."
+            SYSTEM_PROMPT_BASE
+            + f" You are {self.robot_id}, the {workspace_side} robot arm. Analyze tasks from your own spatial perspective and only claim capabilities within your workspace bounds."
         )
         user_prompt = f"""{context}
 
@@ -222,29 +146,13 @@ JSON: {{"can_contribute":bool,"capabilities":[],"constraints":[],"suggested_role
         round_number: int = 1,
         available_operations: Optional[List[str]] = None,
     ) -> PlanProposal:
-        """
-        Phase 2: Propose a coordinated plan considering other robots' analyses.
-
-        Args:
-            task: Natural language task description
-            other_analyses: Analyses from other robots
-            world_state: Current world state snapshot
-            round_number: Current negotiation round
-            available_operations: List of valid operation names from the registry
-
-        Returns:
-            PlanProposal with commands in SequenceExecutor format
-        """
+        """Phase 2: Propose a coordinated plan considering other robots' analyses."""
         context = self._build_agent_context(world_state)
 
-        # Build summary of other robots' analyses
         analyses_summary = ""
         for analysis in other_analyses:
-            analyses_summary += (
-                f"\n{analysis.robot_id}: role='{analysis.suggested_role}' contribute={analysis.can_contribute}, collab={analysis.requires_collaboration}"
-            )
+            analyses_summary += f"\n{analysis.robot_id}: role='{analysis.suggested_role}' contribute={analysis.can_contribute}, collab={analysis.requires_collaboration}"
 
-        # Build operations section for the prompt
         if available_operations:
             ops_str = "\n".join(f"  - {op}" for op in available_operations)
             ops_section = (
@@ -305,17 +213,7 @@ JSON: {{"reasoning":"","commands":[{{"parallel_group":1,"operation":"","params":
         task: str,
         world_state: Dict[str, Any],
     ) -> ProposalEvaluation:
-        """
-        Phase 3: Evaluate another robot's plan proposal.
-
-        Args:
-            proposal: Plan proposal to evaluate
-            task: Original task description
-            world_state: Current world state snapshot
-
-        Returns:
-            ProposalEvaluation with accept/reject and concerns
-        """
+        """Phase 3: Evaluate another robot's plan proposal."""
         context = self._build_agent_context(world_state)
 
         commands_json = json.dumps(proposal.commands, indent=2)
@@ -368,16 +266,7 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
             )
 
     def _get_workspace_label(self) -> str:
-        """
-        Return a human-readable workspace side label for this robot.
-
-        Uses ROBOT_WORKSPACE_ASSIGNMENTS config to determine left/right/unknown,
-        avoiding fragile substring matches on robot_id strings.
-
-        Returns:
-            Descriptive label such as "left (X < 0)", "right (X > 0)", or
-            "workspace '<name>'" for unrecognized assignments.
-        """
+        """Return workspace side label — uses config assignments, not fragile robot_id substring matching."""
         workspace = ROBOT_WORKSPACE_ASSIGNMENTS.get(self.robot_id, "")
         if "left" in workspace.lower():
             return "left (X < 0)"
@@ -386,16 +275,7 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
         return f"workspace '{workspace}'" if workspace else "workspace (unknown)"
 
     def _build_agent_context(self, world_state_snapshot: Dict[str, Any]) -> str:
-        """
-        Build context string describing this robot's situation.
-
-        Args:
-            world_state_snapshot: Current world state
-
-        Returns:
-            Formatted context string for LLM prompt
-        """
-        # Robot identity and workspace
+        """Build LLM context string for this robot's spatial situation."""
         wb = WORKSPACE_REGIONS.get(self.workspace, {})
         sz = WORKSPACE_REGIONS.get("shared_zone", {})
         context = (
@@ -426,15 +306,7 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
         return context
 
     def _classify_position_zone(self, position) -> str:
-        """
-        Classify a world position into a named workspace zone.
-
-        Args:
-            position: Position as tuple/list (x, y, z) or "unknown"
-
-        Returns:
-            Zone label: "left_workspace", "right_workspace", "shared_zone", or "unknown"
-        """
+        """Classify world position into named workspace zone via WORKSPACE_REGIONS X bounds."""
         if not isinstance(position, (list, tuple)) or len(position) < 1:
             return "unknown"
         x = position[0]
@@ -446,18 +318,7 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
         return "unknown"
 
     def _call_llm(self, system_prompt: str, user_prompt: str) -> Optional[str]:
-        """
-        Call LM Studio for LLM inference.
-
-        Follows the same pattern as CommandParser._parse_with_llm().
-
-        Args:
-            system_prompt: System message for the LLM
-            user_prompt: User message with the actual query
-
-        Returns:
-            LLM response text or None if failed
-        """
+        """Call LM Studio. Returns response text or None on failure."""
         try:
             payload: dict = {
                 "model": self.model,
@@ -516,15 +377,7 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
             return None
 
     def _extract_json(self, content: str) -> Optional[Dict]:
-        """
-        Extract JSON from LLM response text. Delegates to core.LLMUtils.
-
-        Args:
-            content: Raw LLM response
-
-        Returns:
-            Parsed JSON dict or None
-        """
+        """Extract JSON from LLM response. Delegates to core.LLMUtils."""
         result = _extract_json_util(content)
         if result is None:
             logger.error(f"[{self.robot_id}] Failed to extract JSON from response")

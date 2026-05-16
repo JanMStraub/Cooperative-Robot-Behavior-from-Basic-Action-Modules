@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for FieldOperations
-================================
-
-Tests detect_field and detect_all_fields without live Unity connection or
-YOLO model. All external collaborators (image storage, YOLODetector, WorldState)
-are mocked.
-
-Coverage:
-- detect_field: happy path, invalid robot_id, invalid field_label, no stereo images,
-  incomplete stereo pair, no detections, no 3D coordinates, world_position as dict,
-  WorldState update called
-- detect_all_fields: happy path with multiple fields, empty detections (success with []),
-  invalid robot_id, no stereo images
-- Field letter extraction from YOLO class names (field_a → A, field_g → G)
-"""
+"""Unit tests for FieldOperations"""
 
 from unittest.mock import MagicMock, patch
 
@@ -22,10 +7,8 @@ import pytest
 
 from operations.FieldOperations import detect_field, detect_all_fields
 
-
-# ---------------------------------------------------------------------------
 # Shared helpers
-# ---------------------------------------------------------------------------
+
 
 def _make_detection(color: str, world_position=(0.1, 0.2, 0.3), confidence=0.85):
     """Create a mock YOLO DetectionObject."""
@@ -58,9 +41,8 @@ def _stereo_params(metadata=None):
     return params
 
 
-# ---------------------------------------------------------------------------
 # detect_field
-# ---------------------------------------------------------------------------
+
 
 class TestDetectField:
     def _patch_all(self, detections_result, stereo=None):
@@ -77,10 +59,23 @@ class TestDetectField:
 
         patches = [
             patch("core.Imports.get_unified_image_storage", return_value=image_storage),
-            patch("operations.FieldOperations.get_unified_image_storage", return_value=image_storage),
+            patch(
+                "operations.FieldOperations.get_unified_image_storage",
+                return_value=image_storage,
+            ),
             patch("vision.YOLODetector.YOLODetector", return_value=detector),
-            patch("operations.FieldOperations.YOLODetector" if False else "vision.YOLODetector.YOLODetector", return_value=detector),
-            patch("operations.StereoUtils.camera_config_from_metadata", return_value=_stereo_params()),
+            patch(
+                (
+                    "operations.FieldOperations.YOLODetector"
+                    if False
+                    else "vision.YOLODetector.YOLODetector"
+                ),
+                return_value=detector,
+            ),
+            patch(
+                "operations.StereoUtils.camera_config_from_metadata",
+                return_value=_stereo_params(),
+            ),
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", False),
             patch("core.Imports.get_world_state", return_value=world_state),
         ]
@@ -103,8 +98,14 @@ class TestDetectField:
         # camera_config_from_metadata and YOLODetector are local imports inside the
         # function body, so patch at the source module, not on FieldOperations.
         with (
-            patch("operations.FieldOperations.get_unified_image_storage", return_value=image_storage),
-            patch("operations.StereoUtils.camera_config_from_metadata", return_value=_stereo_params()),
+            patch(
+                "operations.FieldOperations.get_unified_image_storage",
+                return_value=image_storage,
+            ),
+            patch(
+                "operations.StereoUtils.camera_config_from_metadata",
+                return_value=_stereo_params(),
+            ),
             patch("vision.YOLODetector.YOLODetector", return_value=detector_inst),
             patch("config.Vision.YOLO_MODEL_PATH", "/fake/model.onnx"),
             patch("core.Imports.get_world_state", return_value=world_state),
@@ -114,7 +115,9 @@ class TestDetectField:
         return result, world_state, detector_inst
 
     def test_happy_path_returns_field_label(self):
-        result, _, _ = self._run(field_label="D", detections=[_make_detection("field_d")])
+        result, _, _ = self._run(
+            field_label="D", detections=[_make_detection("field_d")]
+        )
         assert result.success is True
         assert result.result["field_label"] == "D"
 
@@ -164,15 +167,27 @@ class TestDetectField:
     def test_no_stereo_images(self):
         image_storage = MagicMock()
         image_storage.get_latest_stereo_image.return_value = None
-        with patch("operations.FieldOperations.get_unified_image_storage", return_value=image_storage):
+        with patch(
+            "operations.FieldOperations.get_unified_image_storage",
+            return_value=image_storage,
+        ):
             result = detect_field("Robot1", "D")
         assert result.success is False
         assert result.error["code"] == "NO_STEREO_IMAGES"
 
     def test_incomplete_stereo_pair(self):
         image_storage = MagicMock()
-        image_storage.get_latest_stereo_image.return_value = (None, None, None, None, {})
-        with patch("operations.FieldOperations.get_unified_image_storage", return_value=image_storage):
+        image_storage.get_latest_stereo_image.return_value = (
+            None,
+            None,
+            None,
+            None,
+            {},
+        )
+        with patch(
+            "operations.FieldOperations.get_unified_image_storage",
+            return_value=image_storage,
+        ):
             result = detect_field("Robot1", "D")
         assert result.success is False
         assert result.error["code"] == "INCOMPLETE_STEREO_PAIR"
@@ -189,7 +204,9 @@ class TestDetectField:
         assert result.error["code"] == "NO_3D_COORDINATES"
 
     def test_confidence_in_result(self):
-        det = _make_detection("field_b", world_position=(0.1, 0.2, 0.3), confidence=0.92)
+        det = _make_detection(
+            "field_b", world_position=(0.1, 0.2, 0.3), confidence=0.92
+        )
         result, _, _ = self._run(field_label="B", detections=[det])
         assert result.result["confidence"] == pytest.approx(0.92)
 
@@ -206,9 +223,8 @@ class TestDetectField:
         assert call_kwargs["filter_classes"] == ["field_e"]
 
 
-# ---------------------------------------------------------------------------
 # detect_all_fields
-# ---------------------------------------------------------------------------
+
 
 class TestDetectAllFields:
     def _run(self, detections=None, stereo="ok"):
@@ -225,8 +241,14 @@ class TestDetectAllFields:
         detector_inst.detect_objects_stereo.return_value = det_result
 
         with (
-            patch("operations.FieldOperations.get_unified_image_storage", return_value=image_storage),
-            patch("operations.StereoUtils.camera_config_from_metadata", return_value=_stereo_params()),
+            patch(
+                "operations.FieldOperations.get_unified_image_storage",
+                return_value=image_storage,
+            ),
+            patch(
+                "operations.StereoUtils.camera_config_from_metadata",
+                return_value=_stereo_params(),
+            ),
             patch("vision.YOLODetector.YOLODetector", return_value=detector_inst),
             patch("config.Vision.YOLO_MODEL_PATH", "/fake/model.onnx"),
         ):

@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for GripperOperations.py
-
-Tests the gripper control operations including:
-- Open/close gripper commands
-- Timeout handling
-- Command broadcasting to Unity
-- Failure recovery
-- Invalid robot ID handling
-- State validation
-- Parameter validation
-- Error handling
-"""
+"""Unit tests for GripperOperations.py"""
 
 import pytest
 from unittest.mock import Mock, patch
@@ -25,34 +13,22 @@ from operations.GripperOperations import (
     PLACE_BETWEEN_OBJECTS_OPERATION,
 )
 
-# ============================================================================
 # Fixtures
-# ============================================================================
 
 
 @pytest.fixture
 def mock_broadcaster():
-    """
-    Create a mock CommandBroadcaster for testing.
-
-    Returns:
-        Mock CommandBroadcaster with send_command method
-    """
     broadcaster = Mock()
     broadcaster.send_command = Mock(return_value=True)
     return broadcaster
 
 
-# ============================================================================
 # Test Class: Basic Gripper Operations
-# ============================================================================
 
 
 class TestGripperOperations:
-    """Test basic gripper control operations."""
 
     def test_open_gripper_success(self, patch_command_broadcaster):
-        """Test opening gripper successfully."""
 
         result = control_gripper("Robot1", open_gripper=True)
 
@@ -64,7 +40,6 @@ class TestGripperOperations:
         patch_command_broadcaster.send_command.assert_called_once()
 
     def test_close_gripper_success(self, patch_command_broadcaster):
-        """Test closing gripper successfully."""
 
         result = control_gripper("Robot1", open_gripper=False)
 
@@ -75,7 +50,6 @@ class TestGripperOperations:
         patch_command_broadcaster.send_command.assert_called_once()
 
     def test_gripper_command_structure(self, patch_command_broadcaster):
-        """Test that gripper command has correct structure."""
 
         result = control_gripper("Robot1", open_gripper=True, request_id=123)
 
@@ -95,16 +69,12 @@ class TestGripperOperations:
         assert request_id == 123
 
 
-# ============================================================================
 # Test Class: Error Handling
-# ============================================================================
 
 
 class TestGripperErrors:
-    """Test error handling for gripper operations."""
 
     def test_gripper_invalid_robot_id_empty(self, patch_command_broadcaster):
-        """Test gripper control with empty robot ID."""
 
         result = control_gripper("", open_gripper=True)
 
@@ -113,7 +83,6 @@ class TestGripperErrors:
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_gripper_invalid_robot_id_none(self, patch_command_broadcaster):
-        """Test gripper control with None robot ID."""
 
         result = control_gripper(None, open_gripper=True)  # type: ignore[arg-type]
 
@@ -122,7 +91,6 @@ class TestGripperErrors:
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_gripper_invalid_parameter_type(self, patch_command_broadcaster):
-        """Test gripper control with invalid open_gripper parameter type."""
 
         result = control_gripper("Robot1", open_gripper="yes")  # type: ignore[arg-type]
 
@@ -131,7 +99,6 @@ class TestGripperErrors:
         assert result.error["code"] == "INVALID_OPEN_GRIPPER_PARAMETER"
 
     def test_gripper_communication_failed(self, patch_command_broadcaster):
-        """Test gripper control when communication fails."""
         patch_command_broadcaster.send_command = Mock(return_value=False)
 
         result = control_gripper("Robot1", open_gripper=True)
@@ -141,7 +108,6 @@ class TestGripperErrors:
         assert result.error["code"] == "COMMUNICATION_FAILED"
 
     def test_gripper_network_failure(self, patch_command_broadcaster):
-        """Test gripper control when broadcaster raises exception."""
         patch_command_broadcaster.send_command = Mock(
             side_effect=Exception("Network error")
         )
@@ -153,16 +119,12 @@ class TestGripperErrors:
         assert result.error["code"] == "UNEXPECTED_ERROR"
 
 
-# ============================================================================
 # Test Class: Command Broadcasting
-# ============================================================================
 
 
 class TestGripperBroadcasting:
-    """Test command broadcasting to Unity."""
 
     def test_gripper_command_broadcast_open(self, patch_command_broadcaster):
-        """Test opening gripper broadcasts correct command to Unity."""
 
         control_gripper("CustomRobot", open_gripper=True, request_id=999)
 
@@ -175,7 +137,6 @@ class TestGripperBroadcasting:
         assert request_id == 999
 
     def test_gripper_command_broadcast_close(self, patch_command_broadcaster):
-        """Test closing gripper broadcasts correct command to Unity."""
 
         control_gripper("AR4_Robot", open_gripper=False, request_id=555)
 
@@ -188,16 +149,12 @@ class TestGripperBroadcasting:
         assert request_id == 555
 
 
-# ============================================================================
 # Test Class: Operation Definition
-# ============================================================================
 
 
 class TestGripperOperationDefinition:
-    """Test the BasicOperation definition for gripper control."""
 
     def test_operation_definition_exists(self):
-        """Test that CONTROL_GRIPPER_OPERATION is properly defined."""
         assert CONTROL_GRIPPER_OPERATION is not None
         assert CONTROL_GRIPPER_OPERATION.name == "control_gripper"
         assert (
@@ -205,7 +162,6 @@ class TestGripperOperationDefinition:
         )
 
     def test_operation_has_metadata(self):
-        """Test that operation has required metadata."""
         op = CONTROL_GRIPPER_OPERATION
 
         assert op.description is not None
@@ -222,9 +178,7 @@ class TestGripperOperationDefinition:
         assert result.success is True
 
 
-# ============================================================================
 # Test Class: place_between_objects
-# ============================================================================
 
 
 def _make_ws_two_objects():
@@ -244,16 +198,17 @@ def _make_ws_two_objects():
 
 
 class TestPlaceBetweenObjects:
-    """Tests for place_between_objects operation."""
 
     def _patch_ws(self, monkeypatch, ws):
         try:
             import operations._imports as imp
+
             monkeypatch.setattr(imp, "get_world_state", lambda: ws)
         except (ImportError, AttributeError):
             pass
         try:
             import core.Imports as ci
+
             monkeypatch.setattr(ci, "get_world_state", lambda: ws)
         except (ImportError, AttributeError):
             pass
@@ -327,7 +282,9 @@ class TestPlaceBetweenObjects:
         assert "object_id_2" in param_names
         assert op.implementation is place_between_objects
 
-    def test_default_y_used_when_no_on_top_of(self, monkeypatch, patch_command_broadcaster):
+    def test_default_y_used_when_no_on_top_of(
+        self, monkeypatch, patch_command_broadcaster
+    ):
         """Explicit y passes through unchanged when on_top_of not given."""
         ws = _make_ws_two_objects()
         self._patch_ws(monkeypatch, ws)
@@ -338,9 +295,7 @@ class TestPlaceBetweenObjects:
         assert abs(result.result["placed_at"]["y"] - 0.08) < 1e-6
 
 
-# ============================================================================
 # Test Class: place_object — on_top_of stacking
-# ============================================================================
 
 
 def _make_world_state(
@@ -362,15 +317,18 @@ class TestPlaceObjectOnTopOf:
     def _patch_ws(self, monkeypatch, ws):
         """Patch get_world_state in GripperOperations module."""
         import operations.GripperOperations as mod
+
         monkeypatch.setattr(mod, "_resolve_placement_y.__globals__", {}, raising=False)
         # Patch at the _imports level used by _resolve_placement_y
         try:
             import operations._imports as imp
+
             monkeypatch.setattr(imp, "get_world_state", lambda: ws)
         except (ImportError, AttributeError):
             pass
         try:
             import core.Imports as ci
+
             monkeypatch.setattr(ci, "get_world_state", lambda: ws)
         except (ImportError, AttributeError):
             pass
@@ -394,8 +352,12 @@ class TestPlaceObjectOnTopOf:
         self._patch_ws(monkeypatch, ws)
 
         result = place_object(
-            "Robot1", x=0.0, y=0.0, z=0.0,
-            on_top_of="target_cube", placed_object_height=0.04,
+            "Robot1",
+            x=0.0,
+            y=0.0,
+            z=0.0,
+            on_top_of="target_cube",
+            placed_object_height=0.04,
         )
 
         assert result.success is True
@@ -451,7 +413,9 @@ class TestPlaceObjectOnTopOf:
         assert abs(result.result["placed_at"]["y"] - 0.42) < 1e-6
         assert result.result["resolution"] == "explicit_coords"
 
-    def test_tcp_command_y_matches_computed(self, monkeypatch, patch_command_broadcaster):
+    def test_tcp_command_y_matches_computed(
+        self, monkeypatch, patch_command_broadcaster
+    ):
         """The y value in the Unity command dict equals the computed effective_y."""
         ws = _make_world_state(position=(0.0, 0.10, 0.0), dimensions=(0.05, 0.20, 0.05))
         self._patch_ws(monkeypatch, ws)

@@ -45,17 +45,21 @@ namespace Robotics
 
         // Pre-allocated buffer for OverlapSphere to avoid per-call Collider[] allocation
         private readonly Collider[] _overlapBuffer = new Collider[32];
+
         // Reusable timestamp to avoid DateTime/TimeSpan/TimeMsg allocations at 10Hz
         private readonly TimeMsg _rosTimestamp = new TimeMsg();
         private static readonly System.DateTime _unixEpoch = new System.DateTime(
-            1970, 1, 1, 0, 0, 0, System.DateTimeKind.Utc
+            1970,
+            1,
+            1,
+            0,
+            0,
+            0,
+            System.DateTimeKind.Utc
         );
 
         private const string _logPrefix = "[ROS_GRIPPER_SUBSCRIBER]";
 
-        /// <summary>
-        /// Whether this subscriber is active.
-        /// </summary>
         public bool IsActive { get; private set; }
 
         private void Start()
@@ -220,7 +224,11 @@ namespace Robotics
             const float searchRadius = 0.10f;
 
             // --- Pass 1: free Target-tagged objects ---
-            int hitCount = Physics.OverlapSphereNonAlloc(searchOrigin, searchRadius, _overlapBuffer);
+            int hitCount = Physics.OverlapSphereNonAlloc(
+                searchOrigin,
+                searchRadius,
+                _overlapBuffer
+            );
 
             GameObject nearest = null;
             float nearestDist = float.MaxValue;
@@ -259,7 +267,10 @@ namespace Robotics
                     if (!other.IsHoldingObject || other.GraspedObject == null)
                         continue;
 
-                    float dist = Vector3.Distance(searchOrigin, other.GraspedObject.transform.position);
+                    float dist = Vector3.Distance(
+                        searchOrigin,
+                        other.GraspedObject.transform.position
+                    );
                     if (dist <= searchRadius && dist < nearestDist)
                     {
                         nearestDist = dist;
@@ -315,9 +326,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Publish current gripper state as JointState feedback.
-        /// </summary>
         private void PublishGripperState()
         {
             // Update reusable timestamp in-place — avoids DateTime/TimeSpan/TimeMsg
@@ -365,9 +373,6 @@ namespace Robotics
             return $"/{robotId}/{topicTemplate}";
         }
 
-        /// <summary>
-        /// Enable or disable the gripper subscriber.
-        /// </summary>
         public void SetActive(bool active)
         {
             IsActive = active;

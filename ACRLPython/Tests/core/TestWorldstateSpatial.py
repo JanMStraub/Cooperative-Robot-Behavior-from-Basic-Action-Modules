@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test suite for WorldState spatial query methods.
-
-Tests spatial reasoning capabilities:
-- find_objects_near: Proximity queries
-- find_robots_near: Robot proximity
-- get_reachable_objects: Reachability computation
-- get_objects_in_region: Region containment
-- get_region_for_position: Position-to-region mapping
-- get_world_context_string: LLM context generation
-"""
+"""Test suite for WorldState spatial query methods"""
 
 import unittest
 from operations.WorldState import get_world_state
@@ -17,7 +7,6 @@ from config.Robot import WORKSPACE_REGIONS
 
 
 class TestWorldStateSpatial(unittest.TestCase):
-    """Test spatial query methods on WorldState."""
 
     def setUp(self):
         """Reset world state before each test."""
@@ -25,7 +14,6 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.world_state.reset()
 
     def test_find_objects_near_returns_correct_objects(self):
-        """Test that find_objects_near returns objects within radius."""
         # Register objects at known positions
         self.world_state.register_object("obj1", position=(0.0, 0.0, 0.0))
         self.world_state.register_object("obj2", position=(0.05, 0.05, 0.0))
@@ -66,7 +54,6 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.assertIn("obj2", nearby_all_ids)
 
     def test_find_robots_near(self):
-        """Test finding robots within radius."""
         # Register robots with positions
         self.world_state.update_robot("Robot1", position=(-0.3, 0.2, 0.0))
         self.world_state.update_robot("Robot2", position=(0.3, 0.2, 0.0))
@@ -84,7 +71,6 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.assertEqual(len(nearby_narrow), 0)  # Both are 0.3m away
 
     def test_get_reachable_objects(self):
-        """Test getting objects reachable by a robot."""
         # Register robot
         self.world_state.update_robot("Robot1", position=(-0.475, 0.0, 0.0))
 
@@ -134,7 +120,6 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.assertIn("obj2", reachable_all_ids)
 
     def test_get_objects_in_region(self):
-        """Test getting objects in a workspace region."""
         # Register objects in different regions
         # left_workspace: x_min=-0.5, x_max=-0.15
         self.world_state.register_object("left_obj", position=(-0.3, 0.3, 0.0))
@@ -158,7 +143,6 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.assertNotIn("right_obj", shared_ids)
 
     def test_get_objects_in_region_unknown_region(self):
-        """Test behavior with unknown region name."""
         objs = self.world_state.get_objects_in_region("nonexistent_region")
         self.assertEqual(len(objs), 0)
 
@@ -181,7 +165,6 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.assertIsNone(region)
 
     def test_get_region_for_position_boundaries(self):
-        """Test region detection at boundaries."""
         # Get left_workspace bounds
         left = WORKSPACE_REGIONS["left_workspace"]
 
@@ -199,7 +182,6 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.assertIn(region, ["left_workspace", "shared_zone"])
 
     def test_get_world_context_string_basic(self):
-        """Test basic world context string generation."""
         # Register robot
         self.world_state.update_robot(
             "Robot1", position=(-0.3, 0.2, 0.1), gripper_state="open"
@@ -223,7 +205,6 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.assertIn("-0.20, 0.30, 0.00", context)
 
     def test_get_world_context_string_with_annotations(self):
-        """Test context string includes spatial annotations."""
         # Register robot at base position
         self.world_state.update_robot(
             "Robot1", position=(-0.475, 0.0, 0.0), gripper_state="closed"
@@ -251,7 +232,6 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.assertIn("right_workspace", context)
 
     def test_get_world_context_string_with_grasped_object(self):
-        """Test context string shows grasped objects."""
         # Register robots
         self.world_state.update_robot(
             "Robot1", position=(-0.3, 0.2, 0.0), gripper_state="closed"
@@ -283,7 +263,6 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.assertIn("stale", context)
 
     def test_get_world_context_string_no_objects(self):
-        """Test context string when no objects are present."""
         # Register robot only
         self.world_state.update_robot("Robot1", position=(-0.3, 0.2, 0.0))
 
@@ -294,12 +273,10 @@ class TestWorldStateSpatial(unittest.TestCase):
         self.assertIn("No objects detected", context)
 
     def test_get_world_context_string_unknown_robot(self):
-        """Test context string for unknown robot."""
         context = self.world_state.get_world_context_string("UnknownRobot")
         self.assertIn("state unknown", context)
 
     def test_empty_searches(self):
-        """Test spatial queries with no objects registered."""
         # No objects registered
         nearby = self.world_state.find_objects_near((0.0, 0.0, 0.0))
         self.assertEqual(len(nearby), 0)

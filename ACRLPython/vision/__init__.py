@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
-"""
-Computer Vision and AI Processing Modules
-
-This package contains modules for vision-based processing including
-LLM analysis, object detection, and depth estimation.
-
-Modules:
-- AnalyzeImage: LM Studio LLM vision processing
-- ObjectDetector: Color-based cube detection
-- DepthEstimator: Stereo depth estimation and 3D coordinate conversion (integrated disparity calculation)
-- StereoConfig: Configuration classes for camera calibration and stereo reconstruction
-"""
+"""Vision and AI processing modules."""
 
 from .AnalyzeImage import LMStudioVisionProcessor, get_images_from_server, save_response
 from .DetectionDataModels import DetectionObject, DetectionResult
 from .ObjectDetector import CubeDetector
-
-# DepthEstimator now has integrated disparity calculation (no external dependencies)
 from .DepthEstimator import (
     calc_disparity,
     estimate_depth_at_point,

@@ -1,33 +1,11 @@
 #!/usr/bin/env python3
 """
 Centralised lazy imports for the operations package.
-=====================================================
 
-All ``try: from ..X import Y / except ImportError: from X import Y`` blocks
-that were duplicated across 8+ operation files are consolidated here.
-
-Usage in operation files::
-
-    from ._imports import get_command_broadcaster
-    from ._imports import get_unified_image_storage, get_world_state
-    from ._imports import (
-        ENABLE_VISION_STREAMING,
-        VISION_OPERATION_TIMEOUT,
-        DEFAULT_CAMERA_ID,
-        DEFAULT_LMSTUDIO_MODEL,
-    )
-
-Design notes:
-- Only ``core.Imports`` lazy singletons and ``config.*`` constants belong here.
-- ``from .Base import`` shims are NOT needed — the package-relative form always
-  works when operations are loaded through the package (i.e. always).
-- This module must NOT import from any other operations module to stay
-  importable by all of them without causing circular dependencies.
+All ``try: from ..X / except ImportError: from X`` blocks duplicated across 8+ operation files
+consolidated here. Must NOT import from any other operations module (circular dependency risk).
 """
 
-# ---------------------------------------------------------------------------
-# core.Imports lazy singletons
-# ---------------------------------------------------------------------------
 try:
     from ..core.Imports import get_command_broadcaster
     from ..core.Imports import get_unified_image_storage
@@ -41,9 +19,6 @@ except ImportError:
     from core.Imports import get_global_registry  # type: ignore[no-redef]
     from core.Imports import get_negotiation_hub  # type: ignore[no-redef]
 
-# ---------------------------------------------------------------------------
-# config.Robot constants
-# ---------------------------------------------------------------------------
 try:
     from ..config.Robot import (
         FOLLOW_TARGET_DRIFT_THRESHOLD,
@@ -97,9 +72,6 @@ except ImportError:
         ROBOT_BASE_POSITIONS,
     )
 
-# ---------------------------------------------------------------------------
-# config.Vision + config.Servers constants
-# ---------------------------------------------------------------------------
 try:
     from ..config.Vision import (
         ENABLE_VISION_STREAMING,

@@ -19,9 +19,7 @@ from operations.SyncOperations import (
     _execute_wait,
 )
 
-# ============================================================================
 # UNIT TESTS: EventBus Core
-# ============================================================================
 
 
 class TestEventBusCore:
@@ -198,9 +196,7 @@ class TestEventBusCore:
         assert elapsed_ms < 50
 
 
-# ============================================================================
 # UNIT TESTS: EventBus Thread Safety
-# ============================================================================
 
 
 class TestEventBusThreadSafety:
@@ -500,9 +496,7 @@ class TestEventBusThreadSafety:
         assert event_bus.get_waiter_count(event_name) == 0
 
 
-# ============================================================================
 # UNIT TESTS: Signal Operation
-# ============================================================================
 
 
 class TestSignalOperation:
@@ -563,9 +557,7 @@ class TestSignalOperation:
         )
 
 
-# ============================================================================
 # UNIT TESTS: Wait For Signal Operation
-# ============================================================================
 
 
 class TestWaitForSignalOperation:
@@ -708,9 +700,7 @@ class TestWaitForSignalOperation:
         )
 
 
-# ============================================================================
 # UNIT TESTS: Wait Operation
-# ============================================================================
 
 
 class TestWaitOperation:
@@ -785,9 +775,7 @@ class TestWaitOperation:
         assert result.error["code"] == "WAIT_FAILED"
 
 
-# ============================================================================
 # INTEGRATION TESTS: Basic Scenarios
-# ============================================================================
 
 
 class TestSyncIntegrationBasic:
@@ -925,9 +913,7 @@ class TestSyncIntegrationBasic:
         assert results == ["start", "after_time_wait", "after_signal_wait"]
 
 
-# ============================================================================
 # INTEGRATION TESTS: Multi-Robot Coordination
-# ============================================================================
 
 
 class TestSyncIntegrationMultiRobot:
@@ -1060,9 +1046,7 @@ class TestSyncIntegrationMultiRobot:
         assert chain.index("r2_done") < chain.index("r3_start")
 
 
-# ============================================================================
 # INTEGRATION TESTS: SequenceExecutor Integration
-# ============================================================================
 
 
 class TestSyncWithSequenceExecutor:

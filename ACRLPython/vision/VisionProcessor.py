@@ -1,40 +1,5 @@
 #!/usr/bin/env python3
-"""
-VisionProcessor.py - Background thread for continuous vision processing
-
-Implements a continuous vision processing pipeline that:
-- Polls ImageServer for new stereo frames at configurable FPS
-- Processes frames with YOLO detection + depth estimation
-- Publishes results to SharedVisionState (optional)
-- Runs non-blocking in background thread
-
-This enables streaming vision for multi-robot coordination, providing
-low-latency object detection updates without blocking the main thread.
-
-Features:
-- Configurable FPS (default: 5 FPS conservative)
-- Thread-safe operation
-- Graceful shutdown
-- Optional object tracking across frames
-- Optional shared vision state publishing
-- Automatic error recovery
-
-Usage:
-    from vision.VisionProcessor import VisionProcessor
-    from vision.YOLODetector import YOLODetector
-
-    # Initialize detector
-    detector = YOLODetector(model_path="yolo/models/robot_detector.onnx")
-
-    # Create and start processor
-    processor = VisionProcessor(detector, fps=5.0)
-    processor.start()
-
-    # ... processor runs in background ...
-
-    # Stop when done
-    processor.stop()
-"""
+"""Background thread for continuous YOLO+depth vision processing at configurable FPS."""
 
 import platform
 import time
@@ -50,7 +15,6 @@ try:
 except ImportError:
     CV2_AVAILABLE = False
 
-# Import detection components
 try:
     from .YOLODetector import YOLODetector
     from .ObjectTracker import ObjectTracker
@@ -62,20 +26,16 @@ except ImportError:
     from vision.DetectionDataModels import DetectionObject, DetectionResult
     from vision.StereoConfig import CameraConfig
 
-# Import from centralized lazy import system (prevents circular dependencies)
 try:
     from ..core.Imports import get_unified_image_storage
 except ImportError:
     from core.Imports import get_unified_image_storage
 
 
-# Helper to get storage instance
 def _get_storage():
-    """Get UnifiedImageStorage instance using centralized imports"""
     return get_unified_image_storage()
 
 
-# Import config
 try:
     from config.Vision import (
         TRACKING_MAX_AGE,
@@ -112,27 +72,6 @@ class VisionProcessor:
 
     Polls ImageServer for new stereo frames, processes with YOLO + depth,
     and optionally publishes to SharedVisionState for multi-robot coordination.
-
-    Attributes:
-        detector: YOLODetector instance for object detection
-        fps: Target processing rate in frames per second
-        enable_tracking: Enable persistent object tracking across frames
-        enable_shared_state: Publish results to SharedVisionState
-        running: Thread running state
-        thread: Background processing thread
-        tracker: Optional ObjectTracker for persistent IDs
-        on_result_callback: Optional callback for detection results
-
-    Example:
-        detector = YOLODetector(model_path="robot_detector.onnx")
-        processor = VisionProcessor(detector, fps=5.0, enable_tracking=True)
-        processor.start()
-
-        # Set callback for results
-        def handle_results(result: DetectionResult):
-            print(f"Detected {len(result.detections)} objects")
-
-        processor.on_result_callback = handle_results
     """
 
     def __init__(
@@ -144,17 +83,6 @@ class VisionProcessor:
         enable_visualization: bool = False,
         use_main_thread: bool = False,
     ):
-        """
-        Initialize vision processor.
-
-        Args:
-            detector: YOLODetector instance
-            fps: Target processing rate (default: 5.0 FPS)
-            enable_tracking: Enable object tracking (default: False)
-            enable_shared_state: Publish to SharedVisionState (default: False)
-            enable_visualization: Show live video window with detections (default: False)
-            use_main_thread: Run in main thread instead of background (required for macOS GUI) (default: False)
-        """
         self.detector = detector
         self.fps = fps
         self.enable_tracking = enable_tracking
@@ -172,17 +100,14 @@ class VisionProcessor:
             YOLO_INPUT_SIZE if CV2_AVAILABLE else None
         )
 
-        # Initialize tracker if enabled
         if self.enable_tracking:
             self.tracker = ObjectTracker(
                 max_age=TRACKING_MAX_AGE, min_iou=TRACKING_MIN_IOU
             )
             logger.info("Object tracking enabled for VisionProcessor")
 
-        # Initialize shared state if enabled
         if self.enable_shared_state:
             try:
-                # Use absolute import to avoid "beyond top-level package" error
                 from operations.SharedVisionState import get_shared_vision_state
 
                 self.shared_state = get_shared_vision_state()
@@ -198,10 +123,9 @@ class VisionProcessor:
                 )
                 self.enable_shared_state = False
 
-        # Check if OpenCV is available for visualization
         if self.enable_visualization:
             try:
-                # Warn about macOS threading limitations
+                # macOS: OpenCV GUI may not work in background threads
                 if platform.system() == "Darwin" and not use_main_thread:
                     logger.warning(
                         "macOS detected: OpenCV GUI may not work in background threads. "
@@ -222,12 +146,6 @@ class VisionProcessor:
         )
 
     def start(self):
-        """
-        Start background processing thread.
-
-        Note: On macOS, visualization may not work in background threads.
-        Use run() instead to run in the main thread.
-        """
         if self.running:
             logger.warning("VisionProcessor already running")
             return
@@ -244,20 +162,7 @@ class VisionProcessor:
         logger.debug("VisionProcessor started")
 
     def run(self):
-        """
-        Run processing loop in the current (main) thread.
-
-        This is a blocking call that runs until stop() is called from another thread
-        or KeyboardInterrupt is received. Use this instead of start() on macOS when
-        visualization is enabled.
-
-        Example:
-            processor = VisionProcessor(detector, enable_visualization=True, use_main_thread=True)
-            try:
-                processor.run()  # Blocks until Ctrl+C
-            except KeyboardInterrupt:
-                processor.stop()
-        """
+        """Run in main thread (blocking). Required on macOS when visualization is enabled."""
         if self.running:
             logger.warning("VisionProcessor already running")
             return
@@ -267,9 +172,6 @@ class VisionProcessor:
         self._processing_loop()
 
     def stop(self):
-        """
-        Stop background processing thread.
-        """
         if not self.running:
             logger.warning("VisionProcessor not running")
             return
@@ -291,18 +193,6 @@ class VisionProcessor:
                 pass
 
     def _processing_loop(self):
-        """
-        Main processing loop (runs in background thread).
-
-        Process flow:
-        1. Cheap timestamp poll — skip frame copy if Unity hasn't sent a new frame
-        2. Copy stereo images from storage
-        3. Optionally resize to YOLO_INPUT_SIZE before inference
-        4. Run YOLO detection (+ depth only when a consumer actually needs it)
-        5. Apply object tracking if enabled
-        6. Publish to SharedVisionState / invoke callback
-        7. Sleep to maintain target FPS
-        """
         try:
             storage = _get_storage()
             if storage is None:
@@ -502,7 +392,6 @@ class VisionProcessor:
                 time.sleep(frame_interval)
                 continue
 
-            # Sleep to maintain target FPS
             elapsed = time.time() - loop_start_time
             sleep_time = max(0, frame_interval - elapsed)
             if sleep_time > 0:
@@ -511,21 +400,8 @@ class VisionProcessor:
         logger.info("VisionProcessor loop ended")
 
     def _draw_detections(self, image, detections: List[DetectionObject]):
-        """
-        Draw detection bounding boxes and labels on image.
-
-        Args:
-            image: Input image (BGR format)
-            detections: List of DetectionObject to draw
-
-        Returns:
-            Image with detections drawn
-        """
         try:
-            # Make a copy to avoid modifying original
             vis_image = image.copy()
-
-            # Color map for different object types
             color_map = {
                 "red": (0, 0, 255),  # Red in BGR
                 "blue": (255, 0, 0),  # Blue in BGR
@@ -561,7 +437,6 @@ class VisionProcessor:
 
                 label = " ".join(label_parts)
 
-                # Draw label background
                 (label_w, label_h), _ = cv2.getTextSize(
                     label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
                 )
@@ -573,7 +448,6 @@ class VisionProcessor:
                     -1,  # Filled
                 )
 
-                # Draw label text
                 cv2.putText(
                     vis_image,
                     label,
@@ -585,7 +459,6 @@ class VisionProcessor:
                     cv2.LINE_AA,
                 )
 
-            # Add FPS counter
             fps_text = f"FPS: {self.fps:.1f} | Objects: {len(detections)}"
             cv2.putText(
                 vis_image,
@@ -605,12 +478,6 @@ class VisionProcessor:
             return image
 
     def get_stats(self) -> dict:
-        """
-        Get processor statistics.
-
-        Returns:
-            Dictionary with processor stats
-        """
         stats = {
             "running": self.running,
             "fps": self.fps,
@@ -624,11 +491,6 @@ class VisionProcessor:
         return stats
 
 
-# ===========================
-# Main (for testing)
-# ===========================
-
-
 def main():
     """Test VisionProcessor with mock detector"""
     print("=== VisionProcessor Test ===\n")
@@ -636,7 +498,6 @@ def main():
     # Mock detector (would normally be YOLODetector)
     class MockDetector:
         def detect_objects_stereo(self, imgL, imgR, **kwargs):
-            # Return empty result for testing
             from vision.DetectionDataModels import DetectionResult
 
             return DetectionResult("test", 1280, 960, [])

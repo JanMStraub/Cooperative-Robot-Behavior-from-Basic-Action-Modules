@@ -16,16 +16,11 @@ def vector_normalize(vec: np.ndarray) -> np.ndarray:
     """
     Normalize a vector to unit length.
 
-    Args:
-        vec: Input vector as numpy array
 
-    Returns:
-        Normalized vector (unit length). Returns zero vector if input is zero.
     """
     norm = np.linalg.norm(vec)
 
     if norm < 1e-8:
-        # Return zero vector for degenerate case
         return np.zeros_like(vec)
 
     return vec / norm
@@ -35,12 +30,7 @@ def vector_dot(v1: np.ndarray, v2: np.ndarray) -> float:
     """
     Calculate dot product of two vectors.
 
-    Args:
-        v1: First vector
-        v2: Second vector
 
-    Returns:
-        Scalar dot product
     """
     return float(np.dot(v1, v2))
 
@@ -49,12 +39,7 @@ def vector_cross(v1: np.ndarray, v2: np.ndarray) -> np.ndarray:
     """
     Calculate cross product of two 3D vectors.
 
-    Args:
-        v1: First 3D vector
-        v2: Second 3D vector
 
-    Returns:
-        Cross product vector perpendicular to both inputs
     """
     return np.cross(v1, v2)
 
@@ -63,12 +48,7 @@ def vector_distance(p1: np.ndarray, p2: np.ndarray) -> float:
     """
     Calculate Euclidean distance between two points.
 
-    Args:
-        p1: First point as vector
-        p2: Second point as vector
 
-    Returns:
-        Distance as float
     """
     return float(np.linalg.norm(p2 - p1))
 
@@ -77,12 +57,7 @@ def vector_angle(v1: np.ndarray, v2: np.ndarray) -> float:
     """
     Calculate angle between two vectors in degrees.
 
-    Args:
-        v1: First vector
-        v2: Second vector
 
-    Returns:
-        Angle in degrees [0, 180]
     """
     # Normalize vectors
     v1_norm = vector_normalize(v1)
@@ -109,12 +84,7 @@ def vector_project(v: np.ndarray, onto: np.ndarray) -> np.ndarray:
     """
     Project vector v onto vector 'onto'.
 
-    Args:
-        v: Vector to project
-        onto: Vector to project onto
 
-    Returns:
-        Projected vector component along 'onto'
     """
     onto_norm = vector_normalize(onto)
     projection_length = np.dot(v, onto_norm)
@@ -127,12 +97,7 @@ def vector_reject(v: np.ndarray, from_direction: np.ndarray) -> np.ndarray:
 
     Returns the component of v perpendicular to from_direction.
 
-    Args:
-        v: Vector to reject from
-        from_direction: Direction to reject
 
-    Returns:
-        Rejected vector component perpendicular to from_direction
     """
     projection = vector_project(v, from_direction)
     return v - projection
@@ -142,13 +107,7 @@ def vector_lerp(v1: np.ndarray, v2: np.ndarray, t: float) -> np.ndarray:
     """
     Linear interpolation between two vectors.
 
-    Args:
-        v1: Start vector
-        v2: End vector
-        t: Interpolation parameter [0, 1]
 
-    Returns:
-        Interpolated vector
     """
     t = np.clip(t, 0.0, 1.0)
     return v1 + (v2 - v1) * t
@@ -160,13 +119,7 @@ def vector_slerp(v1: np.ndarray, v2: np.ndarray, t: float) -> np.ndarray:
 
     Maintains constant magnitude during interpolation, unlike lerp.
 
-    Args:
-        v1: Start vector
-        v2: End vector
-        t: Interpolation parameter [0, 1]
 
-    Returns:
-        Interpolated vector
     """
     t = np.clip(t, 0.0, 1.0)
 
@@ -208,12 +161,7 @@ def vector_clamp_magnitude(v: np.ndarray, max_magnitude: float) -> np.ndarray:
     """
     Clamp vector magnitude to maximum value.
 
-    Args:
-        v: Input vector
-        max_magnitude: Maximum allowed magnitude
 
-    Returns:
-        Vector with magnitude <= max_magnitude
     """
     magnitude = np.linalg.norm(v)
 
@@ -231,11 +179,7 @@ def vectors_orthonormal_basis(
 
     Creates right and up vectors perpendicular to forward.
 
-    Args:
-        forward: Forward direction vector
 
-    Returns:
-        Tuple of (forward_normalized, right, up) forming orthonormal basis
     """
     forward_norm = vector_normalize(forward)
 

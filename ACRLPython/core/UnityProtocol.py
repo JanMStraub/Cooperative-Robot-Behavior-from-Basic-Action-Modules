@@ -68,7 +68,6 @@ import json
 from typing import Tuple, Optional
 from enum import IntEnum
 
-# Import config
 try:
     from config.Servers import (
         MAX_STRING_LENGTH as _MAX_STRING_LENGTH,
@@ -80,7 +79,6 @@ except ImportError:
         MAX_IMAGE_SIZE as _MAX_IMAGE_SIZE,
     )
 
-# Configure logging
 try:
     from core.LoggingSetup import setup_logging
 
@@ -92,7 +90,7 @@ except ImportError:
 
 
 class MessageType(IntEnum):
-    """Message type enumeration for protocol V2"""
+    """Protocol V2 message type codes."""
 
     IMAGE = 0x01
     RESULT = 0x02
@@ -125,21 +123,10 @@ class UnityProtocol:
     @staticmethod
     def _recv_exactly(sock, num_bytes: int) -> bytes:
         """
-        Receive exactly num_bytes from a socket, looping until all bytes arrive.
+        Receive exactly num_bytes, retrying as needed.
 
-        TCP is a stream protocol — a single recv() call may return fewer bytes
-        than requested. This helper retries until the full payload is available
-        or raises ConnectionError on EOF or socket error.
-
-        Args:
-            sock: Connected socket to read from
-            num_bytes: Exact number of bytes required
-
-        Returns:
-            Exactly num_bytes as bytes
-
-        Raises:
-            ConnectionError: If the connection is closed before all bytes arrive
+        TCP recv() may return fewer bytes than requested; this loops until the
+        full payload arrives. Raises ConnectionError on premature EOF.
         """
         chunks = []
         received = 0
@@ -155,16 +142,7 @@ class UnityProtocol:
 
     @staticmethod
     def _encode_header(message_type: MessageType, request_id: int) -> bytes:
-        """
-        Encode message header (type + request_id).
-
-        Args:
-            message_type: Message type from MessageType enum
-            request_id: Unsigned 32-bit request ID
-
-        Returns:
-            5-byte header
-        """
+        """Encode 5-byte message header (type + request_id)."""
         header = bytearray()
         header.append(message_type)  # 1 byte
         header.extend(struct.pack(UnityProtocol.INT_FORMAT, request_id))  # 4 bytes
@@ -172,18 +150,7 @@ class UnityProtocol:
 
     @staticmethod
     def decode_header(data: bytes) -> Tuple[MessageType, int]:
-        """
-        Decode message header (public API).
-
-        Args:
-            data: Byte array to read from (must be exactly 5 bytes)
-
-        Returns:
-            Tuple of (message_type, request_id)
-
-        Raises:
-            ValueError: If header is malformed
-        """
+        """Decode 5-byte message header; raises ValueError if malformed."""
         if len(data) < UnityProtocol.HEADER_SIZE:
             raise ValueError(
                 f"Not enough data for header (need {UnityProtocol.HEADER_SIZE}, have {len(data)})"
@@ -196,19 +163,7 @@ class UnityProtocol:
 
     @staticmethod
     def _decode_header(data: bytes, offset: int = 0) -> Tuple[MessageType, int, int]:
-        """
-        Decode message header from data (internal use with offset tracking).
-
-        Args:
-            data: Byte array to read from
-            offset: Starting offset (default 0)
-
-        Returns:
-            Tuple of (message_type, request_id, new_offset)
-
-        Raises:
-            ValueError: If header is malformed
-        """
+        """Decode header with offset tracking; returns (type, request_id, new_offset)."""
         if len(data) - offset < UnityProtocol.HEADER_SIZE:
             raise ValueError(
                 f"Not enough data for header (need {UnityProtocol.HEADER_SIZE}, have {len(data) - offset})"
@@ -245,7 +200,6 @@ class UnityProtocol:
         Raises:
             ValueError: If data exceeds limits
         """
-        # Validate inputs
         if len(camera_id) == 0:
             raise ValueError("Camera ID cannot be empty")
         if len(camera_id) > UnityProtocol.MAX_STRING_LENGTH:
@@ -263,25 +217,15 @@ class UnityProtocol:
                 f"Image too large: {len(image_bytes)} > {UnityProtocol.MAX_IMAGE_SIZE}"
             )
 
-        # Encode strings
         camera_id_bytes = camera_id.encode("utf-8")
         prompt_bytes = prompt.encode("utf-8")
 
-        # Build message
         message = bytearray()
-
-        # Header
         message.extend(UnityProtocol._encode_header(MessageType.IMAGE, request_id))
-
-        # Camera ID
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(camera_id_bytes)))
         message.extend(camera_id_bytes)
-
-        # Prompt
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(prompt_bytes)))
         message.extend(prompt_bytes)
-
-        # Image
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(image_bytes)))
         message.extend(image_bytes)
 
@@ -302,19 +246,13 @@ class UnityProtocol:
             ValueError: If message is malformed
         """
         try:
-            # Decode header
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
 
             if msg_type != MessageType.IMAGE:
                 raise ValueError(f"Expected IMAGE message, got {msg_type.name}")
 
-            # Read camera ID
             camera_id, offset = UnityProtocol._read_string(data, offset)
-
-            # Read prompt
             prompt, offset = UnityProtocol._read_string(data, offset)
-
-            # Read image
             image_bytes, offset = UnityProtocol._read_bytes(data, offset)
 
             return request_id, camera_id, prompt, image_bytes
@@ -336,17 +274,11 @@ class UnityProtocol:
         Returns:
             Encoded message bytes
         """
-        # Convert dict to JSON
         json_str = json.dumps(result_dict, ensure_ascii=False)
         json_bytes = json_str.encode("utf-8")
 
-        # Build message
         message = bytearray()
-
-        # Header
         message.extend(UnityProtocol._encode_header(MessageType.RESULT, request_id))
-
-        # JSON data
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(json_bytes)))
         message.extend(json_bytes)
 
@@ -367,13 +299,11 @@ class UnityProtocol:
             ValueError: If message is malformed
         """
         try:
-            # Decode header
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
 
             if msg_type != MessageType.RESULT:
                 raise ValueError(f"Expected RESULT message, got {msg_type.name}")
 
-            # Read JSON length
             if len(data) - offset < UnityProtocol.INT_SIZE:
                 raise ValueError("Not enough data for JSON length")
 
@@ -382,7 +312,6 @@ class UnityProtocol:
             )[0]
             offset += UnityProtocol.INT_SIZE
 
-            # Read JSON data
             if offset + json_length > len(data):
                 raise ValueError(f"JSON length {json_length} exceeds remaining data")
 
@@ -396,17 +325,7 @@ class UnityProtocol:
 
     @staticmethod
     def _read_string(data: bytes, offset: int) -> Tuple[str, int]:
-        """
-        Read a length-prefixed string from data.
-
-        Args:
-            data: Byte array to read from
-            offset: Starting offset
-
-        Returns:
-            Tuple of (string, new_offset)
-        """
-        # Read length
+        """Read a length-prefixed UTF-8 string; returns (string, new_offset)."""
         if offset + UnityProtocol.INT_SIZE > len(data):
             raise ValueError("Not enough data for string length")
 
@@ -415,13 +334,11 @@ class UnityProtocol:
         )[0]
         offset += UnityProtocol.INT_SIZE
 
-        # Validate length
         if str_length > UnityProtocol.MAX_STRING_LENGTH:
             raise ValueError(
                 f"String length {str_length} exceeds maximum {UnityProtocol.MAX_STRING_LENGTH}"
             )
 
-        # Read string data
         if offset + str_length > len(data):
             raise ValueError(
                 f"Not enough data for string (need {str_length}, have {len(data) - offset})"
@@ -430,23 +347,12 @@ class UnityProtocol:
         str_bytes = data[offset : offset + str_length]
         offset += str_length
 
-        # Decode
         string = str_bytes.decode("utf-8")
         return string, offset
 
     @staticmethod
     def _read_bytes(data: bytes, offset: int) -> Tuple[bytes, int]:
-        """
-        Read a length-prefixed byte array from data.
-
-        Args:
-            data: Byte array to read from
-            offset: Starting offset
-
-        Returns:
-            Tuple of (bytes, new_offset)
-        """
-        # Read length
+        """Read a length-prefixed byte array; returns (bytes, new_offset)."""
         if offset + UnityProtocol.INT_SIZE > len(data):
             raise ValueError("Not enough data for bytes length")
 
@@ -455,13 +361,11 @@ class UnityProtocol:
         )[0]
         offset += UnityProtocol.INT_SIZE
 
-        # Validate length
         if bytes_length > UnityProtocol.MAX_IMAGE_SIZE:
             raise ValueError(
                 f"Bytes length {bytes_length} exceeds maximum {UnityProtocol.MAX_IMAGE_SIZE}"
             )
 
-        # Read byte data
         if offset + bytes_length > len(data):
             raise ValueError(
                 f"Not enough data for bytes (need {bytes_length}, have {len(data) - offset})"
@@ -493,7 +397,6 @@ class UnityProtocol:
         Raises:
             ValueError: If data exceeds limits
         """
-        # Validate inputs
         if len(query) == 0:
             raise ValueError("Query cannot be empty")
         if len(query) > UnityProtocol.MAX_STRING_LENGTH:
@@ -503,28 +406,17 @@ class UnityProtocol:
         if top_k < 1 or top_k > 100:
             raise ValueError(f"top_k must be between 1 and 100, got {top_k}")
 
-        # Encode query string
         query_bytes = query.encode("utf-8")
 
-        # Encode filters as JSON
         filters = filters or {}
         filters_json = json.dumps(filters, ensure_ascii=False)
         filters_bytes = filters_json.encode("utf-8")
 
-        # Build message
         message = bytearray()
-
-        # Header
         message.extend(UnityProtocol._encode_header(MessageType.RAG_QUERY, request_id))
-
-        # Query text
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(query_bytes)))
         message.extend(query_bytes)
-
-        # Top-k parameter
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, top_k))
-
-        # Filters JSON
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(filters_bytes)))
         message.extend(filters_bytes)
 
@@ -545,16 +437,13 @@ class UnityProtocol:
             ValueError: If message is malformed
         """
         try:
-            # Decode header
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
 
             if msg_type != MessageType.RAG_QUERY:
                 raise ValueError(f"Expected RAG_QUERY message, got {msg_type.name}")
 
-            # Read query text
             query, offset = UnityProtocol._read_string(data, offset)
 
-            # Read top_k
             if offset + UnityProtocol.INT_SIZE > len(data):
                 raise ValueError("Not enough data for top_k")
 
@@ -563,10 +452,7 @@ class UnityProtocol:
             )[0]
             offset += UnityProtocol.INT_SIZE
 
-            # Read filters JSON
             filters_json, offset = UnityProtocol._read_string(data, offset)
-
-            # Parse filters
             filters = json.loads(filters_json) if filters_json else {}
 
             query_dict = {"query": query, "top_k": top_k, "filters": filters}
@@ -589,19 +475,13 @@ class UnityProtocol:
         Returns:
             Encoded message bytes
         """
-        # Convert dict to JSON
         json_str = json.dumps(operation_context, ensure_ascii=False)
         json_bytes = json_str.encode("utf-8")
 
-        # Build message
         message = bytearray()
-
-        # Header
         message.extend(
             UnityProtocol._encode_header(MessageType.RAG_RESPONSE, request_id)
         )
-
-        # JSON data
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(json_bytes)))
         message.extend(json_bytes)
 
@@ -622,13 +502,11 @@ class UnityProtocol:
             ValueError: If message is malformed
         """
         try:
-            # Decode header
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
 
             if msg_type != MessageType.RAG_RESPONSE:
                 raise ValueError(f"Expected RAG_RESPONSE message, got {msg_type.name}")
 
-            # Read JSON data
             if len(data) - offset < UnityProtocol.INT_SIZE:
                 raise ValueError("Not enough data for JSON length")
 
@@ -668,7 +546,6 @@ class UnityProtocol:
         Raises:
             ValueError: If data exceeds limits
         """
-        # Validate inputs
         if len(robot_id) == 0:
             raise ValueError("Robot ID cannot be empty")
         if len(robot_id) > UnityProtocol.MAX_STRING_LENGTH:
@@ -676,22 +553,14 @@ class UnityProtocol:
                 f"Robot ID too long: {len(robot_id)} > {UnityProtocol.MAX_STRING_LENGTH}"
             )
 
-        # Encode robot_id string
         robot_id_bytes = robot_id.encode("utf-8")
 
-        # Build message
         message = bytearray()
-
-        # Header
         message.extend(
             UnityProtocol._encode_header(MessageType.STATUS_QUERY, request_id)
         )
-
-        # Robot ID
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(robot_id_bytes)))
         message.extend(robot_id_bytes)
-
-        # Detailed flag (1 byte: 0 or 1)
         message.extend(struct.pack("B", 1 if detailed else 0))
 
         return bytes(message)
@@ -711,16 +580,13 @@ class UnityProtocol:
             ValueError: If message is malformed
         """
         try:
-            # Decode header
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
 
             if msg_type != MessageType.STATUS_QUERY:
                 raise ValueError(f"Expected STATUS_QUERY message, got {msg_type.name}")
 
-            # Read robot_id
             robot_id, offset = UnityProtocol._read_string(data, offset)
 
-            # Read detailed flag
             if offset + 1 > len(data):
                 raise ValueError("Not enough data for detailed flag")
 
@@ -747,19 +613,13 @@ class UnityProtocol:
         Returns:
             Encoded message bytes
         """
-        # Convert dict to JSON
         json_str = json.dumps(robot_status, ensure_ascii=False)
         json_bytes = json_str.encode("utf-8")
 
-        # Build message
         message = bytearray()
-
-        # Header
         message.extend(
             UnityProtocol._encode_header(MessageType.STATUS_RESPONSE, request_id)
         )
-
-        # JSON data
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(json_bytes)))
         message.extend(json_bytes)
 
@@ -780,7 +640,6 @@ class UnityProtocol:
             ValueError: If message is malformed
         """
         try:
-            # Decode header
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
 
             if msg_type != MessageType.STATUS_RESPONSE:
@@ -788,7 +647,6 @@ class UnityProtocol:
                     f"Expected STATUS_RESPONSE message, got {msg_type.name}"
                 )
 
-            # Read JSON data
             if len(data) - offset < UnityProtocol.INT_SIZE:
                 raise ValueError("Not enough data for JSON length")
 
@@ -828,7 +686,6 @@ class UnityProtocol:
         Raises:
             ValueError: If data exceeds limits
         """
-        # Validate inputs
         if not command_type:
             raise ValueError("Command type cannot be empty")
         if len(command_type) > UnityProtocol.MAX_STRING_LENGTH:
@@ -836,27 +693,18 @@ class UnityProtocol:
                 f"Command type too long: {len(command_type)} > {UnityProtocol.MAX_STRING_LENGTH}"
             )
 
-        # Encode command type
         cmd_type_bytes = command_type.encode("utf-8")
 
-        # Encode params as JSON
         params = params or {}
         params_json = json.dumps(params, ensure_ascii=False)
         params_bytes = params_json.encode("utf-8")
 
-        # Build message
         message = bytearray()
-
-        # Header
         message.extend(
             UnityProtocol._encode_header(MessageType.AUTORT_COMMAND, request_id)
         )
-
-        # Command type
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(cmd_type_bytes)))
         message.extend(cmd_type_bytes)
-
-        # Params JSON
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(params_bytes)))
         message.extend(params_bytes)
 
@@ -877,7 +725,6 @@ class UnityProtocol:
             ValueError: If message is malformed
         """
         try:
-            # Decode header
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
 
             if msg_type != MessageType.AUTORT_COMMAND:
@@ -885,13 +732,8 @@ class UnityProtocol:
                     f"Expected AUTORT_COMMAND message, got {msg_type.name}"
                 )
 
-            # Read command type
             command_type, offset = UnityProtocol._read_string(data, offset)
-
-            # Read params JSON
             params_json, offset = UnityProtocol._read_string(data, offset)
-
-            # Parse params
             params = json.loads(params_json) if params_json else {}
 
             return request_id, command_type, params
@@ -913,19 +755,13 @@ class UnityProtocol:
         Returns:
             Encoded message bytes
         """
-        # Convert dict to JSON
         json_str = json.dumps(response_data, ensure_ascii=False)
         json_bytes = json_str.encode("utf-8")
 
-        # Build message
         message = bytearray()
-
-        # Header
         message.extend(
             UnityProtocol._encode_header(MessageType.AUTORT_RESPONSE, request_id)
         )
-
-        # JSON data
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(json_bytes)))
         message.extend(json_bytes)
 
@@ -946,7 +782,6 @@ class UnityProtocol:
             ValueError: If message is malformed
         """
         try:
-            # Decode header
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
 
             if msg_type != MessageType.AUTORT_RESPONSE:
@@ -954,7 +789,6 @@ class UnityProtocol:
                     f"Expected AUTORT_RESPONSE message, got {msg_type.name}"
                 )
 
-            # Read JSON data
             if len(data) - offset < UnityProtocol.INT_SIZE:
                 raise ValueError("Not enough data for JSON length")
 

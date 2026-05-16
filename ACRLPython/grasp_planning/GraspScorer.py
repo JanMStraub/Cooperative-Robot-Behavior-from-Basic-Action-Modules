@@ -50,16 +50,12 @@ class GraspScorer:
 
     All scores are normalized to [0, 1] range.
 
-    Attributes:
-        config: Grasp planning configuration with scoring weights
     """
 
     def __init__(self, config: Optional[GraspConfig] = None):
         """
         Initialize scorer with configuration.
 
-        Args:
-            config: Grasp planning configuration (uses default if None)
         """
         self.config = config or GraspConfig.create_default()
 
@@ -76,14 +72,7 @@ class GraspScorer:
         Pre-computes object_size array and ideal pre-grasp distance once to
         avoid redundant conversions and calculations inside _score_candidate.
 
-        Args:
-            candidates: List of candidates to score
-            object_size: Size of target object (width, height, depth) in meters
-            gripper_position: Current gripper position (x, y, z)
-            gripper_rotation: Current gripper rotation (x, y, z, w) - optional
 
-        Returns:
-            Sorted list of candidates (highest score first)
         """
         # Pre-compute shared values used by every candidate scoring call
         obj_size_array = np.array(object_size)
@@ -126,15 +115,6 @@ class GraspScorer:
 
         Updates candidate's score fields in-place.
 
-        Args:
-            candidate: Candidate to score (modified in-place)
-            object_size: Size of target object
-            gripper_position: Current gripper position
-            gripper_rotation: Current gripper rotation (optional)
-            obj_size_array: Pre-computed np.array(object_size) to avoid redundant
-                conversion per candidate (computed here if not provided)
-            ideal_distance: Pre-computed ideal pre-grasp distance to avoid redundant
-                calculation per candidate (computed here if not provided)
         """
         if obj_size_array is None:
             obj_size_array = np.array(object_size)
@@ -178,12 +158,7 @@ class GraspScorer:
         Higher score for positions closer to current gripper (easier to reach).
         If IK validation was performed, use validation quality instead.
 
-        Args:
-            candidate: Candidate to evaluate
-            gripper_position: Current gripper position
 
-        Returns:
-            Normalized score [0, 1]
         """
         # If IK was validated by MoveIt, use that score
         if candidate.ik_validated:
@@ -204,11 +179,7 @@ class GraspScorer:
 
         Uses configured preference weights for each approach type.
 
-        Args:
-            candidate: Candidate to evaluate
 
-        Returns:
-            Normalized score [0, 1]
         """
         weight = self.config.get_approach_weight(candidate.approach_type)
 
@@ -224,12 +195,7 @@ class GraspScorer:
         Penalizes deviations from target depth using Gaussian distribution.
         Object-size-aware scoring.
 
-        Args:
-            candidate: Candidate to evaluate
-            object_size: Object size as np.ndarray (pre-computed by caller)
 
-        Returns:
-            Normalized score [0, 1]
         """
         avg_object_size = np.mean(object_size)
         target_depth = self.config.target_grasp_depth * avg_object_size
@@ -255,14 +221,7 @@ class GraspScorer:
         Higher for grasps aligned with object center and gravity.
         Enhanced with center-of-mass alignment, contact area, and edge avoidance.
 
-        Args:
-            candidate: Candidate to evaluate
-            object_size: Object size as np.ndarray (pre-computed by caller)
-            ideal_distance: Pre-computed ideal pre-grasp distance (avoids
-                redundant _calculate_pre_grasp_distance call per candidate)
 
-        Returns:
-            Normalized score [0, 1]
         """
         score = 1.0
 
@@ -310,12 +269,7 @@ class GraspScorer:
 
         Larger contact areas provide more stable grasps.
 
-        Args:
-            candidate: Candidate to evaluate
-            object_size: Size of target object
 
-        Returns:
-            Normalized contact area score [0, 1]
         """
         approach_dir = np.array(candidate.approach_direction)
         abs_approach = np.abs(approach_dir)
@@ -347,12 +301,7 @@ class GraspScorer:
 
         Penalizes grasps near object edges for better stability.
 
-        Args:
-            candidate: Candidate to evaluate
-            object_size: Object size as np.ndarray (pre-computed by caller)
 
-        Returns:
-            Edge avoidance score [0, 1] (higher = farther from edges)
         """
         grasp_pos = np.array(candidate.grasp_position)
         contact_pos = np.array(candidate.contact_point_estimate)
@@ -382,12 +331,7 @@ class GraspScorer:
         Prevents "180-degree flip" scenarios by penalizing large rotations
         from current gripper orientation.
 
-        Args:
-            candidate: Candidate to evaluate
-            current_gripper_rotation: Current gripper rotation quaternion
 
-        Returns:
-            Consistency score [0, 1] (higher = smaller rotation needed)
         """
         delta_angle = quaternion_angle(
             current_gripper_rotation, candidate.grasp_rotation
@@ -410,11 +354,7 @@ class GraspScorer:
         """
         Calculate ideal pre-grasp distance from object size.
 
-        Args:
-            obj_size: Object size array
 
-        Returns:
-            Pre-grasp distance in meters
         """
         avg_size = np.mean(obj_size)
         distance = avg_size * self.config.pre_grasp_distance_factor
@@ -432,12 +372,7 @@ class GraspScorer:
         """
         Filter candidates below a minimum score threshold.
 
-        Args:
-            candidates: Scored candidates
-            min_score: Minimum total score threshold
 
-        Returns:
-            Filtered list of candidates
         """
         filtered = [c for c in candidates if c.total_score >= min_score]
         logger.debug(
@@ -452,12 +387,7 @@ class GraspScorer:
         """
         Get top N candidates from scored list.
 
-        Args:
-            candidates: Scored and sorted candidates
-            count: Number of candidates to return
 
-        Returns:
-            Top N candidates
         """
         return candidates[:count]
 
@@ -468,8 +398,6 @@ class GraspScorer:
         Useful for comparing candidates across different scenarios.
         Modifies candidates in-place.
 
-        Args:
-            candidates: Candidates to normalize (modified in-place)
         """
         if not candidates:
             return

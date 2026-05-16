@@ -600,7 +600,8 @@ namespace Robotics
 
                 ArticulationDrive drive = robotJoints[i].xDrive;
                 float rawTarget = drive.target + clampedStep;
-                bool isFullCircleJoint = Mathf.Approximately(drive.upperLimit, 180f)
+                bool isFullCircleJoint =
+                    Mathf.Approximately(drive.upperLimit, 180f)
                     && Mathf.Approximately(drive.lowerLimit, -180f);
                 if (isFullCircleJoint)
                 {
@@ -921,13 +922,10 @@ namespace Robotics
             return null;
         }
 
-        /// <summary>Returns current distance to target in IK frame, or 0 if no target is set.</summary>
         public float GetDistanceToTarget() => _targetTransform == null ? 0f : _distanceToTarget;
 
-        /// <summary>Returns the current target world position, or null if no target is set.</summary>
         public Vector3? GetCurrentTarget() => _targetTransform?.position;
 
-        /// <summary>Returns the current target world rotation, or null if no target is set.</summary>
         public Quaternion? GetCurrentTargetRotation() => _targetTransform?.rotation;
 
         /// <summary>True if a target transform is currently assigned.</summary>
@@ -939,7 +937,6 @@ namespace Robotics
         /// <summary>Returns the original target GameObject (not the temp transform), or null for position-only targets.</summary>
         public GameObject GetTargetObject() => _targetObject;
 
-        /// <summary>Enables or disables real-time tracking of a moving target object.</summary>
         public void SetMovingTargetTracking(bool enable) => _enableMovingTargetTracking = enable;
 
         /// <summary>
@@ -951,11 +948,6 @@ namespace Robotics
             _sqrTargetMovementThreshold = _targetMovementThreshold * _targetMovementThreshold;
         }
 
-        /// <summary>
-        /// Clear the current target and stop IK tracking.
-        /// Call this when the robot should no longer maintain its current position
-        /// (e.g., after opening gripper to release an object).
-        /// </summary>
         /// <summary>
         /// Release any grasped object and open the gripper. Called during simulation reset.
         /// </summary>
@@ -1029,14 +1021,11 @@ namespace Robotics
             );
         }
 
-        /// <summary>Returns whether moving-target tracking is currently enabled.</summary>
         public bool IsTargetTrackingEnabled() => _enableMovingTargetTracking;
 
-        /// <summary>Returns the end effector world position, or Vector3.zero if endEffectorBase is not assigned.</summary>
         public Vector3 GetCurrentEndEffectorPosition() =>
             endEffectorBase == null ? Vector3.zero : endEffectorBase.position;
 
-        /// <summary>Resets all joint drive targets to zero and clears velocity and force state.</summary>
         public void ResetJointTargets()
         {
             ClearTarget();

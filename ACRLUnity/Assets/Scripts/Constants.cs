@@ -77,9 +77,6 @@ namespace Core
         public const string TEMP_TARGET_SUFFIX = "_TempTarget";
     }
 
-    /// <summary>
-    /// Constants for object detection and scene analysis
-    /// </summary>
     public static class SceneConstants
     {
         /// <summary>
@@ -95,9 +92,6 @@ namespace Core
         public const float GRASPABLE_OBJECT_SIZE_THRESHOLD = 0.5f;
     }
 
-    /// <summary>
-    /// Constants for camera and vision systems
-    /// </summary>
     public static class CameraConstants
     {
         /// <summary>
@@ -113,9 +107,6 @@ namespace Core
         public const float POSITION_REACHED_THRESHOLD = 0.1f;
     }
 
-    /// <summary>
-    /// Constants for logging and data collection
-    /// </summary>
     public static class LoggingConstants
     {
         /// <summary>
@@ -129,9 +120,6 @@ namespace Core
         public const float DEFAULT_TRAJECTORY_SAMPLE_RATE = 0.2f;
     }
 
-    /// <summary>
-    /// Constants for collision detection
-    /// </summary>
     public static class CollisionConstants
     {
         /// <summary>
@@ -146,9 +134,6 @@ namespace Core
         public const float DEFAULT_TARGET_REWARD = 1.0f;
     }
 
-    /// <summary>
-    /// Constants for Python communication and network
-    /// </summary>
     public static class CommunicationConstants
     {
         /// <summary>
@@ -202,9 +187,6 @@ namespace Core
         public const int ROS_TCP_ENDPOINT_PORT = 10000;
     }
 
-    /// <summary>
-    /// Constants for AutoRT (Autonomous Robot Task generation)
-    /// </summary>
     public static class AutoRTConstants
     {
         /// <summary>

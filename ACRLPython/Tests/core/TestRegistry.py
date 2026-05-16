@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for Registry.py
-
-Tests the operation registry including:
-- Operation registration and lookup
-- Execute operation by name/ID
-- Category and complexity filtering
-- Operation listing and metadata
-- Concurrent access safety
-- Invalid operation handling
-- Performance with multiple operations
-"""
+"""Unit tests for Registry.py"""
 
 import pytest
 import threading
@@ -26,19 +15,11 @@ from operations.Base import (
     OperationResult,
 )
 
-# ============================================================================
 # Fixtures
-# ============================================================================
 
 
 @pytest.fixture
 def sample_operation():
-    """
-    Create a sample BasicOperation for testing.
-
-    Returns:
-        BasicOperation instance
-    """
 
     def test_impl(**kwargs):
         return OperationResult.success_result({"executed": True})
@@ -74,12 +55,6 @@ def sample_operation():
 
 @pytest.fixture
 def clean_registry():
-    """
-    Create a fresh registry for testing.
-
-    Returns:
-        OperationRegistry instance
-    """
     # Reset global registry
     import operations.Registry as registry_module
 
@@ -89,16 +64,12 @@ def clean_registry():
     return registry
 
 
-# ============================================================================
 # Test Class: Registration & Lookup
-# ============================================================================
 
 
 class TestRegistryRegistration:
-    """Test operation registration and lookup."""
 
     def test_registry_initializes_with_operations(self):
-        """Test registry initializes with default operations."""
         registry = OperationRegistry()
 
         ops = registry.get_all_operations()
@@ -109,7 +80,6 @@ class TestRegistryRegistration:
         assert "control_gripper" in op_names
 
     def test_get_operation_by_id(self):
-        """Test retrieving operation by ID."""
         registry = OperationRegistry()
 
         op = registry.get_operation("motion_move_to_coord_001")
@@ -118,7 +88,6 @@ class TestRegistryRegistration:
         assert op.name == "move_to_coordinate"
 
     def test_get_operation_by_name(self):
-        """Test retrieving operation by name."""
         registry = OperationRegistry()
 
         op = registry.get_operation_by_name("move_to_coordinate")
@@ -155,7 +124,6 @@ class TestRegistryRegistration:
         assert op is None
 
     def test_list_all_operations(self):
-        """Test listing all operations."""
         registry = OperationRegistry()
 
         ops = registry.get_all_operations()
@@ -165,16 +133,12 @@ class TestRegistryRegistration:
         assert all(isinstance(op, BasicOperation) for op in ops)
 
 
-# ============================================================================
 # Test Class: Execution
-# ============================================================================
 
 
 class TestRegistryExecution:
-    """Test operation execution through registry."""
 
     def test_execute_operation_by_id_success(self, clean_registry, sample_operation):
-        """Test executing operation by ID with valid parameters."""
         clean_registry.operations[sample_operation.operation_id] = sample_operation
 
         result = clean_registry.execute_operation(
@@ -185,7 +149,6 @@ class TestRegistryExecution:
         assert result.result["executed"] is True
 
     def test_execute_operation_by_name_success(self, clean_registry, sample_operation):
-        """Test executing operation by name with valid parameters."""
         clean_registry.operations[sample_operation.operation_id] = sample_operation
 
         result = clean_registry.execute_operation_by_name(
@@ -215,16 +178,12 @@ class TestRegistryExecution:
         assert result.error["code"] == "OPERATION_NOT_FOUND"
 
 
-# ============================================================================
 # Test Class: Filtering
-# ============================================================================
 
 
 class TestRegistryFiltering:
-    """Test operation filtering by category and complexity."""
 
     def test_get_operations_by_category(self):
-        """Test retrieving operations by category."""
         registry = OperationRegistry()
 
         nav_ops = registry.get_operations_by_category(OperationCategory.NAVIGATION)
@@ -233,7 +192,6 @@ class TestRegistryFiltering:
         assert all(op.category == OperationCategory.NAVIGATION for op in nav_ops)
 
     def test_get_operations_by_complexity(self):
-        """Test retrieving operations by complexity."""
         registry = OperationRegistry()
 
         basic_ops = registry.get_operations_by_complexity(OperationComplexity.BASIC)
@@ -242,7 +200,6 @@ class TestRegistryFiltering:
         assert all(op.complexity == OperationComplexity.BASIC for op in basic_ops)
 
     def test_get_operations_by_multiple_filters(self, clean_registry, sample_operation):
-        """Test filtering by both category and complexity."""
         clean_registry.operations[sample_operation.operation_id] = sample_operation
 
         # Get navigation operations
@@ -260,9 +217,7 @@ class TestRegistryFiltering:
         assert all(op.complexity == OperationComplexity.BASIC for op in basic_nav_ops)
 
 
-# ============================================================================
 # Test Class: Concurrency
-# ============================================================================
 
 
 class TestRegistryConcurrency:
@@ -329,16 +284,12 @@ class TestRegistryConcurrency:
         assert len(set(operations)) == 1
 
 
-# ============================================================================
 # Test Class: Performance
-# ============================================================================
 
 
 class TestRegistryPerformance:
-    """Test registry performance with many operations."""
 
     def test_lookup_performance_large_registry(self):
-        """Test operation lookup performance with many operations."""
         registry = OperationRegistry()
 
         # Measure lookup time
@@ -352,16 +303,12 @@ class TestRegistryPerformance:
         assert duration < 0.1
 
 
-# ============================================================================
 # Test Class: Export and Documentation
-# ============================================================================
 
 
 class TestRegistryExport:
-    """Test registry export and documentation generation."""
 
     def test_generate_summary(self):
-        """Test generating registry summary."""
         registry = OperationRegistry()
 
         summary = registry.generate_summary()
@@ -372,7 +319,6 @@ class TestRegistryExport:
         assert "Total operations:" in summary
 
     def test_export_for_rag(self, clean_registry, sample_operation, tmp_path):
-        """Test exporting operations for RAG system."""
         clean_registry.operations[sample_operation.operation_id] = sample_operation
 
         output_dir = tmp_path / "rag_test"
@@ -387,9 +333,7 @@ class TestRegistryExport:
         assert (output_dir / "operations_index.json").exists()
 
 
-# ============================================================================
 # Test Class: Global Registry Singleton
-# ============================================================================
 
 
 class TestGlobalRegistry:
@@ -403,7 +347,6 @@ class TestGlobalRegistry:
         assert registry1 is registry2
 
     def test_global_registry_has_operations(self):
-        """Test global registry is initialized with operations."""
         registry = get_global_registry()
 
         ops = registry.get_all_operations()

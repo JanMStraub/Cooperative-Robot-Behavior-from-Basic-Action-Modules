@@ -50,39 +50,13 @@ except ImportError:
     )
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
 def _f_from_fov(fov: float) -> float:
-    """
-    Convert a horizontal field-of-view angle to a normalised focal length.
-
-    Args:
-        fov: Horizontal field of view in degrees.
-
-    Returns:
-        Normalised focal length (focal_length / sensor_width).
-    """
+    """Horizontal FOV in degrees → normalised focal length (f / sensor_width)."""
     return 1.0 / (2.0 * math.tan(math.radians(fov / 2.0)))
 
 
 def _vertical_to_horizontal_fov(vertical_fov: float, aspect: float) -> float:
-    """
-    Convert a vertical field-of-view to horizontal FOV for a given aspect ratio.
-
-    Unity's ``camera.fieldOfView`` is vertical FOV.  All downstream math
-    (Q-matrix construction) requires horizontal FOV, so this conversion must
-    be applied before calling ``_f_from_fov``.
-
-    Args:
-        vertical_fov: Vertical field of view in degrees (as sent by Unity).
-        aspect: Image aspect ratio (width / height).
-
-    Returns:
-        Horizontal field of view in degrees.
-    """
+    """Convert Unity vertical FOV to horizontal FOV. Required before _f_from_fov."""
     return math.degrees(
         2.0 * math.atan(math.tan(math.radians(vertical_fov / 2.0)) * aspect)
     )
@@ -91,21 +65,7 @@ def _vertical_to_horizontal_fov(vertical_fov: float, aspect: float) -> float:
 def _calc_disparity(
     imgL: np.ndarray, imgR: np.ndarray, max_disp: Optional[int] = None
 ) -> np.ndarray:
-    """
-    Compute a disparity map between two rectified grayscale images using StereoSGBM.
-
-    Args:
-        imgL: Grayscale left image (single-channel).
-        imgR: Grayscale right image (single-channel).
-        max_disp: Maximum disparity (rounded up to next multiple of 16).
-                  Defaults to 128 if not provided.
-
-    Returns:
-        Float32 disparity map; invalid pixels are set to NaN.
-
-    Raises:
-        ValueError: If images are not single-channel.
-    """
+    """StereoSGBM disparity for rectified grayscale pair. Invalid pixels → NaN."""
     if imgL.ndim != 2 or imgR.ndim != 2:
         raise ValueError(
             "_calc_disparity expects single-channel (grayscale) images. "
@@ -117,7 +77,6 @@ def _calc_disparity(
     if max_disp is None:
         max_disp = 128
 
-    # StereoSGBM requires numDisparities to be divisible by 16.
     if max_disp % 16 != 0:
         max_disp += 16 - (max_disp % 16)
 
@@ -150,23 +109,7 @@ def _make_3d(
     min_disp: float = 0.0,
     cam_dist: float = 0.1,
 ) -> Dict[str, np.ndarray]:
-    """
-    Reproject a disparity map into a coloured 3-D point cloud.
-
-    Uses OpenCV's reprojectImageTo3D with a Q-matrix constructed from the
-    camera parameters.  The X axis is negated to match Unity's left-handed
-    coordinate system.
-
-    Args:
-        depth_map: Float32 disparity map (pixels with value <= 0 are ignored).
-        imgL_color: BGR colour image used to colour each point.
-        focal_length: Pixel focal length (normalised_f * image_width).
-        min_disp: Minimum disparity threshold; points below this are discarded.
-        cam_dist: Stereo baseline in metres.
-
-    Returns:
-        Dict with keys ``'points'`` (Nx3 float32) and ``'colors'`` (Nx3 uint8, RGB).
-    """
+    """Reproject disparity map to coloured 3-D point cloud via Q-matrix."""
     depth_map = np.nan_to_num(depth_map, nan=-1.0).astype(np.float32)
 
     h, w = imgL_color.shape[:2]
@@ -206,30 +149,9 @@ def _reconstruct_from_disparity(
     min_disp: float = 0.0,
     cam_dist: float = DEFAULT_STEREO_BASELINE,
 ) -> Dict[str, np.ndarray]:
-    """
-    Build a point cloud from a pre-computed disparity map and colour image.
-
-    Args:
-        disparity: Float32 disparity map from _calc_disparity.
-        imgL_color: BGR colour reference image.
-        fov: Vertical FOV in degrees (as sent by Unity's ``camera.fieldOfView``).
-            Converted to horizontal FOV internally using the image aspect ratio.
-            If given, overrides focal_length/sensor_width.
-        focal_length: Camera focal length (metres or pixels, combined with sensor_width).
-        sensor_width: Camera sensor width (same units as focal_length).
-        min_disp: Minimum disparity; lower values are discarded.
-        cam_dist: Stereo baseline in metres.
-
-    Returns:
-        Dict with ``'points'`` (Nx3) and ``'colors'`` (Nx3) arrays.
-
-    Raises:
-        ValueError: If neither fov nor (focal_length + sensor_width) is provided.
-    """
+    """Build point cloud from pre-computed disparity. fov overrides focal_length/sensor_width."""
     if fov is not None:
-        # Unity sends vertical FOV; convert to horizontal using image aspect ratio
-        # before computing the normalised focal length (which is f / sensor_width).
-        aspect = disparity.shape[1] / disparity.shape[0]  # width / height
+        aspect = disparity.shape[1] / disparity.shape[0]
         horiz_fov = _vertical_to_horizontal_fov(fov, aspect)
         f_norm = _f_from_fov(horiz_fov)
     elif focal_length is not None and sensor_width is not None:
@@ -239,11 +161,6 @@ def _reconstruct_from_disparity(
 
     f_px = f_norm * disparity.shape[1]
     return _make_3d(disparity, imgL_color, f_px, min_disp=min_disp, cam_dist=cam_dist)
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 
 def stereo_reconstruct(
@@ -257,37 +174,16 @@ def stereo_reconstruct(
     cam_dist: float = DEFAULT_STEREO_BASELINE,
     mask_edges: bool = False,
 ) -> Dict[str, np.ndarray]:
-    """
-    Reconstruct a point cloud from two BGR stereo images.
-
-    Intended for offline use (files on disk).  For live Unity data use
-    ``reconstruct_from_storage`` instead.
-
-    Args:
-        imgL: Left camera image (BGR).
-        imgR: Right camera image (BGR).
-        fov: Horizontal FOV in degrees.
-        focal_length: Camera focal length (if fov not given).
-        sensor_width: Sensor width (if fov not given).
-        min_disp: Minimum disparity threshold.
-        max_disp: Maximum disparity (defaults to 128).
-        cam_dist: Stereo baseline in metres (default: ``DEFAULT_STEREO_BASELINE``).
-        mask_edges: If True, suppress strong depth edges to reduce noise.
-
-    Returns:
-        Dict with ``'points'`` (Nx3 float32) and ``'colors'`` (Nx3 uint8, RGB).
-    """
+    """Offline point cloud reconstruction from BGR stereo pair. Use reconstruct_from_storage() for live Unity data."""
     imgL_color = imgL.copy()
     imgL_gray = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
     imgR_gray = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
 
-    logger.info("Computing disparity map…")
     disparity = _calc_disparity(imgL_gray, imgR_gray, max_disp=max_disp)
 
     if mask_edges:
         disparity = _remove_edges(disparity)
 
-    logger.info("Generating 3-D point cloud…")
     point_cloud = _reconstruct_from_disparity(
         disparity,
         imgL_color,
@@ -311,25 +207,7 @@ def stereo_reconstruct_stream(
     max_disp: Optional[int] = None,
     cam_dist: float = DEFAULT_STEREO_BASELINE,
 ) -> Dict[str, np.ndarray]:
-    """
-    Reconstruct a point cloud from two BGR stereo images received via streaming.
-
-    Identical to ``stereo_reconstruct`` but omits edge masking (not suitable
-    for real-time use) and does not write anything to disk.
-
-    Args:
-        imgL: Left camera image (BGR).
-        imgR: Right camera image (BGR).
-        fov: Horizontal FOV in degrees.
-        focal_length: Camera focal length (if fov not given).
-        sensor_width: Sensor width (if fov not given).
-        min_disp: Minimum disparity threshold.
-        max_disp: Maximum disparity (defaults to 128).
-        cam_dist: Stereo baseline in metres (default: ``DEFAULT_STEREO_BASELINE``).
-
-    Returns:
-        Dict with ``'points'`` (Nx3 float32) and ``'colors'`` (Nx3 uint8, RGB).
-    """
+    """Like stereo_reconstruct but no edge masking (not real-time safe) and no disk I/O."""
     imgL_color = imgL.copy()
     imgL_gray = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
     imgR_gray = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
@@ -353,26 +231,7 @@ def reconstruct_from_storage(
     min_disp: float = 0.0,
     max_disp: Optional[int] = None,
 ) -> Optional[Dict[str, np.ndarray]]:
-    """
-    Pull the latest stereo pair from UnifiedImageStorage and reconstruct.
-
-    Camera parameters (fov, cam_dist / baseline) are read from the pair's
-    stored metadata if available, then fall back to the config defaults
-    (``DEFAULT_STEREO_FOV``, ``DEFAULT_STEREO_BASELINE``), then to the
-    explicit arguments supplied here.
-
-    Args:
-        camera_pair_id: Specific stereo pair ID to use.  If None, the most
-                        recently received pair is used.
-        fov: Override horizontal FOV in degrees.
-        cam_dist: Override stereo baseline in metres.
-        min_disp: Minimum disparity threshold.
-        max_disp: Maximum disparity (defaults to 128).
-
-    Returns:
-        Dict with ``'points'`` and ``'colors'`` arrays, or None if no stereo
-        images are available in storage.
-    """
+    """Pull latest stereo pair from UnifiedImageStorage and reconstruct. Params: explicit arg > metadata > config default."""
     try:
         from core.Imports import get_unified_image_storage
 
@@ -381,7 +240,6 @@ def reconstruct_from_storage(
         logger.error(f"UnifiedImageStorage not available: {e}")
         return None
 
-    # Fetch images + metadata
     if camera_pair_id is not None:
         pair = storage.get_stereo_pair(camera_pair_id)
         if pair is None:
@@ -396,7 +254,6 @@ def reconstruct_from_storage(
             return None
         imgL, imgR, _, _, metadata = result
 
-    # Resolve camera parameters: explicit arg > metadata > config default
     resolved_fov = fov or metadata.get("fov", DEFAULT_STEREO_FOV)
     resolved_cam_dist = cam_dist or metadata.get("baseline", DEFAULT_STEREO_BASELINE)
 
@@ -414,25 +271,8 @@ def reconstruct_from_storage(
     )
 
 
-# ---------------------------------------------------------------------------
-# Edge masking (offline quality improvement)
-# ---------------------------------------------------------------------------
-
-
 def _remove_edges(image: np.ndarray, ksize: int = 5) -> np.ndarray:
-    """
-    Suppress the strongest depth edges to reduce stereo matching artefacts.
-
-    Sets the top-10 % of Laplacian-detected edges to NaN so that they are
-    excluded from the point cloud.
-
-    Args:
-        image: Float32 disparity map (may contain NaN).
-        ksize: Kernel size for median blur and Laplacian.
-
-    Returns:
-        Copy of the disparity map with edge pixels set to NaN.
-    """
+    """Suppress top-10% Laplacian edges (NaN) to reduce stereo matching artefacts."""
     img = np.copy(image)
     img = cv2.medianBlur(img, ksize)
     img = cv2.Laplacian(img, cv2.CV_64F, ksize=ksize)
@@ -446,13 +286,7 @@ def _remove_edges(image: np.ndarray, ksize: int = 5) -> np.ndarray:
     return np.where(mask != 0, np.nan, image)
 
 
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
-
-
 def _build_arg_parser() -> argparse.ArgumentParser:
-    """Build and return the CLI argument parser."""
     p = argparse.ArgumentParser(
         description="Stereo point cloud reconstruction test tool."
     )
@@ -514,12 +348,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def _visualize_point_cloud(point_cloud: Dict[str, np.ndarray]) -> None:
-    """
-    Display a point cloud with open3d if available, otherwise print a summary.
-
-    Args:
-        point_cloud: Dict with ``'points'`` and ``'colors'`` arrays.
-    """
+    """Display point cloud with open3d if available, otherwise log summary."""
     try:
         import open3d as o3d  # type: ignore[import]
 
@@ -550,7 +379,6 @@ if __name__ == "__main__":
     args = _build_arg_parser().parse_args()
 
     if args.live:
-        # --- Live mode: pull from UnifiedImageStorage ---
         logger.info("Live mode: reading latest stereo pair from UnifiedImageStorage…")
         pc = reconstruct_from_storage(
             fov=args.fov,
@@ -568,7 +396,6 @@ if __name__ == "__main__":
                 _visualize_point_cloud(pc)
 
     else:
-        # --- Offline mode: read from image files ---
         if not args.l or not args.r:
             _build_arg_parser().error("Provide --l and --r image paths, or use --live.")
 

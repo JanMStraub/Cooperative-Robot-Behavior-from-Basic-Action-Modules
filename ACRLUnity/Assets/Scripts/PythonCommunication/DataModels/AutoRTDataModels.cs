@@ -7,7 +7,6 @@ namespace PythonCommunication.DataModels
     /// Data models for AutoRT (Autonomous Robot Task generation) integration.
     /// Matches Python AutoRTIntegration.py serialization format.
     /// </summary>
-
     [Serializable]
     public class TaskOperation
     {
@@ -37,25 +36,16 @@ namespace PythonCommunication.DataModels
             required_robots = new List<string>();
         }
 
-        /// <summary>
-        /// Get a display-friendly summary of the task.
-        /// </summary>
         public string GetSummary()
         {
             return $"[Complexity {estimated_complexity}] {description}";
         }
 
-        /// <summary>
-        /// Get robot count required for this task.
-        /// </summary>
         public int RobotCount
         {
             get { return required_robots?.Count ?? 0; }
         }
 
-        /// <summary>
-        /// Get operation count for this task.
-        /// </summary>
         public int OperationCount
         {
             get { return operations?.Count ?? 0; }
@@ -69,7 +59,7 @@ namespace PythonCommunication.DataModels
         public List<ProposedTask> tasks;
         public bool loop_running;
         public string error;
-        public string status;  // Execution status: "started", "not_found", "error", etc.
+        public string status; // Execution status: "started", "not_found", "error", etc.
         public uint request_id;
 
         public AutoRTResponse()
@@ -77,9 +67,6 @@ namespace PythonCommunication.DataModels
             tasks = new List<ProposedTask>();
         }
 
-        /// <summary>
-        /// Check if the response indicates an error state.
-        /// </summary>
         public bool HasError
         {
             get { return !success || !string.IsNullOrEmpty(error); }

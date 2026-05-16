@@ -68,9 +68,7 @@ def safe_move_task():
     )
 
 
-# ============================================================================
 # BoundingBox Tests
-# ============================================================================
 
 
 def test_bounding_box_contains_inside():
@@ -94,9 +92,7 @@ def test_bounding_box_contains_boundary():
     assert bbox.contains((1.0, 0.0, 0.5)) is True
 
 
-# ============================================================================
 # Initialization Tests
-# ============================================================================
 
 
 def test_constitution_init(mock_config):
@@ -110,9 +106,7 @@ def test_constitution_init(mock_config):
             assert constitution.min_robot_separation == 0.2
 
 
-# ============================================================================
 # LAYER 1: Semantic Safety Tests
-# ============================================================================
 
 
 def test_semantic_safety_approves_safe_task(
@@ -203,9 +197,7 @@ def test_semantic_safety_llm_error_rejects(
             assert len(verdict.rejection_reason) > 0
 
 
-# ============================================================================
 # LAYER 2: Kinematic Safety Tests - Workspace Bounds
-# ============================================================================
 
 
 def test_kinematic_rejects_out_of_bounds_x(mock_config, mock_world_state, empty_scene):
@@ -281,9 +273,7 @@ def test_kinematic_approves_within_bounds(
             assert len(verdict.violations) == 0
 
 
-# ============================================================================
 # LAYER 2: Kinematic Safety Tests - Velocity Limits
-# ============================================================================
 
 
 def test_kinematic_rejects_excessive_velocity(
@@ -352,9 +342,7 @@ def test_kinematic_approves_safe_velocity(mock_config, mock_world_state, empty_s
             assert verdict.approved is True
 
 
-# ============================================================================
 # LAYER 2: Kinematic Safety Tests - Force Limits
-# ============================================================================
 
 
 def test_kinematic_rejects_high_gripper_force(
@@ -389,9 +377,7 @@ def test_kinematic_rejects_high_gripper_force(
             assert any("gripper force" in v.lower() for v in verdict.violations)
 
 
-# ============================================================================
 # LAYER 2: Kinematic Safety Tests - Robot Collision
-# ============================================================================
 
 
 def test_kinematic_rejects_robot_collision_planned(mock_config, empty_scene):
@@ -501,9 +487,7 @@ def test_kinematic_approves_safe_separation(mock_config, empty_scene):
             assert verdict.approved is True
 
 
-# ============================================================================
 # Two-Layer Integration Tests
-# ============================================================================
 
 
 def test_evaluate_task_both_layers_approve(mock_config, empty_scene, safe_move_task):

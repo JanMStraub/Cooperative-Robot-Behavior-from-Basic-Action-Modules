@@ -153,12 +153,7 @@ def _points_to_tsdf_grid(
 class VGNClient:
     """Local grasp-pose predictor: YOLO → VLM → VGN.
 
-    The model is loaded lazily on the first ``predict_grasps`` call and cached
-    at class level so subsequent calls reuse the loaded weights.
-
-    Attributes:
-        _net:    Class-level cached VGN network (loaded once).
-        _device: Class-level cached torch device.
+    Model loaded lazily on first ``predict_grasps`` call and cached at class level.
     """
 
     _net = None
@@ -180,9 +175,7 @@ class VGNClient:
         self._model_path: str = VGN_MODEL_PATH
         self._top_k_default: int = int(VGN_TOP_K)
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
 
     def is_available(self) -> bool:
         """Return True if the VGN model file exists and torch is importable.
@@ -426,9 +419,7 @@ class VGNClient:
 
         bx, by, bw, bh = yolo_bbox
 
-        # ----------------------------------------------------------------
         # Step 1 — VLM bbox refinement (opt-in, off by default)
-        # ----------------------------------------------------------------
         refined_bbox = yolo_bbox  # default: use YOLO bbox unchanged
         try:
             from config.Servers import VGN_USE_VLM_REFINEMENT
@@ -462,9 +453,7 @@ class VGNClient:
         else:
             logger.debug("[VGN] VLM refinement skipped (VGN_USE_VLM_REFINEMENT=false)")
 
-        # ----------------------------------------------------------------
         # Step 2 — Point cloud masking
-        # ----------------------------------------------------------------
         debug_info["cam_pos"] = cam_pos
         debug_info["cam_rot"] = cam_rot
 
@@ -520,8 +509,6 @@ class VGNClient:
         # covers the object while still filtering far-field background.
         _depth_margin = 0.07 if _depth_hint_from_stereo else 0.25
 
-        # Build segmentation mask using refined bbox.
-        # Import from GraspUtils (shared module) to avoid circular import with
         # GraspOperations which imports VGNClient.
         from operations.GraspUtils import _build_segmentation_mask
 
@@ -569,9 +556,7 @@ class VGNClient:
             f"[VGN] Masked point cloud: {masked_points.shape[0]} / {pts_rh.shape[0]} points"
         )
 
-        # ----------------------------------------------------------------
         # Step 2b — Transform to world frame for VGN
-        # ----------------------------------------------------------------
         # VGN was trained on axis-aligned table-top scenes (Y-up).
         # Transform from Unity camera frame to world frame so the table
         # surface is flat.
@@ -626,9 +611,7 @@ class VGNClient:
                     f"skipping filter and using all {n_before} bbox-masked points"
                 )
 
-        # ----------------------------------------------------------------
         # Step 2c — Surface completion / densification
-        # ----------------------------------------------------------------
         # The depth camera only sees the top face of a table-top cube.
         # A partial top-face cloud → flat-disc TSDF → VGN prefers horizontal
         # side grasps.  When WorldState dimensions are available, synthesise a
@@ -692,9 +675,7 @@ class VGNClient:
                     f"({_n_copies}x, σ={_sigma} m)"
                 )
 
-        # ----------------------------------------------------------------
         # Step 3 — TSDF construction
-        # ----------------------------------------------------------------
         centroid = masked_points.mean(axis=0)
 
         debug_info["centroid"] = centroid
@@ -792,7 +773,11 @@ class VGNClient:
         debug_info["tsdf_size"] = _TSDF_SIZE
         debug_info["tsdf_res"] = _TSDF_RES
 
-        from config.Vision import VGN_EXPORT_TSDF, VGN_EXPORT_TSDF_PATH, VGN_EXPORT_TSDF_OBJ
+        from config.Vision import (
+            VGN_EXPORT_TSDF,
+            VGN_EXPORT_TSDF_PATH,
+            VGN_EXPORT_TSDF_OBJ,
+        )
 
         if VGN_EXPORT_TSDF:
             np.savez(
@@ -807,7 +792,10 @@ class VGNClient:
                 try:
                     from skimage import measure
                     import os as _os
-                    verts, faces, _, _ = measure.marching_cubes(grid.squeeze(), level=0.0)
+
+                    verts, faces, _, _ = measure.marching_cubes(
+                        grid.squeeze(), level=0.0
+                    )
                     verts = verts / grid.shape[0] * _TSDF_SIZE
                     obj_path = _os.path.splitext(VGN_EXPORT_TSDF_PATH)[0] + ".obj"
                     with open(obj_path, "w") as _f:
@@ -817,11 +805,11 @@ class VGNClient:
                             _f.write(f"f {face[0]+1} {face[1]+1} {face[2]+1}\n")
                     logger.info(f"[VGN] TSDF mesh exported to {obj_path}")
                 except ImportError:
-                    logger.warning("[VGN] skimage not installed — skipping OBJ export (pip install scikit-image)")
+                    logger.warning(
+                        "[VGN] skimage not installed — skipping OBJ export (pip install scikit-image)"
+                    )
 
-        # ----------------------------------------------------------------
         # Step 4 — VGN inference
-        # ----------------------------------------------------------------
         net = self._load_model()
         if net is None:
             logger.warning("[VGN] Model failed to load — aborting")
@@ -867,9 +855,7 @@ class VGNClient:
             logger.info("[VGN] VGN returned no grasps")
             return None
 
-        # ----------------------------------------------------------------
         # Step 5 — Output conversion
-        # ----------------------------------------------------------------
         from scipy.spatial.transform import Rotation  # type: ignore
 
         frame_label = "RH world" if _in_world_frame else "camera"
@@ -989,9 +975,7 @@ class VGNClient:
         )
         return top_results
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
 
     @classmethod
     def _load_model(cls):

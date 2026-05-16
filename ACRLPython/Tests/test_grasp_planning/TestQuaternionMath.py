@@ -28,15 +28,12 @@ from utils.QuaternionMath import (
 
 
 class TestQuaternionBasics:
-    """Test basic quaternion operations."""
 
     def test_identity_quaternion(self):
-        """Test identity quaternion returns (0, 0, 0, 1)."""
         quat = quaternion_identity()
         assert quat == (0.0, 0.0, 0.0, 1.0)
 
     def test_normalize_unit_quaternion(self):
-        """Test normalizing an already unit quaternion."""
         quat = (0.0, 0.0, 0.0, 1.0)
         normalized = quaternion_normalize(quat)
         assert np.allclose(normalized, quat, atol=1e-6)
@@ -50,10 +47,8 @@ class TestQuaternionBasics:
 
 
 class TestEulerConversions:
-    """Test Euler angle to quaternion conversions."""
 
     def test_zero_rotation(self):
-        """Test zero rotation returns identity quaternion."""
         quat = quaternion_from_euler(0.0, 0.0, 0.0)
         assert np.allclose(quat, (0.0, 0.0, 0.0, 1.0), atol=1e-6)
 
@@ -93,10 +88,8 @@ class TestEulerConversions:
 
 
 class TestQuaternionMultiplication:
-    """Test quaternion multiplication."""
 
     def test_identity_multiplication(self):
-        """Test multiplying by identity quaternion."""
         quat = (0.5, 0.5, 0.5, 0.5)
         identity = quaternion_identity()
         result = quaternion_multiply(quat, identity)
@@ -125,10 +118,8 @@ class TestQuaternionMultiplication:
 
 
 class TestVectorRotation:
-    """Test rotating vectors with quaternions."""
 
     def test_identity_rotation(self):
-        """Test rotating vector with identity quaternion."""
         vec = np.array([1.0, 0.0, 0.0])
         identity = quaternion_identity()
         rotated = quaternion_rotate_vector(identity, vec)
@@ -155,7 +146,6 @@ class TestVectorRotation:
         assert np.allclose(rotated, expected, atol=1e-6)
 
     def test_180_degree_rotation(self):
-        """Test 180 degree rotation."""
         vec = np.array([1.0, 0.0, 0.0])
         quat = quaternion_from_euler(0.0, 0.0, np.pi)
         rotated = quaternion_rotate_vector(quat, vec)
@@ -166,16 +156,13 @@ class TestVectorRotation:
 
 
 class TestQuaternionAngle:
-    """Test angle calculation between quaternions."""
 
     def test_same_quaternion_angle(self):
-        """Test angle between same quaternion is zero."""
         quat = quaternion_from_euler(0.5, 0.3, 0.7)
         angle = quaternion_angle(quat, quat)
         assert np.isclose(angle, 0.0, atol=1e-6)
 
     def test_opposite_quaternion_angle(self):
-        """Test angle between opposite quaternions."""
         quat1 = (0.0, 0.0, 0.0, 1.0)
         quat2 = (0.0, 0.0, 0.0, -1.0)
         angle = quaternion_angle(quat1, quat2)
@@ -183,14 +170,12 @@ class TestQuaternionAngle:
         assert np.isclose(angle, 0.0, atol=1e-6)
 
     def test_90_degree_rotation_angle(self):
-        """Test angle between quaternions 90 degrees apart."""
         quat1 = quaternion_identity()
         quat2 = quaternion_from_euler(0.0, 0.0, np.pi / 2)
         angle = quaternion_angle(quat1, quat2)
         assert np.isclose(angle, 90.0, atol=1e-3)
 
     def test_180_degree_rotation_angle(self):
-        """Test angle between quaternions 180 degrees apart."""
         quat1 = quaternion_identity()
         quat2 = quaternion_from_euler(0.0, 0.0, np.pi)
         angle = quaternion_angle(quat1, quat2)
@@ -201,7 +186,6 @@ class TestAxisAngleConversion:
     """Test axis-angle to quaternion conversion."""
 
     def test_zero_angle(self):
-        """Test zero angle rotation."""
         axis = np.array([0.0, 0.0, 1.0])
         quat = quaternion_from_axis_angle(axis, 0.0)
         assert np.allclose(quat, quaternion_identity(), atol=1e-6)
@@ -216,7 +200,6 @@ class TestAxisAngleConversion:
         assert np.allclose(quat, expected, atol=1e-6)
 
     def test_arbitrary_axis(self):
-        """Test rotation around arbitrary axis."""
         axis = np.array([1.0, 1.0, 1.0])  # Will be normalized
         angle = np.pi / 3
         quat = quaternion_from_axis_angle(axis, angle)
@@ -227,10 +210,8 @@ class TestAxisAngleConversion:
 
 
 class TestQuaternionInverse:
-    """Test quaternion inverse operation."""
 
     def test_inverse_of_identity(self):
-        """Test inverse of identity is identity."""
         identity = quaternion_identity()
         inv = quaternion_inverse(identity)
         assert np.allclose(inv, identity, atol=1e-6)
@@ -242,7 +223,6 @@ class TestQuaternionInverse:
         assert np.allclose(quat, inv_inv, atol=1e-6)
 
     def test_inverse_rotates_opposite(self):
-        """Test that inverse rotates in opposite direction."""
         vec = np.array([1.0, 0.0, 0.0])
         quat = quaternion_from_euler(0.0, 0.0, np.pi / 4)
         inv_quat = quaternion_inverse(quat)

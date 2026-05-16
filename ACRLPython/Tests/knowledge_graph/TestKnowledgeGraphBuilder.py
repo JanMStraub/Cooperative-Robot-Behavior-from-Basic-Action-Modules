@@ -12,7 +12,6 @@ from operations.WorldState import get_world_state
 
 
 class TestGraphBuilder(unittest.TestCase):
-    """Test GraphBuilder functionality."""
 
     def setUp(self):
         """Create fresh graph and world state for each test."""
@@ -27,7 +26,6 @@ class TestGraphBuilder(unittest.TestCase):
         self.world_state.reset()
 
     def test_static_regions_initialized(self):
-        """Test that static regions are created at initialization."""
         # Check region nodes exist
         self.assertTrue(self.graph.has_node("left_workspace"))
         self.assertTrue(self.graph.has_node("right_workspace"))
@@ -40,7 +38,6 @@ class TestGraphBuilder(unittest.TestCase):
         self.assertIn("shared_zone", left_neighbors)
 
     def test_update_robot_nodes(self):
-        """Test robot node creation and updates."""
         # Add robot to WorldState
         self.world_state.update_robot(
             "Robot1", position=(-0.3, 0.2, 0.1), gripper_state="open"
@@ -59,7 +56,6 @@ class TestGraphBuilder(unittest.TestCase):
         self.assertEqual(robot_node["gripper_state"], "open")
 
     def test_update_object_nodes(self):
-        """Test object node creation and updates."""
         # Add object to WorldState
         self.world_state.register_object(
             "RedCube", position=(0.1, 0.3, 0.0), color="red"
@@ -78,7 +74,6 @@ class TestGraphBuilder(unittest.TestCase):
         self.assertEqual(obj_node["color"], "red")
 
     def test_can_reach_edges_computed(self):
-        """Test CAN_REACH edges are computed correctly."""
         # Setup: Robot and reachable object
         self.world_state.update_robot("Robot1", position=(-0.475, 0.0, 0.0))
         self.world_state.register_object("NearbyObj", position=(-0.3, 0.3, 0.0))
@@ -95,7 +90,6 @@ class TestGraphBuilder(unittest.TestCase):
         self.assertIn("NearbyObj", reachable)
 
     def test_near_edges_computed(self):
-        """Test NEAR edges are computed for close objects."""
         # Setup: Two objects very close together
         self.world_state.register_object("Obj1", position=(0.0, 0.3, 0.0))
         self.world_state.register_object("Obj2", position=(0.01, 0.3, 0.0))  # 1cm away
@@ -115,7 +109,6 @@ class TestGraphBuilder(unittest.TestCase):
         self.assertIn("Obj1", near_obj2)
 
     def test_in_region_edges_computed(self):
-        """Test IN_REGION edges are computed correctly."""
         # Robot in left workspace
         self.world_state.update_robot("Robot1", position=(-0.3, 0.3, 0.0))
 
@@ -128,7 +121,6 @@ class TestGraphBuilder(unittest.TestCase):
         self.assertIn("left_workspace", in_region)
 
     def test_grasping_edges_computed(self):
-        """Test GRASPING edges when robot grasps object."""
         # Setup: Robot with grasped object
         self.world_state.update_robot("Robot1", position=(-0.3, 0.2, 0.0))
         self.world_state.register_object("GraspedCube", position=(-0.3, 0.2, 0.0))
@@ -146,7 +138,6 @@ class TestGraphBuilder(unittest.TestCase):
         self.assertIn("GraspedCube", grasping)
 
     def test_allocated_edges_computed(self):
-        """Test ALLOCATED edges when region is allocated to robot."""
         # Setup: Allocate region
         self.world_state.update_robot("Robot1", position=(-0.3, 0.2, 0.0))
         self.world_state.allocate_workspace("left_workspace", "Robot1")
@@ -160,7 +151,6 @@ class TestGraphBuilder(unittest.TestCase):
         self.assertIn("Robot1", allocated)
 
     def test_stale_objects_removed(self):
-        """Test that objects no longer in WorldState are removed from graph."""
         # Add object
         self.world_state.register_object("TempObj", position=(0.1, 0.3, 0.0))
 
@@ -178,7 +168,6 @@ class TestGraphBuilder(unittest.TestCase):
 
 
 class TestGraphQueryEngine(unittest.TestCase):
-    """Test GraphQueryEngine functionality."""
 
     def setUp(self):
         """Create graph with test data."""
@@ -211,7 +200,6 @@ class TestGraphQueryEngine(unittest.TestCase):
         self.world_state.reset()
 
     def test_find_reachable_robots(self):
-        """Test finding which robots can reach an object."""
         # RedCube should be reachable by Robot1 (nearby)
         reachable = self.query_engine.find_reachable_robots("RedCube")
 
@@ -220,7 +208,6 @@ class TestGraphQueryEngine(unittest.TestCase):
         # (depends on MAX_ROBOT_REACH)
 
     def test_find_robots_near(self):
-        """Test finding robots near another robot."""
         # Robot1 and Robot2 are ~0.95m apart
         nearby = self.query_engine.find_robots_near("Robot1", max_distance=1.0)
 
@@ -230,7 +217,6 @@ class TestGraphQueryEngine(unittest.TestCase):
         self.assertGreater(nearby[0]["distance"], 0.9)
 
     def test_get_objects_in_reach(self):
-        """Test getting all objects reachable by a robot."""
         objects = self.query_engine.get_objects_in_reach("Robot1")
 
         # Should have RedCube
@@ -243,7 +229,6 @@ class TestGraphQueryEngine(unittest.TestCase):
         self.assertEqual(red_cube.get("color"), "red")
 
     def test_get_handoff_candidates(self):
-        """Test finding handoff positions."""
         # Place object in shared zone
         self.world_state.register_object("SharedObj", position=(0.0, 0.3, 0.0))
 
@@ -264,7 +249,6 @@ class TestGraphQueryEngine(unittest.TestCase):
         self.assertIsInstance(candidates, list)
 
     def test_get_graph_stats(self):
-        """Test getting graph statistics."""
         stats = self.query_engine.get_graph_stats()
 
         self.assertIn("total_nodes", stats)

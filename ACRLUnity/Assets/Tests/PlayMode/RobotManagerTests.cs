@@ -1,9 +1,9 @@
-using NUnit.Framework;
 using System.Collections;
 using System.Collections.Generic;
+using NUnit.Framework;
+using Robotics;
 using UnityEngine;
 using UnityEngine.TestTools;
-using Robotics;
 
 namespace Tests.PlayMode
 {
@@ -20,7 +20,6 @@ namespace Tests.PlayMode
         [UnitySetUp]
         public IEnumerator Setup()
         {
-            // Clean up any existing instance
             if (RobotManager.Instance != null)
             {
                 UnityEngine.Object.DestroyImmediate(RobotManager.Instance.gameObject);
@@ -29,7 +28,7 @@ namespace Tests.PlayMode
             _managerObject = new GameObject("TestRobotManager");
             _manager = _managerObject.AddComponent<RobotManager>();
 
-            yield return null; // Allow Awake/Start to run and singleton to be set
+            yield return null;
         }
 
         [TearDown]
@@ -42,12 +41,11 @@ namespace Tests.PlayMode
 
             foreach (var obj in _tempObjects)
             {
-                if (obj != null) UnityEngine.Object.DestroyImmediate(obj);
+                if (obj != null)
+                    UnityEngine.Object.DestroyImmediate(obj);
             }
             _tempObjects.Clear();
         }
-
-        #region Singleton Tests
 
         [Test]
         public void RobotManager_Singleton_IsSet()
@@ -69,10 +67,6 @@ namespace Tests.PlayMode
                 UnityEngine.Object.DestroyImmediate(secondObject);
             }
         }
-
-        #endregion
-
-        #region Initialization Tests
 
         [Test]
         public void RobotManager_InitialState_HasEmptyRobotInstances()
@@ -101,10 +95,6 @@ namespace Tests.PlayMode
             Assert.AreEqual(0, _manager.Robots.Length);
         }
 
-        #endregion
-
-        #region Robot Registration Tests
-
         [UnityTest]
         public IEnumerator RobotManager_RegisterRobot_AddsToInstances()
         {
@@ -114,7 +104,6 @@ namespace Tests.PlayMode
             _tempObjects.Add(robotObject);
             robotObject.AddComponent<RobotController>();
 
-            // RegisterRobot takes (robotId, robotGameObject, targetGameObject, profile)
             _manager.RegisterRobot("TestRobot", robotObject, null, null);
 
             Assert.IsTrue(_manager.RobotInstances.ContainsKey("TestRobot"));
@@ -132,10 +121,8 @@ namespace Tests.PlayMode
             _tempObjects.Add(robotObject);
             robotObject.AddComponent<RobotController>();
 
-            // Pass null/empty robotId to auto-generate
             _manager.RegisterRobot(null, robotObject, null, null);
 
-            // Should have auto-generated an ID based on GameObject name
             Assert.AreEqual(countBefore + 1, _manager.AllRobotIds.Count);
             Assert.IsTrue(_manager.RobotInstances.ContainsKey("CustomRobot"));
 
@@ -160,10 +147,6 @@ namespace Tests.PlayMode
             yield return null;
         }
 
-        #endregion
-
-        #region Robot Query Tests
-
         [UnityTest]
         public IEnumerator RobotManager_RobotInstances_ReturnsRegisteredRobot()
         {
@@ -180,10 +163,6 @@ namespace Tests.PlayMode
             yield return null;
         }
 
-        #endregion
-
-        #region Event Tests
-
         [UnityTest]
         public IEnumerator RobotManager_OnTargetChanged_EventFires()
         {
@@ -195,7 +174,6 @@ namespace Tests.PlayMode
 
             _manager.RegisterRobot("TestRobot", robotObject, targetObject, null);
 
-            // Mark the robot active so CheckForTargetChanges processes it
             _manager.RobotInstances["TestRobot"].isActive = true;
 
             string changedRobotId = null;
@@ -204,21 +182,16 @@ namespace Tests.PlayMode
                 changedRobotId = id;
             };
 
-            // Move the target beyond the 0.001m threshold to trigger the event
-            // OnTargetChanged fires from CheckForTargetChanges() in Update when
-            // the target position changes by more than 0.001m.
             targetObject.transform.position = new Vector3(1f, 0f, 0f);
 
-            // Wait until the event fires (driven by Update)
             yield return new WaitUntil(() => changedRobotId != null);
 
-            Assert.AreEqual("TestRobot", changedRobotId,
-                "OnTargetChanged should fire with correct robot ID when target moves");
+            Assert.AreEqual(
+                "TestRobot",
+                changedRobotId,
+                "OnTargetChanged should fire with correct robot ID when target moves"
+            );
         }
-
-        #endregion
-
-        #region Duplicate Registration Tests
 
         [UnityTest]
         public IEnumerator RobotManager_RegisterRobot_DuplicateId_LogsWarningAndUpdates()
@@ -228,7 +201,11 @@ namespace Tests.PlayMode
             robotObject.AddComponent<RobotController>();
 
             _manager.RegisterRobot("TestRobot", robotObject, null, null);
-            Assert.AreEqual(1, _manager.AllRobotIds.Count, "Should have one robot after first registration");
+            Assert.AreEqual(
+                1,
+                _manager.AllRobotIds.Count,
+                "Should have one robot after first registration"
+            );
 
             // Second registration with same ID should log a warning
             LogAssert.Expect(
@@ -238,15 +215,14 @@ namespace Tests.PlayMode
             _manager.RegisterRobot("TestRobot", robotObject, null, null);
 
             // Count should remain 1 — duplicate overwrites, not appends
-            Assert.AreEqual(1, _manager.AllRobotIds.Count,
-                "Duplicate registration should not increase the robot count");
+            Assert.AreEqual(
+                1,
+                _manager.AllRobotIds.Count,
+                "Duplicate registration should not increase the robot count"
+            );
 
             yield return null;
         }
-
-        #endregion
-
-        #region Multiple Robot Tests
 
         [UnityTest]
         public IEnumerator RobotManager_MultipleRobots_TracksAll()
@@ -268,10 +244,6 @@ namespace Tests.PlayMode
             yield return null;
         }
 
-        #endregion
-
-        #region Active Robot Count Tests
-
         [UnityTest]
         public IEnumerator RobotManager_ActiveRobotCount_TracksActiveRobots()
         {
@@ -290,7 +262,5 @@ namespace Tests.PlayMode
 
             yield return null;
         }
-
-        #endregion
     }
 }

@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-VisionOperations.py - Vision-based operations for object detection and scene analysis
-
-Provides operations that use camera images for perception:
-- detect_object: Stereo detection with depth estimation
-- analyze_scene: LLM vision analysis
-"""
+"""Vision-based perception operations: stereo object detection and LLM scene analysis."""
 
 import logging
 import time
@@ -32,47 +26,19 @@ from ._imports import (
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Helper Functions
-# ============================================================================
-
-
 def color_matches(detection_color: Optional[str], query_color: Optional[str]) -> bool:
-    """
-    Flexible color matching for both legacy and YOLO detectors.
-
-    Supports:
-    - Exact match: "blue" == "blue"
-    - Partial match: "blue" matches "blue_cube"
-    - Case-insensitive: "Blue" matches "blue_cube"
-
-    Args:
-        detection_color: Color from detector (e.g., "blue_cube", "blue", "red_cube")
-        query_color: Color to search for (e.g., "blue", "red")
-
-    Returns:
-        True if colors match
-    """
+    """Flexible color matching: exact, partial (YOLO class "blue_cube" matches "blue"), case-insensitive."""
     if detection_color is None or query_color is None:
         return False
 
     detection_lower = detection_color.lower()
     query_lower = query_color.lower()
 
-    # Exact match (legacy CubeDetector: "blue" == "blue")
     if detection_lower == query_lower:
         return True
-
-    # Partial match (YOLO: "blue" in "blue_cube")
     if query_lower in detection_lower:
         return True
-
     return False
-
-
-# ============================================================================
-# Implementation: Analyze Scene
-# ============================================================================
 
 
 def analyze_scene(
@@ -81,22 +47,11 @@ def analyze_scene(
     model: Optional[str] = None,
     **kwargs,
 ) -> OperationResult:
-    """
-    Analyze a scene using LLM vision.
-
-    Args:
-        prompt: What to analyze in the scene
-        camera_id: Camera to use for analysis
-        model: LLM model to use
-
-    Returns:
-        OperationResult with analysis text
-    """
+    """Analyze a scene using LLM vision (LM Studio)."""
     if model is None:
         model = DEFAULT_LMSTUDIO_MODEL
 
     try:
-        # Get image storage using centralized imports
         storage = get_unified_image_storage()
 
         stereo_data = storage.get_latest_stereo()
@@ -111,12 +66,9 @@ def analyze_scene(
             )
         _, image, _, _ = stereo_data
 
-        # Lazy import to avoid circular dependency
         from vision.AnalyzeImage import LMStudioVisionProcessor
 
         processor = LMStudioVisionProcessor(model=model)
-
-        # Send image for analysis
         llm_result = processor.send_images(
             images=[image], camera_ids=[camera_id], prompt=prompt
         )
@@ -144,7 +96,6 @@ def analyze_scene(
 
 
 def create_analyze_scene_operation() -> BasicOperation:
-    """Create the BasicOperation definition for analyze_scene."""
     return BasicOperation(
         operation_id="perception_analyze_scene_001",
         name="analyze_scene",
@@ -224,11 +175,6 @@ def create_analyze_scene_operation() -> BasicOperation:
     )
 
 
-# ============================================================================
-# Implementation: Unified Stereo Detection
-# ============================================================================
-
-
 def detect_object_stereo(
     # Primary parameters
     color: Optional[str] = None,
@@ -249,50 +195,20 @@ def detect_object_stereo(
     request_id: int = 0,
     **kwargs,
 ) -> OperationResult:
-    """
-    Unified stereo detection operation with 3D coordinate estimation.
-
-    This operation combines the functionality of detect_object, detect_with_depth,
-    and calculate_object_coordinates into a single flexible operation.
-
-    Args:
-        color: Color to detect (red, green, blue) or None for all colors
-        camera_id: Stereo camera pair ID
-        request_fresh_capture: True to request new images, False to use cached from ImageStorage
-        min_confidence: Minimum detection confidence threshold
-        max_distance: Maximum detection distance in meters (None for no limit)
-        selection: Selection strategy when multiple objects found:
-                  - "left": Select leftmost object (smallest center_x)
-                  - "right": Select rightmost object (largest center_x)
-                  - "closest": Select closest object (smallest distance)
-                  - "first": Select first detection
-                  - "all": Return all detections
-        baseline: Stereo camera baseline in meters (override config)
-        fov: Camera field of view in degrees (override config)
-        camera_position: Camera position [x, y, z] in world space (override config)
-        camera_rotation: Camera rotation [pitch, yaw, roll] in degrees (override config)
-        robot_id: Robot ID for compatibility (not used in detection)
-        request_id: Request ID for tracking
-
-    Returns:
-        OperationResult with 3D coordinates and detection info
-    """
-    # Normalize string "None" from LLM output to Python None
-    if color == "None":
+    """Unified stereo detection with 3D coordinate estimation and configurable selection strategy."""
+    if color == "None":  # Normalize LLM string "None" to Python None
         color = None
 
     try:
-        # Get image storage and command broadcaster using centralized imports
         storage = get_unified_image_storage()
         broadcaster = get_command_broadcaster()
 
-        # If vision streaming is enabled, images in storage are already continuously fresh
+        # Streaming keeps images fresh — no need for fresh capture request
         if ENABLE_VISION_STREAMING:
             request_fresh_capture = False
 
         # Get stereo images
         if request_fresh_capture:
-            # Request fresh capture from Unity
             request_time = time.time()
             logger.info(
                 f"Requesting stereo capture from {camera_id} (request_id={request_id})"
@@ -343,7 +259,6 @@ def detect_object_stereo(
                     hints,
                 )
         else:
-            # Use cached images from storage
             stereo_data = storage.get_stereo_pair(camera_id)
             if stereo_data is None:
                 return OperationResult.error_result(
@@ -357,7 +272,6 @@ def detect_object_stereo(
 
         imgL, imgR, prompt = stereo_data
 
-        # Get metadata from storage (contains camera pose from Unity)
         metadata = storage.get_stereo_metadata(camera_id)
         logger.debug(f"Metadata for {camera_id}: {metadata}")
 
@@ -383,12 +297,9 @@ def detect_object_stereo(
                 f"No metadata received from Unity, using defaults: pos={camera_position}, rot={camera_rotation}"
             )
 
-        # Lazy imports to avoid circular dependency
         from vision.ObjectDetector import CubeDetector
         from vision.StereoConfig import CameraConfig
 
-        # Check if vision streaming is enabled and cached results are available
-        # (cfg is already imported at the top of the file)
         enable_streaming = ENABLE_VISION_STREAMING
         use_cached = False
         detection_result = None
@@ -420,17 +331,16 @@ def detect_object_stereo(
 
                     cached_detections = []
                     for idx, obj in enumerate(cached_objects):
-                        # Inherit dimensions from WorldState when available so that
-                        # Unity-streamed collider dimensions survive the cached path.
+                        # Inherit dims from WorldState — Unity-streamed collider bounds
+                        # are more accurate than anything estimable from a zero-area bbox.
                         inherited_dims = None
                         if _ws_for_dims is not None:
                             inherited_dims = _ws_for_dims.get_object_dimensions(
                                 obj.color
                             )
 
-                        # Create detection from cached object.
-                        # bbox=(0,0,0,0) because pixel coordinates aren't available
-                        # for cached results; do NOT pass this to dimension estimation.
+                        # bbox=(0,0,0,0): pixel coords unavailable for cached results;
+                        # must not be passed to dimension estimation.
                         det = DetectionObject(
                             object_id=idx,
                             color=obj.color,
@@ -460,7 +370,6 @@ def detect_object_stereo(
                 )
 
         if not use_cached:
-            # Run detection using CubeDetector with stereo mode (on-demand)
             logger.info("Running on-demand stereo detection")
             detector = CubeDetector()
             camera_config = CameraConfig(
@@ -492,7 +401,6 @@ def detect_object_stereo(
                 ["Ensure objects are visible", "Check lighting conditions"],
             )
 
-        # Debug: show all detections before color filtering
         logger.debug(
             f"Total detections before filtering: {len(detection_result.detections)}"
         )
@@ -506,7 +414,6 @@ def detect_object_stereo(
                 f"  Detection {idx+1}: color={d.color}, world_pos={world_pos_str}, conf={d.confidence:.2f}"
             )
 
-        # Filter by color if specified (flexible matching for both CubeDetector and YOLODetector)
         detections = detection_result.detections
         if color is not None:
             detections = [d for d in detections if color_matches(d.color, color)]
@@ -525,7 +432,6 @@ def detect_object_stereo(
                     ],
                 )
 
-        # Filter by confidence
         detections = [d for d in detections if d.confidence >= min_confidence]
         if not detections:
             return OperationResult.error_result(
@@ -534,7 +440,6 @@ def detect_object_stereo(
                 ["Lower min_confidence threshold", "Improve lighting conditions"],
             )
 
-        # Filter by distance if specified
         if max_distance is not None:
             detections_with_distance = []
             for d in detections:
@@ -555,10 +460,7 @@ def detect_object_stereo(
                     ["Increase max_distance", "Move objects closer"],
                 )
 
-        # Apply selection strategy
         if selection == "left":
-            # Use world X coordinate (negative = left in world space)
-            # Filter out detections without world position first
             valid_detections = [d for d in detections if d.world_position is not None]
             if not valid_detections:
                 return OperationResult.error_result(
@@ -579,7 +481,6 @@ def detect_object_stereo(
                 f"Selected leftmost detection from {len(detections)} (world_x={cast(tuple, best.world_position)[0]:.3f}, pixel_x={best.center_x})"
             )
         elif selection == "right":
-            # Use world X coordinate (positive = right in world space)
             valid_detections = [d for d in detections if d.world_position is not None]
             if not valid_detections:
                 return OperationResult.error_result(
@@ -608,7 +509,6 @@ def detect_object_stereo(
             best = detections[0]
             logger.debug(f"Selected first detection from {len(detections)}")
         elif selection == "all":
-            # Return all detections
             result = {
                 "detections": [
                     {
@@ -631,7 +531,6 @@ def detect_object_stereo(
                 ["Use 'left', 'right', 'closest', 'first', or 'all'"],
             )
 
-        # Check if selected detection has world position
         if best.world_position is None:
             return OperationResult.error_result(
                 "NO_DEPTH",
@@ -639,7 +538,6 @@ def detect_object_stereo(
                 ["Object may be too close or too far", "Check stereo calibration"],
             )
 
-        # Return single best detection
         result = {
             "x": best.world_position[0],
             "y": best.world_position[1],
@@ -654,7 +552,6 @@ def detect_object_stereo(
             f"Detected {best.color if best.color else 'object'} at ({result['x']:.3f}, {result['y']:.3f}, {result['z']:.3f})"
         )
 
-        # Update WorldState with detected object position (for ROS planning and other operations)
         try:
             from core.Imports import get_world_state
 
@@ -697,7 +594,7 @@ def detect_object_stereo(
                 f"Failed to update WorldState after detection: {e}", exc_info=True
             )
 
-        # Sync detected object into KG immediately (don't wait for WorldStatePublisher 10Hz cycle)
+        # Sync to KG immediately — don't wait for WorldStatePublisher 10Hz cycle.
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
 
@@ -738,7 +635,6 @@ def detect_object_stereo(
 
 
 def create_detect_object_stereo_operation() -> BasicOperation:
-    """Create the BasicOperation definition for detect_object_stereo."""
     return BasicOperation(
         operation_id="perception_stereo_detect_001",
         name="detect_object_stereo",
@@ -890,11 +786,5 @@ def create_detect_object_stereo_operation() -> BasicOperation:
     )
 
 
-# ============================================================================
-# Operation Instances (imported by Registry)
-# ============================================================================
-
-
-# Create operation instances
 ANALYZE_SCENE_OPERATION = create_analyze_scene_operation()
 DETECT_OBJECT_STEREO_OPERATION = create_detect_object_stereo_operation()

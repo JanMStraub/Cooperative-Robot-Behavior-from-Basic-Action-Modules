@@ -35,12 +35,7 @@ def world_to_robot_frame(
     2. Apply robot's Y-rotation (for Robot2's 180° facing direction)
     3. Convert Unity axes to ROS axes (Y-up left-handed -> Z-up right-handed)
 
-    Args:
-        world_pos: Position in Unity world frame with keys 'x', 'y', 'z'
-        robot_id: Robot identifier ('Robot1' or 'Robot2')
 
-    Returns:
-        Position in robot-local ROS frame with keys 'x', 'y', 'z'
 
     Raises:
         ValueError: If robot_id is not configured
@@ -92,12 +87,7 @@ def robot_to_world_frame(
     2. Apply inverse robot Y-rotation
     3. Translate to world origin
 
-    Args:
-        local_pos: Position in robot-local ROS frame with keys 'x', 'y', 'z'
-        robot_id: Robot identifier ('Robot1' or 'Robot2')
 
-    Returns:
-        Position in Unity world frame with keys 'x', 'y', 'z'
 
     Raises:
         ValueError: If robot_id is not configured
@@ -160,8 +150,6 @@ def _build_np_transform_cache() -> Dict[str, Dict]:
         ros_z = rotated_y
     Combined into a 3×3 matrix applied after translation.
 
-    Returns:
-        Dict mapping robot_id to {'base': np.ndarray, 'fwd': np.ndarray, 'inv': np.ndarray}
     """
     cache = {}
     for robot_id, transform in ROBOT_BASE_TRANSFORMS.items():
@@ -201,12 +189,7 @@ def world_to_robot_frame_np(world_pos: np.ndarray, robot_id: str) -> np.ndarray:
     Uses pre-computed matrices to avoid dict round-trips. Numerically equivalent
     to world_to_robot_frame() but operates entirely on NumPy arrays.
 
-    Args:
-        world_pos: Position as [x, y, z] NumPy array in Unity world frame
-        robot_id: Robot identifier ('Robot1' or 'Robot2')
 
-    Returns:
-        Position in robot-local ROS frame as [x, y, z] NumPy array
 
     Raises:
         ValueError: If robot_id is not configured
@@ -228,12 +211,7 @@ def robot_to_world_frame_np(local_pos: np.ndarray, robot_id: str) -> np.ndarray:
     Inverse of world_to_robot_frame_np. Uses the transpose of the forward
     matrix (valid because fwd is orthogonal) plus translation.
 
-    Args:
-        local_pos: Position as [x, y, z] NumPy array in robot-local ROS frame
-        robot_id: Robot identifier ('Robot1' or 'Robot2')
 
-    Returns:
-        Position in Unity world frame as [x, y, z] NumPy array
 
     Raises:
         ValueError: If robot_id is not configured
@@ -252,11 +230,7 @@ def get_robot_base_position(robot_id: str) -> Tuple[float, float, float]:
     """
     Get the robot base position in Unity world coordinates.
 
-    Args:
-        robot_id: Robot identifier
 
-    Returns:
-        Base position as (x, y, z) tuple
 
     Raises:
         ValueError: If robot_id is not configured
@@ -274,11 +248,7 @@ def get_robot_base_rotation(robot_id: str) -> float:
     """
     Get the robot base Y-rotation in Unity world coordinates.
 
-    Args:
-        robot_id: Robot identifier
 
-    Returns:
-        Y-rotation in degrees
 
     Raises:
         ValueError: If robot_id is not configured
@@ -300,10 +270,6 @@ def add_robot_transform(
 
     This allows dynamic robot configurations beyond the default Robot1/Robot2.
 
-    Args:
-        robot_id: Unique robot identifier
-        position: Base position in Unity world as (x, y, z)
-        y_rotation: Base rotation around Y-axis in degrees
     """
     ROBOT_BASE_TRANSFORMS[robot_id] = {
         "position": position,

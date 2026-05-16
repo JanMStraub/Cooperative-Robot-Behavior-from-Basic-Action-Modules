@@ -348,19 +348,6 @@ public class SaveScreenshots : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets class ID from GameObject name.
-    /// </summary>
-    int GetClassId(string objectName)
-    {
-        string className = ExtractClassName(objectName);
-        if (classNameToId.TryGetValue(className, out int classId))
-        {
-            return classId;
-        }
-        return 0;
-    }
-
-    /// <summary>
     /// Releases render texture and screenshot texture resources.
     /// </summary>
     void OnDestroy()
@@ -817,7 +804,7 @@ public class SaveScreenshots : MonoBehaviour
                 float lowerLimit = drive.lowerLimit;
                 float upperLimit = drive.upperLimit;
 
-                // Middle 30% of range for subtle poses
+                // Middle 40% (±20%) of range for subtle poses
                 float center = (lowerLimit + upperLimit) / 2f;
                 float fullRange = upperLimit - lowerLimit;
                 float halfMiddleRange = fullRange * 0.20f;

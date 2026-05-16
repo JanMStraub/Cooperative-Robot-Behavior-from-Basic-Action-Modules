@@ -25,7 +25,6 @@ class UnityHardwareInterface(RobotHardwareInterface):
     """
 
     def _broadcaster(self):
-        """Return the CommandBroadcaster singleton."""
         from core.Imports import get_command_broadcaster
 
         return get_command_broadcaster()

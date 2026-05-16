@@ -85,9 +85,6 @@ namespace Robotics
         private ControlMode _currentMode;
         private const string _logPrefix = "[ROS_CONTROL_MODE_MANAGER]";
 
-        /// <summary>
-        /// The current active control mode.
-        /// </summary>
         public ControlMode CurrentMode => _currentMode;
 
         /// <summary>
@@ -156,9 +153,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Switch control mode at runtime.
-        /// </summary>
         public void SetControlMode(ControlMode mode)
         {
             ControlMode previousMode = _currentMode;
@@ -173,9 +167,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Apply the control mode settings to all components.
-        /// </summary>
         private void ApplyMode(ControlMode mode)
         {
             switch (mode)
@@ -207,9 +198,6 @@ namespace Robotics
                 _jointStatePublisher.SetPublishing(true);
         }
 
-        /// <summary>
-        /// Enable or disable ROS subscriber components.
-        /// </summary>
         private void SetROSSubscribersEnabled(bool enable)
         {
             if (_trajectorySubscriber != null)

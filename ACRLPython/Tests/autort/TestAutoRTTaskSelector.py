@@ -57,9 +57,7 @@ def sample_tasks():
     ]
 
 
-# ============================================================================
 # Selection Strategy Tests
-# ============================================================================
 
 
 def test_select_task_random(task_selector, sample_tasks):
@@ -123,9 +121,7 @@ def test_select_task_balanced_scoring(task_selector, sample_tasks):
     assert selected in [sample_tasks[0], sample_tasks[2]]
 
 
-# ============================================================================
 # History Tracking Tests
-# ============================================================================
 
 
 def test_update_history(task_selector, sample_tasks):
@@ -154,9 +150,7 @@ def test_update_history_multiple(task_selector, sample_tasks):
     assert sum(1 for h in task_selector.history[key] if h["success"]) == 2
 
 
-# ============================================================================
 # Task Key Generation Tests
-# ============================================================================
 
 
 def test_task_key_same_operations(task_selector):
@@ -259,9 +253,7 @@ def test_task_key_operation_sequence_matters(task_selector):
     assert task_selector._task_key(task1) != task_selector._task_key(task2)
 
 
-# ============================================================================
 # Exploration Tests
-# ============================================================================
 
 
 def test_explore_prioritizes_untried(task_selector, sample_tasks):
@@ -281,9 +273,7 @@ def test_explore_prioritizes_untried(task_selector, sample_tasks):
     assert selected == sample_tasks[2]
 
 
-# ============================================================================
 # Exploitation Tests
-# ============================================================================
 
 
 def test_exploit_handles_unknown_tasks(task_selector, sample_tasks):
@@ -312,9 +302,7 @@ def test_exploit_prefers_consistency(task_selector, sample_tasks):
     assert selected == sample_tasks[0]
 
 
-# ============================================================================
 # Balanced Strategy Tests
-# ============================================================================
 
 
 def test_balanced_novelty_decay(task_selector, sample_tasks):

@@ -37,7 +37,6 @@ except ImportError:
 
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 
-# Import types for type checking only (avoids circular dependency at runtime)
 if TYPE_CHECKING:
     try:
         from ..orchestrators.CommandParser import CommandParser
@@ -46,7 +45,6 @@ if TYPE_CHECKING:
         from orchestrators.CommandParser import CommandParser
         from orchestrators.SequenceExecutor import SequenceExecutor
 
-# Import config
 try:
     from config.Servers import (
         DEFAULT_HOST,
@@ -98,7 +96,6 @@ class SequenceQueryHandler(SingletonBase):
             True if initialization succeeded
         """
         try:
-            # Import from centralized lazy import system (prevents circular dependencies)
             try:
                 from ..core.Imports import get_command_parser, get_sequence_executor
             except ImportError:
@@ -151,8 +148,8 @@ class SequenceQueryHandler(SingletonBase):
         Returns:
             Execution result dictionary
         """
-        from benchmarks.feature_flags import BenchmarkFeatureFlags
-        from servers.feature_flag_context import FeatureFlagContext
+        from benchmarks.FeatureFlags import BenchmarkFeatureFlags
+        from servers.FeatureFlagContext import FeatureFlagContext
 
         flags = BenchmarkFeatureFlags.from_json(flags_json)
         with FeatureFlagContext(flags):
@@ -431,7 +428,10 @@ class SequenceServer(TCPServerBase):
                 # Execute the sequence
                 handler = SequenceQueryHandler()
                 result = handler.execute_sequence(
-                    command_text, robot_id, camera_id, auto_execute,
+                    command_text,
+                    robot_id,
+                    camera_id,
+                    auto_execute,
                     flags_json=flags_json,
                 )
 
@@ -494,7 +494,6 @@ class SequenceServer(TCPServerBase):
         # bound, even if decode_autort_command() raises before assigning it.
         request_id = struct.unpack("<I", header_bytes[1:5])[0]
         try:
-            # Import AutoRT handler lazily
             try:
                 from ..servers.AutoRTIntegration import AutoRTHandler
             except ImportError:
@@ -600,7 +599,6 @@ class SequenceServer(TCPServerBase):
             # Encode result as JSON
             result_json = json.dumps(result).encode("utf-8")
 
-            # Build response (Protocol V2): [type:1][request_id:4][result_len:4][result_json:N]
             # Note: Uses little-endian per UnityProtocol.py specification
             response = struct.pack("B", MessageType.RESULT)  # type (1 byte)
             response += struct.pack(
@@ -648,13 +646,11 @@ def run_sequence_server_background(
     Returns:
         SequenceServer instance
     """
-    # Initialize the query handler
     handler = SequenceQueryHandler()
     handler.initialize(
         lm_studio_url=lm_studio_url, model=model, check_completion=check_completion
     )
 
-    # Create server config
     if config:
         # Handle both ServerConfig objects and dicts
         if isinstance(config, ServerConfig):
@@ -667,7 +663,6 @@ def run_sequence_server_background(
     else:
         server_config = ServerConfig(host=DEFAULT_HOST, port=SEQUENCE_SERVER_PORT)
 
-    # Create and start server
     server = SequenceServer(server_config)
     server.start()
 
@@ -693,11 +688,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # Initialize handler
     handler = SequenceQueryHandler()
     handler.initialize(model=args.model)
 
-    # Create and start server
     config = ServerConfig(host=args.host, port=args.port)
     server = SequenceServer(config)
 

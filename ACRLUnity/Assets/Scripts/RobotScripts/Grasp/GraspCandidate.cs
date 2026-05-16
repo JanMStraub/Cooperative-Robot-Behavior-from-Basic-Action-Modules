@@ -40,15 +40,6 @@ namespace Robotics.Grasp
 
         public bool useSimplifiedExecution;
 
-        /// <summary>
-        /// Create a basic grasp candidate with minimal information.
-        /// </summary>
-        /// <param name="preGrasp">Pre-grasp position</param>
-        /// <param name="preGraspRot">Pre-grasp rotation</param>
-        /// <param name="grasp">Grasp position</param>
-        /// <param name="graspRot">Grasp rotation</param>
-        /// <param name="approach">Approach type</param>
-        /// <returns>Initialized grasp candidate</returns>
         public static GraspCandidate Create(
             Vector3 preGrasp,
             Quaternion preGraspRot,
@@ -113,11 +104,6 @@ namespace Robotics.Grasp
         [Tooltip("Offset from wrist center to gripper center (meters)")]
         public Vector3 gripperCenterOffset;
 
-        /// <summary>
-        /// Check if an object of given size can be grasped by this gripper.
-        /// </summary>
-        /// <param name="objectSize">Size of the target object</param>
-        /// <returns>True if object can fit between gripper fingers</returns>
         public bool CanGrasp(Vector3 objectSize)
         {
             float minDimension = Mathf.Min(objectSize.x, objectSize.y, objectSize.z);

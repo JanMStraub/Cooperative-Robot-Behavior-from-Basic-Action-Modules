@@ -107,14 +107,8 @@ namespace Robotics
 
         public event System.Action OnGripperActionComplete;
 
-        /// <summary>
-        /// Check if the gripper is currently holding an object.
-        /// </summary>
         public bool IsHoldingObject => _isHoldingObject;
 
-        /// <summary>
-        /// Get the currently grasped object (if any).
-        /// </summary>
         public GameObject GraspedObject => _graspedObject;
 
         private void Awake()
@@ -190,7 +184,8 @@ namespace Robotics
             }
 
             // Stop closure when both fingers contact the target — prevents force-through on lightweight objects.
-            bool isContactStop = isClosing
+            bool isContactStop =
+                isClosing
                 && contactSensor != null
                 && _targetObjectToGrasp != null
                 && contactSensor.BothFingersContact(_targetObjectToGrasp);
@@ -208,9 +203,10 @@ namespace Robotics
                     // Freeze drive at current physical position so the ArticulationBody stops
                     // applying force immediately, not after one more frame of penetration.
                     float holdLeft = leftGripper.jointPosition[0];
-                    float holdRight = rightGripper.jointPosition.dofCount > 0
-                        ? rightGripper.jointPosition[0]
-                        : holdLeft;
+                    float holdRight =
+                        rightGripper.jointPosition.dofCount > 0
+                            ? rightGripper.jointPosition[0]
+                            : holdLeft;
                     SetDriveTarget(leftGripper, holdLeft);
                     SetDriveTarget(rightGripper, holdRight);
                     _currentPhysicalTarget = holdLeft;
@@ -220,10 +216,10 @@ namespace Robotics
                 }
                 if (_wasMoving)
                 {
-                    bool attachOnContactStop = isContactStop
-                        && _shouldAttachOnClose
-                        && _targetObjectToGrasp != null;
-                    bool attachOnFullClose = _shouldAttachOnClose
+                    bool attachOnContactStop =
+                        isContactStop && _shouldAttachOnClose && _targetObjectToGrasp != null;
+                    bool attachOnFullClose =
+                        _shouldAttachOnClose
                         && _targetObjectToGrasp != null
                         && targetPosition < 0.1f;
 
@@ -430,12 +426,9 @@ namespace Robotics
             body.jointForce = new ArticulationReducedSpace(0f);
         }
 
-        #region Object Attachment
-
         /// <summary>
         /// Set the target object to grasp. This object will be automatically attached when CloseGrippers() completes.
         /// </summary>
-        /// <param name="obj">GameObject to grasp</param>
         public void SetTargetObject(GameObject obj)
         {
             _targetObjectToGrasp = obj;
@@ -457,7 +450,6 @@ namespace Robotics
         /// This is called automatically when the gripper closes if a target object was set.
         /// Handles handoff: if object is held by another gripper, detaches from that gripper first.
         /// </summary>
-        /// <param name="obj">GameObject to attach</param>
         public void AttachObject(GameObject obj)
         {
             if (obj == null)
@@ -513,11 +505,6 @@ namespace Robotics
                 RobotManager.Instance.ClearRobotTarget(rc.robotId);
         }
 
-        /// <summary>
-        /// Find the GripperController that is currently holding the specified object.
-        /// </summary>
-        /// <param name="obj">Object to check</param>
-        /// <returns>GripperController holding the object, or null if not held</returns>
         private static GripperController FindGripperHoldingObject(GameObject obj)
         {
             GripperController[] allGrippers = FindObjectsByType<GripperController>(
@@ -623,7 +610,5 @@ namespace Robotics
                 _objectToMonitorAfterDetach = null;
             }
         }
-
-        #endregion
     }
 }

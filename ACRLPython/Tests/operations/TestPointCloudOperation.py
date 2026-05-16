@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for PointCloudOperations.py
-
-Tests:
-- Successful point cloud generation from mocked stereo images
-- Stale image rejection
-- Incomplete stereo pair handling
-- Uniform random downsampling
-- Integration marker for tests that need live Unity (skipped by default)
-"""
+"""Unit tests for PointCloudOperations.py"""
 
 import time
 import pytest
@@ -32,9 +23,9 @@ def _load_backend_client():
     import os
 
     helper_path = os.path.join(
-        os.path.dirname(__file__), "..", "integration", "helpers", "backend_client.py"
+        os.path.dirname(__file__), "..", "integration", "helpers", "BackendClient.py"
     )
-    spec = importlib.util.spec_from_file_location("backend_client", helper_path)
+    spec = importlib.util.spec_from_file_location("BackendClient", helper_path)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -66,10 +57,7 @@ _STEREO_SKIP = (
     "Backend not reachable on port 5008 — run Unity and start the backend servers"
 )
 
-
-# ============================================================================
 # Helpers
-# ============================================================================
 
 
 def _make_stereo_images(width: int = 64, height: int = 48) -> tuple:
@@ -110,9 +98,7 @@ def _make_storage_mock(
     return storage
 
 
-# ============================================================================
 # Tests
-# ============================================================================
 
 
 class TestGeneratePointCloud:
@@ -274,9 +260,7 @@ class TestGeneratePointCloud:
         assert callable(GENERATE_POINT_CLOUD_OPERATION.implementation)
 
 
-# ============================================================================
 # Integration tests (require live Unity + stereo camera — skipped by default)
-# ============================================================================
 
 
 @pytest.mark.integration

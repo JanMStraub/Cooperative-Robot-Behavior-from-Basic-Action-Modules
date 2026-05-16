@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""
-ObjectDetector.py - General object detection using contours
-
-Detects any colored objects using contour detection and edge detection.
-Returns bounding boxes and centroids in pixel coordinates.
-
-Supports stereo mode: Detects objects and estimates 3D world positions using
-stereo disparity.
-
-Usage:
-    detector = CubeDetector()
-    result = detector.detect_objects(image, camera_id="AR4Left")
-
-    # Stereo mode
-    result = detector.detect_objects_stereo(imgL, imgR, camera_config)
-"""
+"""HSV-based color object detector with YOLO fallback and stereo depth support."""
 
 import logging
 from typing import List, Dict, Tuple, Optional
@@ -23,7 +8,6 @@ from pathlib import Path
 import numpy as np
 import cv2
 
-# Import config
 try:
     from config.Vision import (
         USE_YOLO,
@@ -91,13 +75,11 @@ except ImportError:
     )
     from ..config.Servers import LOG_FORMAT
 
-# Import shared detection data models
 try:
     from .DetectionDataModels import DetectionObject, DetectionResult
 except ImportError:
     from vision.DetectionDataModels import DetectionObject, DetectionResult
 
-# Import YOLO detector if enabled
 YOLO_AVAILABLE = False
 if USE_YOLO:
     try:
@@ -111,7 +93,6 @@ if USE_YOLO:
             "Falling back to HSV color detection — install ultralytics to enable YOLO"
         )
 
-# Import stereo depth estimation
 try:
     try:
         from .StereoConfig import (
@@ -128,7 +109,6 @@ try:
             DEFAULT_RECONSTRUCTION_CONFIG,
         )
 
-    # Use depth estimator with integrated disparity calculation
     try:
         from .DepthEstimator import (
             calc_disparity,
@@ -149,29 +129,23 @@ try:
 except Exception as e:
     logging.warning(f"Stereo depth estimation not available: {e}")
     STEREO_AVAILABLE = False
-    # Define dummy types for type hints when stereo is not available
     CameraConfig = type("CameraConfig", (), {})
     DEFAULT_CAMERA_CONFIG = None
     DEFAULT_RECONSTRUCTION_CONFIG = None
     ReconstructionConfig = type("ReconstructionConfig", (), {})
 
-    # Define dummy functions when stereo is not available
     def estimate_depth_from_bbox(*args, **kwargs) -> Optional[Tuple[float, float, int]]:
-        """Dummy function when stereo depth estimation is not available"""
         return None
 
     def estimate_object_world_position_from_disparity(
         *args, **kwargs
     ) -> Optional[Tuple[float, float, float]]:
-        """Dummy function when stereo depth estimation is not available"""
         return None
 
     def save_disparity_map_debug(*args, **kwargs) -> None:
-        """Dummy function when stereo depth estimation is not available"""
         pass
 
     def calc_disparity(*args, **kwargs) -> np.ndarray:
-        """Dummy function when stereo depth estimation is not available"""
         return np.zeros((0, 0), dtype=np.float32)
 
 
@@ -181,30 +155,12 @@ def estimate_object_dimensions_from_bbox(
     focal_length_px: float,
     camera_config: Optional["CameraConfig"] = None,  # type: ignore
 ) -> Tuple[float, float, float]:
-    """
-    Estimate 3D object dimensions from 2D bounding box and depth.
-
-    Converts 2D bounding box dimensions to 3D world dimensions using pinhole camera model.
-    The depth dimension is estimated heuristically as the minimum of width/height scaled by 0.8.
-
-    Args:
-        bbox: Bounding box as (x, y, width_px, height_px) in pixels
-        depth_m: Depth (Z distance from camera) in meters
-        focal_length_px: Camera focal length in pixels
-        camera_config: Optional camera configuration (currently unused, for future extensions)
-
-    Returns:
-        Tuple of (width_m, height_m, depth_m) in meters
-    """
+    """Pinhole model: pixel bbox + depth → (width_m, height_m, depth_m). Depth dim heuristic: min(w,h)*0.8."""
     x, y, w_px, h_px = bbox
 
-    # Pinhole camera model: world_size = (pixel_size * depth) / focal_length
     width_m = (w_px * depth_m) / focal_length_px
     height_m = (h_px * depth_m) / focal_length_px
 
-    # Heuristic: Assume object depth is approximately the smaller of width/height * 0.8
-    # This works reasonably well for cube-like objects
-    # Future improvement: Use multiple view angles or point cloud data for accurate depth
     depth_m_est = min(width_m, height_m) * 0.8
 
     return (width_m, height_m, depth_m_est)
@@ -219,13 +175,7 @@ class CubeDetector:
     """
 
     def __init__(self):
-        """
-        Initialize the detector.
-
-        Uses YOLODetector if USE_YOLO is enabled in config and ultralytics is installed.
-        Logs an error and falls back to HSV if YOLO is not available.
-        """
-        # Check if YOLO should be used (read dynamically for testability)
+        # Read USE_YOLO dynamically for testability
         try:
             import config.Vision as vision_cfg
 
@@ -237,7 +187,6 @@ class CubeDetector:
         self._segmentation_model = None
 
         if self.use_yolo and YOLO_AVAILABLE:
-            # Initialize detection model
             try:
                 model_path = (
                     YOLO_SEGMENTATION_MODEL
@@ -252,49 +201,33 @@ class CubeDetector:
                 )
                 self.use_yolo = False
 
-        # Always initialize HSV detector (for fallback or direct use)
-        # Red color ranges (HSV wraps around, so we need two ranges)
+        # Red needs two ranges because hue wraps around in HSV
         self.red_lower_1 = np.array(RED_HSV_LOWER_1, dtype=np.uint8)
         self.red_upper_1 = np.array(RED_HSV_UPPER_1, dtype=np.uint8)
         self.red_lower_2 = np.array(RED_HSV_LOWER_2, dtype=np.uint8)
         self.red_upper_2 = np.array(RED_HSV_UPPER_2, dtype=np.uint8)
 
-        # Blue color range
         self.blue_lower = np.array(BLUE_HSV_LOWER, dtype=np.uint8)
         self.blue_upper = np.array(BLUE_HSV_UPPER, dtype=np.uint8)
-
-        # Green color range
         self.green_lower = np.array(GREEN_HSV_LOWER, dtype=np.uint8)
         self.green_upper = np.array(GREEN_HSV_UPPER, dtype=np.uint8)
-
-        # Yellow color range
         self.yellow_lower = np.array(YELLOW_HSV_LOWER, dtype=np.uint8)
         self.yellow_upper = np.array(YELLOW_HSV_UPPER, dtype=np.uint8)
-
-        # Orange color range
         self.orange_lower = np.array(ORANGE_HSV_LOWER, dtype=np.uint8)
         self.orange_upper = np.array(ORANGE_HSV_UPPER, dtype=np.uint8)
-
-        # Purple color range
         self.purple_lower = np.array(PURPLE_HSV_LOWER, dtype=np.uint8)
         self.purple_upper = np.array(PURPLE_HSV_UPPER, dtype=np.uint8)
-
-        # Cyan color range
         self.cyan_lower = np.array(CYAN_HSV_LOWER, dtype=np.uint8)
         self.cyan_upper = np.array(CYAN_HSV_UPPER, dtype=np.uint8)
-
-        # Magenta color range
         self.magenta_lower = np.array(MAGENTA_HSV_LOWER, dtype=np.uint8)
         self.magenta_upper = np.array(MAGENTA_HSV_UPPER, dtype=np.uint8)
 
-        # Detection thresholds
         self.min_area = MIN_CUBE_AREA_PX
         self.max_area = MAX_CUBE_AREA_PX
         self.min_aspect = MIN_ASPECT_RATIO
         self.max_aspect = MAX_ASPECT_RATIO
         self.min_confidence = MIN_CONFIDENCE
 
-        # Debug settings
         self.enable_debug = ENABLE_DEBUG_IMAGES
         if self.enable_debug:
             self.debug_dir = Path(DEBUG_IMAGES_DIR)
@@ -306,34 +239,17 @@ class CubeDetector:
     def detect_objects(
         self, image: np.ndarray, camera_id: str = "unknown"
     ) -> DetectionResult:
-        """
-        Detect objects in an image using YOLO.
-
-        Uses YOLO by default. Falls back to HSV color detection only if YOLO
-        is unavailable (missing ultralytics package).
-
-        Args:
-            image: OpenCV image (BGR format)
-            camera_id: ID of the camera for metadata
-
-        Returns:
-            DetectionResult containing all detected objects
-        """
-        # Delegate to YOLO if enabled
         if self.use_yolo:
             return self.yolo_detector.detect_objects(image, camera_id)
 
-        # Otherwise use HSV color detection
         if image is None or image.size == 0:
             logging.warning("Empty image provided to detector")
             return DetectionResult(camera_id, 0, 0, [])
 
         height, width = image.shape[:2]
 
-        # Detect all objects using edge and contour detection
         detections = self._detect_all_objects(image)
 
-        # Assign IDs
         all_detections = []
         object_id = 0
 
@@ -348,7 +264,6 @@ class CubeDetector:
             )
             object_id += 1
 
-        # Save debug image if enabled (save even with 0 detections for debugging)
         if self.enable_debug:
             self._save_debug_image(image, all_detections, camera_id)
 
@@ -365,25 +280,6 @@ class CubeDetector:
         camera_rotation: Optional[List[float]] = None,
         camera_position: Optional[List[float]] = None,
     ) -> DetectionResult:
-        """
-        Detect objects in stereo images and estimate 3D world positions.
-
-        Uses YOLO by default. Falls back to HSV color detection only if YOLO
-        is unavailable. Detects objects in the left image and computes depth
-        using stereo disparity.
-
-        Args:
-            imgL: Left camera image (BGR format)
-            imgR: Right camera image (BGR format)
-            camera_config: Camera calibration parameters (baseline, FOV, etc.)
-            camera_id: ID of the camera for metadata
-            camera_rotation: Camera rotation [pitch, yaw, roll] in degrees
-            camera_position: Camera position [x, y, z] in world space
-
-        Returns:
-            DetectionResult containing detected cubes with 3D world positions
-        """
-        # Delegate to YOLO if enabled
         if self.use_yolo:
             return self.yolo_detector.detect_objects_stereo(
                 imgL, imgR, camera_config, camera_id, camera_rotation, camera_position
@@ -412,21 +308,16 @@ class CubeDetector:
                 logging.error("No camera config available")
                 return DetectionResult(camera_id, 0, 0, [])
 
-        # First, detect cubes in the left image (using existing 2D detection)
         detection_result = self.detect_objects(imgL, camera_id=camera_id)
 
-        # If no detections, return early
         if len(detection_result.detections) == 0:
             logging.info("No objects detected in stereo images")
             return detection_result
 
-        # OPTIMIZATION: Compute disparity map ONCE for all detections
-        # This provides 80-95% speedup for multi-object scenes
         logging.debug(
             f"Computing disparity map for {len(detection_result.detections)} detections"
         )
 
-        # Convert to grayscale if needed
         if len(imgL.shape) == 3:
             imgL_gray = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
         else:
@@ -437,14 +328,11 @@ class CubeDetector:
         else:
             imgR_gray = imgR
 
-        # Compute disparity once using default reconstruction config
         recon_config = DEFAULT_RECONSTRUCTION_CONFIG
         disparity = calc_disparity(imgL_gray, imgR_gray, recon_config)
 
-        # Save disparity map for debugging (if enabled in config)
         save_disparity_map_debug(disparity)
 
-        # Now estimate 3D world position for each detection using pre-computed disparity
         detections_with_depth = []
         h, w = imgL.shape[:2]
 
@@ -453,9 +341,6 @@ class CubeDetector:
         focal_length = (w / 2.0) / math.tan(math.radians(camera_config.fov / 2.0))
 
         for det in detection_result.detections:
-            # Sample depth using bbox ROI median (more robust than single-pixel center)
-            # estimate_depth_from_bbox uses the inner 50% of the bbox to avoid edge
-            # artifacts and returns (depth_m, median_disparity, num_valid_pixels).
             depth_result = estimate_depth_from_bbox(
                 disparity,
                 (det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h),
@@ -465,8 +350,6 @@ class CubeDetector:
             depth_m = depth_result[0] if depth_result is not None else None
             disp_value = depth_result[1] if depth_result is not None else None
 
-            # Estimate world position using pre-computed disparity (OPTIMIZED)
-            # Use lower min_disparity (1.0px) to handle distant objects better
             world_pos = estimate_object_world_position_from_disparity(
                 disparity,
                 det.center_x,
@@ -480,10 +363,7 @@ class CubeDetector:
                 camera_position=camera_position,
             )
 
-            # Estimate 3D dimensions from bounding box and depth.
-            # When estimate_depth_from_bbox failed (depth_m is None) but we have
-            # a world-space position and camera position, derive a fallback depth
-            # from the Euclidean distance so dimensions can still be computed.
+            # fallback: derive depth from Euclidean distance when bbox sampling failed
             fallback_depth_m = depth_m
             if (
                 fallback_depth_m is None
@@ -507,7 +387,6 @@ class CubeDetector:
                     camera_config,
                 )
 
-            # Create new detection object with world position, depth, disparity, and dimensions
             det_with_depth = DetectionObject(
                 object_id=det.object_id,
                 color=det.color,
@@ -545,20 +424,7 @@ class CubeDetector:
     def detect_objects_segmented(
         self, image: np.ndarray, camera_id: str = "unknown"
     ) -> DetectionResult:
-        """
-        Detect objects using YOLO segmentation model (returns masks alongside bboxes).
-
-        Only available when YOLO_TASK='segment' is configured in config/Vision.py.
-        Falls back to standard detection when segmentation is not enabled.
-
-        Args:
-            image: OpenCV image (BGR format)
-            camera_id: ID of the camera for metadata
-
-        Returns:
-            DetectionResult where each DetectionObject.mask contains the segmentation mask
-            (None if segmentation not available or not enabled)
-        """
+        """YOLO segmentation detection. Falls back to bbox-only when YOLO_TASK!='segment'."""
         if not self.use_yolo or not YOLO_AVAILABLE:
             logging.warning(
                 "YOLO not available; falling back to bbox-only detect_objects"
@@ -572,9 +438,7 @@ class CubeDetector:
             return self.detect_objects(image, camera_id)
 
         try:
-            # Delegate to YOLO detector with task=segment
             result = self.yolo_detector.detect_objects(image, camera_id)  # type: ignore[name-defined]
-            # Masks are populated by YOLODetector when task='segment'
             return result
         except Exception as e:
             logging.error(
@@ -583,47 +447,22 @@ class CubeDetector:
             return self.detect_objects(image, camera_id)
 
     def _detect_all_objects(self, image: np.ndarray) -> List[Dict]:
-        """
-        Detect colored cubes in image using HSV color segmentation
-
-        Args:
-            image: OpenCV image (BGR format)
-
-        Returns:
-            List of detection dictionaries
-        """
-        # Convert to HSV for color segmentation
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         detections = []
 
-        # Detect red cubes (two ranges because red wraps around HSV)
         mask_red_1 = cv2.inRange(hsv, self.red_lower_1, self.red_upper_1)
         mask_red_2 = cv2.inRange(hsv, self.red_lower_2, self.red_upper_2)
         mask_red = cv2.bitwise_or(mask_red_1, mask_red_2)
 
-        # Detect blue cubes
         mask_blue = cv2.inRange(hsv, self.blue_lower, self.blue_upper)
-
-        # Detect green cubes
         mask_green = cv2.inRange(hsv, self.green_lower, self.green_upper)
-
-        # Detect yellow cubes
         mask_yellow = cv2.inRange(hsv, self.yellow_lower, self.yellow_upper)
-
-        # Detect orange cubes
         mask_orange = cv2.inRange(hsv, self.orange_lower, self.orange_upper)
-
-        # Detect purple cubes
         mask_purple = cv2.inRange(hsv, self.purple_lower, self.purple_upper)
-
-        # Detect cyan cubes
         mask_cyan = cv2.inRange(hsv, self.cyan_lower, self.cyan_upper)
-
-        # Detect magenta cubes
         mask_magenta = cv2.inRange(hsv, self.magenta_lower, self.magenta_upper)
 
-        # Process each color mask
         for color_name, mask in [
             ("red", mask_red),
             ("blue", mask_blue),
@@ -634,12 +473,10 @@ class CubeDetector:
             ("cyan", mask_cyan),
             ("magenta", mask_magenta),
         ]:
-            # Apply morphological operations to clean up mask
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
             mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
             mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
-            # Find contours in the mask
             contours, _ = cv2.findContours(
                 mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
@@ -648,18 +485,15 @@ class CubeDetector:
             logging.debug(f"  {color_name.upper()}: Analyzing {len(contours)} contours")
 
             for i, contour in enumerate(contours):
-                # Get bounding box
                 x, y, w, h = cv2.boundingRect(contour)
                 area = w * h
 
-                # Filter by area
                 if area < self.min_area or area > self.max_area:
                     logging.debug(
                         f"    Contour {i}: Rejected by area ({area}px, need {self.min_area}-{self.max_area})"
                     )
                     continue
 
-                # Filter by aspect ratio
                 aspect_ratio = w / h if h > 0 else 0
                 if aspect_ratio < self.min_aspect or aspect_ratio > self.max_aspect:
                     logging.debug(

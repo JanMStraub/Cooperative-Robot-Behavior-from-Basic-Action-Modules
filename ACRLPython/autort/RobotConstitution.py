@@ -31,7 +31,6 @@ class BoundingBox:
         self.max_corner = max_corner
 
     def contains(self, point: Tuple[float, float, float]) -> bool:
-        """Check if a 3D point is within the bounding box"""
         return all(
             self.min_corner[i] <= point[i] <= self.max_corner[i] for i in range(3)
         )
@@ -52,12 +51,6 @@ class RobotConstitution:
     """
 
     def __init__(self, config):
-        """
-        Initialize RobotConstitution.
-
-        Args:
-            config: AutoRT config module with safety settings
-        """
         self.config = config
         self.llm_client = OpenAI(base_url=config.LM_STUDIO_URL, api_key="not-needed")
         self.model = config.SAFETY_VALIDATION_MODEL
@@ -94,9 +87,6 @@ class RobotConstitution:
 
         Useful for deployment-specific rules (e.g. real vs. sim, per-experiment constraints)
         without restarting the server or modifying config files.
-
-        Args:
-            rule: Natural-language safety rule to add (e.g. "Do not touch the green zone").
         """
         if rule and rule not in self.semantic_rules:
             self.semantic_rules.append(rule)
@@ -105,9 +95,6 @@ class RobotConstitution:
     def evaluate_task(self, task: ProposedTask, scene: SceneDescription) -> TaskVerdict:
         """
         Evaluate task through both safety layers.
-
-        Returns:
-            TaskVerdict with approval status and reasons
         """
         # LAYER 1: Semantic Safety (LLM)
         semantic_verdict = self._evaluate_semantic_safety(task)

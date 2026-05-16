@@ -1,8 +1,8 @@
+using System.Collections;
 using NUnit.Framework;
+using Robotics;
 using UnityEngine;
 using UnityEngine.TestTools;
-using System.Collections;
-using Robotics;
 
 namespace Tests.PlayMode
 {
@@ -29,7 +29,10 @@ namespace Tests.PlayMode
             rootBody.jointType = ArticulationJointType.FixedJoint;
 
             // Ignore expected error from GripperController.Awake() before grippers are assigned
-            LogAssert.Expect(LogType.Error, "[GRIPPER_CONTROLLER] Gripper references not assigned!");
+            LogAssert.Expect(
+                LogType.Error,
+                "[GRIPPER_CONTROLLER] Gripper references not assigned!"
+            );
 
             _gripperController = _gripperObject.AddComponent<GripperController>();
 
@@ -80,8 +83,6 @@ namespace Tests.PlayMode
                 Object.DestroyImmediate(_gripperObject);
         }
 
-        #region Open/Close Tests
-
         /// <summary>
         /// Test that OpenGrippers sets targetPosition to 1.0 (fully open).
         /// </summary>
@@ -89,7 +90,12 @@ namespace Tests.PlayMode
         public void OpenGrippers_SetsTargetToOne()
         {
             _gripperController.OpenGrippers();
-            Assert.AreEqual(1.0f, _gripperController.targetPosition, EPSILON, "OpenGrippers should set targetPosition to 1.0");
+            Assert.AreEqual(
+                1.0f,
+                _gripperController.targetPosition,
+                EPSILON,
+                "OpenGrippers should set targetPosition to 1.0"
+            );
         }
 
         /// <summary>
@@ -99,7 +105,12 @@ namespace Tests.PlayMode
         public void CloseGrippers_SetsTargetToZero()
         {
             _gripperController.CloseGrippers();
-            Assert.AreEqual(0.0f, _gripperController.targetPosition, EPSILON, "CloseGrippers should set targetPosition to 0.0");
+            Assert.AreEqual(
+                0.0f,
+                _gripperController.targetPosition,
+                EPSILON,
+                "CloseGrippers should set targetPosition to 0.0"
+            );
         }
 
         /// <summary>
@@ -128,10 +139,6 @@ namespace Tests.PlayMode
             Assert.IsTrue(_gripperController.IsMoving, "CloseGrippers should set IsMoving to true");
         }
 
-        #endregion
-
-        #region SetGripperPosition Tests
-
         /// <summary>
         /// Test that SetGripperPosition accepts valid normalized values.
         /// </summary>
@@ -139,7 +146,12 @@ namespace Tests.PlayMode
         public void SetGripperPosition_ValidValue_SetsTargetPosition()
         {
             _gripperController.SetGripperPosition(0.5f);
-            Assert.AreEqual(0.5f, _gripperController.targetPosition, EPSILON, "SetGripperPosition should set targetPosition to 0.5");
+            Assert.AreEqual(
+                0.5f,
+                _gripperController.targetPosition,
+                EPSILON,
+                "SetGripperPosition should set targetPosition to 0.5"
+            );
         }
 
         /// <summary>
@@ -149,7 +161,12 @@ namespace Tests.PlayMode
         public void SetGripperPosition_ValueAboveOne_ClampsToOne()
         {
             _gripperController.SetGripperPosition(1.5f);
-            Assert.AreEqual(1.0f, _gripperController.targetPosition, EPSILON, "SetGripperPosition should clamp values above 1.0 to 1.0");
+            Assert.AreEqual(
+                1.0f,
+                _gripperController.targetPosition,
+                EPSILON,
+                "SetGripperPosition should clamp values above 1.0 to 1.0"
+            );
         }
 
         /// <summary>
@@ -159,7 +176,12 @@ namespace Tests.PlayMode
         public void SetGripperPosition_NegativeValue_ClampsToZero()
         {
             _gripperController.SetGripperPosition(-0.5f);
-            Assert.AreEqual(0.0f, _gripperController.targetPosition, EPSILON, "SetGripperPosition should clamp negative values to 0.0");
+            Assert.AreEqual(
+                0.0f,
+                _gripperController.targetPosition,
+                EPSILON,
+                "SetGripperPosition should clamp negative values to 0.0"
+            );
         }
 
         /// <summary>
@@ -169,7 +191,12 @@ namespace Tests.PlayMode
         public void SetGripperPosition_Zero_SetsToZero()
         {
             _gripperController.SetGripperPosition(0.0f);
-            Assert.AreEqual(0.0f, _gripperController.targetPosition, EPSILON, "SetGripperPosition should accept 0.0");
+            Assert.AreEqual(
+                0.0f,
+                _gripperController.targetPosition,
+                EPSILON,
+                "SetGripperPosition should accept 0.0"
+            );
         }
 
         /// <summary>
@@ -179,12 +206,13 @@ namespace Tests.PlayMode
         public void SetGripperPosition_One_SetsToOne()
         {
             _gripperController.SetGripperPosition(1.0f);
-            Assert.AreEqual(1.0f, _gripperController.targetPosition, EPSILON, "SetGripperPosition should accept 1.0");
+            Assert.AreEqual(
+                1.0f,
+                _gripperController.targetPosition,
+                EPSILON,
+                "SetGripperPosition should accept 1.0"
+            );
         }
-
-        #endregion
-
-        #region ResetGrippers Tests
 
         /// <summary>
         /// Test that ResetGrippers sets targetPosition to 1.0 (fully open).
@@ -194,7 +222,12 @@ namespace Tests.PlayMode
         {
             _gripperController.targetPosition = 0.5f;
             _gripperController.ResetGrippers();
-            Assert.AreEqual(1.0f, _gripperController.targetPosition, EPSILON, "ResetGrippers should set targetPosition to 1.0 (open)");
+            Assert.AreEqual(
+                1.0f,
+                _gripperController.targetPosition,
+                EPSILON,
+                "ResetGrippers should set targetPosition to 1.0 (open)"
+            );
         }
 
         /// <summary>
@@ -214,13 +247,19 @@ namespace Tests.PlayMode
 
             // Check that drive targets are set to upper limit (fully open)
             float expectedTarget = _leftGripper.xDrive.upperLimit;
-            Assert.AreEqual(expectedTarget, _leftGripper.xDrive.target, EPSILON, "Left gripper drive target should be set to upper limit (open)");
-            Assert.AreEqual(expectedTarget, _rightGripper.xDrive.target, EPSILON, "Right gripper drive target should be set to upper limit (open)");
+            Assert.AreEqual(
+                expectedTarget,
+                _leftGripper.xDrive.target,
+                EPSILON,
+                "Left gripper drive target should be set to upper limit (open)"
+            );
+            Assert.AreEqual(
+                expectedTarget,
+                _rightGripper.xDrive.target,
+                EPSILON,
+                "Right gripper drive target should be set to upper limit (open)"
+            );
         }
-
-        #endregion
-
-        #region GetTargetPosition Tests
 
         /// <summary>
         /// Test that GetTargetPosition returns the current targetPosition.
@@ -230,12 +269,13 @@ namespace Tests.PlayMode
         {
             _gripperController.targetPosition = 0.7f;
             float target = _gripperController.targetPosition;
-            Assert.AreEqual(0.7f, target, EPSILON, "targetPosition should return current targetPosition");
+            Assert.AreEqual(
+                0.7f,
+                target,
+                EPSILON,
+                "targetPosition should return current targetPosition"
+            );
         }
-
-        #endregion
-
-        #region GripSpeed Interpolation Tests
 
         /// <summary>
         /// Test that gripSpeed interpolation converges towards target over multiple frames.
@@ -260,7 +300,11 @@ namespace Tests.PlayMode
             float driveTarget = _leftGripper.xDrive.target;
 
             // Should be significantly closer to upper limit than 0
-            Assert.Greater(driveTarget, upperLimit * 0.5f, "Drive target should be approaching upper limit");
+            Assert.Greater(
+                driveTarget,
+                upperLimit * 0.5f,
+                "Drive target should be approaching upper limit"
+            );
         }
 
         /// <summary>
@@ -301,13 +345,15 @@ namespace Tests.PlayMode
             float slowDisplacement = Mathf.Abs(slowDriveTarget - baselineTarget2);
 
             // Fast grip speed should result in larger displacement in same number of frames
-            Debug.Log($"Fast drive target: {fastDriveTarget} (displacement: {fastDisplacement}), Slow drive target: {slowDriveTarget} (displacement: {slowDisplacement})");
-            Assert.Greater(fastDisplacement, slowDisplacement, "Faster gripSpeed should result in faster convergence");
+            Debug.Log(
+                $"Fast drive target: {fastDriveTarget} (displacement: {fastDisplacement}), Slow drive target: {slowDriveTarget} (displacement: {slowDisplacement})"
+            );
+            Assert.Greater(
+                fastDisplacement,
+                slowDisplacement,
+                "Faster gripSpeed should result in faster convergence"
+            );
         }
-
-        #endregion
-
-        #region OnGripperActionComplete Event Tests
 
         /// <summary>
         /// Test that OnGripperActionComplete event fires when gripper reaches target.
@@ -324,7 +370,10 @@ namespace Tests.PlayMode
             // Wait until event fires or 2s timeout
             yield return TestHelpers.WaitUntil(() => eventFired, 2.0f);
 
-            Assert.IsTrue(eventFired, "OnGripperActionComplete should fire when gripper reaches target");
+            Assert.IsTrue(
+                eventFired,
+                "OnGripperActionComplete should fire when gripper reaches target"
+            );
         }
 
         /// <summary>
@@ -343,10 +392,6 @@ namespace Tests.PlayMode
             Assert.IsFalse(eventFired, "OnGripperActionComplete should not fire immediately");
         }
 
-        #endregion
-
-        #region IsMoving State Tests
-
         /// <summary>
         /// Test that IsMoving becomes false after gripper converges to target.
         /// </summary>
@@ -361,7 +406,10 @@ namespace Tests.PlayMode
             // Wait until convergence (or 2s timeout)
             yield return TestHelpers.WaitUntil(() => !_gripperController.IsMoving, 2.0f);
 
-            Assert.IsFalse(_gripperController.IsMoving, "IsMoving should become false after convergence");
+            Assert.IsFalse(
+                _gripperController.IsMoving,
+                "IsMoving should become false after convergence"
+            );
         }
 
         /// <summary>
@@ -377,12 +425,11 @@ namespace Tests.PlayMode
             yield return null;
             yield return null;
 
-            Assert.IsTrue(_gripperController.IsMoving, "IsMoving should stay true during interpolation");
+            Assert.IsTrue(
+                _gripperController.IsMoving,
+                "IsMoving should stay true during interpolation"
+            );
         }
-
-        #endregion
-
-        #region CurrentPosition Tests
 
         /// <summary>
         /// Test that CurrentPosition returns the left gripper's joint position.
@@ -402,21 +449,26 @@ namespace Tests.PlayMode
 
                 // Joint position should be a valid number (not NaN or infinity)
                 Assert.IsFalse(float.IsNaN(currentPos), "Joint position should not be NaN");
-                Assert.IsFalse(float.IsInfinity(currentPos), "Joint position should not be infinity");
+                Assert.IsFalse(
+                    float.IsInfinity(currentPos),
+                    "Joint position should not be infinity"
+                );
 
                 // Should be within the configured limits (0 to 0.05)
-                Assert.GreaterOrEqual(currentPos, -0.001f, "Joint position should be >= lower limit");
+                Assert.GreaterOrEqual(
+                    currentPos,
+                    -0.001f,
+                    "Joint position should be >= lower limit"
+                );
                 Assert.LessOrEqual(currentPos, 0.051f, "Joint position should be <= upper limit");
             }
             else
             {
-                Assert.Inconclusive("ArticulationBody jointPosition not initialized in test environment");
+                Assert.Inconclusive(
+                    "ArticulationBody jointPosition not initialized in test environment"
+                );
             }
         }
-
-        #endregion
-
-        #region Null Reference Tests
 
         /// <summary>
         /// Test that Update handles null grippers gracefully.
@@ -434,7 +486,5 @@ namespace Tests.PlayMode
 
             Assert.Pass("Update should handle null grippers without crashing");
         }
-
-        #endregion
     }
 }

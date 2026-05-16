@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-send_handoff.py — Test the explicit handoff pipeline in Unity without the LLM.
+SendHandoff.py — Test the explicit handoff pipeline in Unity without the LLM.
 
 Uses the SequenceServer "EXEC:" prefix to bypass LLM parsing and feed operations
 directly into SequenceExecutor. Each step blocks until Unity confirms completion
@@ -20,11 +20,11 @@ Flat step sequence (each is an independent SE operation):
   8. Robot1: return_to_start_position
 
 Usage:
-    python tools/send_handoff.py
-    python tools/send_handoff.py --object red_bar --grasper Robot1 --receiver Robot2
-    python tools/send_handoff.py --grasp-only    # only step 1
-    python tools/send_handoff.py --receive-only  # steps 5-8
-    python tools/send_handoff.py --dry-run       # parse without executing
+    python tools/SendHandoff.py
+    python tools/SendHandoff.py --object red_bar --grasper Robot1 --receiver Robot2
+    python tools/SendHandoff.py --grasp-only    # only step 1
+    python tools/SendHandoff.py --receive-only  # steps 5-8
+    python tools/SendHandoff.py --dry-run       # parse without executing
 """
 
 import argparse
@@ -59,7 +59,6 @@ HANDOFF_Z = 0.0
 def build_message(
     ops: list, robot_id: str, camera_id: str, auto_execute: bool, request_id: int
 ) -> bytes:
-    """Encode an EXEC: SEQUENCE_QUERY message."""
     cmd_b = (DIRECT_EXEC_PREFIX + json.dumps(ops)).encode("utf-8")
     rob_b = robot_id.encode("utf-8")
     cam_b = camera_id.encode("utf-8")
@@ -468,7 +467,6 @@ def run_handoff(
 
 
 def main():
-    """Parse arguments and run the handoff."""
     parser = argparse.ArgumentParser(
         description="Test explicit flat handoff pipeline in Unity without LLM latency.",
         formatter_class=argparse.RawDescriptionHelpFormatter,

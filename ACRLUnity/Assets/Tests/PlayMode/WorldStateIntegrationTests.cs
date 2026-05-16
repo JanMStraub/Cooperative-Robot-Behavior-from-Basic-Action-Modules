@@ -1,12 +1,12 @@
 using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
-using UnityEngine;
-using UnityEngine.TestTools;
 using PythonCommunication;
 using Robotics;
 using Simulation;
 using Tests.EditMode;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Tests.PlayMode
 {
@@ -27,8 +27,6 @@ namespace Tests.PlayMode
         private RobotManager _robotManager;
         private GameObject _testRobotObject;
         private RobotController _testRobot;
-
-        #region Setup/Teardown
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -57,15 +55,18 @@ namespace Tests.PlayMode
             TestHelpers.CleanupAllSingletons();
         }
 
-        #endregion
-
-        #region Publisher Initialization Tests
-
         [Test]
         public void WorldStatePublisher_Singleton_IsSet()
         {
-            Assert.IsNotNull(WorldStatePublisher.Instance, "WorldStatePublisher Instance should be set");
-            Assert.AreEqual(_publisher, WorldStatePublisher.Instance, "Instance should match created publisher");
+            Assert.IsNotNull(
+                WorldStatePublisher.Instance,
+                "WorldStatePublisher Instance should be set"
+            );
+            Assert.AreEqual(
+                _publisher,
+                WorldStatePublisher.Instance,
+                "Instance should match created publisher"
+            );
         }
 
         [UnityTest]
@@ -96,15 +97,20 @@ namespace Tests.PlayMode
             yield return null;
 
             // Verify RobotManager is actually gone
-            Assert.IsNull(RobotManager.Instance, "RobotManager.Instance should be null after destruction");
+            Assert.IsNull(
+                RobotManager.Instance,
+                "RobotManager.Instance should be null after destruction"
+            );
 
             // Create new publisher (will fail to find RobotManager)
             var newPublisherObj = new GameObject("NewPublisher");
             var newPublisher = newPublisherObj.AddComponent<WorldStatePublisher>();
 
             // Expect error log when Start() is called on next frame
-            LogAssert.Expect(LogType.Error,
-                "[WORLD_STATE_PUBLISHER] RobotManager.Instance is null! Ensure RobotManager GameObject is in the scene.");
+            LogAssert.Expect(
+                LogType.Error,
+                "[WORLD_STATE_PUBLISHER] RobotManager.Instance is null! Ensure RobotManager GameObject is in the scene."
+            );
 
             yield return null; // Wait for Start() to be called
 
@@ -113,10 +119,6 @@ namespace Tests.PlayMode
 
             Object.DestroyImmediate(newPublisherObj);
         }
-
-        #endregion
-
-        #region Robot State Publishing Tests
 
         [UnityTest]
         public IEnumerator Publisher_RobotState_IncludesPosition()
@@ -129,8 +131,11 @@ namespace Tests.PlayMode
 
             // Publisher should track robot position
             // (Actual publishing happens periodically in Update)
-            Assert.AreEqual(testPosition, _testRobot.transform.position,
-                "Robot position should be trackable");
+            Assert.AreEqual(
+                testPosition,
+                _testRobot.transform.position,
+                "Robot position should be trackable"
+            );
         }
 
         [UnityTest]
@@ -143,8 +148,12 @@ namespace Tests.PlayMode
             yield return null;
 
             // Publisher should track robot rotation
-            TestHelpers.AssertQuaternionApproximately(testRotation, _testRobot.transform.rotation,
-                0.01f, "Robot rotation should be trackable");
+            TestHelpers.AssertQuaternionApproximately(
+                testRotation,
+                _testRobot.transform.rotation,
+                0.01f,
+                "Robot rotation should be trackable"
+            );
         }
 
         [UnityTest]
@@ -191,10 +200,6 @@ namespace Tests.PlayMode
             Assert.IsNotNull(_testRobot, "Robot should be initialized");
         }
 
-        #endregion
-
-        #region Object State Publishing Tests
-
         [UnityTest]
         public IEnumerator Publisher_ObjectState_TracksTrackedObjects()
         {
@@ -225,8 +230,11 @@ namespace Tests.PlayMode
             yield return null;
 
             // Publisher should be able to track object position
-            Assert.AreEqual(objectPosition, testObject.transform.position,
-                "Object position should be trackable");
+            Assert.AreEqual(
+                objectPosition,
+                testObject.transform.position,
+                "Object position should be trackable"
+            );
 
             Object.Destroy(testObject);
         }
@@ -241,7 +249,7 @@ namespace Tests.PlayMode
                 position = new PositionData(new Vector3(0.3f, 0.2f, 0.3f)),
                 color = "blue",
                 object_type = "cube",
-                confidence = 0.95f
+                confidence = 0.95f,
             };
 
             yield return null;
@@ -249,13 +257,13 @@ namespace Tests.PlayMode
             // Publisher should be able to handle detected object updates
             Assert.IsNotNull(detectedObjectData, "Detected object data should be created");
             Assert.AreEqual("blue", detectedObjectData.color, "Object color should be tracked");
-            Assert.AreEqual(0.95f, detectedObjectData.confidence, 0.01f,
-                "Detection confidence should be tracked");
+            Assert.AreEqual(
+                0.95f,
+                detectedObjectData.confidence,
+                0.01f,
+                "Detection confidence should be tracked"
+            );
         }
-
-        #endregion
-
-        #region Update Frequency Tests
 
         [UnityTest]
         public IEnumerator Publisher_UpdateRate_PublishesAtConfiguredFrequency()
@@ -278,8 +286,10 @@ namespace Tests.PlayMode
             var disabledPublisher = publisherObj.AddComponent<WorldStatePublisher>();
 
             // Use reflection to set _enablePublishing = false
-            var enableField = typeof(WorldStatePublisher).GetField("_enablePublishing",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var enableField = typeof(WorldStatePublisher).GetField(
+                "_enablePublishing",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance
+            );
             enableField?.SetValue(disabledPublisher, false);
 
             yield return null; // Single frame sufficient to confirm no crash
@@ -291,10 +301,6 @@ namespace Tests.PlayMode
             Object.DestroyImmediate(publisherObj);
         }
 
-        #endregion
-
-        #region Data Model Tests
-
         [Test]
         public void WorldStateUpdate_CreatesValidStructure()
         {
@@ -303,7 +309,7 @@ namespace Tests.PlayMode
                 type = "world_state_update",
                 robots = new List<RobotStateData>(),
                 objects = new List<ObjectStateData>(),
-                timestamp = Time.time
+                timestamp = Time.time,
             };
 
             Assert.AreEqual("world_state_update", update.type, "Type should be world_state_update");
@@ -323,14 +329,18 @@ namespace Tests.PlayMode
                 gripper_state = "open",
                 is_moving = false,
                 is_initialized = true,
-                joint_angles = new float[] { 0f, 0f, 0f, 0f, 0f, 0f }
+                joint_angles = new float[] { 0f, 0f, 0f, 0f, 0f, 0f },
             };
 
             Assert.AreEqual("TestRobot", robotState.robot_id);
             Assert.IsNotNull(robotState.position);
             Assert.AreEqual("open", robotState.gripper_state);
             Assert.IsTrue(robotState.is_initialized);
-            Assert.AreEqual(6, robotState.joint_angles.Length, "Should have 6 joint angles for AR4");
+            Assert.AreEqual(
+                6,
+                robotState.joint_angles.Length,
+                "Should have 6 joint angles for AR4"
+            );
         }
 
         [Test]
@@ -365,7 +375,7 @@ namespace Tests.PlayMode
                 position = new PositionData(new Vector3(0.3f, 0.2f, 0.3f)),
                 color = "red",
                 object_type = "cube",
-                confidence = 0.92f
+                confidence = 0.92f,
             };
 
             Assert.AreEqual("cube_001", objectState.object_id);
@@ -373,10 +383,6 @@ namespace Tests.PlayMode
             Assert.AreEqual("cube", objectState.object_type);
             Assert.AreEqual(0.92f, objectState.confidence, 0.001f);
         }
-
-        #endregion
-
-        #region Coordination Integration Tests
 
         [UnityTest]
         public IEnumerator Coordination_WorkspaceTracking_UpdatesWithRobotMovement()
@@ -389,7 +395,10 @@ namespace Tests.PlayMode
             yield return null;
 
             // Both robots should have distinct positions
-            float distance = Vector3.Distance(_testRobot.transform.position, robot2.transform.position);
+            float distance = Vector3.Distance(
+                _testRobot.transform.position,
+                robot2.transform.position
+            );
             Assert.Greater(distance, 0f, "Robots should be at different positions");
 
             Object.Destroy(robot2Obj);
@@ -405,13 +414,19 @@ namespace Tests.PlayMode
             yield return null;
 
             // Check separation distance
-            float distance = Vector3.Distance(_testRobot.transform.position, robot2.transform.position);
+            float distance = Vector3.Distance(
+                _testRobot.transform.position,
+                robot2.transform.position
+            );
 
             if (distance < TestConstants.MIN_SAFE_SEPARATION)
             {
                 // Publisher should report robots within minimum separation
-                Assert.Less(distance, TestConstants.MIN_SAFE_SEPARATION,
-                    "Robots are within minimum safe separation");
+                Assert.Less(
+                    distance,
+                    TestConstants.MIN_SAFE_SEPARATION,
+                    "Robots are within minimum safe separation"
+                );
             }
 
             Object.Destroy(robot2Obj);
@@ -433,10 +448,6 @@ namespace Tests.PlayMode
             Object.Destroy(simObj);
             Object.DestroyImmediate(config);
         }
-
-        #endregion
-
-        #region Python Integration Tests (Require Backend)
 
         [UnityTest]
         public IEnumerator Integration_WorldStateServer_ReceivesUpdates()
@@ -489,10 +500,6 @@ namespace Tests.PlayMode
             Object.Destroy(testCube);
         }
 
-        #endregion
-
-        #region Error Handling Tests
-
         [UnityTest]
         public IEnumerator Publisher_NullRobotManager_HandlesGracefully()
         {
@@ -533,22 +540,21 @@ namespace Tests.PlayMode
             var fastPublisher = fastPublisherObj.AddComponent<WorldStatePublisher>();
 
             // Use reflection to set high update rate
-            var updateRateField = typeof(WorldStatePublisher).GetField("_updateRate",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var updateRateField = typeof(WorldStatePublisher).GetField(
+                "_updateRate",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance
+            );
             updateRateField?.SetValue(fastPublisher, 10f); // 10Hz
 
             // A few frames is sufficient to confirm rapid updates don't crash
-            for (int i = 0; i < 10; i++) yield return null;
+            for (int i = 0; i < 10; i++)
+                yield return null;
 
             // Should handle rapid updates without crashing
             Assert.Pass("Publisher handles rapid update rate");
 
             Object.DestroyImmediate(fastPublisherObj);
         }
-
-        #endregion
-
-        #region Performance Tests
 
         [UnityTest]
         public IEnumerator Performance_StateCollection_LessThan10ms()
@@ -562,28 +568,33 @@ namespace Tests.PlayMode
                 type = "world_state_update",
                 robots = new List<RobotStateData>(),
                 objects = new List<ObjectStateData>(),
-                timestamp = Time.time
+                timestamp = Time.time,
             };
 
             // Add robot state
-            update.robots.Add(new RobotStateData
-            {
-                robot_id = _testRobot.robotId,
-                position = new PositionData(_testRobot.transform.position),
-                rotation = new RotationData(_testRobot.transform.rotation),
-                gripper_state = "unknown",
-                is_moving = false,
-                is_initialized = true,
-                joint_angles = new float[6]
-            });
+            update.robots.Add(
+                new RobotStateData
+                {
+                    robot_id = _testRobot.robotId,
+                    position = new PositionData(_testRobot.transform.position),
+                    rotation = new RotationData(_testRobot.transform.rotation),
+                    gripper_state = "unknown",
+                    is_moving = false,
+                    is_initialized = true,
+                    joint_angles = new float[6],
+                }
+            );
 
             stopwatch.Stop();
 
             yield return null;
 
             // State collection should be fast (< 10ms)
-            Assert.Less(stopwatch.ElapsedMilliseconds, 10,
-                $"State collection should take < 10ms, took {stopwatch.ElapsedMilliseconds}ms");
+            Assert.Less(
+                stopwatch.ElapsedMilliseconds,
+                10,
+                $"State collection should take < 10ms, took {stopwatch.ElapsedMilliseconds}ms"
+            );
         }
 
         [UnityTest]
@@ -598,7 +609,8 @@ namespace Tests.PlayMode
             }
 
             // A few frames is sufficient to confirm multi-robot publishing doesn't crash
-            for (int i = 0; i < 10; i++) yield return null;
+            for (int i = 0; i < 10; i++)
+                yield return null;
 
             // Publisher should handle multiple robots efficiently
             Assert.Pass("Publisher scales with multiple robots");
@@ -608,7 +620,5 @@ namespace Tests.PlayMode
                 Object.Destroy(robot.gameObject);
             }
         }
-
-        #endregion
     }
 }

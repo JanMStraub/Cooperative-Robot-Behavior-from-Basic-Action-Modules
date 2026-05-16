@@ -23,7 +23,6 @@ namespace Vision
     /// </summary>
     public class StereoCameraController : MonoBehaviour
     {
-        [Header("Stereo Camera Configuration")]
         [Header("Image Settings")]
         [SerializeField]
         [Tooltip("Width of captured images in pixels")]
@@ -42,16 +41,10 @@ namespace Vision
 
         [Header("Streaming Mode")]
         [SerializeField]
-        [Tooltip("Enable continuous streaming mode (default: true for Dashboard)")]
-        private bool _enableStreaming = true;
-
-        [SerializeField]
         [Tooltip("Streaming rate in FPS (frames per second)")]
         [Range(1f, 30f)]
         private float _streamingFPS = 5.0f;
 
-        private float _stereoBaseline;
-        private float _cameraFOV;
         private int _captureCounter = 0;
         private float _streamingInterval;
         private float _timeSinceLastCapture = 0f;
@@ -69,33 +62,10 @@ namespace Vision
 
         private const string _logPrefix = "[STEREO_CAMERA_CONTROLLER]";
 
-        /// <summary>
-        /// Get the camera FOV
-        /// </summary>
-        private float GetCameraFOV()
-        {
-            if (_leftCamera != null)
-            {
-                return _leftCamera.fieldOfView;
-            }
-            return _cameraFOV;
-        }
+        private float GetCameraFOV() => _leftCamera.fieldOfView;
 
-        /// <summary>
-        /// Get the stereo baseline
-        /// </summary>
-        private float GetStereoBaseline()
-        {
-            if (_leftCamera != null && _rightCamera != null)
-            {
-                float distance = Vector3.Distance(
-                    _leftCamera.transform.position,
-                    _rightCamera.transform.position
-                );
-                return distance;
-            }
-            return _stereoBaseline;
-        }
+        private float GetStereoBaseline() =>
+            Vector3.Distance(_leftCamera.transform.position, _rightCamera.transform.position);
 
         /// <summary>
         /// Finds cameras as child objects of this GameObject
@@ -125,9 +95,6 @@ namespace Vision
 
         private void Start()
         {
-            // Force streaming on so the Web Dashboard receives continuous video feeds
-            _enableStreaming = true;
-
             FindCameras();
 
             if (_leftCamera == null || _rightCamera == null)
@@ -144,19 +111,13 @@ namespace Vision
             _sharedTex = new Texture2D(_imageWidth, _imageHeight, TextureFormat.RGB24, false);
 
             _streamingInterval = 1.0f / _streamingFPS;
-            if (_enableStreaming)
-            {
-                Debug.Log(
-                    $"{_logPrefix} Streaming enabled at {_streamingFPS} FPS (interval: {_streamingInterval:F3}s)"
-                );
-            }
+            Debug.Log(
+                $"{_logPrefix} Streaming enabled at {_streamingFPS} FPS (interval: {_streamingInterval:F3}s)"
+            );
         }
 
         private void Update()
         {
-            if (!_enableStreaming)
-                return;
-
             _timeSinceLastCapture += Time.deltaTime;
 
             if (_timeSinceLastCapture >= _streamingInterval)

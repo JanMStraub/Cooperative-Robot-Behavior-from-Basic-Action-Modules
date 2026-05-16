@@ -63,8 +63,6 @@ namespace PythonCommunication
         /// </summary>
         public event Action<SequenceResult> OnSequenceResultReceived;
 
-        #region Singleton & Init
-
         protected override void Awake()
         {
             if (Instance == null)
@@ -80,10 +78,6 @@ namespace PythonCommunication
                 Destroy(gameObject);
             }
         }
-
-        #endregion
-
-        #region Public API
 
         /// <summary>
         /// Send the current prompt as a sequence command.
@@ -108,9 +102,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Clear the current prompt.
-        /// </summary>
         public void ClearPrompt()
         {
             _prompt = "";
@@ -193,10 +184,6 @@ namespace PythonCommunication
                 $"move to ({x}, {y}, {z}), then open the gripper, then move to ({x}, {y}, {liftZ})";
             return ExecuteSequence(command);
         }
-
-        #endregion
-
-        #region Protocol V2 Implementation (Overrides)
 
         /// <summary>
         /// Reads and decodes the response from the stream.
@@ -297,10 +284,6 @@ namespace PythonCommunication
             }
         }
 
-        #endregion
-
-        #region Encoding Helper
-
         /// <summary>
         /// Encode a sequence query message using Protocol V2.
         /// Format: [Type:1][ReqID:4] + [CmdLen:4][Cmd:N] + [0x00000000] + [0x00000000] + [AutoExec:1]
@@ -315,8 +298,8 @@ namespace PythonCommunication
                 UnityProtocol.HEADER_SIZE
                 + 4
                 + cmdBytes.Length
-                + 4   // robot_id length=0
-                + 4   // camera_id length=0
+                + 4 // robot_id length=0
+                + 4 // camera_id length=0
                 + 1;
 
             byte[] packet = new byte[size];
@@ -353,13 +336,11 @@ namespace PythonCommunication
         /// </summary>
         private void WriteInt32LE(byte[] buffer, ref int offset, int value)
         {
-            buffer[offset]     = (byte)(value);
+            buffer[offset] = (byte)(value);
             buffer[offset + 1] = (byte)(value >> 8);
             buffer[offset + 2] = (byte)(value >> 16);
             buffer[offset + 3] = (byte)(value >> 24);
             offset += 4;
         }
-
-        #endregion
     }
 }

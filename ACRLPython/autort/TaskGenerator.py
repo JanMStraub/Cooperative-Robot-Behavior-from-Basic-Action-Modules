@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""
-AutoRT Task Generator
-
-LLM-based task generation with Pydantic validation and manual retry loop.
-"""
+"""LLM-based task generation with Pydantic validation and retry loop."""
 
 import json
 import logging
@@ -23,15 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 class TaskGenerator:
-    """Generates task proposals using LLM with robust JSON parsing"""
+    """Generates task proposals using LLM with robust JSON parsing."""
 
     def __init__(self, config):
-        """
-        Initialize TaskGenerator.
-
-        Args:
-            config: AutoRT config module with LLM settings
-        """
         self.config = config
         self.llm_client = OpenAI(base_url=config.LM_STUDIO_URL, api_key="not-needed")
         self.model = config.TASK_GENERATION_MODEL
@@ -50,18 +40,10 @@ class TaskGenerator:
         include_collaborative: Optional[bool] = None,
     ) -> List[ProposedTask]:
         """
-        Generate task proposals in parallel - one LLM request per task.
+        Generate task proposals in parallel — one LLM request per task.
 
-        Sends ``num_tasks`` concurrent requests to the LLM, each asking for a
-        single task.  Results are merged and deduplicated by task_id.  Any
-        request that fails all retries is silently skipped so that partial
-        results are still returned.
-
-        Args:
-            scene: Scene description with detected objects
-            robot_ids: List of robot IDs to use
-            num_tasks: Number of tasks to generate
-            include_collaborative: Whether to generate collaborative tasks (None = use config default)
+        Sends ``num_tasks`` concurrent requests. Results merged and deduplicated
+        by task_id. Failed slots silently skipped; partial results returned.
         """
         if include_collaborative is None:
             try:
@@ -103,17 +85,10 @@ class TaskGenerator:
         self, prompt: str, slot_index: int
     ) -> Optional[ProposedTask]:
         """
-        Generate and validate a single task with retries.
+        Generate and validate one task with retries.
 
-        Called concurrently by ``generate_tasks`` - each invocation runs in its
-        own thread and retries independently on JSON/validation errors.
-
-        Args:
-            prompt: Base task-generation prompt (built for 1 task)
-            slot_index: Index used for logging to distinguish parallel workers
-
-        Returns:
-            A validated ProposedTask, or None if all retries failed
+        Called concurrently; each thread retries independently on JSON/validation errors.
+        Returns None if all retries fail.
         """
         last_error: Optional[str] = None
         current_prompt = prompt
@@ -166,10 +141,9 @@ Please fix these issues and generate a valid task following the parameter schema
         return None
 
     def _query_llm(self, prompt: str) -> str:
-        """Query LM Studio via OpenAI-compatible API"""
+        """Query LM Studio via OpenAI-compatible API."""
         try:
-            # Add system message to suppress reasoning for reasoning models
-            # Type ignore needed for LM Studio compatibility - OpenAI SDK expects TypedDict but accepts plain dicts
+            # Type ignore needed for LM Studio compat — OpenAI SDK expects TypedDict but accepts plain dicts
             messages = [
                 {
                     "role": "system",
@@ -187,7 +161,8 @@ Please fix these issues and generate a valid task following the parameter schema
                 "messages": messages,
                 "temperature": self.temperature,
                 # Single task JSON - 4096 tokens covers verbose multi-step tasks.
-                "max_tokens": 4096 + (LLM_THINKING_BUDGET if LLM_THINKING_ENABLED else 0),
+                "max_tokens": 4096
+                + (LLM_THINKING_BUDGET if LLM_THINKING_ENABLED else 0),
             }
             # Structured output forces valid JSON at the inference layer.
             # Set USE_STRUCTURED_OUTPUT=false for models that don't support response_format.
@@ -220,12 +195,10 @@ Please fix these issues and generate a valid task following the parameter schema
         num_tasks: int,
         include_collaborative: bool,
     ) -> str:
-        """Build prompt for LLM task generation"""
-        # Build object list with spatial hints (which robot is closer)
+        """Build LLM task generation prompt."""
         objects_lines = []
         for obj in scene.objects:
             x_pos = obj.position[0]
-            # Determine proximity hint based on X coordinate
             proximity_hint = ""
             if x_pos < -0.1:
                 proximity_hint = " [closer to Robot1/left]"
@@ -242,7 +215,6 @@ Please fix these issues and generate a valid task following the parameter schema
 
         operations_str = self._get_operations_summary()
 
-        # Build robot spatial layout information
         robot_layout = self._build_robot_layout_description(robot_ids)
 
         collaborative_hint = ""
@@ -259,7 +231,6 @@ Collaborative patterns:
 Use 'signal' and 'wait_for_signal' for coordination between robots.
 """
 
-        # Add spatial hints for single-robot tasks
         spatial_hints = ""
         if not include_collaborative or len(robot_ids) == 1:
             spatial_hints = f"\n{robot_layout}\n" if robot_layout else ""
@@ -317,13 +288,7 @@ Every robot_id in operations must appear in required_robots
 Output compact JSON array only, no markdown"""
 
     def _parse_llm_response(self, raw_response: str) -> List[ProposedTask]:
-        """
-        Parse LLM JSON response with Pydantic validation.
-
-        Raises:
-            json.JSONDecodeError: If response is not valid JSON
-            ValidationError: If JSON doesn't match ProposedTask schema
-        """
+        """Parse LLM JSON response with Pydantic validation."""
         # Strip reasoning tokens from models like Mistral Reasoning
         if "[THINK]" in raw_response and "[/THINK]" in raw_response:
             # Extract content after [/THINK] tag
@@ -368,19 +333,10 @@ Output compact JSON array only, no markdown"""
             raise ValueError(f"Unexpected response type: {type(data)}")
 
     def _fix_missing_robot_ids(self, task_dict: dict) -> dict:
-        """
-        Fix operations with missing robot_ids by inferring from context.
-
-        Args:
-            task_dict: Raw task dictionary from LLM
-
-        Returns:
-            Fixed task dictionary
-        """
+        """Infer missing robot_ids from context (coordination ops → first robot, sequential → last seen)."""
         required_robots = task_dict.get("required_robots", [])
         operations = task_dict.get("operations", [])
 
-        # Track last valid robot_id to use for inference
         last_robot_id = required_robots[0] if required_robots else "Robot1"
 
         for op in operations:
@@ -407,24 +363,14 @@ Output compact JSON array only, no markdown"""
         return task_dict
 
     def _validate_operations(self, task: ProposedTask) -> bool:
-        """
-        Validate that all operations exist in Registry and have valid parameters.
-
-        Returns:
-            True if all operations are valid, False otherwise
-        """
+        """Validate all operations exist in Registry with valid parameters."""
         is_valid, _ = self._validate_operations_with_feedback(task)
         return is_valid
 
     def _validate_operations_with_feedback(
         self, task: ProposedTask
     ) -> tuple[bool, str]:
-        """
-        Validate operations and return detailed feedback for LLM retry.
-
-        Returns:
-            Tuple of (is_valid: bool, error_message: str)
-        """
+        """Validate operations; return (is_valid, error_message) for LLM retry."""
         try:
             for i, op in enumerate(task.operations, 1):
                 # Check operation exists
@@ -447,16 +393,7 @@ Output compact JSON array only, no markdown"""
             return False, f"Validation exception: {str(e)}"
 
     def _validate_operation_parameters_with_feedback(self, operation, op_def) -> str:
-        """
-        Validate operation parameters and return detailed error message.
-
-        Args:
-            operation: Operation instance from ProposedTask
-            op_def: BasicOperation definition from Registry
-
-        Returns:
-            Error message string if invalid, empty string if valid
-        """
+        """Validate operation parameters. Returns error string or empty string if valid."""
         op_params = operation.parameters if operation.parameters else {}
 
         for param_def in op_def.parameters:
@@ -510,15 +447,9 @@ Output compact JSON array only, no markdown"""
 
     def _get_operations_summary(self) -> str:
         """
-        Get token-efficient operation list from the live Registry with parameter schemas.
+        Build token-efficient operation list with parameter schemas from live Registry.
 
-        Queries the Registry for all operations and formats them with:
-        - Parameter names and types
-        - Valid values (enums)
-        - Default values
-        - Required vs optional distinction
-
-        Cached after first call since operations don't change at runtime.
+        Cached after first call — operations don't change at runtime.
         """
         if self._operations_summary_cache is not None:
             return self._operations_summary_cache
@@ -526,7 +457,6 @@ Output compact JSON array only, no markdown"""
         operations = self.registry.get_all_operations()
         lines = []
         for op in operations:
-            # Build detailed parameter specifications
             param_specs = []
             for p in op.parameters:
                 spec_parts = [p.name, f":{p.type}"]
@@ -556,21 +486,10 @@ Output compact JSON array only, no markdown"""
         return summary
 
     def _build_robot_layout_description(self, robot_ids: List[str]) -> str:
-        """
-        Build description of robot physical layout based on robot IDs.
-
-        Uses ROBOT_SPATIAL_LAYOUT from config for detailed position information.
-
-        Args:
-            robot_ids: List of robot IDs (e.g., ["Robot1", "Robot2"])
-
-        Returns:
-            Formatted description of robot positions
-        """
+        """Format robot spatial positions from ROBOT_SPATIAL_LAYOUT config."""
         if not robot_ids:
             return ""
 
-        # Import spatial layout from config
         try:
             from config.AutoRT import ROBOT_SPATIAL_LAYOUT
         except ImportError:
@@ -650,7 +569,7 @@ Output compact JSON array only, no markdown"""
     def _build_previous_task_section(
         self, last_task_context: ExecutedTaskContext
     ) -> str:
-        """Build the PREVIOUS TASK CONTEXT prompt section from the last executed task."""
+        """Build PREVIOUS TASK CONTEXT prompt section for continuity/recovery hints."""
         last_op = (
             last_task_context.operation_types[-1]
             if last_task_context.operation_types

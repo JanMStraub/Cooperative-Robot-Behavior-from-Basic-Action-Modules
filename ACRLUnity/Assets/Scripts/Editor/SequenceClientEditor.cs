@@ -34,9 +34,6 @@ namespace EditorScripts
         private Color _originalColor;
         private Color _originalBgColor;
 
-        /// <summary>
-        /// Initialize custom styles
-        /// </summary>
         private void InitializeStyles()
         {
             if (_stylesInitialized && _boxStyle != null)

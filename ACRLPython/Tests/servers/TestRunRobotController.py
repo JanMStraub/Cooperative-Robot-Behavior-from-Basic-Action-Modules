@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-"""
-Unit tests for RobotController ROS auto-connect behaviour.
-"""
+"""Unit tests for RobotController ROS auto-connect behaviour."""
 
 import threading
 from unittest.mock import patch, MagicMock
 
 
 class TestAutoConnectROS:
-    """Tests for AUTO_CONNECT_ROS wiring in RobotController."""
 
     @patch("orchestrators.RunRobotController.ROSBridge")
     @patch("orchestrators.RunRobotController.ROS_ENABLED", True)

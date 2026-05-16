@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""
-Default Position Operations for Robot Control
-==============================================
-
-This module implements operations for returning the robot to its initial/default position
-by restoring the start joint targets saved when the robot was registered.
-"""
+"""Return-to-start-position operation: restores saved start joint targets from RobotManager registration."""
 
 import time
 from typing import Optional
@@ -21,21 +15,14 @@ from .Base import (
 )
 from .ROSDispatcher import execute_with_ros_fallback
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
 
-
-# Import from centralized lazy import system (prevents circular dependencies)
 try:
     from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
 except ImportError:
     from core.Imports import get_command_broadcaster as _get_command_broadcaster
-
-# ============================================================================
-# Implementation: Return to Start Position
-# ============================================================================
 
 
 def return_to_start_position(
@@ -45,56 +32,12 @@ def return_to_start_position(
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
-    Return robot to its initial start position using saved joint targets.
+    Return robot to saved start joint configuration (exact joint restore, not IK).
 
-    This operation commands the robot arm to return to the exact joint configuration
-    it had when first registered with RobotManager. This ensures the robot returns
-    to a known, safe position regardless of current configuration.
-
-    Args:
-        robot_id: ID of the robot to move (e.g., "AR4_Robot", "Robot1")
-        speed: Speed multiplier (0.1=slow, 1.0=normal, 2.0=fast), range: [0.1, 2.0]
-        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
-
-    Returns:
-        Dict with the following structure:
-        {
-            "success": bool,           # True if command was sent successfully
-            "result": dict or None,    # Result data if successful
-            "error": dict or None      # Error information if failed
-        }
-
-        Success result structure:
-        {
-            "robot_id": str,
-            "speed": float,
-            "status": "command_sent",
-            "timestamp": float
-        }
-
-        Error structure:
-        {
-            "code": str,                    # Error code (e.g., "INVALID_ROBOT_ID")
-            "message": str,                 # Human-readable error message
-            "recovery_suggestions": list    # List of suggested actions
-        }
-
-    Example:
-        >>> # Return robot to start position at normal speed
-        >>> result = return_to_start_position("Robot1")
-        >>> if result["success"]:
-        ...     print(f"Command sent at {result['result']['timestamp']}")
-
-        >>> # Return slowly for safety
-        >>> result = return_to_start_position("Robot1", speed=0.3)
-
-    Note:
-        This operation uses the joint targets saved when the robot was first
-        registered, providing exact joint angle restoration rather than IK-based
-        end-effector positioning.
+    ROS path reads start angles from WorldState so MoveIt targets the same pose
+    as the TCP path (not URDF all-zeros).
     """
     try:
-        # Validate robot_id
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
@@ -105,7 +48,6 @@ def return_to_start_position(
                 ],
             )
 
-        # Validate speed
         if not (0.1 <= speed <= 2.0):
             return OperationResult.error_result(
                 "INVALID_SPEED",
@@ -120,8 +62,6 @@ def return_to_start_position(
             from ros2.ROSBridge import ROSBridge
 
             bridge = ROSBridge.get_instance()
-            # Read the Unity start joint targets from WorldState so MoveIt plans
-            # to the same pose the TCP path uses, not the URDF all-zeros pose.
             start_joint_angles = None
             try:
                 from core.Imports import get_world_state
@@ -191,46 +131,21 @@ def return_to_start_position(
         return OperationResult.error_result(
             "UNEXPECTED_ERROR",
             f"Unexpected error occurred: {str(e)}",
-            [
-                "Check logs for detailed error information",
-                "Verify all parameters are correct types",
-                "Retry the operation",
-                "Report bug if error persists",
-            ],
+            ["Check logs", "Verify parameters", "Retry"],
         )
 
 
-# ============================================================================
-# BasicOperation Definition - For RAG System
-# ============================================================================
-
-
 def create_return_to_start_position_operation() -> BasicOperation:
-    """
-    Create the BasicOperation definition for return_to_start_position.
-
-    This provides rich metadata for RAG retrieval and LLM task planning.
-    """
     return BasicOperation(
         operation_id="motion_return_to_start_001",
         name="return_to_start_position",
         category=OperationCategory.NAVIGATION,
         complexity=OperationComplexity.BASIC,
-        description="Return the robot to its initial start position using saved joint targets",
+        description="Return robot to initial start position using saved joint targets",
         long_description="""
-            This operation commands the robot arm to return to the exact joint configuration
-            it had when first registered with RobotManager. Unlike move_to_coordinate which
-            uses inverse kinematics to reach an end-effector position, this operation directly
-            sets joint angles to restore the robot to a known, safe configuration.
-
-            This is useful for:
-            - Returning to a safe home position after completing a task
-            - Resetting the robot state between operations
-            - Clearing joint configurations after failed movements
-            - Returning to a known good state for calibration
-
-            The start joint targets are automatically saved when the robot is registered
-            in RobotManager during scene initialization.
+            Restores the exact joint configuration from RobotManager registration.
+            Unlike move_to_coordinate (IK), directly sets joint angles for a known-safe state.
+            Useful after task completion, failed movements, or between operations.
         """,
         usage_examples=[
             "Return to home after picking object: return_to_start_position(robot_id='Robot1')",
@@ -287,5 +202,4 @@ def create_return_to_start_position_operation() -> BasicOperation:
     )
 
 
-# Create the operation instance for export
 RETURN_TO_START_POSITION_OPERATION = create_return_to_start_position_operation()

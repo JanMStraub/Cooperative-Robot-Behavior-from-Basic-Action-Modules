@@ -155,10 +155,6 @@ POINT_CLOUD_OUTLIER_STD_RATIO = float(
     os.environ.get("POINT_CLOUD_OUTLIER_STD_RATIO", "1.5")
 )
 
-# ============================================================================
-# Camera Identity
-# ============================================================================
-
 # Default camera used for perception operations when Unity sends no camera_id.
 # Override with the DEFAULT_CAMERA_ID env var to match your scene's camera name.
 DEFAULT_CAMERA_ID = os.environ.get(
@@ -245,10 +241,6 @@ STEREO_MAX_Y_DIFF = int(os.environ.get("STEREO_MAX_Y_DIFF", "10"))
 STEREO_MAX_SIZE_RATIO = float(os.environ.get("STEREO_MAX_SIZE_RATIO", "0.3"))
 STEREO_MIN_IOU = float(os.environ.get("STEREO_MIN_IOU", "0.0"))
 
-# ============================================================================
-# World State Position Source
-# ============================================================================
-
 # When True, object positions streamed from Unity (WorldStatePublisher) are
 # written into WorldState, potentially overwriting vision-detected positions.
 # Set to False to keep only stereo/vision-detected positions in WorldState.
@@ -267,10 +259,6 @@ ENABLE_OBJECT_TRACKING = os.environ.get("ENABLE_OBJECT_TRACKING", "true").lower(
 )
 TRACKING_MAX_AGE = int(os.environ.get("TRACKING_MAX_AGE", "5"))
 TRACKING_MIN_IOU = float(os.environ.get("TRACKING_MIN_IOU", "0.3"))
-
-# ============================================================================
-# YOLO Advanced Configuration
-# ============================================================================
 
 # Used in vision/ObjectDetector.py: task mode ("detect" or "segment") and segmentation model path
 YOLO_TASK = os.environ.get("YOLO_TASK", "detect")  # detect or segment
@@ -293,10 +281,6 @@ CONFLICT_RESOLUTION_STRATEGY = os.environ.get(
 )
 CONFLICT_MIN_DISTANCE_DIFF = float(os.environ.get("CONFLICT_MIN_DISTANCE_DIFF", "0.05"))
 
-# ============================================================================
-# VGN Debug Export
-# ============================================================================
-
 VGN_EXPORT_TSDF = os.environ.get("VGN_EXPORT_TSDF", "false").lower() in (
     "true",
     "1",
@@ -304,13 +288,17 @@ VGN_EXPORT_TSDF = os.environ.get("VGN_EXPORT_TSDF", "false").lower() in (
 )
 VGN_EXPORT_TSDF_PATH = os.environ.get(
     "VGN_EXPORT_TSDF_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "documents", "vgn_tsdf_last.npz"),
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "documents",
+        "vgn_tsdf_last.npz",
+    ),
 )
-VGN_EXPORT_TSDF_OBJ = os.environ.get("VGN_EXPORT_TSDF_OBJ", "true").lower() in ("true", "1", "yes")
-
-# ============================================================================
-# Visualization and Performance
-# ============================================================================
+VGN_EXPORT_TSDF_OBJ = os.environ.get("VGN_EXPORT_TSDF_OBJ", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 ENABLE_VISION_VISUALIZATION = os.environ.get(
     "ENABLE_VISION_VISUALIZATION", "false"

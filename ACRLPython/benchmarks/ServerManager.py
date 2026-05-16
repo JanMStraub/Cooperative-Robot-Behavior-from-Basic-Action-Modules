@@ -5,6 +5,7 @@ ServerManager — subprocess lifecycle for live benchmark runs.
 Spawns RunRobotController as a child process group, polls ports 5007+5008
 until ready, and tears down on stop() or context manager exit.
 """
+
 from __future__ import annotations
 
 import os
@@ -18,6 +19,7 @@ from typing import Optional
 def port_open(port: int, timeout: float = 1.0) -> bool:
     """Return True if a TCP server is accepting connections on port."""
     import socket
+
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -50,11 +52,6 @@ class ServerManager:
         """
         Configure server manager.
 
-        Args:
-            startup_timeout: Seconds to wait for ports to open after spawn.
-            poll_interval: Seconds between port probes.
-            extra_args: Extra CLI args forwarded to RunRobotController
-                        (e.g. ["--env", "real"]).
         """
         self._startup_timeout = startup_timeout
         self._poll_interval = poll_interval
@@ -132,8 +129,6 @@ class ServerManager:
         """
         Poll _READINESS_PORTS until all open or timeout.
 
-        Returns:
-            True if all ports opened within startup_timeout, False otherwise.
         """
         deadline = time.monotonic() + self._startup_timeout
         while time.monotonic() < deadline:

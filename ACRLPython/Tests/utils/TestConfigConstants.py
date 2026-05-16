@@ -13,9 +13,7 @@ Usage:
     result = operation(timeout=DEFAULT_TIMEOUT_MS)
 """
 
-# ============================================================================
 # Timing Constants
-# ============================================================================
 
 # Thread synchronization delays
 THREAD_START_DELAY_MS = 100  # Time to wait for threads to start (milliseconds)
@@ -32,9 +30,7 @@ SHORT_TTL_SECONDS = 0.1  # Short TTL for expiration tests (seconds)
 MEDIUM_TTL_SECONDS = 1.0  # Medium TTL for caching tests (seconds)
 LONG_TTL_SECONDS = 10.0  # Long TTL for stable caching (seconds)
 
-# ============================================================================
 # Concurrency Constants
-# ============================================================================
 
 # Thread counts for concurrency tests
 CONCURRENCY_THREAD_COUNT_SMALL = 5  # Small thread count for basic tests
@@ -45,9 +41,7 @@ CONCURRENCY_THREAD_COUNT_LARGE = 100  # Large thread count for extreme tests
 STRESS_TEST_ITERATIONS = 1000  # Iterations for stress tests
 PERFORMANCE_TEST_ITERATIONS = 10000  # Iterations for performance benchmarks
 
-# ============================================================================
 # Network Constants
-# ============================================================================
 
 # Server ports (should match production config)
 STEREO_SERVER_PORT = 5006
@@ -64,9 +58,7 @@ SERVER_STARTUP_WAIT_SEC = 0.5  # Wait for server to start (seconds)
 MAX_MESSAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB maximum message size
 LARGE_MESSAGE_SIZE_BYTES = 5 * 1024  # 5KB large message threshold
 
-# ============================================================================
 # Spatial/Position Constants
-# ============================================================================
 
 # Distance thresholds
 POSITION_TOLERANCE_MM = 1.0  # Position accuracy tolerance (millimeters)
@@ -86,9 +78,7 @@ WORKSPACE_MAX_Y = 1.0
 WORKSPACE_MIN_Z = 0.0
 WORKSPACE_MAX_Z = 0.5
 
-# ============================================================================
 # Force/Grasp Constants
-# ============================================================================
 
 # Grasp force thresholds
 MIN_GRASP_FORCE_N = 5.0  # Minimum grasp force (Newtons)
@@ -104,9 +94,7 @@ TYPICAL_CONTACT_DURATION_MS = 150  # Typical contact duration (milliseconds)
 DEFAULT_PRE_GRASP_DISTANCE_M = 0.1  # Default pre-grasp offset (meters)
 DEFAULT_RETREAT_DISTANCE_M = 0.12  # Default retreat distance (meters)
 
-# ============================================================================
 # Performance Benchmarks
-# ============================================================================
 
 # Expected performance thresholds
 MAX_INDEX_BUILD_TIME_100_OPS_SEC = 5.0  # Max time to index 100 operations (seconds)
@@ -120,9 +108,7 @@ MAX_SPATIAL_CALC_TIME_100_OBJS_SEC = (
 MAX_DB_WRITE_TIME_MS = 10  # Max time for database write (milliseconds)
 MAX_CACHE_LOOKUP_TIME_MS = 1  # Max time for cache lookup (milliseconds)
 
-# ============================================================================
 # Test Data Scales
-# ============================================================================
 
 # Object counts for scaling tests
 SMALL_OBJECT_COUNT = 10  # Small number of objects
@@ -139,9 +125,7 @@ SMALL_OPERATION_COUNT = 10  # Small number of operations
 MEDIUM_OPERATION_COUNT = 100  # Medium number of operations
 LARGE_OPERATION_COUNT = 1000  # Large number of operations
 
-# ============================================================================
 # Image/Vision Constants
-# ============================================================================
 
 # Image dimensions
 MIN_IMAGE_WIDTH = 64
@@ -155,9 +139,7 @@ TEST_IMAGE_HEIGHT = 480  # Standard test image height
 IMAGE_CHANNELS = 3  # RGB channels
 IMAGE_DTYPE_BITS = 8  # 8-bit image depth
 
-# ============================================================================
 # Verification/Safety Constants
-# ============================================================================
 
 # Verification confidence scores
 MIN_CONFIDENCE_SCORE = 0.0
@@ -168,9 +150,7 @@ MAX_CONFIDENCE_SCORE = 1.0
 UNSTABLE_GRASP_THRESHOLD = 0.5  # Below this = unstable
 STABLE_GRASP_THRESHOLD = 0.8  # Above this = stable
 
-# ============================================================================
 # RAG/Embedding Constants
-# ============================================================================
 
 # Embedding dimensions
 TYPICAL_EMBEDDING_DIM = 384  # Typical embedding dimension
@@ -181,9 +161,7 @@ DEFAULT_RAG_TOP_K = 3  # Default number of RAG results
 MAX_RAG_TOP_K = 10  # Maximum RAG results
 DEFAULT_RAG_MIN_SCORE = 0.5  # Minimum similarity score
 
-# ============================================================================
 # Workspace Allocation Constants
-# ============================================================================
 
 # Workspace timeouts
 WORKSPACE_ALLOCATION_TIMEOUT_SEC = 2.0  # Timeout for workspace allocation
@@ -194,9 +172,7 @@ SMALL_WORKSPACE_COUNT = 3  # Small number of workspaces
 MEDIUM_WORKSPACE_COUNT = 5  # Medium number of workspaces
 LARGE_WORKSPACE_COUNT = 10  # Large number of workspaces
 
-# ============================================================================
 # Command Parsing Constants
-# ============================================================================
 
 # Retry settings
 MAX_GRASP_RETRIES = 3  # Maximum grasp retry attempts
@@ -207,9 +183,7 @@ SMALL_QUEUE_SIZE = 5  # Small command queue
 MEDIUM_QUEUE_SIZE = 50  # Medium command queue
 LARGE_QUEUE_SIZE = 500  # Large command queue
 
-# ============================================================================
 # Logging/Cleanup Constants
-# ============================================================================
 
 # Command retention
 COMMAND_RETENTION_SEC = 300  # Keep completed commands for 5 minutes

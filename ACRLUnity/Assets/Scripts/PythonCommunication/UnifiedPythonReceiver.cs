@@ -24,9 +24,6 @@ namespace PythonCommunication
         [SerializeField]
         private bool _verboseLogging = false;
 
-        /// <summary>
-        /// Event fired when an LLM result is received
-        /// </summary>
         public event Action<LLMResult> OnLLMResultReceived;
 
         // Single robust client for all results (port 5010)
@@ -34,11 +31,6 @@ namespace PythonCommunication
 
         private const string _logPrefix = "[UNIFIED_RECEIVER]";
 
-        #region Singleton
-
-        /// <summary>
-        /// Initialize singleton instance
-        /// </summary>
         private void Awake()
         {
             if (Instance == null)
@@ -73,10 +65,6 @@ namespace PythonCommunication
                 Instance = null;
             }
         }
-
-        #endregion
-
-        #region JSON Routing
 
         /// <summary>
         /// Handle received JSON and route to appropriate handler.
@@ -129,9 +117,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Route LLM result to external subscribers
-        /// </summary>
         private void RouteLLMResult(LLMResult result)
         {
             if (_logResults)
@@ -156,10 +141,6 @@ namespace PythonCommunication
             }
         }
 
-        #endregion
-
-        #region Public API
-
         /// <summary>
         /// Send a completion message back to Python on the results connection.
         /// Used by PythonCommandHandler to notify Python when commands complete.
@@ -178,10 +159,6 @@ namespace PythonCommunication
             return _client.SendCompletion(completionJson, requestId);
         }
 
-        /// <summary>
-        /// Enable or disable verbose logging at runtime
-        /// </summary>
-        /// <param name="verbose">True to enable verbose logging</param>
         public void SetVerboseLogging(bool verbose)
         {
             _verboseLogging = verbose;
@@ -191,11 +168,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Check if the results client is connected
-        /// </summary>
         public bool IsConnected => _client != null && _client.IsConnected;
-
-        #endregion
     }
 }

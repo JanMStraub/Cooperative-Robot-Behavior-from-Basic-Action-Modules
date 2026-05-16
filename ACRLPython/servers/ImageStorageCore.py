@@ -1,36 +1,7 @@
 #!/usr/bin/env python3
 """
-Unified Image Storage Core
-==========================
-
-Thread-safe singleton for storing and retrieving camera images.
-
-Architecture Decision:
-    This module is intentionally separated from ImageServer to avoid circular
-    import dependencies in the module graph:
-
-    OLD (Circular):
-        operations/DetectionOperations → servers/ImageServer →
-        servers/__init__ → servers/SequenceServer →
-        orchestrators/SequenceExecutor → operations/Registry →
-        operations/DetectionOperations (CIRCULAR!)
-
-    NEW (Clean):
-        operations/DetectionOperations → servers/ImageStorageCore)
-        servers/ImageServer → servers/ImageStorageCore
-
-    Core Principle:
-        - Core modules (servers/ImageStorageCore) have NO high-level dependencies
-        - High-level modules (servers/ImageServer) CAN depend on core modules
-        - Operations modules CAN depend on core modules but NOT server modules
-
-Thread Safety:
-    - Uses double-checked locking for singleton initialization
-    - Separate locks for single and stereo image storage
-    - All methods are thread-safe
-
-Consolidation:
-    Replaces legacy StreamingServer ImageStorage and StereoDetectionServer StereoImageStorage.
+Thread-safe singleton for camera image storage. Separated from ImageServer to break the
+operations→ImageServer→SequenceServer→operations circular import chain.
 """
 
 import threading
@@ -76,7 +47,6 @@ class UnifiedImageStorage:
         return cls._instance
 
     def _init_storage(self):
-        """Initialize storage structures."""
         # OrderedDict preserves insertion order so popitem(last=False) evicts the
         # oldest camera ID when the cap is reached.
         self._single_images: OrderedDict[str, Tuple[np.ndarray, float, str]] = (
@@ -90,7 +60,6 @@ class UnifiedImageStorage:
         ] = OrderedDict()
         self._data_lock = threading.Lock()
 
-    # Single camera methods
     def store_single_image(self, camera_id: str, image: np.ndarray, prompt: str = ""):
         """Store a single camera image, evicting the oldest entry if the cap is reached."""
         with self._data_lock:
@@ -102,28 +71,24 @@ class UnifiedImageStorage:
                 self._single_images.popitem(last=False)
 
     def get_single_image(self, camera_id: str) -> Optional[np.ndarray]:
-        """Get the latest single camera image."""
         with self._data_lock:
             if camera_id in self._single_images:
                 return self._single_images[camera_id][0].copy()
             return None
 
     def get_single_prompt(self, camera_id: str) -> Optional[str]:
-        """Get the prompt for a single camera image."""
         with self._data_lock:
             if camera_id in self._single_images:
                 return self._single_images[camera_id][2]
             return None
 
     def get_single_age(self, camera_id: str) -> Optional[float]:
-        """Get age of single camera image in seconds."""
         with self._data_lock:
             if camera_id in self._single_images:
                 return time.time() - self._single_images[camera_id][1]
             return None
 
     def get_latest_single(self) -> Optional[Tuple[str, np.ndarray, str]]:
-        """Get the most recently stored single image."""
         with self._data_lock:
             if not self._single_images:
                 return None
@@ -150,7 +115,6 @@ class UnifiedImageStorage:
         col_step = max(1, w // size)
         return gray[::row_step, ::col_step][:size, :size].astype(np.float32)
 
-    # Stereo camera methods
     def store_stereo_pair(
         self,
         camera_pair_id: str,
@@ -187,7 +151,6 @@ class UnifiedImageStorage:
     def get_stereo_pair(
         self, camera_pair_id: str
     ) -> Optional[Tuple[np.ndarray, np.ndarray, str]]:
-        """Get a stereo image pair."""
         with self._data_lock:
             if camera_pair_id in self._stereo_images:
                 imgL, imgR, prompt, _, _, _ = self._stereo_images[camera_pair_id]
@@ -195,28 +158,25 @@ class UnifiedImageStorage:
             return None
 
     def get_stereo_metadata(self, camera_pair_id: str) -> Optional[dict]:
-        """Get metadata for a stereo pair (baseline, fov, camera_position, camera_rotation)."""
+        """Get metadata for a stereo pair (baseline, fov, camera_position, camera_rotation, ...)."""
         with self._data_lock:
             if camera_pair_id in self._stereo_images:
                 return self._stereo_images[camera_pair_id][4]
             return None
 
     def get_stereo_age(self, camera_pair_id: str) -> Optional[float]:
-        """Get age of stereo pair in seconds."""
         with self._data_lock:
             if camera_pair_id in self._stereo_images:
                 return time.time() - self._stereo_images[camera_pair_id][3]
             return None
 
     def get_stereo_timestamp(self, camera_pair_id: str) -> Optional[float]:
-        """Get the timestamp when stereo pair was received."""
         with self._data_lock:
             if camera_pair_id in self._stereo_images:
                 return self._stereo_images[camera_pair_id][3]
             return None
 
     def get_latest_stereo(self) -> Optional[Tuple[str, np.ndarray, np.ndarray, str]]:
-        """Get the most recently stored stereo pair."""
         with self._data_lock:
             if not self._stereo_images:
                 return None
@@ -277,11 +237,9 @@ class UnifiedImageStorage:
             return imgL.copy(), imgR.copy(), prompt, timestamp, metadata
 
     def get_all_stereo_ids(self) -> List[str]:
-        """Get all stereo camera pair IDs."""
         with self._data_lock:
             return list(self._stereo_images.keys())
 
-    # General methods
     def get_all_camera_ids(self) -> List[str]:
         """Get all camera IDs (single and stereo)."""
         with self._data_lock:
@@ -293,8 +251,6 @@ class UnifiedImageStorage:
         """Remove images older than max_age_seconds."""
         with self._data_lock:
             current = time.time()
-
-            # Clean single images
             to_remove = [
                 k
                 for k, v in self._single_images.items()
@@ -303,7 +259,6 @@ class UnifiedImageStorage:
             for k in to_remove:
                 del self._single_images[k]
 
-            # Clean stereo images
             to_remove = [
                 k
                 for k, v in self._stereo_images.items()

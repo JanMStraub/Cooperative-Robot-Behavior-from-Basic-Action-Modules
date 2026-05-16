@@ -30,7 +30,6 @@ from typing import Optional
 if "--web" in sys.argv:
     os.environ.setdefault("ENABLE_VISION_STREAMING", "true")
 
-# Import config
 try:
     from config.Servers import (
         DEFAULT_HOST,
@@ -94,7 +93,6 @@ except ImportError:
         AUTO_CONNECT_ROS = False
         ROSBridge = None  # type: ignore
 
-# Import servers - handle both direct execution and package import
 try:
     from ..servers.ImageServer import run_image_server_background
     from ..servers.CommandServer import (
@@ -190,7 +188,6 @@ class RobotController:
         try:
             from operations.WorldState import get_world_state
 
-            # Import SequenceQueryHandler to access the singleton
             try:
                 from servers.SequenceServer import SequenceQueryHandler
             except ImportError:
@@ -349,9 +346,7 @@ class RobotController:
             # Also keep KG current when Python detections write to WorldState
             # (e.g. detect_object_stereo, detect_field) without waiting for the
             # next Unity WorldStateServer packet.
-            world_state.register_object_observer(
-                self._graph_builder.on_object_updated
-            )
+            world_state.register_object_observer(self._graph_builder.on_object_updated)
             logger.info("KnowledgeGraph wired — updates on Python object detections")
 
         except Exception as e:
@@ -426,7 +421,6 @@ class RobotController:
             port=self._command_port, host=self._host
         )
 
-        # Initialize and start SequenceServer (port 5008)
         logger.info(f"Starting SequenceServer (port: {self._sequence_port})")
         self._sequence_server = run_sequence_server_background(
             lm_studio_url=LMSTUDIO_BASE_URL,
@@ -476,7 +470,6 @@ class RobotController:
         # Start perception refresh loop (keeps stale objects fresh via stereo+YOLO)
         self._start_perception_refresh()
 
-        # Initialize hardware and camera singletons for the selected environment.
         # This call seeds the module-level cache so all subsequent lazy accessors
         # via core.Imports return the correct adapter for --env sim or --env real.
         from core.Imports import get_hardware_interface, get_camera_provider
@@ -517,7 +510,6 @@ class RobotController:
                 "(detect_object_stereo will use cached images)"
             )
 
-        # Initialize vision streaming if enabled
         if enable_streaming:
             try:
                 import platform
@@ -535,7 +527,6 @@ class RobotController:
                         f"Initializing VisionProcessor with YOLO model: {YOLO_MODEL_PATH}"
                     )
 
-                    # Initialize YOLO detector
                     detector = YOLODetector(model_path=YOLO_MODEL_PATH)
 
                     # Share with WebUI so it doesn't load a duplicate model
@@ -557,7 +548,6 @@ class RobotController:
                             "VisionProcessor will run in main thread (blocking)"
                         )
 
-                    # Create vision processor with config
                     self._vision_processor = VisionProcessor(
                         detector=detector,
                         fps=VISION_STREAM_FPS,
@@ -753,7 +743,6 @@ def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # Create controller
     controller = RobotController(
         host=args.host,
         model=args.model,

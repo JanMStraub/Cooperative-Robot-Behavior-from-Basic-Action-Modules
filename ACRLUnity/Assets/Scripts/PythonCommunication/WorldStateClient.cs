@@ -19,9 +19,6 @@ namespace PythonCommunication
     /// </summary>
     public class WorldStateClient : TCPClientBase
     {
-        /// <summary>
-        /// Singleton instance for global access
-        /// </summary>
         public static WorldStateClient Instance { get; private set; }
 
         [Header("Settings")]
@@ -36,11 +33,6 @@ namespace PythonCommunication
 
         private const string _logPrefix = "[WORLD_STATE_CLIENT]";
 
-        #region Unity Lifecycle
-
-        /// <summary>
-        /// Initialize singleton instance
-        /// </summary>
         protected override void Awake()
         {
             // Singleton pattern
@@ -64,9 +56,6 @@ namespace PythonCommunication
             _autoReconnect = true;
         }
 
-        /// <summary>
-        /// Clean up singleton on destroy
-        /// </summary>
         protected override void OnDestroy()
         {
             if (Instance == this)
@@ -75,10 +64,6 @@ namespace PythonCommunication
             }
             base.OnDestroy();
         }
-
-        #endregion
-
-        #region World State Publishing
 
         /// <summary>
         /// Publish a world state update to Python.
@@ -132,22 +117,12 @@ namespace PythonCommunication
             }
         }
 
-        #endregion
-
-        #region Lifecycle Hooks
-
-        /// <summary>
-        /// Called when connection is established
-        /// </summary>
         protected override void OnConnected()
         {
             base.OnConnected();
             Debug.Log($"{_logPrefix} World state streaming connected to port {_serverPort}");
         }
 
-        /// <summary>
-        /// Called when connection attempt fails
-        /// </summary>
         protected override void OnConnectionFailed(Exception exception)
         {
             base.OnConnectionFailed(exception);
@@ -159,15 +134,10 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Called when disconnecting
-        /// </summary>
         protected override void OnDisconnecting()
         {
             base.OnDisconnecting();
             Debug.Log($"{_logPrefix} Disconnecting (sent {_updatesSent} updates this session)");
         }
-
-        #endregion
     }
 }

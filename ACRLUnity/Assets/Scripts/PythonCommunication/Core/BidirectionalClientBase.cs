@@ -11,11 +11,6 @@ namespace PythonCommunication.Core
     /// Base class for bidirectional TCP clients that send requests and receive responses.
     /// Provides common functionality for RAGClient, StatusClient, SequenceClient, etc.
     ///
-    /// Features:
-    /// - Thread-safe response queue
-    /// - Background receive thread
-    /// - Main thread callback dispatch
-    /// - Request/response correlation via request_id
     /// </summary>
     /// <typeparam name="TResponse">Response data type</typeparam>
     public abstract class BidirectionalClientBase<TResponse> : TCPClientBase
@@ -35,17 +30,11 @@ namespace PythonCommunication.Core
 
         protected abstract string LogPrefix { get; }
 
-        #region Unity Lifecycle
-
         protected override void Update()
         {
             base.Update();
             ProcessResponseQueue();
         }
-
-        #endregion
-
-        #region Connection Lifecycle
 
         protected override void OnConnected()
         {
@@ -80,10 +69,6 @@ namespace PythonCommunication.Core
             Debug.Log($"{LogPrefix} Disconnecting cleanup done");
         }
 
-        #endregion
-
-        #region Receive Loop
-
         /// <summary>
         /// Background thread that receives responses from server.
         /// Overrides must implement ReceiveResponse() to handle specific protocol.
@@ -107,16 +92,21 @@ namespace PythonCommunication.Core
                 }
                 catch (SocketException sockEx)
                     when (sockEx.SocketErrorCode == SocketError.TimedOut
-                       || sockEx.SocketErrorCode == SocketError.WouldBlock)
+                        || sockEx.SocketErrorCode == SocketError.WouldBlock
+                    )
                 {
                     // WouldBlock is the macOS equivalent of TimedOut on non-blocking sockets.
                     continue;
                 }
                 catch (System.IO.IOException ioEx)
                 {
-                    if (ioEx.InnerException is SocketException innerSockEx
-                        && (innerSockEx.SocketErrorCode == SocketError.TimedOut
-                            || innerSockEx.SocketErrorCode == SocketError.WouldBlock))
+                    if (
+                        ioEx.InnerException is SocketException innerSockEx
+                        && (
+                            innerSockEx.SocketErrorCode == SocketError.TimedOut
+                            || innerSockEx.SocketErrorCode == SocketError.WouldBlock
+                        )
+                    )
                     {
                         continue;
                     }
@@ -127,14 +117,20 @@ namespace PythonCommunication.Core
                         // true unexpected error. EOF means the server shut down cleanly.
                         bool isRemoteClose =
                             ioEx.Message.StartsWith("Connection closed") // graceful EOF from ReadExactly
-                            || (ioEx.InnerException is SocketException sockEx2
-                                && (sockEx2.SocketErrorCode == SocketError.ConnectionReset
-                                    || sockEx2.SocketErrorCode == SocketError.ConnectionAborted));
+                            || (
+                                ioEx.InnerException is SocketException sockEx2
+                                && (
+                                    sockEx2.SocketErrorCode == SocketError.ConnectionReset
+                                    || sockEx2.SocketErrorCode == SocketError.ConnectionAborted
+                                )
+                            );
 
                         if (isRemoteClose)
                             Debug.Log($"{LogPrefix} Server closed the connection.");
                         else
-                            Debug.LogWarning($"{LogPrefix} Stream closed unexpectedly: {ioEx.Message}");
+                            Debug.LogWarning(
+                                $"{LogPrefix} Stream closed unexpectedly: {ioEx.Message}"
+                            );
 
                         Disconnect();
                     }
@@ -175,10 +171,6 @@ namespace PythonCommunication.Core
         {
             return 0;
         }
-
-        #endregion
-
-        #region Response Processing
 
         /// <summary>
         /// Process queued responses on main thread.
@@ -245,10 +237,6 @@ namespace PythonCommunication.Core
         /// </summary>
         protected virtual void OnResponseReceived(TResponse response) { }
 
-        #endregion
-
-        #region Request/Response
-
         /// <summary>
         /// Send a request and register callback for response.
         /// </summary>
@@ -281,9 +269,6 @@ namespace PythonCommunication.Core
             return true;
         }
 
-        /// <summary>
-        /// Get number of pending requests.
-        /// </summary>
         public int PendingRequestCount
         {
             get
@@ -295,9 +280,6 @@ namespace PythonCommunication.Core
             }
         }
 
-        /// <summary>
-        /// Get number of queued responses.
-        /// </summary>
         public int QueuedResponseCount
         {
             get
@@ -308,10 +290,6 @@ namespace PythonCommunication.Core
                 }
             }
         }
-
-        #endregion
-
-        #region Utility Methods
 
         /// <summary>
         /// Read a 4-byte big-endian integer from stream.
@@ -350,9 +328,6 @@ namespace PythonCommunication.Core
             return Encoding.UTF8.GetString(buffer);
         }
 
-        /// <summary>
-        /// Read a length-prefixed JSON string and parse it.
-        /// </summary>
         protected string ReadJsonString()
         {
             return ReadString();
@@ -368,7 +343,5 @@ namespace PythonCommunication.Core
                 Array.Reverse(bytes);
             Array.Copy(bytes, 0, buffer, offset, 4);
         }
-
-        #endregion
     }
 }

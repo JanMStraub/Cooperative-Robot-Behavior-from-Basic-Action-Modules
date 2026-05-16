@@ -29,27 +29,16 @@ namespace Robotics
         private int _iterationCount;
         public int IterationCount => _iterationCount;
 
-        /// <summary>
-        /// Reset iteration counter (call when starting new target)
-        /// </summary>
         public void ResetIterationCount()
         {
             _iterationCount = 0;
         }
 
-        /// <summary>
-        /// Set iteration count (for transferring state between solvers)
-        /// </summary>
         public void SetIterationCount(int count)
         {
             _iterationCount = count;
         }
 
-        /// <summary>
-        /// Creates a new IK solver for a robot with specified joint count
-        /// </summary>
-        /// <param name="jointCount">Number of robot joints</param>
-        /// <param name="dampingFactor">Damping factor for pseudo-inverse stability</param>
         public IKSolver(int jointCount, float dampingFactor)
         {
             _dampingFactor = dampingFactor;
@@ -187,9 +176,6 @@ namespace Robotics
             return _jointDelta;
         }
 
-        /// <summary>
-        /// Calculate orientation error as angle-axis representation
-        /// </summary>
         private Vector3 CalculateOrientationError(Quaternion current, Quaternion target)
         {
             Quaternion quaternionError = target * Quaternion.Inverse(current);
@@ -204,9 +190,6 @@ namespace Robotics
             return axis.normalized * (angleDegree * Mathf.Deg2Rad);
         }
 
-        /// <summary>
-        /// Build the 6D error vector (position + orientation)
-        /// </summary>
         private void BuildErrorVector(Vector3 posError, Vector3 rotError)
         {
             _errorVector[0] = posError.x;
@@ -217,9 +200,6 @@ namespace Robotics
             _errorVector[5] = rotError.z;
         }
 
-        /// <summary>
-        /// Compute the 6xN Jacobian matrix for the robot at its current configuration
-        /// </summary>
         private void CalculateJacobian(IKState currentState, JointInfo[] joints)
         {
             if (_jacobianMatrix.ColumnCount != joints.Length)
@@ -290,7 +270,8 @@ namespace Robotics
         private static void SolveLU6x6(double[,] a, double[] b, double[] y, int[] piv)
         {
             const int n = 6;
-            for (int i = 0; i < n; i++) piv[i] = i;
+            for (int i = 0; i < n; i++)
+                piv[i] = i;
 
             // LU factorization with partial pivoting (in-place on a)
             for (int k = 0; k < n; k++)
@@ -301,15 +282,27 @@ namespace Robotics
                 for (int i = k + 1; i < n; i++)
                 {
                     double v = System.Math.Abs(a[i, k]);
-                    if (v > maxVal) { maxVal = v; maxRow = i; }
+                    if (v > maxVal)
+                    {
+                        maxVal = v;
+                        maxRow = i;
+                    }
                 }
                 if (maxRow != k)
                 {
                     // Swap rows in a
-                    for (int j = 0; j < n; j++) { double t = a[k, j]; a[k, j] = a[maxRow, j]; a[maxRow, j] = t; }
-                    int tmp = piv[k]; piv[k] = piv[maxRow]; piv[maxRow] = tmp;
+                    for (int j = 0; j < n; j++)
+                    {
+                        double t = a[k, j];
+                        a[k, j] = a[maxRow, j];
+                        a[maxRow, j] = t;
+                    }
+                    int tmp = piv[k];
+                    piv[k] = piv[maxRow];
+                    piv[maxRow] = tmp;
                 }
-                if (a[k, k] == 0.0) continue; // singular column — skip
+                if (a[k, k] == 0.0)
+                    continue; // singular column — skip
                 double inv = 1.0 / a[k, k];
                 for (int i = k + 1; i < n; i++)
                 {
@@ -320,11 +313,12 @@ namespace Robotics
             }
 
             // Apply row permutation to b -> y, then forward/back substitution
-            for (int i = 0; i < n; i++) y[i] = b[piv[i]];
+            for (int i = 0; i < n; i++)
+                y[i] = b[piv[i]];
             // Forward substitution (L is unit lower triangular)
             for (int i = 1; i < n; i++)
-                for (int j = 0; j < i; j++)
-                    y[i] -= a[i, j] * y[j];
+            for (int j = 0; j < i; j++)
+                y[i] -= a[i, j] * y[j];
             // Back substitution
             for (int i = n - 1; i >= 0; i--)
             {
@@ -335,9 +329,6 @@ namespace Robotics
         }
     }
 
-    /// <summary>
-    /// Data structure for IK state (end effector position and rotation)
-    /// </summary>
     public struct IKState
     {
         public Vector3 Position;
@@ -350,9 +341,6 @@ namespace Robotics
         }
     }
 
-    /// <summary>
-    /// Data structure for joint information (position and axis in IK frame)
-    /// </summary>
     public struct JointInfo
     {
         public Vector3 WorldPosition;

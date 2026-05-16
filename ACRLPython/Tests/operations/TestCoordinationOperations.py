@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for CoordinationOperations.py
-
-Tests the multi-robot coordination operations including:
-- detect_other_robot: Robot detection in workspace
-- mirror_movement_of_other_robot: Movement mirroring
-- Multi-robot workspace safety
-- Coordination with missing/offline robots
-"""
+"""Unit tests for CoordinationOperations.py"""
 
 import pytest
 from unittest.mock import Mock
@@ -19,9 +11,7 @@ from operations.CoordinationOperations import (
     MIRROR_MOVEMENT_OPERATION,
 )
 
-# ============================================================================
 # Test Class: detect_other_robot - Robot Detection
-# ============================================================================
 
 
 class TestDetectOtherRobot:
@@ -30,7 +20,6 @@ class TestDetectOtherRobot:
     def test_detect_other_robot_success(
         self, mock_world_state_multi_robot, patch_world_state
     ):
-        """Test successful detection of another robot."""
         # Mock robot states with end effector positions
         mock_world_state_multi_robot.get_robot_state = Mock(
             side_effect=lambda rid: {
@@ -59,7 +48,6 @@ class TestDetectOtherRobot:
         assert 0.55 <= result.result["distance"] <= 0.65
 
     def test_detect_other_robot_invalid_robot_id(self):
-        """Test detection with invalid robot ID."""
         result = detect_other_robot("", "Robot2")
 
         assert result.success is False
@@ -67,7 +55,6 @@ class TestDetectOtherRobot:
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_detect_other_robot_invalid_target_robot_id(self):
-        """Test detection with invalid target robot ID."""
         result = detect_other_robot("Robot1", "")
 
         assert result.success is False
@@ -77,7 +64,6 @@ class TestDetectOtherRobot:
     def test_detect_other_robot_target_not_found(
         self, mock_world_state_multi_robot, patch_world_state
     ):
-        """Test detection when target robot not in world state."""
         # Mock get_robot_state to return None for target
         mock_world_state_multi_robot.get_robot_state = Mock(
             side_effect=lambda rid: {
@@ -98,7 +84,6 @@ class TestDetectOtherRobot:
     def test_detect_other_robot_detector_not_found(
         self, mock_world_state_multi_robot, patch_world_state
     ):
-        """Test detection when detecting robot not in world state."""
         # Mock get_robot_state to return None for detector
         mock_world_state_multi_robot.get_robot_state = Mock(
             side_effect=lambda rid: {
@@ -119,7 +104,6 @@ class TestDetectOtherRobot:
     def test_detect_other_robot_missing_position_data(
         self, mock_world_state_multi_robot, patch_world_state
     ):
-        """Test detection when position data is missing."""
         # Mock robot states without position data
         mock_world_state_multi_robot.get_robot_state = Mock(
             side_effect=lambda rid: {
@@ -138,7 +122,6 @@ class TestDetectOtherRobot:
     def test_detect_other_robot_uses_base_position_fallback(
         self, mock_world_state_multi_robot, patch_world_state
     ):
-        """Test detection falls back to base position if end effector position unavailable."""
         # Mock robot states with only base position
         mock_world_state_multi_robot.get_robot_state = Mock(
             side_effect=lambda rid: {
@@ -163,7 +146,6 @@ class TestDetectOtherRobot:
     def test_detect_other_robot_with_camera_id(
         self, mock_world_state_multi_robot, patch_world_state
     ):
-        """Test detection with custom camera ID."""
         mock_world_state_multi_robot.get_robot_state = Mock(
             side_effect=lambda rid: {
                 "Robot1": {
@@ -185,16 +167,12 @@ class TestDetectOtherRobot:
         assert result.result["camera_id"] == "stereo"
 
 
-# ============================================================================
 # Test Class: mirror_movement_of_other_robot - Movement Mirroring
-# ============================================================================
 
 
 class TestMirrorMovement:
-    """Test robot movement mirroring operation."""
 
     def test_mirror_movement_success(self, patch_command_broadcaster):
-        """Test successful movement mirroring activation."""
         result = mirror_movement_of_other_robot("Robot2", "Robot1", "x")
 
         assert result.success is True
@@ -207,7 +185,6 @@ class TestMirrorMovement:
         patch_command_broadcaster.send_command.assert_called_once()
 
     def test_mirror_movement_with_scale_factor(self, patch_command_broadcaster):
-        """Test mirroring with custom scale factor."""
         result = mirror_movement_of_other_robot(
             "Robot2", "Robot1", "x", scale_factor=0.5
         )
@@ -217,7 +194,6 @@ class TestMirrorMovement:
         assert result.result["scale_factor"] == 0.5
 
     def test_mirror_movement_all_axes(self, patch_command_broadcaster):
-        """Test mirroring on different axes."""
         for axis in ["x", "y", "z", "none"]:
             result = mirror_movement_of_other_robot("Robot2", "Robot1", axis)
             assert result.success is True
@@ -225,7 +201,6 @@ class TestMirrorMovement:
             assert result.result["mirror_axis"] == axis
 
     def test_mirror_movement_invalid_robot_id(self):
-        """Test mirroring with invalid robot ID."""
         result = mirror_movement_of_other_robot("", "Robot1", "x")
 
         assert result.success is False
@@ -233,7 +208,6 @@ class TestMirrorMovement:
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_mirror_movement_invalid_target_robot_id(self):
-        """Test mirroring with invalid target robot ID."""
         result = mirror_movement_of_other_robot("Robot2", "", "x")
 
         assert result.success is False
@@ -241,7 +215,6 @@ class TestMirrorMovement:
         assert result.error["code"] == "INVALID_TARGET_ROBOT_ID"
 
     def test_mirror_movement_invalid_mirror_axis(self):
-        """Test mirroring with invalid mirror axis."""
         result = mirror_movement_of_other_robot("Robot2", "Robot1", "invalid")
 
         assert result.success is False
@@ -249,7 +222,6 @@ class TestMirrorMovement:
         assert result.error["code"] == "INVALID_MIRROR_AXIS"
 
     def test_mirror_movement_invalid_scale_factor_too_low(self):
-        """Test mirroring with scale factor below minimum."""
         result = mirror_movement_of_other_robot(
             "Robot2", "Robot1", "x", scale_factor=0.05
         )
@@ -259,7 +231,6 @@ class TestMirrorMovement:
         assert result.error["code"] == "INVALID_SCALE_FACTOR"
 
     def test_mirror_movement_invalid_scale_factor_too_high(self):
-        """Test mirroring with scale factor above maximum."""
         result = mirror_movement_of_other_robot(
             "Robot2", "Robot1", "x", scale_factor=3.0
         )
@@ -269,7 +240,6 @@ class TestMirrorMovement:
         assert result.error["code"] == "INVALID_SCALE_FACTOR"
 
     def test_mirror_movement_command_structure(self, patch_command_broadcaster):
-        """Test that mirror command has correct structure."""
         result = mirror_movement_of_other_robot(
             "Robot2", "Robot1", "y", scale_factor=1.5, request_id=456
         )
@@ -289,7 +259,6 @@ class TestMirrorMovement:
         assert request_id == 456
 
     def test_mirror_movement_communication_failed(self, patch_command_broadcaster):
-        """Test mirroring when communication fails."""
         patch_command_broadcaster.send_command = Mock(return_value=False)
 
         result = mirror_movement_of_other_robot("Robot2", "Robot1", "x")
@@ -299,7 +268,6 @@ class TestMirrorMovement:
         assert result.error["code"] == "COMMUNICATION_FAILED"
 
     def test_mirror_movement_network_error(self, patch_command_broadcaster):
-        """Test mirroring when broadcaster raises exception."""
         patch_command_broadcaster.send_command = Mock(
             side_effect=Exception("Network error")
         )
@@ -311,16 +279,12 @@ class TestMirrorMovement:
         assert result.error["code"] == "UNEXPECTED_ERROR"
 
 
-# ============================================================================
 # Test Class: Operation Definitions
-# ============================================================================
 
 
 class TestCoordinationOperationDefinitions:
-    """Test BasicOperation definitions for coordination operations."""
 
     def test_detect_other_robot_operation_definition(self):
-        """Test DETECT_OTHER_ROBOT_OPERATION is properly defined."""
         assert DETECT_OTHER_ROBOT_OPERATION is not None
         assert DETECT_OTHER_ROBOT_OPERATION.name == "detect_other_robot"
         assert (
@@ -328,7 +292,6 @@ class TestCoordinationOperationDefinitions:
         )
 
     def test_detect_other_robot_has_metadata(self):
-        """Test detect operation has required metadata."""
         op = DETECT_OTHER_ROBOT_OPERATION
 
         assert op.description is not None
@@ -338,7 +301,6 @@ class TestCoordinationOperationDefinitions:
         assert op.implementation is not None
 
     def test_mirror_movement_operation_definition(self):
-        """Test MIRROR_MOVEMENT_OPERATION is properly defined."""
         assert MIRROR_MOVEMENT_OPERATION is not None
         assert MIRROR_MOVEMENT_OPERATION.name == "mirror_movement_of_other_robot"
         assert (
@@ -346,7 +308,6 @@ class TestCoordinationOperationDefinitions:
         )
 
     def test_mirror_movement_has_metadata(self):
-        """Test mirror operation has required metadata."""
         op = MIRROR_MOVEMENT_OPERATION
 
         assert op.description is not None
@@ -390,13 +351,10 @@ class TestCoordinationOperationDefinitions:
         assert result.success is True
 
 
-# ============================================================================
 # Test Class: Concurrent Execution
-# ============================================================================
 
 
 class TestCoordinationConcurrency:
-    """Test thread safety for coordination operations."""
 
     def test_concurrent_detections(
         self, mock_world_state_multi_robot, patch_world_state
@@ -460,9 +418,7 @@ class TestCoordinationConcurrency:
         assert all(r.success for r in results)
 
 
-# ============================================================================
 # Test Class: Edge Cases
-# ============================================================================
 
 
 class TestCoordinationEdgeCases:
@@ -471,7 +427,6 @@ class TestCoordinationEdgeCases:
     def test_detect_robot_same_id(
         self, mock_world_state_multi_robot, patch_world_state
     ):
-        """Test detecting a robot with the same ID (should still work)."""
         mock_world_state_multi_robot.get_robot_state = Mock(
             return_value={
                 "robot_id": "Robot1",
@@ -504,7 +459,6 @@ class TestCoordinationEdgeCases:
     def test_detect_with_large_distance(
         self, mock_world_state_multi_robot, patch_world_state
     ):
-        """Test detection with robots far apart."""
         mock_world_state_multi_robot.get_robot_state = Mock(
             side_effect=lambda rid: {
                 "Robot1": {

@@ -56,7 +56,6 @@ except ImportError:
     from config.Robot import HANDOFF_PRESENTATION_POSITION
     from operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 
-# Configure logging
 from core.LoggingSetup import setup_logging
 from core.LLMUtils import extract_json as _extract_json_util
 
@@ -114,7 +113,8 @@ class _PromptBuilder:
         spatial_block = (
             f"\n        {spatial_section}\n"
             "        NOTE: Spatial context is reference only. Use ONLY operations from Available Operations above.\n"
-            if spatial_section else ""
+            if spatial_section
+            else ""
         )
         reflection_block = (
             f"\n        === REFLECTION ===\n        {hint}\n" if hint else ""
@@ -275,6 +275,7 @@ class _PromptBuilder:
                                     )
                     summary_lines.append("\n=== MOST RELEVANT OPERATIONS ===")
 
+                ops_added = 0
                 if operation_results:
                     if not workflow_results:
                         summary_lines.append(
@@ -289,8 +290,10 @@ class _PromptBuilder:
                             summary_lines.append(
                                 f"- {op.name}({params}): {op.description} [relevance: {score:.2f}]"
                             )
-                else:
-                    # No RAG op hits — list all ops as fallback
+                            ops_added += 1
+
+                if ops_added == 0:
+                    # No RAG op hits or all lookups failed — list all ops as fallback
                     for op in self.registry.get_all_operations():
                         params = self.format_parameters(op.parameters)
                         summary_lines.append(f"- {op.name}({params}): {op.description}")
@@ -375,7 +378,6 @@ class CommandParser:
             model: Model name for parsing (default from config)
             use_rag: Whether to use RAG for semantic operation context
         """
-        # Import from centralized lazy import system (prevents circular dependencies)
         from core.Imports import get_global_registry
 
         self.lm_studio_url = lm_studio_url or LMSTUDIO_BASE_URL
@@ -392,13 +394,11 @@ class CommandParser:
         self._session.mount("http://", adapter)
         self._session.mount("https://", adapter)
 
-        # Initialize LRU Cache for parsed commands
         if self.use_cache:
             self._parse_cache = functools.lru_cache(maxsize=128)(self._do_llm_request)
         else:
             self._parse_cache = self._do_llm_request
 
-        # Initialize RAG system for semantic operation search
         self.rag = None
         if use_rag:
             try:
@@ -604,7 +604,10 @@ class CommandParser:
             f'High-level command: "{command_text}"\n'
             f"Default robot: {robot_id}\n\n"
             "Decompose this command into an ordered list of short, concrete physical motion descriptions. Each entry should describe one distinct robot motion (e.g. 'move end-effector to target position', 'lower arm to 0.3m height').\n"
-            "IMPORTANT: Do NOT add gripper open/close or grasp motions unless the command EXPLICITLY says to pick up, grab, grasp, or grip an object. Pure navigation ('move to it', 'navigate to X', 'go to position') must NOT include any gripper step.\n Navigation example: 'detect the blue cube and move to it': "'["detect blue cube position", "move end-effector to detected position"]\n' "Pick example: 'grasp the red cube': "'["grasp red cube (full approach and grip)"]\n'
+            "IMPORTANT: Do NOT add gripper open/close or grasp motions unless the command EXPLICITLY says to pick up, grab, grasp, or grip an object. Pure navigation ('move to it', 'navigate to X', 'go to position') must NOT include any gripper step.\n Navigation example: 'detect the blue cube and move to it': "
+            '["detect blue cube position", "move end-effector to detected position"]\n'
+            "Pick example: 'grasp the red cube': "
+            '["grasp red cube (full approach and grip)"]\n'
             "IMPORTANT: grasp/pick/grab is always a SINGLE step (do NOT split into approach + descend + close).\n"
             "Output a JSON array of strings only. No markdown."
         )
@@ -685,7 +688,6 @@ class CommandParser:
         Returns:
             Parsed command structure
         """
-        # Build prompt for LLM using _PromptBuilder
         kg_section = self._get_spatial_context(robot_id, command_text=command_text)
         peer_section = self._get_peer_context(robot_id)
         spatial_section = "\n        ".join(s for s in [kg_section, peer_section] if s)
@@ -829,6 +831,18 @@ class CommandParser:
                 logger.info(f"LLM returned an array directly, wrapping in dict")
                 parsed = {"commands": parsed}
 
+            # Catch single-operation responses (no "commands"/"plan" wrapper)
+            if (
+                isinstance(parsed, dict)
+                and "operation" in parsed
+                and "commands" not in parsed
+                and "plan" not in parsed
+            ):
+                logger.info(
+                    "LLM returned single operation dict, wrapping in commands list"
+                )
+                parsed = {"commands": [parsed]}
+
             if not parsed:
                 return {
                     "success": False,
@@ -910,7 +924,9 @@ class CommandParser:
                     lines.append(f"  - {r['robot_id']} ({r['distance']:.2f}m)")
 
             _handoff_keywords = ("hand", "pass", "give", "transfer", "handoff")
-            mentions_handoff = any(kw in command_text.lower() for kw in _handoff_keywords)
+            mentions_handoff = any(
+                kw in command_text.lower() for kw in _handoff_keywords
+            )
             # Handoff candidates — only inject when command mentions handoff intent
             # to avoid polluting single-robot prompts with multi-robot context noise
             if reachable and mentions_handoff:
@@ -1018,6 +1034,8 @@ class CommandParser:
         validated = []
         for cmd in commands:
             operation = cmd.get("operation", "")
+            if isinstance(operation, list):
+                operation = operation[0] if operation else ""
             params = cmd.get("params", {})
 
             # Ensure robot_id is present (use "robot" field if specified in multi-robot plan)
@@ -1027,7 +1045,11 @@ class CommandParser:
             # Verify operation exists
             op = self.registry.get_operation_by_name(operation)
             if op is None:
-                logger.warning("Unknown operation '%s' (params=%s), skipping", operation, list(params.keys()))
+                logger.warning(
+                    "Unknown operation '%s' (params=%s), skipping",
+                    operation,
+                    list(params.keys()),
+                )
                 continue
 
             validated_cmd = {"operation": operation, "params": params}
@@ -1069,7 +1091,6 @@ class CommandParser:
         if not any("parallel_group" in cmd for cmd in commands):
             return commands
 
-        # Build map: var_name -> parallel_group that captures it
         capture_group: Dict[str, int] = {}
         for cmd in commands:
             if "capture_var" in cmd and "parallel_group" in cmd:
@@ -1104,9 +1125,9 @@ class CommandParser:
                     changed = True
 
         # Renumber groups to be contiguous (1, 2, 3, …) preserving relative order
-        groups_sorted = sorted(set(
-            cmd["parallel_group"] for cmd in commands if "parallel_group" in cmd
-        ))
+        groups_sorted = sorted(
+            set(cmd["parallel_group"] for cmd in commands if "parallel_group" in cmd)
+        )
         remap = {old: new for new, old in enumerate(groups_sorted, start=1)}
         for cmd in commands:
             if "parallel_group" in cmd:

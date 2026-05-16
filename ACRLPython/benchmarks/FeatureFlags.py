@@ -4,6 +4,7 @@ BenchmarkFeatureFlags — per-sequence feature flag overrides for ablation bench
 Serialised as a compact JSON blob appended to SEQUENCE_QUERY messages.
 None values are omitted (meaning: use server default).
 """
+
 from __future__ import annotations
 
 import json
@@ -30,8 +31,6 @@ class BenchmarkFeatureFlags:
         """
         Serialise to compact JSON string; returns empty string when all fields are None.
 
-        Returns:
-            JSON string like '{"use_rag": false}', or "" if nothing to override.
         """
         d = {k: v for k, v in self.__dict__.items() if v is not None}
         return json.dumps(d, separators=(",", ":")) if d else ""
@@ -41,11 +40,7 @@ class BenchmarkFeatureFlags:
         """
         Deserialise from JSON string produced by to_json().
 
-        Args:
-            text: JSON string or empty string.
 
-        Returns:
-            BenchmarkFeatureFlags with parsed values; unknown keys are ignored.
         """
         if not text:
             return cls()
@@ -61,11 +56,7 @@ class BenchmarkFeatureFlags:
         Translates BenchmarkConfig field names to BenchmarkFeatureFlags field names.
         Only includes fields that are explicitly present in the snapshot.
 
-        Args:
-            snapshot: dict from BenchmarkResult.config_snapshot.
 
-        Returns:
-            BenchmarkFeatureFlags populated from snapshot.
         """
         mapping = {
             "use_rag": "use_rag",

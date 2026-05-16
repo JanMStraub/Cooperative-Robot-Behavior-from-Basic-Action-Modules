@@ -4,9 +4,6 @@ using UnityEngine;
 
 namespace Robotics
 {
-    /// <summary>
-    /// Configuration options for grasp planning and gripper control
-    /// </summary>
     public struct GraspOptions
     {
         public bool useGraspPlanning;

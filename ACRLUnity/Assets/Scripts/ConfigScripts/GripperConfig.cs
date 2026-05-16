@@ -32,9 +32,6 @@ namespace Configuration
         public float smoothTime = 0.5f;
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Validate configuration values to ensure consistency.
-        /// </summary>
         private void OnValidate()
         {
             // Force window size

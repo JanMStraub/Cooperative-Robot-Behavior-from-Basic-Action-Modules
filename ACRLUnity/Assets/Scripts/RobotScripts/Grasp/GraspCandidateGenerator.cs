@@ -29,9 +29,6 @@ namespace Robotics.Grasp
             _random = seed == 0 ? new System.Random() : new System.Random(seed);
         }
 
-        /// <summary>
-        /// Generate all grasp candidates for a target object.
-        /// </summary>
         public List<GraspCandidate> GenerateCandidates(
             GameObject targetObject,
             Vector3 gripperPosition
@@ -212,9 +209,6 @@ namespace Robotics.Grasp
             };
         }
 
-        /// <summary>
-        /// Perturbs a direction vector within a small cone.
-        /// </summary>
         private Vector3 PerturbDirection(Vector3 mainAxis, Vector3 tangent)
         {
             float perturbationAngle = (float)(
@@ -231,12 +225,6 @@ namespace Robotics.Grasp
         /// Calculate gripper rotation for approach type.
         /// Accounts for URDF gripper coordinate frame (90° Z-rotation baked in).
         /// </summary>
-        /// <param name="approach">Approach type</param>
-        /// <param name="approachDir">World-space approach direction</param>
-        /// <param name="tangent">World-space tangent for roll reference</param>
-        /// <param name="objRot">Object rotation</param>
-        /// <param name="angleVar">Angle variation in degrees</param>
-        /// <returns>Gripper rotation quaternion</returns>
         private Quaternion CalculateGripperRotation(
             GraspApproach approach,
             Vector3 approachDir,

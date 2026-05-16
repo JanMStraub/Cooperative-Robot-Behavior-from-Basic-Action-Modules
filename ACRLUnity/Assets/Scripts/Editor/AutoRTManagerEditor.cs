@@ -20,7 +20,6 @@ namespace ACRLEditor
         private GUIStyle _buttonStyle;
         private bool _stylesInitialized = false;
 
-        /// <summary>Caches the AutoRTManager target reference on inspector enable.</summary>
         private void OnEnable()
         {
             _manager = target as AutoRTManager;

@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-Tests for configurable Robot Constitution (Improvement 3).
-
-Covers:
-- Rules loaded from config.SEMANTIC_SAFETY_RULES
-- add_rule() appends new rules at runtime
-- add_rule() deduplicates
-- AUTORT_EXTRA_SAFETY_RULES env var appends via config
-- Fallback to hardcoded defaults when config has no SEMANTIC_SAFETY_RULES
-"""
+"""Tests for configurable Robot Constitution (Improvement 3)"""
 
 import os
 import importlib
@@ -55,9 +46,7 @@ def constitution(request):
             return RobotConstitution(config)
 
 
-# ============================================================================
 # Rule loading
-# ============================================================================
 
 
 class TestRuleLoading:
@@ -96,9 +85,7 @@ class TestRuleLoading:
         assert "Do not harm humans or animals" in rc.semantic_rules
 
 
-# ============================================================================
 # add_rule()
-# ============================================================================
 
 
 class TestAddRule:
@@ -128,9 +115,7 @@ class TestAddRule:
         assert "Do not enter zone B" in prompt_text
 
 
-# ============================================================================
 # AUTORT_EXTRA_SAFETY_RULES env var (tests config module directly)
-# ============================================================================
 
 
 class TestExtraRulesEnvVar:

@@ -25,6 +25,7 @@ from typing import List, Tuple
 
 import numpy as np
 
+
 def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
     """Hamilton product of two quaternions [x, y, z, w]."""
     x1, y1, z1, w1 = q1
@@ -47,11 +48,10 @@ def _normalise_quat(q: np.ndarray) -> np.ndarray:
         return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
     return q / norm
 
-# ---------------------------------------------------------------------------
+
 # URDF joint definitions (verified from ar4.urdf)
 # Each entry: (origin_xyz, origin_rpy, axis_xyz)
 # Fixed joints have axis=None.
-# ---------------------------------------------------------------------------
 
 _JOINT_PARAMS = [
     # joint_1: revolute
@@ -78,21 +78,11 @@ _NUM_JOINTS = 6
 # Chain indices at which to snapshot T for collision link poses (link_2, link_3, link_5, link_6)
 _LINK_CAPTURE_INDICES = {1, 2, 4, 5}
 
-
-# ---------------------------------------------------------------------------
 # Low-level transform helpers
-# ---------------------------------------------------------------------------
 
 
 def _translation_matrix(xyz: Tuple[float, float, float]) -> np.ndarray:
-    """Build a 4×4 homogeneous translation matrix.
-
-    Args:
-        xyz: Translation (x, y, z).
-
-    Returns:
-        4×4 homogeneous translation matrix.
-    """
+    """Build 4×4 homogeneous translation matrix."""
     T = np.eye(4, dtype=np.float64)
     T[0, 3] = xyz[0]
     T[1, 3] = xyz[1]
@@ -101,16 +91,7 @@ def _translation_matrix(xyz: Tuple[float, float, float]) -> np.ndarray:
 
 
 def _rpy_to_matrix(rpy: Tuple[float, float, float]) -> np.ndarray:
-    """Convert intrinsic fixed-frame RPY angles (rad) to a 4×4 rotation matrix.
-
-    URDF uses fixed-axis (extrinsic) RPY: R = Rz(yaw) @ Ry(pitch) @ Rx(roll).
-
-    Args:
-        rpy: (roll, pitch, yaw) in radians.
-
-    Returns:
-        4×4 homogeneous rotation matrix.
-    """
+    """Convert URDF fixed-axis RPY (rad) to 4×4 rotation matrix: R = Rz(yaw) @ Ry(pitch) @ Rx(roll)."""
     roll, pitch, yaw = rpy
     cr, sr = math.cos(roll), math.sin(roll)
     cp, sp = math.cos(pitch), math.sin(pitch)
@@ -131,17 +112,7 @@ def _rpy_to_matrix(rpy: Tuple[float, float, float]) -> np.ndarray:
 
 
 def _axis_angle_matrix(axis: Tuple[float, float, float], theta: float) -> np.ndarray:
-    """Build a 4×4 rotation matrix for rotation of *theta* rad around *axis*.
-
-    Uses Rodrigues' formula.
-
-    Args:
-        axis: Unit rotation axis (x, y, z).
-        theta: Rotation angle in radians.
-
-    Returns:
-        4×4 homogeneous rotation matrix.
-    """
+    """Build 4×4 rotation matrix for theta radians around axis via Rodrigues' formula."""
     ax, ay, az = axis
     c, s = math.cos(theta), math.sin(theta)
     t = 1.0 - c
@@ -159,16 +130,7 @@ def _axis_angle_matrix(axis: Tuple[float, float, float], theta: float) -> np.nda
 
 
 def _mat_to_quaternion(R3: np.ndarray) -> np.ndarray:
-    """Convert a 3×3 rotation matrix to a quaternion [x, y, z, w].
-
-    Uses the Shepperd method for numerical stability.
-
-    Args:
-        R3: 3×3 rotation matrix.
-
-    Returns:
-        Quaternion [x, y, z, w].
-    """
+    """Convert 3×3 rotation matrix to quaternion [x, y, z, w] via Shepperd method."""
     trace = R3[0, 0] + R3[1, 1] + R3[2, 2]
     if trace > 0.0:
         s = 0.5 / math.sqrt(trace + 1.0)
@@ -197,47 +159,23 @@ def _mat_to_quaternion(R3: np.ndarray) -> np.ndarray:
     return _normalise_quat(np.array([x, y, z, w], dtype=np.float64))
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-
 def compute_end_effector_pose(
     joint_angles: list,
     base_position: Tuple[float, float, float],
     base_yaw_rad: float = 0.0,
 ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float, float]]:
-    """Compute the end-effector pose using AR4 forward kinematics.
+    """
+    Compute end-effector pose via AR4 FK (joint_1 → joint_6 → ee_joint → gripper_base_joint).
 
-    Traverses the full URDF chain (joint_1 → joint_6 → ee_joint →
-    gripper_base_joint) and returns the gripper-base frame pose in Unity's
-    left-handed world frame.
-
-    Args:
-        joint_angles: 6 joint angles in radians, ROS joint convention
-            (joint_1 … joint_6).
-        base_position: World position of the robot base in Unity frame (x, y, z).
-        base_yaw_rad: Additional yaw rotation of the whole robot base about the
-            world Y-axis (radians).  Pass ``math.pi`` for Robot2 which is
-            mounted mirrored (180° yaw from Robot1).
-
-    Returns:
-        Tuple of:
-        - position (x, y, z) in Unity world frame (metres)
-        - rotation quaternion (x, y, z, w) in Unity world frame
-
-    Raises:
-        ValueError: If ``joint_angles`` does not have exactly 6 elements.
+    Returns Unity left-handed world frame pose. Pass base_yaw_rad=math.pi for Robot2 (180° mount).
     """
     if len(joint_angles) != _NUM_JOINTS:
         raise ValueError(
             f"Expected {_NUM_JOINTS} joint angles, got {len(joint_angles)}"
         )
 
-    # Start with identity
     T = np.eye(4, dtype=np.float64)
 
-    # Traverse all joints (6 revolute + 2 fixed)
     for i, (xyz, rpy, axis) in enumerate(_JOINT_PARAMS):
         T_trans = _translation_matrix(xyz)
         T_rpy = _rpy_to_matrix(rpy)
@@ -247,17 +185,13 @@ def compute_end_effector_pose(
             T_rot = np.eye(4, dtype=np.float64)
         T = T @ T_trans @ T_rpy @ T_rot
 
-    # Extract ROS-frame position and rotation
     pos_ros = T[:3, 3]
     rot_ros = _mat_to_quaternion(T[:3, :3])
 
-    # Apply base yaw rotation (to handle Robot2 mirroring)
+    # Robot2 mirroring: rotate position and compose quaternion
     if abs(base_yaw_rad) > 1e-9:
-        # Rotation around Y-axis by base_yaw_rad
         cy, sy = math.cos(base_yaw_rad / 2), math.sin(base_yaw_rad / 2)
         q_base_yaw = np.array([0.0, sy, 0.0, cy], dtype=np.float64)
-        # Rotate position
-        # Use Rodrigues directly: p' = R_y(base_yaw) * p
         yaw = base_yaw_rad
         c_yaw, s_yaw = math.cos(yaw), math.sin(yaw)
         px, py, pz = pos_ros
@@ -269,11 +203,10 @@ def compute_end_effector_pose(
         rot_ros = _quat_multiply(q_base_yaw, rot_ros)
         rot_ros = _normalise_quat(rot_ros)
 
-    # Add base offset (already in Unity frame since ROBOT_BASE_POSITIONS is Unity)
     bx, by, bz = base_position
 
-    # Convert ROS right-handed frame → Unity left-handed frame:
-    # negate X of position and quat.x  (same as GraspFrameTransform.py:202-204)
+    # ROS right-handed → Unity left-handed: negate X of position and quat.x
+    # (same pattern as GraspFrameTransform.py:202-204)
     pos_unity = (
         -pos_ros[0] + bx,
         pos_ros[1] + by,
@@ -294,35 +227,12 @@ def compute_link_poses(
     base_position: Tuple[float, float, float],
     base_yaw_rad: float = 0.0,
 ) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float, float]]]:
-    """Compute poses for 4 key arm links using AR4 forward kinematics.
+    """
+    Compute poses for link_2, link_3, link_5, link_6 for collision geometry checks.
 
-    Traverses the URDF joint chain and snapshots the accumulated transform
-    after processing joint indices 1, 2, 4, and 5, yielding poses for:
-      - link_2 (shoulder, after joint_2)
-      - link_3 (elbow, after joint_3)
-      - link_5 (wrist, after joint_5)
-      - link_6 (after joint_6)
-
-    All poses are in Unity's left-handed world frame.  These link midpoints
-    are intended for collision geometry checks, not end-effector pose — the
-    last entry will differ from ``compute_end_effector_pose`` because the two
-    trailing fixed joints (ee_joint, gripper_base_joint) are not included.
-
-    Args:
-        joint_angles: 6 joint angles in radians, ROS joint convention
-            (joint_1 … joint_6).
-        base_position: World position of the robot base in Unity frame (x, y, z).
-        base_yaw_rad: Additional yaw rotation of the whole robot base about the
-            world Y-axis (radians).  Pass ``math.pi`` for Robot2 which is
-            mounted mirrored (180° yaw from Robot1).
-
-    Returns:
-        List of 4 ``(position, quaternion)`` tuples in Unity world frame:
-        [(link_2_pos, link_2_quat), (link_3_pos, link_3_quat),
-         (link_5_pos, link_5_quat), (link_6_pos, link_6_quat)]
-
-    Raises:
-        ValueError: If ``joint_angles`` does not have exactly 6 elements.
+    Snapshots accumulated transform at joint indices 1, 2, 4, 5 (not including
+    ee_joint/gripper_base_joint, so differs from compute_end_effector_pose).
+    Returns Unity world frame poses.
     """
     if len(joint_angles) != _NUM_JOINTS:
         raise ValueError(
@@ -343,7 +253,7 @@ def compute_link_poses(
         if i in _LINK_CAPTURE_INDICES:
             snapshots.append(T.copy())
 
-    # Hoist loop-invariant yaw constants (defaults satisfy type checker when apply_yaw=False)
+    # Hoist yaw constants out of per-snapshot loop
     apply_yaw = abs(base_yaw_rad) > 1e-9
     c_yaw, s_yaw = 1.0, 0.0
     q_base_yaw = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
@@ -378,15 +288,6 @@ def compute_end_effector_position(
     base_position: Tuple[float, float, float],
     base_yaw_rad: float = 0.0,
 ) -> Tuple[float, float, float]:
-    """Convenience wrapper returning only the end-effector position (x, y, z).
-
-    Args:
-        joint_angles: 6 joint angles in radians, ROS joint convention.
-        base_position: Robot base position in Unity world frame.
-        base_yaw_rad: Base yaw offset in radians.
-
-    Returns:
-        End-effector position (x, y, z) in Unity world frame.
-    """
+    """Convenience wrapper — returns only position (x, y, z) in Unity world frame."""
     pos, _ = compute_end_effector_pose(joint_angles, base_position, base_yaw_rad)
     return pos

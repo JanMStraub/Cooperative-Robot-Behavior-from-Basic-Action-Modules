@@ -1,43 +1,16 @@
 #!/usr/bin/env python3
-"""
-RAG System for Robot Operations
-================================
-
-Semantic search and retrieval system for robot operations using LM Studio embeddings.
-
-Usage:
-    >>> from rag import RAGSystem
-    >>>
-    >>> # Initialize RAG system
-    >>> rag = RAGSystem()
-    >>>
-    >>> # Build index (first time or when operations change)
-    >>> rag.index_operations()
-    >>>
-    >>> # Search for operations
-    >>> results = rag.search("move robot to position", top_k=3)
-    >>> print(results[0]['metadata']['name'])
-    'move_to_coordinate'
-    >>>
-    >>> # Get full context for LLM
-    >>> context = rag.get_operation_context("pick up object")
-    >>> print(context['summary'])
-    'Found 3 relevant operations for: pick up object'
-"""
+"""Semantic search and retrieval for robot operations."""
 
 from typing import Optional, List, Dict, Any, cast
 import os
 
 
 def _get_registry():
-    """Get registry instance using centralized imports"""
-    # Import from centralized lazy import system (prevents circular dependencies)
     from core.Imports import get_global_registry
 
     return get_global_registry()
 
 
-# Import config
 try:
     from config.Rag import RAG_VECTOR_STORE_PATH
 except ImportError:
@@ -54,7 +27,6 @@ from .ConfidenceScorer import (
     ConfidenceLevel,
 )
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
@@ -105,7 +77,7 @@ class RAGSystem:
             self._try_load_index()
 
     def _try_load_index(self):
-        """Try to load existing index from disk"""
+        """Try to load existing index from disk."""
         if os.path.exists(RAG_VECTOR_STORE_PATH):
             try:
                 self.vector_store = VectorStore.load()
@@ -122,25 +94,7 @@ class RAGSystem:
             pass
 
     def index_operations(self, rebuild: bool = False) -> bool:
-        """
-        Build or rebuild the operation index.
-
-        This generates embeddings for all operations in the registry
-        and creates a searchable index.
-
-        Args:
-            rebuild: Force rebuild even if index exists (default: False)
-
-        Returns:
-            True if indexing succeeded, False otherwise
-
-        Example:
-            >>> rag = RAGSystem()
-            >>> rag.index_operations()
-            Building index for 5 operations...
-            Index built with 5 operations
-            True
-        """
+        """Build or rebuild the operation index."""
         try:
             if rebuild or self.vector_store is None:
                 self.vector_store = self.indexer.build_index(save=True)
@@ -148,7 +102,6 @@ class RAGSystem:
                 assert self.vector_store is not None
                 self.vector_store = self.indexer.update_index(self.vector_store)
 
-            # Create query engine with new vector store
             self.query_engine = QueryEngine(
                 vector_store=self.vector_store,
                 embedding_generator=self.embedding_generator,
@@ -169,24 +122,7 @@ class RAGSystem:
         category: Optional[str] = None,
         complexity: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        Search for operations using natural language.
-
-        Args:
-            query: Natural language search query
-            top_k: Number of results to return (default from config)
-            min_score: Minimum similarity score (default from config)
-            category: Filter by category (e.g., "navigation")
-            complexity: Filter by complexity (e.g., "basic")
-
-        Returns:
-            List of dicts with operation_id, score, metadata
-
-        Example:
-            >>> results = rag.search("move robot to position")
-            >>> results[0]['metadata']['name']
-            'move_to_coordinate'
-        """
+        """Search for operations using natural language."""
         if self.query_engine is None:
             logger.error("Query engine not initialized. Call index_operations() first.")
             return []
@@ -201,26 +137,7 @@ class RAGSystem:
         )
 
     def get_operation_context(self, query: str, top_k: int = 3) -> Dict[str, Any]:
-        """
-        Get full operation context for LLM consumption.
-
-        Returns comprehensive information about relevant operations
-        including parameters, examples, preconditions, etc.
-
-        Args:
-            query: Natural language query describing the task
-            top_k: Number of operations to include in context
-
-        Returns:
-            Dict with query, operations (full details), and summary
-
-        Example:
-            >>> context = rag.get_operation_context("move robot to pick up object")
-            >>> context['summary']
-            'Found 3 relevant operations for: move robot to pick up object'
-            >>> context['operations'][0]['name']
-            'move_to_coordinate'
-        """
+        """Get full operation context for LLM consumption."""
         if self.query_engine is None:
             logger.error("Query engine not initialized. Call index_operations() first.")
             return {
@@ -236,16 +153,7 @@ class RAGSystem:
     def get_operations_by_category(
         self, category: str, top_k: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """
-        Get all operations in a specific category.
-
-        Args:
-            category: Category name (e.g., "navigation", "manipulation")
-            top_k: Maximum number to return
-
-        Returns:
-            List of operations in that category
-        """
+        """Get all operations in a specific category."""
         if self.query_engine is None:
             logger.error("Query engine not initialized. Call index_operations() first.")
             return []
@@ -256,16 +164,7 @@ class RAGSystem:
     def find_similar_operations(
         self, operation_id: str, top_k: int = 5
     ) -> List[Dict[str, Any]]:
-        """
-        Find operations similar to a given operation.
-
-        Args:
-            operation_id: Operation ID to find similar operations for
-            top_k: Number of similar operations to return
-
-        Returns:
-            List of similar operations
-        """
+        """Find operations similar to a given operation."""
         if self.query_engine is None:
             logger.error("Query engine not initialized. Call index_operations() first.")
             return []
@@ -276,23 +175,7 @@ class RAGSystem:
     def search_by_type(
         self, query: str, result_type: str, top_k: int = 5
     ) -> List[Dict[str, Any]]:
-        """
-        Search for items of a specific type (operation, workflow, context).
-
-        Args:
-            query: Search query
-            result_type: Filter by type ("operation", "workflow", "context")
-            top_k: Number of results to return
-
-        Returns:
-            List of results matching the specified type
-
-        Example:
-            >>> results = rag.search_by_type("handoff coordination", "workflow", top_k=3)
-            >>> results[0]['metadata']['name']
-            'handoff'
-        """
-        # Get more results than requested to allow for filtering
+        """Search for items of a specific type."""
         all_results = self.search(query, top_k=top_k * 3)
         filtered = [
             r for r in all_results if r.get("metadata", {}).get("type") == result_type
@@ -304,22 +187,7 @@ class RAGSystem:
         return self.query_engine is not None and self.vector_store is not None
 
     def get_stats(self) -> Dict[str, Any]:
-        """
-        Get comprehensive statistics about the RAG system.
-
-        Returns:
-            Dict containing:
-                - config: System configuration
-                - indexer_stats: Indexer statistics
-                - vector_store_stats: Vector store statistics
-                - embedding_stats: Embedding generator statistics
-
-        Example:
-            >>> rag = RAGSystem()
-            >>> stats = rag.get_stats()
-            >>> print(stats['vector_store_stats']['num_operations'])
-            17
-        """
+        """Get comprehensive statistics about RAG system."""
         stats = {
             "config": {
                 "lm_studio_url": self.embedding_generator.base_url,
@@ -371,12 +239,9 @@ class RAGSystem:
         return f"RAGSystem({ready}, operations={num_ops})"
 
 
-# Public aliases — kept after class definitions so the module-level names
-# don't shadow the submodule names during Pylance's import resolution above.
 VectorStore = _VectorStore
 QueryEngine = _QueryEngine
 
-# Export main classes and functions
 __all__ = [
     "RAGSystem",
     "EmbeddingGenerator",

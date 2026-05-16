@@ -47,19 +47,11 @@ WORKSPACE_REGIONS = {
     },
 }
 
-# ============================================================================
-# Robot Workspace Assignments (default allocation)
-# ============================================================================
-
 # Used in operations/CoordinationVerifier.py for workspace allocation queries
 ROBOT_WORKSPACE_ASSIGNMENTS = {
     "Robot1": "left_workspace",
     "Robot2": "right_workspace",
 }
-
-# ============================================================================
-# Robot Base Positions (world coordinates, meters)
-# ============================================================================
 
 # Used in ros2/ROSMotionClient.py, servers/NegotiationHub.py, operations/SpatialOperations.py
 ROBOT_BASE_POSITIONS = {
@@ -157,7 +149,9 @@ PLACE_TCP_OFFSET = float(os.environ.get("PLACE_TCP_OFFSET", "0.055"))  # meters
 
 # Stereo depth on flat Unity surfaces is unreliable and returns near-zero Y.
 # Clamp placement Y to at least this height so the arm never descends into the table.
-PLACE_MIN_Y = float(os.environ.get("PLACE_MIN_Y", "0.06"))  # meters, table surface height
+PLACE_MIN_Y = float(
+    os.environ.get("PLACE_MIN_Y", "0.06")
+)  # meters, table surface height
 
 # ============================================================================
 # Grasp Descent Parameters
@@ -185,18 +179,18 @@ MIN_ROBOT_SEPARATION = float(os.environ.get("MIN_ROBOT_SEPARATION", "0.2"))  # m
 # Python pre-check: block a move command whose target is within this radius of another
 # robot's EE (static case).  6 cm catches close-approach safety violations while
 # Unity's ProximityGuard (EE_STOP_THRESHOLD = 0.25m) enforces the broader runtime margin.
-STATIC_COLLISION_RADIUS = float(os.environ.get("STATIC_COLLISION_RADIUS", "0.06"))  # meters
+STATIC_COLLISION_RADIUS = float(
+    os.environ.get("STATIC_COLLISION_RADIUS", "0.06")
+)  # meters
 
 # Unity ProximityGuard EE stop threshold mirrored here for Python-side awareness.
 # Must stay in sync with Assets/Scripts/Constants.cs ProximityConstants.EE_STOP_THRESHOLD.
-PROXIMITY_EE_STOP_THRESHOLD = float(os.environ.get("PROXIMITY_EE_STOP_THRESHOLD", "0.25"))  # meters
+PROXIMITY_EE_STOP_THRESHOLD = float(
+    os.environ.get("PROXIMITY_EE_STOP_THRESHOLD", "0.25")
+)  # meters
 MAX_ROBOT_REACH = float(
     os.environ.get("MAX_ROBOT_REACH", "0.64")
 )  # meters (AR4 kinematic limit)
-
-# ============================================================================
-# State Caching Configuration
-# ============================================================================
 
 ROBOT_STATUS_CACHE_TTL = float(
     os.environ.get("ROBOT_STATUS_CACHE_TTL", "0.5")
@@ -209,10 +203,6 @@ WORKSPACE_ALLOCATION_TIMEOUT = float(
     os.environ.get("WORKSPACE_ALLOCATION_TIMEOUT", "60.0")
 )  # seconds
 
-# ============================================================================
-# Object Liveness Tracking Configuration
-# ============================================================================
-
 CONFIDENCE_DECAY_PER_FRAME = float(
     os.environ.get("CONFIDENCE_DECAY_PER_FRAME", "0.1")
 )  # Confidence drops 0.1 per missed detection
@@ -222,10 +212,6 @@ STALE_CONFIDENCE_THRESHOLD = float(
 OBJECT_TTL_SECONDS = float(
     os.environ.get("OBJECT_TTL_SECONDS", "30.0")
 )  # Delete object if not seen for 2s
-
-# ============================================================================
-# FK-based Movement Detection
-# ============================================================================
 
 # Minimum total joint angle delta (radians) to mark a robot as is_moving.
 # Sum of |Δθᵢ| across all 6 joints must exceed this threshold.

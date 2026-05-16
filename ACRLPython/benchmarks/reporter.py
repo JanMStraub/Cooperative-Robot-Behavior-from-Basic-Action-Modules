@@ -6,19 +6,14 @@ from __future__ import annotations
 import dataclasses
 import json
 from pathlib import Path
-from .result import BenchmarkResult
+from .Result import BenchmarkResult
 
 
 def write_json(result: BenchmarkResult, output_dir: str = ".") -> str:
     """
     Serialise BenchmarkResult to a JSON file.
 
-    Args:
-        result: The benchmark result to write.
-        output_dir: Directory to write the file into (created if absent).
 
-    Returns:
-        Absolute path to the written file.
     """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     fname = f"benchmark{result.benchmark_id}_{result.run_id}.json"
@@ -33,12 +28,7 @@ def write_csv(result: BenchmarkResult, output_dir: str = ".") -> str:
 
     One row per step; benchmark-level summary columns repeated on every row.
 
-    Args:
-        result: The benchmark result to write.
-        output_dir: Directory to write the file into (created if absent).
 
-    Returns:
-        Absolute path to the written file.
     """
     import csv
 
@@ -47,15 +37,35 @@ def write_csv(result: BenchmarkResult, output_dir: str = ".") -> str:
     path = Path(output_dir) / fname
 
     # Flatten feature_flags into individual columns for easy filtering
-    flag_keys = ["use_rag", "use_vgn", "use_knowledge_graph", "use_ros_movement",
-                 "reflexion_enabled", "dry_run", "use_negotiation"]
+    flag_keys = [
+        "use_rag",
+        "use_vgn",
+        "use_knowledge_graph",
+        "use_ros_movement",
+        "reflexion_enabled",
+        "dry_run",
+        "use_negotiation",
+    ]
     fieldnames = [
-        "benchmark_id", "benchmark_name", "run_id", "execution_mode",
-        "benchmark_success", "total_duration_ms", "success_rate",
-        "ops_executed", "ops_succeeded", "avg_step_duration_ms",
+        "benchmark_id",
+        "benchmark_name",
+        "run_id",
+        "execution_mode",
+        "benchmark_success",
+        "total_duration_ms",
+        "success_rate",
+        "ops_executed",
+        "ops_succeeded",
+        "avg_step_duration_ms",
         *flag_keys,
-        "step_index", "operation", "robot_id", "parallel_group_id",
-        "step_success", "step_duration_ms", "error_code", "retry_count",
+        "step_index",
+        "operation",
+        "robot_id",
+        "parallel_group_id",
+        "step_success",
+        "step_duration_ms",
+        "error_code",
+        "retry_count",
     ]
     flags = result.feature_flags or {}
     with open(path, "w", newline="", encoding="utf-8") as f:
@@ -76,7 +86,9 @@ def write_csv(result: BenchmarkResult, output_dir: str = ".") -> str:
                 "step_index": s.index,
                 "operation": s.operation,
                 "robot_id": s.robot_id or "",
-                "parallel_group_id": "" if s.parallel_group_id is None else s.parallel_group_id,
+                "parallel_group_id": (
+                    "" if s.parallel_group_id is None else s.parallel_group_id
+                ),
                 "step_success": s.success,
                 "step_duration_ms": s.duration_ms,
                 "error_code": s.error_code or "",
@@ -92,8 +104,6 @@ def print_summary(result: BenchmarkResult) -> None:
     """
     Print a human-readable benchmark summary to stdout.
 
-    Args:
-        result: The benchmark result to summarise.
     """
     status = "PASS" if result.success else "FAIL"
     ok = sum(1 for s in result.steps if s.success)
@@ -111,18 +121,24 @@ def print_summary(result: BenchmarkResult) -> None:
     print(f"  Avg step:  {result.avg_step_duration_ms:.0f}ms")
     print(f"  Retries:   {result.retry_count}")
     if result.per_op_stats:
-        failing = {op: v for op, v in result.per_op_stats.items() if v["fail_count"] > 0}
+        failing = {
+            op: v for op, v in result.per_op_stats.items() if v["fail_count"] > 0
+        }
         if failing:
             print("  Failing ops:")
             for op, v in failing.items():
-                print(f"    {op:<35} {v['fail_count']}/{v['count']} fails  avg {v['avg_duration_ms']:.0f}ms")
+                print(
+                    f"    {op:<35} {v['fail_count']}/{v['count']} fails  avg {v['avg_duration_ms']:.0f}ms"
+                )
     print("  Steps:")
     for s in result.steps:
         tag = "OK  " if s.success else "FAIL"
         err = f"  [{s.error_code}]" if s.error_code else ""
         robot = f"  {s.robot_id}" if s.robot_id else ""
         pg = f"  pg={s.parallel_group_id}" if s.parallel_group_id is not None else ""
-        print(f"    [{s.index}] {s.operation:<35} {tag} {s.duration_ms:>7.0f}ms{robot}{pg}{err}")
+        print(
+            f"    [{s.index}] {s.operation:<35} {tag} {s.duration_ms:>7.0f}ms{robot}{pg}{err}"
+        )
 
     if result.ablation is not None:
         ab = result.ablation

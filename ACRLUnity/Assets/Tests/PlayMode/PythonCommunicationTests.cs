@@ -1,12 +1,12 @@
 using System;
 using System.Collections;
+using Core;
 using NUnit.Framework;
-using UnityEngine;
-using UnityEngine.TestTools;
 using PythonCommunication;
 using PythonCommunication.Core;
-using Core;
 using Tests.EditMode;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Tests.PlayMode
 {
@@ -19,8 +19,6 @@ namespace Tests.PlayMode
     {
         private GameObject _clientObject;
         private SequenceClient _client;
-
-        #region Setup/Teardown
 
         [SetUp]
         public void SetUp()
@@ -37,10 +35,6 @@ namespace Tests.PlayMode
                 UnityEngine.Object.DestroyImmediate(_clientObject);
             }
         }
-
-        #endregion
-
-        #region Protocol V2 Tests
 
         [Test]
         public void ProtocolV2_HeaderSize_IsCorrect()
@@ -66,9 +60,18 @@ namespace Tests.PlayMode
             Buffer.BlockCopy(BitConverter.GetBytes(123u), 0, testData, 1, 4);
 
             // Decode header
-            int offset = UnityProtocol.DecodeHeader(testData, 0, out MessageType messageType, out uint requestId);
+            int offset = UnityProtocol.DecodeHeader(
+                testData,
+                0,
+                out MessageType messageType,
+                out uint requestId
+            );
 
-            Assert.AreEqual(MessageType.SEQUENCE_QUERY, messageType, "Message type should be SEQUENCE_QUERY");
+            Assert.AreEqual(
+                MessageType.SEQUENCE_QUERY,
+                messageType,
+                "Message type should be SEQUENCE_QUERY"
+            );
             Assert.AreEqual(123u, requestId, "Request ID should be 123");
             Assert.AreEqual(5, offset, "Offset should advance by 5 bytes (header size)");
         }
@@ -79,19 +82,35 @@ namespace Tests.PlayMode
             // Create header with only 3 bytes (need 5)
             byte[] testData = new byte[3];
 
-            Assert.Throws<ArgumentException>(() =>
-            {
-                UnityProtocol.DecodeHeader(testData, 0, out MessageType messageType, out uint requestId);
-            }, "Should throw exception when data is insufficient");
+            Assert.Throws<ArgumentException>(
+                () =>
+                {
+                    UnityProtocol.DecodeHeader(
+                        testData,
+                        0,
+                        out MessageType messageType,
+                        out uint requestId
+                    );
+                },
+                "Should throw exception when data is insufficient"
+            );
         }
 
         [Test]
         public void ProtocolV2_DecodeHeader_WithNullData_ThrowsException()
         {
-            Assert.Throws<ArgumentException>(() =>
-            {
-                UnityProtocol.DecodeHeader(null, 0, out MessageType messageType, out uint requestId);
-            }, "Should throw exception for null data");
+            Assert.Throws<ArgumentException>(
+                () =>
+                {
+                    UnityProtocol.DecodeHeader(
+                        null,
+                        0,
+                        out MessageType messageType,
+                        out uint requestId
+                    );
+                },
+                "Should throw exception for null data"
+            );
         }
 
         [Test]
@@ -103,22 +122,29 @@ namespace Tests.PlayMode
             Assert.AreEqual(0x03, (byte)MessageType.RAG_QUERY, "RAG_QUERY should be 0x03");
             Assert.AreEqual(0x04, (byte)MessageType.RAG_RESPONSE, "RAG_RESPONSE should be 0x04");
             Assert.AreEqual(0x05, (byte)MessageType.STATUS_QUERY, "STATUS_QUERY should be 0x05");
-            Assert.AreEqual(0x06, (byte)MessageType.STATUS_RESPONSE, "STATUS_RESPONSE should be 0x06");
+            Assert.AreEqual(
+                0x06,
+                (byte)MessageType.STATUS_RESPONSE,
+                "STATUS_RESPONSE should be 0x06"
+            );
             Assert.AreEqual(0x07, (byte)MessageType.STEREO_IMAGE, "STEREO_IMAGE should be 0x07");
-            Assert.AreEqual(0x08, (byte)MessageType.SEQUENCE_QUERY, "SEQUENCE_QUERY should be 0x08");
+            Assert.AreEqual(
+                0x08,
+                (byte)MessageType.SEQUENCE_QUERY,
+                "SEQUENCE_QUERY should be 0x08"
+            );
         }
 
         [Test]
         public void ProtocolV2_MaxImageSize_IsReasonable()
         {
             // Max image size should be 10MB
-            Assert.AreEqual(10 * 1024 * 1024, UnityProtocol.MAX_IMAGE_SIZE,
-                "Max image size should be 10MB");
+            Assert.AreEqual(
+                10 * 1024 * 1024,
+                UnityProtocol.MAX_IMAGE_SIZE,
+                "Max image size should be 10MB"
+            );
         }
-
-        #endregion
-
-        #region Request ID Correlation Tests
 
         [UnityTest]
         public IEnumerator RequestIdGeneration_IsUnique()
@@ -131,7 +157,10 @@ namespace Tests.PlayMode
                 // In production, SequenceClient.GenerateRequestId() would be called
                 // For testing, we simulate by using sequential IDs
                 uint requestId = (uint)(i + 1);
-                Assert.IsFalse(requestIds.Contains(requestId), $"Request ID {requestId} should be unique");
+                Assert.IsFalse(
+                    requestIds.Contains(requestId),
+                    $"Request ID {requestId} should be unique"
+                );
                 requestIds.Add(requestId);
             }
 
@@ -152,11 +181,14 @@ namespace Tests.PlayMode
                 success = true,
                 request_id = expectedRequestId,
                 sequence_id = "seq_001",
-                total_commands = 1
+                total_commands = 1,
             };
 
-            Assert.AreEqual(expectedRequestId, mockResult.request_id,
-                "Response request_id should match original request");
+            Assert.AreEqual(
+                expectedRequestId,
+                mockResult.request_id,
+                "Response request_id should match original request"
+            );
         }
 
         [Test]
@@ -167,7 +199,7 @@ namespace Tests.PlayMode
             {
                 { 100u, "move to (0.3, 0.2, 0.1)" },
                 { 101u, "close the gripper" },
-                { 102u, "detect the blue cube" }
+                { 102u, "detect the blue cube" },
             };
 
             // Verify all requests have unique IDs
@@ -179,14 +211,19 @@ namespace Tests.PlayMode
             var response3 = new SequenceResult { request_id = 101u, success = true };
 
             // Verify each response can be matched to its request
-            Assert.IsTrue(requests.ContainsKey(response1.request_id), "Response 1 should match request");
-            Assert.IsTrue(requests.ContainsKey(response2.request_id), "Response 2 should match request");
-            Assert.IsTrue(requests.ContainsKey(response3.request_id), "Response 3 should match request");
+            Assert.IsTrue(
+                requests.ContainsKey(response1.request_id),
+                "Response 1 should match request"
+            );
+            Assert.IsTrue(
+                requests.ContainsKey(response2.request_id),
+                "Response 2 should match request"
+            );
+            Assert.IsTrue(
+                requests.ContainsKey(response3.request_id),
+                "Response 3 should match request"
+            );
         }
-
-        #endregion
-
-        #region Connection Lifecycle Tests
 
         [Test]
         public void SequenceClient_Initialization_CreatesInstance()
@@ -238,18 +275,17 @@ namespace Tests.PlayMode
             {
                 bool wasConnected = _client.IsConnected;
                 yield return new WaitForSeconds(1f);
-                Assert.AreEqual(wasConnected, _client.IsConnected,
-                    "Connection state should remain stable");
+                Assert.AreEqual(
+                    wasConnected,
+                    _client.IsConnected,
+                    "Connection state should remain stable"
+                );
             }
             else
             {
                 Assert.Pass("Python backend not available - skipping keepalive test");
             }
         }
-
-        #endregion
-
-        #region Data Model Tests
 
         [Test]
         public void RagResult_CanBeCreated()
@@ -258,7 +294,7 @@ namespace Tests.PlayMode
             {
                 query = "test query",
                 operations = new OperationInfo[0],
-                num_results = 0
+                num_results = 0,
             };
 
             Assert.AreEqual("test query", result.query);
@@ -273,7 +309,7 @@ namespace Tests.PlayMode
                 name = "move_to_coordinate",
                 description = "Move robot to position",
                 category = "NAVIGATION",
-                similarity_score = 0.95f
+                similarity_score = 0.95f,
             };
 
             Assert.AreEqual("move_to_coordinate", operation.name);
@@ -289,7 +325,7 @@ namespace Tests.PlayMode
                 sequence_id = "seq_123",
                 total_commands = 3,
                 completed_commands = 3,
-                request_id = 456u
+                request_id = 456u,
             };
 
             Assert.IsTrue(result.success);
@@ -305,7 +341,7 @@ namespace Tests.PlayMode
             {
                 command_type = "move_to_coordinate",
                 robot_id = "Robot1",
-                request_id = 123
+                request_id = 123,
             };
 
             Assert.AreEqual("move_to_coordinate", command.command_type);
@@ -316,11 +352,7 @@ namespace Tests.PlayMode
         [Test]
         public void RagQueryFilters_CanSerializeToJson()
         {
-            var filters = new RagQueryFilters
-            {
-                category = "navigation",
-                min_score = 0.7f
-            };
+            var filters = new RagQueryFilters { category = "navigation", min_score = 0.7f };
 
             string json = filters.ToJson();
             Assert.IsTrue(json.Contains("navigation"), "JSON should contain category");
@@ -337,19 +369,25 @@ namespace Tests.PlayMode
                 completed_commands = 2,
                 results = new System.Collections.Generic.List<CommandResult>
                 {
-                    new CommandResult { index = 0, operation = "move_to_coordinate", success = true },
-                    new CommandResult { index = 1, operation = "control_gripper", success = true }
-                }
+                    new CommandResult
+                    {
+                        index = 0,
+                        operation = "move_to_coordinate",
+                        success = true,
+                    },
+                    new CommandResult
+                    {
+                        index = 1,
+                        operation = "control_gripper",
+                        success = true,
+                    },
+                },
             };
 
             Assert.AreEqual(2, result.results.Count, "Should have 2 command results");
             Assert.AreEqual("move_to_coordinate", result.results[0].operation);
             Assert.AreEqual("control_gripper", result.results[1].operation);
         }
-
-        #endregion
-
-        #region Error Handling Tests
 
         [Test]
         public void SequenceClient_SendWithoutConnection_ReturnsFalse()
@@ -366,7 +404,12 @@ namespace Tests.PlayMode
         [Test]
         public void SequenceClient_NullCommand_ReturnsFalse()
         {
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
+            LogAssert.Expect(
+                LogType.Error,
+                new System.Text.RegularExpressions.Regex(
+                    ".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"
+                )
+            );
             bool sent = _client.ExecuteSequence(null);
             Assert.IsFalse(sent, "Should reject null command");
         }
@@ -374,7 +417,12 @@ namespace Tests.PlayMode
         [Test]
         public void SequenceClient_EmptyCommand_ReturnsFalse()
         {
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
+            LogAssert.Expect(
+                LogType.Error,
+                new System.Text.RegularExpressions.Regex(
+                    ".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"
+                )
+            );
             bool sent = _client.ExecuteSequence("");
             Assert.IsFalse(sent, "Should reject empty command");
         }
@@ -399,17 +447,13 @@ namespace Tests.PlayMode
                 success = false,
                 error = "Robot not found",
                 total_commands = 1,
-                completed_commands = 0
+                completed_commands = 0,
             };
 
             Assert.IsFalse(result.success);
             Assert.AreEqual("Robot not found", result.error);
             Assert.AreEqual(0, result.completed_commands);
         }
-
-        #endregion
-
-        #region Thread Safety Tests
 
         [UnityTest]
         public IEnumerator ResponseQueue_ThreadSafe_HandlesMultipleResponses()
@@ -421,7 +465,7 @@ namespace Tests.PlayMode
             {
                 new SequenceResult { request_id = 1, success = true },
                 new SequenceResult { request_id = 2, success = true },
-                new SequenceResult { request_id = 3, success = true }
+                new SequenceResult { request_id = 3, success = true },
             };
 
             yield return null;
@@ -439,7 +483,7 @@ namespace Tests.PlayMode
             var pendingRequests = new System.Collections.Generic.Dictionary<uint, string>
             {
                 { 1u, "request1" },
-                { 2u, "request2" }
+                { 2u, "request2" },
             };
 
             Assert.AreEqual(2, pendingRequests.Count, "Should add 2 pending requests");
@@ -448,41 +492,38 @@ namespace Tests.PlayMode
             Assert.AreEqual(1, pendingRequests.Count, "Should remove 1 request");
         }
 
-        #endregion
-
-        #region Communication Constants Tests
-
         [Test]
         public void CommunicationConstants_ActivePorts_AreDifferent()
         {
             var ports = new int[]
             {
-                CommunicationConstants.COMMAND_SERVER_PORT,        // 5007
-                CommunicationConstants.SEQUENCE_SERVER_PORT     // 5008
+                CommunicationConstants.COMMAND_SERVER_PORT, // 5007
+                CommunicationConstants.SEQUENCE_SERVER_PORT, // 5008
             };
 
             var uniquePorts = new System.Collections.Generic.HashSet<int>(ports);
-            Assert.AreEqual(ports.Length, uniquePorts.Count,
-                "All active ports should be unique");
+            Assert.AreEqual(ports.Length, uniquePorts.Count, "All active ports should be unique");
         }
 
         [Test]
         public void CommunicationConstants_SequenceServerPort_IsCorrect()
         {
-            Assert.AreEqual(5008, CommunicationConstants.SEQUENCE_SERVER_PORT,
-                "Sequence server should be on port 5008");
+            Assert.AreEqual(
+                5008,
+                CommunicationConstants.SEQUENCE_SERVER_PORT,
+                "Sequence server should be on port 5008"
+            );
         }
 
         [Test]
         public void CommunicationConstants_CommandServerPort_IsCorrect()
         {
-            Assert.AreEqual(5007, CommunicationConstants.COMMAND_SERVER_PORT,
-                "Command server should be on port 5007");
+            Assert.AreEqual(
+                5007,
+                CommunicationConstants.COMMAND_SERVER_PORT,
+                "Command server should be on port 5007"
+            );
         }
-
-        #endregion
-
-        #region Integration Tests (Require Python Backend)
 
         [UnityTest]
         public IEnumerator Integration_SendSequence_ReceivesResponse()
@@ -529,7 +570,5 @@ namespace Tests.PlayMode
             // Verify correlation worked (all responses matched to requests)
             Assert.Pass("Multiple requests handled without errors");
         }
-
-        #endregion
     }
 }

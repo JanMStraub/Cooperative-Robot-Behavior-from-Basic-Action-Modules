@@ -27,20 +27,9 @@ class GraspPlanner:
 
     Coordinates candidate generation, IK validation, scoring, and selection.
     Provides high-level interface for grasp planning operations.
-
-    Attributes:
-        config: Grasp planning configuration
-        generator: Candidate generator
-        scorer: Candidate scorer
     """
 
     def __init__(self, config: Optional[GraspConfig] = None):
-        """
-        Initialize grasp planner.
-
-        Args:
-            config: Grasp planning configuration (uses default if None)
-        """
         self.config = config or GraspConfig.create_default()
         self.generator = GraspCandidateGenerator(self.config)
         self.scorer = GraspScorer(self.config)
@@ -67,20 +56,6 @@ class GraspPlanner:
         3. Score and rank candidates
         4. Return best candidate above minimum score
 
-        Args:
-            object_position: Object center position (x, y, z) in world coordinates
-            object_rotation: Object rotation quaternion (x, y, z, w)
-            object_size: Object dimensions (width, height, depth) in meters
-            robot_id: Robot identifier for IK validation
-            gripper_position: Current gripper position (x, y, z)
-            gripper_rotation: Current gripper rotation (x, y, z, w) - optional
-            use_moveit_ik: Whether to validate IK via MoveIt (default: True)
-            preferred_approach: Preferred approach type ("top", "front", "side") or None
-            min_score: Minimum acceptable grasp score (default: 0.3)
-            max_candidates: Maximum candidates to validate (default: 5)
-
-        Returns:
-            Best grasp candidate or None if no valid grasps found
         """
         start_time = time.time()
 
@@ -162,14 +137,6 @@ class GraspPlanner:
         Validate IK for candidates using MoveIt.
 
         Only validates top N candidates to save time.
-
-        Args:
-            candidates: List of candidates to validate
-            robot_id: Robot identifier
-            max_candidates: Maximum candidates to validate
-
-        Returns:
-            List of candidates that passed IK validation
         """
         try:
             from ros2.ROSBridge import ROSBridge
@@ -248,9 +215,6 @@ class GraspPlanner:
         The actual save/restore lifecycle is managed by plan_grasp via
         _save_approach_state and _restore_approach_state; this method only
         applies the filter.
-
-        Args:
-            preferred_approach: Approach type to prefer ("top", "front", "side")
         """
         matched = False
         for approach_settings in self.config.enabled_approaches:
@@ -270,9 +234,6 @@ class GraspPlanner:
     def _save_approach_state(self) -> list:
         """
         Save current enabled/preference_weight state of all approach settings.
-
-        Returns:
-            List of (enabled, preference_weight) tuples in config order
         """
         return [
             (s.enabled, s.preference_weight) for s in self.config.enabled_approaches
@@ -281,9 +242,6 @@ class GraspPlanner:
     def _restore_approach_state(self, saved_state: list) -> None:
         """
         Restore enabled/preference_weight state saved by _save_approach_state.
-
-        Args:
-            saved_state: List of (enabled, preference_weight) tuples
         """
         for approach_settings, (enabled, weight) in zip(
             self.config.enabled_approaches, saved_state
@@ -305,18 +263,6 @@ class GraspPlanner:
         Plan multiple grasp candidates for a target object.
 
         Useful for fallback strategies or multi-robot coordination.
-
-        Args:
-            object_position: Object center position
-            object_rotation: Object rotation
-            object_size: Object dimensions
-            robot_id: Robot identifier
-            gripper_position: Current gripper position
-            num_candidates: Number of candidates to return
-            **kwargs: Additional arguments passed to plan_grasp
-
-        Returns:
-            List of top N grasp candidates
         """
         # Generate and score all candidates
         candidates = self.generator.generate_candidates(
@@ -348,12 +294,6 @@ class GraspPlanner:
         Get statistics about a set of grasp candidates.
 
         Useful for debugging and analysis.
-
-        Args:
-            candidates: List of candidates
-
-        Returns:
-            Dictionary with statistics
         """
         if not candidates:
             return {"count": 0}

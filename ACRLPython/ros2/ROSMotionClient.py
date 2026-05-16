@@ -84,7 +84,6 @@ except ImportError:
         "Robot2": (0.475, 0.0, 0.0),
     }
 
-from AR4Kinematics import compute_link_poses
 
 # ROS 2 imports - only available inside Docker
 try:
@@ -186,13 +185,25 @@ class ROSMotionServer:
     }
 
     # Conservative bounding boxes for each AR4 arm segment (metres, ROS frame).
-    # Sized ~2 cm larger than actual links to give RRTConnect clearance.
+    # ~30-44% larger than minimum to give RRTConnect clearance and absorb FK error.
     _ROBOT_LINK_BOX_SIZES = [
-        (0.12, 0.12, 0.20),  # link_2: base→shoulder column
-        (0.10, 0.10, 0.28),  # link_3: upper arm
-        (0.09, 0.09, 0.22),  # link_5: forearm
-        (0.08, 0.08, 0.12),  # link_6: wrist block
+        (0.16, 0.16, 0.24),  # link_2: base→shoulder column
+        (0.14, 0.14, 0.34),  # link_3: upper arm
+        (0.13, 0.13, 0.28),  # link_5: forearm
+        (0.12, 0.12, 0.16),  # link_6: wrist block
     ]
+
+    # Executing commands that move the arm — must be serialized across robots.
+    _EXECUTING_COMMANDS = frozenset(
+        {
+            "plan_and_execute",
+            "plan_cartesian_descent",
+            "plan_cartesian_move",
+            "plan_multi_waypoint",
+            "plan_orientation_change",
+            "plan_return_to_start",
+        }
+    )
 
     def __init__(self, host="0.0.0.0", port=5020):
         """Initialize the ROS motion server with multi-robot support."""
@@ -221,6 +232,9 @@ class ROSMotionServer:
         self._last_planned_trajectories = {}  # robot_id -> JointTrajectory
         self._trajectory_feedback = {}  # robot_id -> last feedback status string
         self._trajectory_feedback_event = {}  # robot_id -> threading.Event
+        # Serializes plan+execute cycles across robots so each robot plans against
+        # the other's settled position, not a mid-execution snapshot.
+        self._inter_robot_execution_lock = threading.Lock()
 
         if HAS_ROS:
             rclpy.init()
@@ -246,30 +260,21 @@ class ROSMotionServer:
                 self._publish_ground_plane(robot_id)
 
     def _initialize_robot(self, robot_id: str):
-        """Initialize MoveIt clients and publishers for a specific robot.
-
-        Args:
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2")
-        """
+        """Initialize MoveIt clients and publishers for a specific robot."""
         logger.info(f"Initializing ROS clients for {robot_id}")
 
-        # MoveIt action client (namespaced)
-        # Action name is relative to the robot namespace
         self._move_group_clients[robot_id] = ActionClient(
             self._node, MoveGroup, f"/{robot_id}/move_action"
         )
 
-        # MoveIt IK service client (for grasp candidate validation)
         self._ik_service_clients[robot_id] = self._node.create_client(
             GetPositionIK, f"/{robot_id}/compute_ik"
         )
 
-        # MoveIt FK service client (for computing Cartesian pose from joint states)
         self._fk_service_clients[robot_id] = self._node.create_client(
             GetPositionFK, f"/{robot_id}/compute_fk"
         )
 
-        # MoveIt Cartesian path service client (for straight-line descents)
         self._cartesian_path_clients[robot_id] = self._node.create_client(
             GetCartesianPath, f"/{robot_id}/compute_cartesian_path"
         )
@@ -282,17 +287,14 @@ class ROSMotionServer:
             f"Registered move_action client and IK service for {robot_id} (non-blocking)"
         )
 
-        # Publisher: planned trajectories -> Unity's ROSTrajectorySubscriber
         self._trajectory_pubs[robot_id] = self._node.create_publisher(
             JointTrajectory, f"/{robot_id}/arm_controller/joint_trajectory", 10
         )
 
-        # Publisher: gripper commands -> Unity's ROSGripperSubscriber
         self._gripper_pubs[robot_id] = self._node.create_publisher(
             JointState, f"/{robot_id}/gripper/command", 10
         )
 
-        # Subscriber: joint states from Unity's ROSJointStatePublisher
         self._current_joint_states[robot_id] = None
         self._joint_state_subs[robot_id] = self._node.create_subscription(
             JointState,
@@ -301,13 +303,9 @@ class ROSMotionServer:
             10,
         )
 
-        # Cache the last planned trajectory for inspection
         self._last_planned_trajectories[robot_id] = None
-
         # Server readiness cache: False until confirmed available for first time
         self._move_group_server_ready[robot_id] = False
-
-        # Execution feedback from Unity's ROSTrajectorySubscriber
         self._trajectory_feedback[robot_id] = None
         self._trajectory_feedback_event[robot_id] = threading.Event()
         self._node.create_subscription(
@@ -373,7 +371,9 @@ class ROSMotionServer:
             f"Published ground plane collision object to {robot_id} planning scene"
         )
 
-    def _publish_other_robot_collision(self, planning_robot_id: str, other_robot_id: str):
+    def _publish_other_robot_collision(
+        self, planning_robot_id: str, other_robot_id: str
+    ):
         """Publish the other robot's arm links as collision objects into a planning scene.
 
         Reads the other robot's current joint state, computes forward-kinematics link
@@ -402,6 +402,10 @@ class ROSMotionServer:
         base_pos = transform["position"]
         base_yaw_rad = math.radians(transform.get("y_rotation", 0.0))
 
+        try:
+            from operations.AR4Kinematics import compute_link_poses
+        except ImportError:
+            from AR4Kinematics import compute_link_poses  # Docker root path fallback
         link_poses = compute_link_poses(joint_angles, base_pos, base_yaw_rad)
 
         collision_objects = []
@@ -455,7 +459,9 @@ class ROSMotionServer:
             f"Published {len(collision_objects)} collision objects for {other_robot_id} into {planning_robot_id} planning scene"
         )
 
-    def _remove_other_robot_collision(self, planning_robot_id: str, other_robot_id: str):
+    def _remove_other_robot_collision(
+        self, planning_robot_id: str, other_robot_id: str
+    ):
         """Remove previously published arm collision objects from a planning scene.
 
         Sends REMOVE operations for all four link collision objects that were added
@@ -631,12 +637,7 @@ class ROSMotionServer:
         return {"x": rx, "y": ry, "z": rz, "w": rw}
 
     def _joint_state_callback(self, robot_id: str, msg):
-        """Cache latest joint state from Unity for a specific robot.
-
-        Args:
-            robot_id: Robot namespace
-            msg: JointState message
-        """
+        """Cache latest joint state from Unity."""
         with self._joint_states_lock:
             # First time receiving joint states for this robot
             if self._current_joint_states[robot_id] is None:
@@ -647,12 +648,7 @@ class ROSMotionServer:
             self._current_joint_states[robot_id] = msg
 
     def _feedback_callback(self, robot_id: str, msg):
-        """Handle trajectory execution feedback from Unity's ROSTrajectorySubscriber.
-
-        Args:
-            robot_id: Robot namespace
-            msg: String message containing JSON feedback with 'status' field
-        """
+        """Handle trajectory execution feedback from Unity's ROSTrajectorySubscriber."""
         try:
             data = json.loads(msg.data)
             status = data.get("status", "")
@@ -665,16 +661,7 @@ class ROSMotionServer:
     def _wait_for_trajectory_completion(
         self, robot_id: str, timeout: float = 30.0
     ) -> str:
-        """Wait until Unity reports the current trajectory as completed or aborted.
-
-        Args:
-            robot_id: Robot namespace
-            timeout: Maximum seconds to wait
-
-        Returns:
-            Final feedback status string: "completed", "completed_with_timeout",
-            "aborted", "rejected", or "timeout" (Python-side wait expired).
-        """
+        """Wait until Unity reports trajectory completed/aborted; returns final status string."""
         event = self._trajectory_feedback_event[robot_id]
         signalled = event.wait(timeout=timeout)
         if not signalled:
@@ -683,7 +670,7 @@ class ROSMotionServer:
         return self._trajectory_feedback.get(robot_id, "timeout")
 
     def start(self):
-        """Start the TCP server and ROS spin thread."""
+        """Start TCP server and ROS spin thread."""
         self._running = True
 
         if HAS_ROS:
@@ -714,7 +701,6 @@ class ROSMotionServer:
         server.close()
 
     def _ros_spin(self):
-        """Spin ROS 2 node in background."""
         while self._running and rclpy.ok():
             rclpy.spin_once(self._node, timeout_sec=0.1)
 
@@ -774,7 +760,6 @@ class ROSMotionServer:
                 "error": "ROS 2 not available (stub mode)",
             }
 
-        # Validate robot_id
         if robot_id not in self._move_group_clients:
             return {
                 "success": False,
@@ -782,36 +767,50 @@ class ROSMotionServer:
             }
 
         try:
-            if command == "plan_to_pose":
-                return self._plan_to_pose(request, robot_id)
-            elif command == "plan_and_execute":
-                return self._plan_and_publish(request, robot_id)
-            elif command == "get_current_pose":
-                return self._get_current_pose(robot_id)
-            elif command == "get_ee_pose":
-                return self._compute_fk(robot_id)
-            elif command == "control_gripper":
-                return self._control_gripper(request, robot_id)
-            elif command == "plan_multi_waypoint":
-                return self._plan_multi_waypoint(request, robot_id)
-            elif command == "plan_orientation_change":
-                return self._plan_orientation_change(request, robot_id)
-            elif command == "plan_return_to_start":
-                return self._plan_return_to_start(request, robot_id)
-            elif command == "validate_grasp_candidates":
-                return self._validate_grasp_candidates(request, robot_id)
-            elif command in ("plan_cartesian_descent", "plan_cartesian_move"):
-                return self._plan_cartesian_move(request, robot_id)
-            elif command == "ping":
-                return {"success": True, "message": "pong", "timestamp": time.time()}
-            else:
-                return {"success": False, "error": f"Unknown command: {command}"}
+            if command in self._EXECUTING_COMMANDS and not request.get(
+                "allow_parallel", False
+            ):
+                logger.debug(
+                    f"{robot_id}: waiting for inter_robot_execution_lock ({command})"
+                )
+                with self._inter_robot_execution_lock:
+                    logger.debug(
+                        f"{robot_id}: acquired inter_robot_execution_lock ({command})"
+                    )
+                    return self._dispatch_command(command, request, robot_id)
+            return self._dispatch_command(command, request, robot_id)
 
         except Exception as e:
             logger.error(
                 f"Error processing {command} for {robot_id}: {e}", exc_info=True
             )
             return {"success": False, "error": str(e)}
+
+    def _dispatch_command(self, command, request, robot_id):
+        """Route command string to handler method (lock-free; caller manages locking)."""
+        if command == "plan_to_pose":
+            return self._plan_to_pose(request, robot_id)
+        elif command == "plan_and_execute":
+            return self._plan_and_publish(request, robot_id)
+        elif command == "get_current_pose":
+            return self._get_current_pose(robot_id)
+        elif command == "get_ee_pose":
+            return self._compute_fk(robot_id)
+        elif command == "control_gripper":
+            return self._control_gripper(request, robot_id)
+        elif command == "plan_multi_waypoint":
+            return self._plan_multi_waypoint(request, robot_id)
+        elif command == "plan_orientation_change":
+            return self._plan_orientation_change(request, robot_id)
+        elif command == "plan_return_to_start":
+            return self._plan_return_to_start(request, robot_id)
+        elif command == "validate_grasp_candidates":
+            return self._validate_grasp_candidates(request, robot_id)
+        elif command in ("plan_cartesian_descent", "plan_cartesian_move"):
+            return self._plan_cartesian_move(request, robot_id)
+        elif command == "ping":
+            return {"success": True, "message": "pong", "timestamp": time.time()}
+        return {"success": False, "error": f"Unknown command: {command}"}
 
     def _build_move_group_goal(self, request, robot_id):
         """Build a MoveGroup goal from request parameters.
@@ -844,7 +843,6 @@ class ROSMotionServer:
         # so the subsequent Cartesian descent starts from the correct joint configuration.
         constrain_joint4 = request.get("constrain_joint4", False)
         joint4_window_rad = request.get("joint4_window_rad", 1.5708)  # default ±90°
-
 
         logger.info(
             f"[GRASP_DEBUG] {robot_id} incoming position ({coordinate_space}): "
@@ -1047,7 +1045,9 @@ class ROSMotionServer:
             _j4c.tolerance_below = _j4_center - _j4_path_lower
             _j4c.tolerance_above = _j4_path_upper - _j4_center
             _j4c.weight = 1.0
-            if goal.request.path_constraints is None or not hasattr(goal.request, "path_constraints"):
+            if goal.request.path_constraints is None or not hasattr(
+                goal.request, "path_constraints"
+            ):
                 goal.request.path_constraints = Constraints()
             goal.request.path_constraints.joint_constraints.append(_j4c)
             logger.info(
@@ -1106,7 +1106,11 @@ class ROSMotionServer:
             # Check server availability once; skip the blocking wait on subsequent calls.
             if not self._move_group_server_ready.get(robot_id, False):
                 if not move_group_client.wait_for_server(timeout_sec=15.0):
-                    return None, 0, f"MoveGroup action server not available for {robot_id}"
+                    return (
+                        None,
+                        0,
+                        f"MoveGroup action server not available for {robot_id}",
+                    )
                 self._move_group_server_ready[robot_id] = True
                 # Publish ground plane on first confirmed connection only
                 self._publish_ground_plane(robot_id)
@@ -1474,7 +1478,9 @@ class ROSMotionServer:
             "status": feedback_status,
         }
         if not success:
-            result["error"] = f"Trajectory execution did not complete (status={feedback_status})"
+            result["error"] = (
+                f"Trajectory execution did not complete (status={feedback_status})"
+            )
         return result
 
     def _get_current_pose(self, robot_id):
@@ -1931,7 +1937,11 @@ class ROSMotionServer:
             orient_constraint.weight = 1.0
             path_constraints = Constraints()
             path_constraints.orientation_constraints.append(orient_constraint)
-            if joint_state is not None and "joint_4" in joint_state.name and JointConstraint is not None:
+            if (
+                joint_state is not None
+                and "joint_4" in joint_state.name
+                and JointConstraint is not None
+            ):
                 _j4_idx = list(joint_state.name).index("joint_4")
                 _j4_current = joint_state.position[_j4_idx]
                 _j4_lower, _j4_upper = ARM_JOINT_LIMITS.get(
@@ -1952,7 +1962,11 @@ class ROSMotionServer:
                     f"[CARTESIAN] {robot_id} joint_4 path constraint: "
                     f"current={_j4_current:.3f} rad, window=[{_j4_path_lower:.3f}, {_j4_path_upper:.3f}]"
                 )
-            if joint_state is not None and "joint_6" in joint_state.name and JointConstraint is not None:
+            if (
+                joint_state is not None
+                and "joint_6" in joint_state.name
+                and JointConstraint is not None
+            ):
                 _j6_idx = list(joint_state.name).index("joint_6")
                 _j6_current = joint_state.position[_j6_idx]
                 _j6_lower, _j6_upper = ARM_JOINT_LIMITS.get(

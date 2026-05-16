@@ -1,26 +1,5 @@
 #!/usr/bin/env python3
-"""
-AnalyzeImage.py - Continuously process Unity robot camera screenshots with LM Studio LLM
-
-This script integrates with StreamingServer to get live camera images from Unity
-and sends them to LM Studio for vision-based analysis. It runs as a daemon, continuously
-monitoring for new images with prompts and processing them automatically.
-
-Usage:
-    # First, start the StreamingServer in another terminal:
-    python StreamingServer.py
-
-    # Then start this script to continuously process images:
-    python AnalyzeImage.py
-    python AnalyzeImage.py --model llama-3.2-vision
-    python AnalyzeImage.py --interval 2.0  # Check every 2 seconds
-
-Requirements:
-    - openai Python SDK (pip install openai)
-    - opencv-python and numpy
-    - LM Studio running locally with server started
-    - StreamingServer.py running
-"""
+"""Daemon that monitors Unity camera images and sends them to LM Studio for vision analysis."""
 
 import argparse
 import json
@@ -81,13 +60,11 @@ except ImportError:
         MAX_IMAGE_AGE,
     )
 
-# Import from centralized lazy import system (prevents circular dependencies)
 try:
     from ..core.Imports import get_unified_image_storage
 except ImportError:
     from core.Imports import get_unified_image_storage
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
@@ -102,13 +79,6 @@ class LMStudioVisionProcessor:
     DEFAULT_MODEL = DEFAULT_LMSTUDIO_MODEL
 
     def __init__(self, model: str = DEFAULT_MODEL, base_url: Optional[str] = None):
-        """
-        Initialize the LM Studio vision processor
-
-        Args:
-            model: LM Studio vision model to use
-            base_url: LM Studio server base URL (default: http://127.0.0.1:1234/v1)
-        """
         self._model = model
         self._base_url = base_url if base_url else LMSTUDIO_BASE_URL
         self._client = OpenAI(base_url=self._base_url, api_key="not-needed")
@@ -125,15 +95,6 @@ class LMStudioVisionProcessor:
             )
 
     def encode_image_to_bytes(self, image: np.ndarray) -> bytes:
-        """
-        Encode a numpy image array to PNG bytes
-
-        Args:
-            image: OpenCV/numpy image array (BGR format)
-
-        Returns:
-            PNG encoded bytes
-        """
         success, buffer = cv2.imencode(".png", image)
         if not success:
             raise ValueError("Failed to encode image as PNG")
@@ -146,28 +107,14 @@ class LMStudioVisionProcessor:
         prompt: str,
         temperature: Optional[float] = None,
     ) -> Dict:
-        """
-        Send images to LM Studio for vision-based analysis
-
-        Args:
-            images: List of numpy image arrays
-            camera_ids: List of camera IDs corresponding to images
-            prompt: The prompt/question to ask the LLM about the images
-            temperature: Sampling temperature (0.0-2.0)
-
-        Returns:
-            Dictionary containing response and metadata
-        """
         if not images:
             raise ValueError("No images provided")
 
-        # Use config default if not specified
         if temperature is None:
             temperature = DEFAULT_TEMPERATURE
 
         logger.info(f"Processing {len(images)} image(s) with LM Studio...")
 
-        # Prepare images as base64 encoded data URLs for OpenAI API
         image_content = []
         for i, (image, cam_id) in enumerate(zip(images, camera_ids)):
             try:
@@ -186,23 +133,18 @@ class LMStudioVisionProcessor:
                 logger.error(f"  Error encoding image from {cam_id}: {e}")
                 raise
 
-        # Build prompt with camera context if multiple cameras
         if len(camera_ids) > 1:
             camera_context = "Images from cameras: " + ", ".join(camera_ids) + ". "
             full_prompt = camera_context + prompt
         else:
             full_prompt = prompt
 
-        # Build message content with text and images
-        # Combine text prompt with image content for vision API
         message_content = [{"type": "text", "text": full_prompt}] + image_content
 
-        # Make request to LM Studio
         logger.info(f"Sending request to LM Studio ({self._model})...")
         start_time = datetime.now()
 
         try:
-            # OpenAI vision API format with properly typed message
             response = self._client.chat.completions.create(
                 model=self._model,
                 messages=[
@@ -221,13 +163,11 @@ class LMStudioVisionProcessor:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
-        # Extract response text. choices can be empty/None on error responses;
-        # content can be None for tool-call or refusal responses.
+        # choices empty on error; content None on tool-call/refusal responses
         if not response.choices:
             raise ValueError("LM Studio returned an empty choices list")
         response_text = response.choices[0].message.content or ""
 
-        # Build result
         result = {
             "success": True,
             "response": response_text,
@@ -250,18 +190,8 @@ class LMStudioVisionProcessor:
 def get_images_from_server(
     camera_ids: Optional[List[str]] = None,
 ) -> tuple[List[np.ndarray], List[str], List[str]]:
-    """
-    Get images from the ImageServer
-
-    Args:
-        camera_ids: List of specific camera IDs to fetch, or None for all cameras
-
-    Returns:
-        Tuple of (images list, camera_ids list, prompts list)
-    """
     storage = get_unified_image_storage()
 
-    # Get all available cameras if not specified
     if camera_ids is None:
         camera_ids = storage.get_all_camera_ids()
 
@@ -296,20 +226,12 @@ def get_images_from_server(
 
 
 def save_response(result: Dict, output_path: Optional[str] = None):
-    """
-    Save LLM's response to files
-
-    Args:
-        result: Result dictionary from send_images
-        output_path: Optional custom output path (without extension)
-    """
     if output_path:
         base_path = Path(output_path)
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base_path = Path(f"llm_response_{timestamp}")
 
-    # Save full JSON result
     json_path = base_path.with_suffix(".json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
@@ -440,10 +362,8 @@ Note: StreamingServer.py must be running for this script to work.
             output_dir.mkdir(parents=True, exist_ok=True)
             logger.info(f"Saving responses to: {output_dir}")
 
-        # Track processed images to avoid reprocessing
         processed_timestamps: Dict[str, float] = {}
 
-        # Determine which cameras to monitor
         monitor_cameras = args.camera  # None = all cameras
 
         logger.info("Starting continuous monitoring mode...")
@@ -454,20 +374,16 @@ Note: StreamingServer.py must be running for this script to work.
         else:
             logger.info("Monitoring all available cameras")
 
-        # Main processing loop
         while True:
             try:
                 storage = get_unified_image_storage()
 
-                # Get camera IDs to check
                 if monitor_cameras:
                     camera_ids = monitor_cameras
                 else:
-                    # Get only single camera IDs (exclude stereo)
                     all_ids = storage.get_all_camera_ids()
                     camera_ids = [cid for cid in all_ids if "(stereo)" not in cid]
 
-                # Check each camera for new images with prompts
                 for cam_id in camera_ids:
                     image = storage.get_single_image(cam_id)
                     if image is None:
@@ -476,23 +392,18 @@ Note: StreamingServer.py must be running for this script to work.
                     prompt = storage.get_single_prompt(cam_id)
                     age = storage.get_single_age(cam_id)
 
-                    # Skip if age is None (shouldn't happen if image exists)
                     if age is None:
                         continue
 
-                    # Skip if no prompt provided
                     if not prompt:
                         continue
 
-                    # Skip if image is too fresh (might still be uploading)
                     if age < args.min_age:
                         continue
 
-                    # Skip if image is too old
                     if age > args.max_age:
                         continue
 
-                    # Check if we've already processed this exact image
                     last_processed = processed_timestamps.get(cam_id, 0)
                     current_timestamp = time.time() - age
 
@@ -511,27 +422,23 @@ Note: StreamingServer.py must be running for this script to work.
                             temperature=args.temperature,
                         )
 
-                    # Display response
                     logger.info("\n" + "=" * 60)
                     logger.info(f"RESPONSE FOR {cam_id}:")
                     logger.info("=" * 60)
                     logger.info(result["response"])
                     logger.info("=" * 60 + "\n")
 
-                    # Save response
                     if not args.no_save:
                         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                         output_path = output_dir / f"{cam_id}_{timestamp_str}"
                         save_response(result, str(output_path))
 
-                    # Mark as processed
                     processed_timestamps[cam_id] = current_timestamp
 
             except Exception as e:
                 logger.error(f"Error in processing loop: {e}")
                 traceback.print_exc()
 
-            # Wait before next check
             time.sleep(args.interval)
 
     except KeyboardInterrupt:

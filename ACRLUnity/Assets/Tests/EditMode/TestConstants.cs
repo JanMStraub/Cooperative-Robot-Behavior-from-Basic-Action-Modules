@@ -1,5 +1,5 @@
-using UnityEngine;
 using Configuration;
+using UnityEngine;
 
 namespace Tests.EditMode
 {
@@ -17,8 +17,6 @@ namespace Tests.EditMode
     /// </summary>
     public static class TestConstants
     {
-        #region Config-Default Helper Methods
-
         /// <summary>
         /// Read the IK convergence threshold from IKConfig field initializers.
         /// Creates and immediately destroys a transient ScriptableObject instance.
@@ -31,9 +29,6 @@ namespace Tests.EditMode
             return value;
         }
 
-        /// <summary>
-        /// Read the IK damping factor from IKConfig field initializers.
-        /// </summary>
         public static float GetDefaultDampingFactor()
         {
             var cfg = ScriptableObject.CreateInstance<IKConfig>();
@@ -42,9 +37,6 @@ namespace Tests.EditMode
             return value;
         }
 
-        /// <summary>
-        /// Read the grasp convergence multiplier from IKConfig field initializers.
-        /// </summary>
         public static float GetGraspConvergenceMultiplier()
         {
             var cfg = ScriptableObject.CreateInstance<IKConfig>();
@@ -53,18 +45,10 @@ namespace Tests.EditMode
             return value;
         }
 
-        #endregion
-
-        #region Production Constants (from Core.RobotConstants - Infrastructure Only)
-
         // Communication Ports
         public const int STEREO_DETECTION_PORT = Core.CommunicationConstants.STEREO_DETECTION_PORT; // 5006
         public const int COMMAND_SERVER_PORT = Core.CommunicationConstants.COMMAND_SERVER_PORT; // 5007
         public const int SEQUENCE_SERVER_PORT = Core.CommunicationConstants.SEQUENCE_SERVER_PORT; // 5008
-
-        #endregion
-
-        #region Default Values (from ScriptableObject Configs)
 
         // NOTE: These match the defaults in IKConfig, GripperConfig, TrajectoryConfig
         // If configs change, update these test constants accordingly
@@ -88,10 +72,6 @@ namespace Tests.EditMode
         // Gripper (from GripperConfig)
         public const float DEFAULT_GRIPPER_SMOOTH_TIME = 0.5f; // seconds
 
-        #endregion
-
-        #region Test-Specific Constants
-
         // Test Tolerances
         /// <summary>
         /// Standard epsilon for floating point comparisons in tests (1mm)
@@ -103,31 +83,14 @@ namespace Tests.EditMode
         /// </summary>
         public const float PHYSICS_EPSILON = 0.005f;
 
-        /// <summary>
-        /// Angular epsilon for rotation comparisons (0.1 degrees)
-        /// </summary>
         public const float ANGULAR_EPSILON = 0.1f;
 
         // Test Iterations
-        /// <summary>
-        /// Number of iterations for stress tests (memory leaks, performance)
-        /// </summary>
         public const int STRESS_TEST_ITERATIONS = 100;
-
-        /// <summary>
-        /// Number of physics frames to wait for stabilization
-        /// </summary>
         public const int PHYSICS_STABILIZATION_FRAMES = 10;
 
         // Test Timeouts
-        /// <summary>
-        /// Maximum wait time for async test operations (seconds)
-        /// </summary>
         public const float TEST_TIMEOUT_SECONDS = 5f;
-
-        /// <summary>
-        /// Short wait time for quick convergence tests (seconds)
-        /// </summary>
         public const float SHORT_WAIT_SECONDS = 0.5f;
 
         /// <summary>
@@ -136,14 +99,7 @@ namespace Tests.EditMode
         public const float CONTACT_DURATION_WAIT = 0.15f; // > 0.1s minimum
 
         // Phase 1: Motion Control Constants (from RobotControlRedesign.md)
-        /// <summary>
-        /// PD control position gain (from TrajectoryController)
-        /// </summary>
         public const float PD_CONTROL_KP = 10.0f;
-
-        /// <summary>
-        /// PD control velocity gain (damping term)
-        /// </summary>
         public const float PD_CONTROL_KD = 2.0f;
 
         /// <summary>
@@ -151,19 +107,8 @@ namespace Tests.EditMode
         /// </summary>
         public const float MAX_JOINT_VELOCITY_RAD_PER_SEC = 5.0f;
 
-        /// <summary>
-        /// End effector velocity convergence threshold (m/s)
-        /// </summary>
         public const float VELOCITY_CONVERGENCE_THRESHOLD = 0.05f; // 5 cm/s
-
-        /// <summary>
-        /// ArticulationBody stiffness (unified across all joints)
-        /// </summary>
         public const float ARTICULATION_STIFFNESS = 2000f;
-
-        /// <summary>
-        /// IK solver max step size per iteration (radians)
-        /// </summary>
         public const float IK_MAX_JOINT_STEP = 0.05f;
 
         /// <summary>
@@ -172,19 +117,8 @@ namespace Tests.EditMode
         public const float IK_DAMPING_LAMBDA = 0.5f;
 
         // Phase 2: Grasp Reliability Constants
-        /// <summary>
-        /// Minimum contact duration for stable grasp detection (seconds)
-        /// </summary>
         public const float MIN_CONTACT_DURATION = 0.1f; // 100ms
-
-        /// <summary>
-        /// Force estimation moving average window size (frames)
-        /// </summary>
         public const int FORCE_WINDOW_SIZE = 5;
-
-        /// <summary>
-        /// Minimum force threshold for grasp stability (Newtons)
-        /// </summary>
         public const float MIN_GRASP_FORCE = 5f;
 
         /// <summary>
@@ -205,9 +139,6 @@ namespace Tests.EditMode
         public const float GRASP_IK_VALIDATION_THRESHOLD = 0.002f; // 2mm
 
         // Phase 3: Coordination Constants
-        /// <summary>
-        /// Minimum safe separation distance between robots (meters)
-        /// </summary>
         public const float MIN_SAFE_SEPARATION = 0.2f; // 20cm
 
         /// <summary>
@@ -217,14 +148,7 @@ namespace Tests.EditMode
         public const float WAYPOINT_AVOIDANCE_OFFSET = 0.1f; // 10cm
 
         // Test Object Sizes
-        /// <summary>
-        /// Standard test cube size (meters)
-        /// </summary>
         public const float TEST_CUBE_SIZE = 0.05f; // 5cm
-
-        /// <summary>
-        /// Standard test target distance from origin (meters)
-        /// </summary>
         public const float TEST_TARGET_DISTANCE = 0.5f; // 50cm
 
         /// <summary>
@@ -233,43 +157,13 @@ namespace Tests.EditMode
         public const float FAR_DISTANCE = 1.0f; // 1 meter
 
         // Test Robot Configuration
-        /// <summary>
-        /// Number of joints in AR4 robot
-        /// </summary>
         public const int AR4_JOINT_COUNT = 6;
-
-        /// <summary>
-        /// Simplified joint count for unit tests
-        /// </summary>
         public const int SIMPLE_JOINT_COUNT = 2;
-
-        /// <summary>
-        /// Joint spacing for test robot chains (meters)
-        /// </summary>
         public const float TEST_JOINT_SPACING = 0.1f; // 10cm
 
-        #endregion
-
-        #region Test Timeouts (Added for refactoring plan)
-
-        /// <summary>
-        /// Short timeout for quick operations (1 second)
-        /// </summary>
         public const float SHORT_TIMEOUT = 1.0f;
-
-        /// <summary>
-        /// Medium timeout for moderate operations (5 seconds)
-        /// </summary>
         public const float MEDIUM_TIMEOUT = 5.0f;
-
-        /// <summary>
-        /// Long timeout for complex operations (15 seconds)
-        /// </summary>
         public const float LONG_TIMEOUT = 15.0f;
-
-        #endregion
-
-        #region Test Ports (Offset from production ports for isolated testing)
 
         /// <summary>
         /// Test port for CommandServer (offset from production 5007)
@@ -291,32 +185,15 @@ namespace Tests.EditMode
         /// </summary>
         public const int TEST_STEREO_IMAGE_PORT = 6006;
 
-        #endregion
-
-        #region Test Robot Configurations
-
-        /// <summary>
-        /// Default test robot starting position
-        /// </summary>
         public static readonly Vector3 TEST_ROBOT_START_POSITION = Vector3.zero;
-
-        /// <summary>
-        /// Test robot IDs for multi-robot scenarios
-        /// </summary>
-        public static readonly string[] TEST_ROBOT_IDS = { "TestRobot1", "TestRobot2", "TestRobot3" };
-
-        /// <summary>
-        /// Default test robot ID (single robot scenarios)
-        /// </summary>
+        public static readonly string[] TEST_ROBOT_IDS =
+        {
+            "TestRobot1",
+            "TestRobot2",
+            "TestRobot3",
+        };
         public const string DEFAULT_TEST_ROBOT_ID = "TestRobot1";
 
-        #endregion
-
-        #region Test Object Configurations
-
-        /// <summary>
-        /// Standard test object size (5cm cube)
-        /// </summary>
         public const float TEST_OBJECT_SIZE = 0.05f;
 
         /// <summary>
@@ -326,22 +203,15 @@ namespace Tests.EditMode
         {
             new Vector3(0.3f, 0.1f, 0.2f),
             new Vector3(0.4f, 0.1f, 0.3f),
-            new Vector3(0.2f, 0.1f, 0.1f)
+            new Vector3(0.2f, 0.1f, 0.1f),
         };
 
-        /// <summary>
-        /// Test object colors (for detection tests)
-        /// </summary>
         public static readonly Color[] TEST_OBJECT_COLORS = new Color[]
         {
             Color.red,
             Color.blue,
-            Color.green
+            Color.green,
         };
-
-        #endregion
-
-        #region Helper Methods
 
         /// <summary>
         /// Calculate expected grasp convergence threshold using live config defaults.
@@ -361,25 +231,16 @@ namespace Tests.EditMode
             return 2f * Mathf.Sqrt(stiffness * inertiaTensor);
         }
 
-        /// <summary>
-        /// Convert degrees to radians (for test assertions)
-        /// </summary>
         public static float DegreesToRadians(float degrees)
         {
             return degrees * Mathf.Deg2Rad;
         }
 
-        /// <summary>
-        /// Convert radians to degrees (for test assertions)
-        /// </summary>
         public static float RadiansToDegrees(float radians)
         {
             return radians * Mathf.Rad2Deg;
         }
 
-        /// <summary>
-        /// Get wait time for Unity physics to settle (WaitForSeconds)
-        /// </summary>
         public static WaitForSeconds GetPhysicsSettleWait()
         {
             return new WaitForSeconds(0.1f);
@@ -395,22 +256,14 @@ namespace Tests.EditMode
             return TEST_ROBOT_IDS[index % TEST_ROBOT_IDS.Length];
         }
 
-        /// <summary>
-        /// Get a test object position by index (wraps around if out of range).
-        /// </summary>
         public static Vector3 GetTestObjectPosition(int index)
         {
             return TEST_OBJECT_POSITIONS[index % TEST_OBJECT_POSITIONS.Length];
         }
 
-        /// <summary>
-        /// Get a test object color by index (wraps around if out of range).
-        /// </summary>
         public static Color GetTestObjectColor(int index)
         {
             return TEST_OBJECT_COLORS[index % TEST_OBJECT_COLORS.Length];
         }
-
-        #endregion
     }
 }

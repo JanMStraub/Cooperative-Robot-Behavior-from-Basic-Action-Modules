@@ -9,7 +9,6 @@ set -euo pipefail
 # Get absolute path to script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# --- Configuration ---
 PYTHON_EXEC="$SCRIPT_DIR/acrl/bin/python"
 CONTROLLER_PATTERN="orchestrators.RunRobotController"
 SEQUENCE_SERVER_PATTERN="orchestrators.RunSequenceServer"
@@ -21,8 +20,6 @@ STOP_DOCKER_ON_EXIT=false
 WEB_PORT="8000"
 ENV_FLAG="sim"
 LAUNCH_UNITY=true
-
-# --- Functions ---
 
 print_header() {
     echo "============================================================"

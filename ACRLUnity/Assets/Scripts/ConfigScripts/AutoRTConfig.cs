@@ -46,28 +46,19 @@ namespace ConfigScripts
         public float uiRefreshRate = 0.5f;
 
         /// <summary>
-        /// Validate configuration settings.
+        /// Validates and clamps config values. Called automatically by Unity editor and explicitly by tests.
         /// </summary>
         public void OnValidate()
         {
-            // Ensure at least one robot is configured
             if (robotIds == null || robotIds.Length == 0)
             {
                 Debug.LogWarning("[AutoRTConfig] No robots configured. Adding default Robot1.");
                 robotIds = new[] { "Robot1" };
             }
 
-            // Validate loop delay
-            if (loopDelaySeconds < 1f)
-            {
-                Debug.LogWarning("[AutoRTConfig] Loop delay too short, setting to 1 second.");
-                loopDelaySeconds = 1f;
-            }
+            loopDelaySeconds = Mathf.Max(1f, loopDelaySeconds);
         }
 
-        /// <summary>
-        /// Get robot IDs as comma-separated string.
-        /// </summary>
         public string GetRobotIdsString()
         {
             return robotIds != null ? string.Join(", ", robotIds) : "None";

@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Core infrastructure for Unity-Python communication.
-
-This package provides base classes and protocol definitions for TCP communication
-between Unity and Python servers.
-"""
+"""Base classes and protocols for Unity-Python TCP communication."""
 
 from .TCPServerBase import TCPServerBase, ServerConfig
 from .UnityProtocol import UnityProtocol

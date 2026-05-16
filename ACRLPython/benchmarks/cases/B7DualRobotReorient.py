@@ -3,11 +3,10 @@
 
 from __future__ import annotations
 
+
 def get_task() -> str:
     """
     Return natural language task description for B7.
 
-    Returns:
-        Task string sent to the LLM via SequenceServer.
     """
     return f"Robot1 and Robot2 work together to grasp the red cube. Robot1 should grasp on one side and Robot2  on the other side and they should lift the cube together to y=0.1."

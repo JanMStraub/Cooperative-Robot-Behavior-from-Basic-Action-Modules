@@ -15,10 +15,6 @@ namespace Robotics.Grasp
 
         private readonly string _logPrefix = "[GRASP_SCORER]";
 
-        /// <summary>
-        /// Initialize scorer with configuration.
-        /// </summary>
-        /// <param name="config">Grasp planning configuration</param>
         public GraspScorer(GraspConfig config)
         {
             _config = config;

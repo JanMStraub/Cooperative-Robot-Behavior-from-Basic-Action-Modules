@@ -1,8 +1,8 @@
-using NUnit.Framework;
 using System.Collections;
+using NUnit.Framework;
+using Simulation;
 using UnityEngine;
 using UnityEngine.TestTools;
-using Simulation;
 
 namespace Tests.PlayMode
 {
@@ -40,8 +40,6 @@ namespace Tests.PlayMode
             }
         }
 
-        #region Singleton Tests
-
         [Test]
         public void WorkspaceManager_Singleton_IsSet()
         {
@@ -61,10 +59,6 @@ namespace Tests.PlayMode
             Assert.IsTrue(duplicateObject == null);
         }
 
-        #endregion
-
-        #region Initialization Tests
-
         [Test]
         public void WorkspaceManager_DefaultRegions_AreCreated()
         {
@@ -81,10 +75,6 @@ namespace Tests.PlayMode
             Assert.IsNotNull(_manager.GetRegion("shared_zone"));
             Assert.IsNotNull(_manager.GetRegion("center"));
         }
-
-        #endregion
-
-        #region Position-based Region Tests
 
         [Test]
         public void GetRegionAtPosition_LeftWorkspace_ReturnsCorrectRegion()
@@ -127,10 +117,6 @@ namespace Tests.PlayMode
             Assert.IsNull(region);
         }
 
-        #endregion
-
-        #region Safety Separation Tests
-
         [Test]
         public void IsSafeSeparation_FarApart_ReturnsTrue()
         {
@@ -161,10 +147,6 @@ namespace Tests.PlayMode
             Assert.IsTrue(safe);
         }
 
-        #endregion
-
-        #region Robot Base Position Tests
-
         [Test]
         public void GetRobotBasePosition_Robot1_ReturnsCorrectPosition()
         {
@@ -182,14 +164,13 @@ namespace Tests.PlayMode
         [Test]
         public void GetRobotBasePosition_UnknownRobot_ReturnsZero()
         {
-            LogAssert.Expect(LogType.Warning, "[WORKSPACE_MANAGER] Unknown robotId 'RobotX' in GetRobotBasePosition");
+            LogAssert.Expect(
+                LogType.Warning,
+                "[WORKSPACE_MANAGER] Unknown robotId 'RobotX' in GetRobotBasePosition"
+            );
             var pos = _manager.GetRobotBasePosition("RobotX");
             Assert.AreEqual(Vector3.zero, pos);
         }
-
-        #endregion
-
-        #region WorkspaceRegion Tests
 
         [Test]
         public void WorkspaceRegion_ContainsPosition_ChecksBounds()
@@ -216,7 +197,5 @@ namespace Tests.PlayMode
             Vector3 center = region.GetCenter();
             Assert.AreEqual(new Vector3(0f, 0f, 0.25f), center);
         }
-
-        #endregion
     }
 }

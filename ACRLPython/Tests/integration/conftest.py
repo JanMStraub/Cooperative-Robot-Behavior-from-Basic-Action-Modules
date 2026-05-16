@@ -6,7 +6,7 @@ Integration test conftest
 Adds the `helpers/` sub-directory to sys.path so that all integration tests
 can import shared utilities with a flat import::
 
-    from backend_client import BackendClient, backend_available
+    from BackendClient import BackendClient, backend_available
 
 This avoids the need for __init__.py files in the test directories (which the
 project intentionally omits — see memory/MEMORY.md) while still providing a
@@ -31,7 +31,7 @@ def reset_simulation_at_session_start():
     positions before any test runs, regardless of prior state.
     Skipped silently if the backend is not available (unit-test runs).
     """
-    from backend_client import backend_available, reset_simulation  # type: ignore[import]
+    from BackendClient import backend_available, reset_simulation  # type: ignore[import]
 
     if backend_available():
         reset_simulation(timeout=20.0)

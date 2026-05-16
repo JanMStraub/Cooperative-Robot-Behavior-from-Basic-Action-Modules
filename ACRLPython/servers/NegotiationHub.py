@@ -1,20 +1,7 @@
 #!/usr/bin/env python3
 """
-Negotiation Hub - Central Multi-Robot Negotiation Coordinator
-=============================================================
-
-Orchestrates the multi-phase negotiation protocol between robot LLM agents.
-Not a TCP server -- called directly by SequenceExecutor when multi-robot
-collaboration is detected.
-
-Protocol:
-1. Analysis Phase: Each robot analyzes the task in parallel
-2. Proposal Phase: One robot proposes a coordinated plan
-3. Evaluation Phase: Other robots evaluate and accept/reject
-4. Repeat until consensus or MAX_ROUNDS reached
-
-Output format matches CommandParser.parse() output, directly consumable
-by SequenceExecutor.execute_sequence().
+Multi-robot negotiation coordinator. Not a TCP server — called directly by SequenceExecutor.
+Output matches CommandParser.parse() format, consumable by SequenceExecutor.execute_sequence().
 """
 
 import re
@@ -39,11 +26,6 @@ from agents.RobotLLMAgent import RobotLLMAgent, TaskAnalysis, PlanProposal
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Data Classes
-# ============================================================================
-
-
 class NegotiationState(Enum):
     """States of a negotiation session."""
 
@@ -58,19 +40,7 @@ class NegotiationState(Enum):
 
 @dataclass
 class NegotiationSession:
-    """
-    Tracks state of an active negotiation.
-
-    Attributes:
-        session_id: Unique session identifier
-        task: Original task description
-        robot_ids: Participating robot IDs
-        state: Current negotiation state
-        analyses: Per-robot task analyses
-        proposals: History of proposals
-        current_round: Current negotiation round
-        start_time: Session start timestamp
-    """
+    """Tracks state of an active negotiation."""
 
     session_id: str
     task: str
@@ -84,17 +54,7 @@ class NegotiationSession:
 
 @dataclass
 class NegotiationResult:
-    """
-    Final result of a negotiation.
-
-    Attributes:
-        success: Whether consensus was reached
-        commands: Agreed plan (if success), empty otherwise
-        reasoning: Explanation of the plan
-        rounds_taken: Number of negotiation rounds
-        duration_s: Total negotiation time
-        state: Final negotiation state
-    """
+    """Final result of a negotiation."""
 
     success: bool = False
     commands: List[Dict[str, Any]] = field(default_factory=list)
@@ -102,11 +62,6 @@ class NegotiationResult:
     rounds_taken: int = 0
     duration_s: float = 0.0
     state: NegotiationState = NegotiationState.IDLE
-
-
-# ============================================================================
-# Negotiation Hub (Singleton)
-# ============================================================================
 
 
 class NegotiationHub(SingletonBase):
@@ -129,33 +84,12 @@ class NegotiationHub(SingletonBase):
         return self._last_round_count
 
     def _get_or_create_agent(self, robot_id: str) -> RobotLLMAgent:
-        """
-        Get or create a robot LLM agent.
-
-        Args:
-            robot_id: Robot identifier
-
-        Returns:
-            RobotLLMAgent instance for the robot
-        """
         if robot_id not in self._agents:
             self._agents[robot_id] = RobotLLMAgent(robot_id)
             logger.info(f"Created LLM agent for {robot_id}")
         return self._agents[robot_id]
 
     def needs_negotiation(self, command_text: str, robot_id: str = "Robot1") -> bool:
-        """
-        Detect if a command requires multi-robot negotiation.
-
-        Checks for collaboration keywords and multi-robot references.
-
-        Args:
-            command_text: Natural language command
-            robot_id: Robot that received the command
-
-        Returns:
-            True if negotiation is needed
-        """
         # Re-read config dynamically to support runtime changes
         import config.Negotiation as neg_cfg
 
@@ -193,15 +127,8 @@ class NegotiationHub(SingletonBase):
         """
         Run the full negotiation protocol.
 
-        Args:
-            task_description: Natural language task
-            robot_ids: Participating robots (default: all known robots)
-            timeout: Negotiation timeout in seconds
-            spatial_context: Optional KG-derived spatial context dict (e.g. handoff
-                candidates) logged for future agent prompt injection.
-
-        Returns:
-            NegotiationResult with agreed plan or failure info
+        spatial_context: Optional KG-derived dict (e.g. handoff candidates) logged for
+            future agent prompt injection.
         """
         timeout = timeout or NEGOTIATION_TIMEOUT
         robot_ids = robot_ids or list(ROBOT_BASE_POSITIONS.keys())
@@ -330,17 +257,7 @@ class NegotiationHub(SingletonBase):
     def _run_analysis_phase(
         self, session: NegotiationSession, world_state: Dict[str, Any]
     ) -> bool:
-        """
-        Run analysis phase: each robot analyzes the task in parallel.
-
-        Args:
-            session: Active negotiation session
-            world_state: Current world state snapshot
-
-        Returns:
-            True if at least one robot can contribute
-        """
-        # Get available operations
+        """Run analysis phase: each robot analyzes the task in parallel."""
         try:
             from core.Imports import get_global_registry
 
@@ -350,7 +267,6 @@ class NegotiationHub(SingletonBase):
             available_ops = []
             logger.warning("Cannot get operation names for analysis")
 
-        # Run analyses in parallel
         with ThreadPoolExecutor(max_workers=len(session.robot_ids)) as executor:
             futures = {}
             for robot_id in session.robot_ids:
@@ -399,27 +315,14 @@ class NegotiationHub(SingletonBase):
     def _run_proposal_phase(
         self, session: NegotiationSession, world_state: Dict[str, Any]
     ) -> Optional[PlanProposal]:
-        """
-        Run proposal phase: one robot proposes a plan.
-
-        The proposer is chosen round-robin from contributing robots.
-
-        Args:
-            session: Active negotiation session
-            world_state: Current world state snapshot
-
-        Returns:
-            PlanProposal or None if proposal failed
-        """
+        """Proposal phase: one robot proposes a plan. Proposer chosen round-robin."""
         contributors = [rid for rid, a in session.analyses.items() if a.can_contribute]
         if not contributors:
             return None
 
-        # Round-robin proposer selection
         proposer_idx = (session.current_round - 1) % len(contributors)
         proposer_id = contributors[proposer_idx]
 
-        # Collect other robots' analyses
         other_analyses = [
             a for rid, a in session.analyses.items() if rid != proposer_id
         ]
@@ -475,20 +378,10 @@ class NegotiationHub(SingletonBase):
         world_state: Dict[str, Any],
     ) -> bool:
         """
-        Run evaluation phase: other robots evaluate the proposal.
+        Evaluation phase: other robots evaluate the proposal. Consensus = all accept.
 
-        Consensus requires all evaluating robots to accept.
-
-        Args:
-            session: Active negotiation session
-            proposal: Plan to evaluate
-            world_state: Current world state snapshot
-
-        Returns:
-            True if all robots accept the proposal
+        Only robots with can_contribute=True evaluate; querying others wastes LLM tokens.
         """
-        # Only ask robots that can contribute — robots that set can_contribute=False
-        # during analysis have nothing useful to evaluate, and querying them wastes LLM tokens.
         evaluator_ids = [
             rid
             for rid, analysis in session.analyses.items()
@@ -496,10 +389,8 @@ class NegotiationHub(SingletonBase):
         ]
 
         if not evaluator_ids:
-            # Only one robot, auto-accept
-            return True
+            return True  # Only one robot, auto-accept
 
-        # Run evaluations in parallel
         all_accept = True
         with ThreadPoolExecutor(max_workers=len(evaluator_ids)) as executor:
             futures = {}
@@ -527,12 +418,7 @@ class NegotiationHub(SingletonBase):
         return all_accept
 
     def _get_world_state_snapshot(self) -> Dict[str, Any]:
-        """
-        Serialize current world state for LLM context.
-
-        Returns:
-            Dict with robots and objects state
-        """
+        """Serialize current world state for LLM context."""
         snapshot = {"robots": {}, "objects": {}}
 
         try:
@@ -540,7 +426,6 @@ class NegotiationHub(SingletonBase):
 
             ws = get_world_state()
 
-            # Serialize robot states
             for robot_id in ROBOT_BASE_POSITIONS:
                 state = ws.get_robot_state(robot_id)
                 if state:
@@ -551,7 +436,6 @@ class NegotiationHub(SingletonBase):
                         "is_initialized": state.is_initialized,
                     }
 
-            # Serialize objects
             for obj in ws.get_all_objects():
                 snapshot["objects"][obj.object_id] = {
                     "position": obj.position,
@@ -568,19 +452,7 @@ class NegotiationHub(SingletonBase):
     def _normalize_commands(
         self, commands: List[Dict[str, Any]], robot_ids: List[str]
     ) -> List[Dict[str, Any]]:
-        """
-        Normalize command format for SequenceExecutor compatibility.
-
-        Ensures every command has operation, params (with robot_id),
-        and preserves capture_var and parallel_group.
-
-        Args:
-            commands: Raw commands from LLM
-            robot_ids: Available robot IDs
-
-        Returns:
-            Normalized command list
-        """
+        """Normalize command format for SequenceExecutor. Ensures operation, params.robot_id, capture_var, parallel_group."""
         normalized = []
         default_robot = robot_ids[0] if robot_ids else "Robot1"
 
@@ -591,7 +463,6 @@ class NegotiationHub(SingletonBase):
 
             params = cmd.get("params", {})
 
-            # Ensure robot_id
             if "robot_id" not in params:
                 params["robot_id"] = cmd.get("robot", default_robot)
 
@@ -607,15 +478,7 @@ class NegotiationHub(SingletonBase):
         return normalized
 
     def _validate_plan(self, commands: List[Dict[str, Any]]) -> Tuple[bool, List[str]]:
-        """
-        Structural validation of the negotiated plan.
-
-        Args:
-            commands: Normalized command list
-
-        Returns:
-            (valid, errors) tuple
-        """
+        """Structural validation of the negotiated plan. Returns (valid, errors)."""
         errors = []
 
         if len(commands) > MAX_PLAN_LENGTH:

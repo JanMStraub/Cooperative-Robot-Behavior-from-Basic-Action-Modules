@@ -102,7 +102,9 @@ namespace PythonCommunication
         [SerializeField]
         private bool _enablePublishing = true;
 
-        [Tooltip("Update rate in Hz (updates per second). Mirrors 1.0/WORLD_STATE_UPDATE_INTERVAL in ACRLPython/config/Robot.py (default: 10 Hz = 0.1s interval).")]
+        [Tooltip(
+            "Update rate in Hz (updates per second). Mirrors 1.0/WORLD_STATE_UPDATE_INTERVAL in ACRLPython/config/Robot.py (default: 10 Hz = 0.1s interval)."
+        )]
         [SerializeField]
         [Range(0.1f, 10f)]
         private float _updateRate = 10.0f;
@@ -149,11 +151,6 @@ namespace PythonCommunication
         // Pre-allocated joint angle buffer sized for AR4 (6 joints); grows if needed
         private float[] _jointAnglesCache = new float[6];
 
-        #region Unity Lifecycle
-
-        /// <summary>
-        /// Initialize singleton
-        /// </summary>
         private void Awake()
         {
             if (Instance == null)
@@ -168,9 +165,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Initialize components and calculate update interval
-        /// </summary>
         private void Start()
         {
             _robotManager = RobotManager.Instance;
@@ -214,10 +208,6 @@ namespace PythonCommunication
                 _timeSinceLastUpdate = 0f;
             }
         }
-
-        #endregion
-
-        #region World State Publishing
 
         /// <summary>
         /// Gather and publish current world state to Python.
@@ -317,7 +307,8 @@ namespace PythonCommunication
 
                 // Also consider the robot moving if it is executing a ROS trajectory,
                 // which bypasses the Unity IK targets used by GetDistanceToTarget()
-                var rosSubscriber = robotInstance.robotGameObject.GetComponentInChildren<ROSTrajectorySubscriber>();
+                var rosSubscriber =
+                    robotInstance.robotGameObject.GetComponentInChildren<ROSTrajectorySubscriber>();
                 if (rosSubscriber != null && rosSubscriber.IsExecutingTrajectory)
                 {
                     isMoving = true;
@@ -345,7 +336,10 @@ namespace PythonCommunication
 
                 // Convert startJointTargets (degrees, Unity) → radians for ROS consumers
                 float[] startJointAnglesRad = null;
-                if (robotInstance.startJointTargets != null && robotInstance.startJointTargets.Length > 0)
+                if (
+                    robotInstance.startJointTargets != null
+                    && robotInstance.startJointTargets.Length > 0
+                )
                 {
                     startJointAnglesRad = new float[robotInstance.startJointTargets.Length];
                     for (int i = 0; i < robotInstance.startJointTargets.Length; i++)
@@ -358,7 +352,9 @@ namespace PythonCommunication
                     position = new PositionData(position),
                     rotation = new RotationData(rotation),
                     target_position = new PositionData(targetPosition),
-                    target_rotation = targetRotation.HasValue ? new RotationData(targetRotation.Value) : null,
+                    target_rotation = targetRotation.HasValue
+                        ? new RotationData(targetRotation.Value)
+                        : null,
                     gripper_state = gripperState,
                     is_moving = isMoving,
                     is_initialized = true,
@@ -390,9 +386,10 @@ namespace PythonCommunication
             for (int i = 0; i < count; i++)
             {
                 var joint = controller.robotJoints[i];
-                _jointAnglesCache[i] = (joint != null && joint.jointType == ArticulationJointType.RevoluteJoint)
-                    ? joint.jointPosition[0]
-                    : 0f;
+                _jointAnglesCache[i] =
+                    (joint != null && joint.jointType == ArticulationJointType.RevoluteJoint)
+                        ? joint.jointPosition[0]
+                        : 0f;
             }
 
             return _jointAnglesCache;
@@ -458,23 +455,32 @@ namespace PythonCommunication
         private string InferColorFromName(string name)
         {
             string lower = name.ToLowerInvariant();
-            
-            // Prevent false positives from words containing "red"
-            lower = lower.Replace("shared", "")
-                         .Replace("desired", "")
-                         .Replace("colored", "")
-                         .Replace("ignored", "")
-                         .Replace("measured", "");
 
-            if (lower.Contains("red")) return "red";
-            if (lower.Contains("blue")) return "blue";
-            if (lower.Contains("green")) return "green";
-            if (lower.Contains("yellow")) return "yellow";
-            if (lower.Contains("orange")) return "orange";
-            if (lower.Contains("purple")) return "purple";
-            if (lower.Contains("black")) return "black";
-            if (lower.Contains("white")) return "white";
-            
+            // Prevent false positives from words containing "red"
+            lower = lower
+                .Replace("shared", "")
+                .Replace("desired", "")
+                .Replace("colored", "")
+                .Replace("ignored", "")
+                .Replace("measured", "");
+
+            if (lower.Contains("red"))
+                return "red";
+            if (lower.Contains("blue"))
+                return "blue";
+            if (lower.Contains("green"))
+                return "green";
+            if (lower.Contains("yellow"))
+                return "yellow";
+            if (lower.Contains("orange"))
+                return "orange";
+            if (lower.Contains("purple"))
+                return "purple";
+            if (lower.Contains("black"))
+                return "black";
+            if (lower.Contains("white"))
+                return "white";
+
             return "unknown";
         }
 
@@ -492,10 +498,6 @@ namespace PythonCommunication
                 return "cylinder";
             return "unknown";
         }
-
-        #endregion
-
-        #region Public API
 
         /// <summary>
         /// Register a detected object from vision system
@@ -606,7 +608,5 @@ namespace PythonCommunication
         {
             return (_updatesSent, _lastUpdateTime);
         }
-
-        #endregion
     }
 }

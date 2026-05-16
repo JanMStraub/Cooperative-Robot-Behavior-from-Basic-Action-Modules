@@ -26,15 +26,7 @@ class WorkflowCategory(Enum):
 
 @dataclass
 class WorkflowStep:
-    """
-    A single step in a workflow pattern.
-
-    Attributes:
-        operation_id: The operation to execute
-        parameter_bindings: Variable bindings from previous steps
-        conditional: Optional condition for executing this step
-        description: Human-readable description of the step
-    """
+    """A single step in a workflow pattern."""
 
     operation_id: str
     parameter_bindings: Dict[str, str] = field(default_factory=dict)
@@ -55,17 +47,6 @@ class WorkflowStep:
 class WorkflowPattern:
     """
     A reusable workflow pattern (sequence of operations).
-
-    Attributes:
-        pattern_id: Unique identifier for the pattern
-        name: Human-readable name
-        category: Workflow category
-        description: What this workflow accomplishes
-        steps: Ordered sequence of workflow steps
-        variable_bindings: Parameter flow between steps
-        success_criteria: How to determine workflow success
-        failure_recovery: What to do if a step fails
-        usage_examples: Example invocations
     """
 
     pattern_id: str
@@ -141,10 +122,7 @@ class WorkflowPattern:
         return doc
 
 
-# ============================================================================
 # Pattern Definitions: Single Robot Workflows
-# ============================================================================
-
 
 DETECT_AND_APPROACH_PATTERN = WorkflowPattern(
     pattern_id="workflow_detect_approach_001",
@@ -180,7 +158,6 @@ DETECT_AND_APPROACH_PATTERN = WorkflowPattern(
         "Approach closest object: detect_and_approach(selection='closest', robot_id='Robot1')",
     ],
 )
-
 
 PICK_AND_PLACE_PATTERN = WorkflowPattern(
     pattern_id="workflow_pick_place_001",
@@ -239,7 +216,6 @@ PICK_AND_PLACE_PATTERN = WorkflowPattern(
     ],
 )
 
-
 VERIFY_AND_ACT_PATTERN = WorkflowPattern(
     pattern_id="workflow_verify_act_001",
     name="verify_and_act",
@@ -282,11 +258,7 @@ VERIFY_AND_ACT_PATTERN = WorkflowPattern(
     ],
 )
 
-
-# ============================================================================
 # Pattern Definitions: Multi-Robot Coordination
-# ============================================================================
-
 
 SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
     pattern_id="workflow_simultaneous_move_001",
@@ -346,7 +318,6 @@ SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
         "Use parallel_group in SequenceExecutor for true simultaneous execution",
     ],
 )
-
 
 HANDOFF_PATTERN = WorkflowPattern(
     pattern_id="workflow_handoff_001",
@@ -457,7 +428,6 @@ HANDOFF_PATTERN = WorkflowPattern(
         "Use parallel_group in SequenceExecutor for Robot1 and Robot2 movements",
     ],
 )
-
 
 LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
     pattern_id="workflow_llm_coordination_001",
@@ -570,10 +540,7 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
     ],
 )
 
-
-# ============================================================================
 # Pattern Registry
-# ============================================================================
 
 
 class WorkflowPatternRegistry:
@@ -653,12 +620,9 @@ def get_global_workflow_registry() -> WorkflowPatternRegistry:
     return _global_workflow_registry
 
 
-# ============================================================================
 # TEXT-BASED PATTERNS (for RAG indexing and LLM guidance)
-# ============================================================================
 # These are detailed textual descriptions removed from non-atomic operations.
 # They guide the LLM on how to chain atomic operations for complex workflows.
-# ============================================================================
 
 HANDOFF_TEXT_PATTERN = """
 HANDOFF OPERATION: Explicit flat step sequence

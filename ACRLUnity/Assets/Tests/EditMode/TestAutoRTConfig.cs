@@ -1,5 +1,5 @@
-using NUnit.Framework;
 using ConfigScripts;
+using NUnit.Framework;
 using PythonCommunication.DataModels;
 using UnityEngine;
 
@@ -27,25 +27,38 @@ namespace Tests.EditMode
             Object.DestroyImmediate(_config);
         }
 
-        #region Default Values Tests
-
         [Test]
         public void TestDefaultValues()
         {
             // Assert - Verify default values match plan specification
-            Assert.AreEqual(3, _config.maxTaskCandidates, "Default max task candidates should be 3");
-            Assert.AreEqual(TaskSelectionStrategy.Balanced, _config.strategy, "Default strategy should be Balanced");
-            Assert.AreEqual(false, _config.enableContinuousLoop, "Continuous loop should be disabled by default");
+            Assert.AreEqual(
+                3,
+                _config.maxTaskCandidates,
+                "Default max task candidates should be 3"
+            );
+            Assert.AreEqual(
+                TaskSelectionStrategy.Balanced,
+                _config.strategy,
+                "Default strategy should be Balanced"
+            );
+            Assert.AreEqual(
+                false,
+                _config.enableContinuousLoop,
+                "Continuous loop should be disabled by default"
+            );
             Assert.AreEqual(5f, _config.loopDelaySeconds, "Default loop delay should be 5 seconds");
             Assert.AreEqual(10, _config.maxDisplayTasks, "Default max display tasks should be 10");
             Assert.AreEqual(true, _config.autoRefresh, "Auto-refresh should be enabled by default");
-            Assert.AreEqual(0.5f, _config.uiRefreshRate, "Default UI refresh rate should be 0.5 seconds");
+            Assert.AreEqual(
+                0.5f,
+                _config.uiRefreshRate,
+                "Default UI refresh rate should be 0.5 seconds"
+            );
         }
 
         [Test]
         public void TestDefaultRobotIds()
         {
-            // Assert
             Assert.IsNotNull(_config.robotIds, "Robot IDs should not be null");
             Assert.AreEqual(2, _config.robotIds.Length, "Should have 2 default robots");
             Assert.AreEqual("Robot1", _config.robotIds[0], "First robot should be Robot1");
@@ -55,13 +68,11 @@ namespace Tests.EditMode
         [Test]
         public void TestDefaultCollaborativeTasks()
         {
-            // Assert
-            Assert.True(_config.enableCollaborativeTasks, "Collaborative tasks should be enabled by default");
+            Assert.True(
+                _config.enableCollaborativeTasks,
+                "Collaborative tasks should be enabled by default"
+            );
         }
-
-        #endregion
-
-        #region Validation Tests
 
         [Test]
         public void TestOnValidate_EmptyRobotIds()
@@ -69,7 +80,6 @@ namespace Tests.EditMode
             // Arrange - Set robot IDs to null
             _config.robotIds = null;
 
-            // Act
             _config.OnValidate();
 
             // Assert - Should add default Robot1
@@ -84,7 +94,6 @@ namespace Tests.EditMode
             // Arrange - Set robot IDs to empty array
             _config.robotIds = new string[0];
 
-            // Act
             _config.OnValidate();
 
             // Assert - Should add default Robot1
@@ -98,11 +107,14 @@ namespace Tests.EditMode
             // Arrange - Set loop delay below minimum
             _config.loopDelaySeconds = 0.5f;
 
-            // Act
             _config.OnValidate();
 
             // Assert - Should be clamped to minimum
-            Assert.GreaterOrEqual(_config.loopDelaySeconds, 1f, "Loop delay should be at least 1 second");
+            Assert.GreaterOrEqual(
+                _config.loopDelaySeconds,
+                1f,
+                "Loop delay should be at least 1 second"
+            );
         }
 
         [Test]
@@ -112,7 +124,6 @@ namespace Tests.EditMode
             _config.robotIds = new string[] { "Robot1", "Robot2", "Robot3" };
             _config.loopDelaySeconds = 5f;
 
-            // Act
             _config.OnValidate();
 
             // Assert - Should remain unchanged
@@ -120,65 +131,45 @@ namespace Tests.EditMode
             Assert.AreEqual(5f, _config.loopDelaySeconds, "Should keep valid loop delay");
         }
 
-        #endregion
-
-        #region Helper Method Tests
-
         [Test]
         public void TestGetRobotIdsString_MultipleRobots()
         {
-            // Arrange
             _config.robotIds = new string[] { "Robot1", "Robot2", "Robot3" };
 
-            // Act
             string result = _config.GetRobotIdsString();
 
-            // Assert
             Assert.AreEqual("Robot1, Robot2, Robot3", result);
         }
 
         [Test]
         public void TestGetRobotIdsString_SingleRobot()
         {
-            // Arrange
             _config.robotIds = new string[] { "Robot1" };
 
-            // Act
             string result = _config.GetRobotIdsString();
 
-            // Assert
             Assert.AreEqual("Robot1", result);
         }
 
         [Test]
         public void TestGetRobotIdsString_NullArray()
         {
-            // Arrange
             _config.robotIds = null;
 
-            // Act
             string result = _config.GetRobotIdsString();
 
-            // Assert
             Assert.AreEqual("None", result);
         }
 
         [Test]
         public void TestGetRobotIdsString_EmptyArray()
         {
-            // Arrange
             _config.robotIds = new string[0];
 
-            // Act
             string result = _config.GetRobotIdsString();
 
-            // Assert
             Assert.AreEqual("", result);
         }
-
-        #endregion
-
-        #region Range Tests
 
         [Test]
         public void TestMaxTaskCandidates_ValidRange()
@@ -245,10 +236,6 @@ namespace Tests.EditMode
             Assert.AreEqual(2f, _config.uiRefreshRate);
         }
 
-        #endregion
-
-        #region Strategy Tests
-
         [Test]
         public void TestAllStrategies()
         {
@@ -268,16 +255,11 @@ namespace Tests.EditMode
             Assert.AreEqual(TaskSelectionStrategy.Random, _config.strategy);
         }
 
-        #endregion
-
-        #region Integration Tests
-
         [Test]
         public void TestCompleteConfiguration()
         {
             // Test a complete, realistic configuration
 
-            // Arrange
             _config.maxTaskCandidates = 7;
             _config.strategy = TaskSelectionStrategy.Explore;
             _config.enableContinuousLoop = true;
@@ -308,7 +290,6 @@ namespace Tests.EditMode
         {
             // Test minimal valid configuration
 
-            // Arrange
             _config.maxTaskCandidates = 1;
             _config.strategy = TaskSelectionStrategy.Balanced;
             _config.enableContinuousLoop = false;
@@ -328,17 +309,12 @@ namespace Tests.EditMode
             Assert.GreaterOrEqual(_config.loopDelaySeconds, 1f);
         }
 
-        #endregion
-
-        #region Edge Cases
-
         [Test]
         public void TestRobotIds_SpecialCharacters()
         {
             // Arrange - Robot IDs with special characters
             _config.robotIds = new string[] { "Robot-1", "Robot_A", "Robot.Test" };
 
-            // Act
             string result = _config.GetRobotIdsString();
 
             // Assert - Should handle special characters
@@ -353,7 +329,6 @@ namespace Tests.EditMode
             // Arrange - Array with empty strings
             _config.robotIds = new string[] { "", "Robot1", "" };
 
-            // Act
             string result = _config.GetRobotIdsString();
 
             // Assert - Should include empty strings in output
@@ -371,7 +346,5 @@ namespace Tests.EditMode
             // Assert - Should maintain reasonable precision
             Assert.AreEqual(5.123456f, _config.loopDelaySeconds, 0.0001f);
         }
-
-        #endregion
     }
 }

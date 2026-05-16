@@ -1,14 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Configuration;
 using NUnit.Framework;
-using UnityEngine;
-using UnityEngine.TestTools;
 using Robotics;
 using Robotics.Grasp;
 using Simulation;
-using Configuration;
 using Tests.EditMode;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Tests.PlayMode
 {
@@ -26,8 +26,6 @@ namespace Tests.PlayMode
         private GameObject _robotObject;
         private RobotController _robotController;
 
-        #region Setup/Teardown
-
         [UnitySetUp]
         public IEnumerator SetUp()
         {
@@ -42,8 +40,14 @@ namespace Tests.PlayMode
             _robotController.endEffectorBase = endEffectorBase.transform;
 
             // Expect initialization warnings
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of TestRobot");
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(
+                LogType.Warning,
+                "[ROBOT_CONTROLLER] No GripperController found in children of TestRobot"
+            );
+            LogAssert.Expect(
+                LogType.Warning,
+                "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies."
+            );
 
             yield return null;
         }
@@ -54,14 +58,12 @@ namespace Tests.PlayMode
             TestHelpers.DestroyAll(_robotObject);
         }
 
-        #endregion
-
-        #region Memory Leak Tests (Consolidated from MemoryLeakTests.cs)
-
         [UnityTest]
         public IEnumerator Memory_SetTargetVector3_DoesNotLeak()
         {
-            int initialObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int initialObjectCount = Object
+                .FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+                .Length;
 
             // Call SetTarget 100 times
             for (int i = 0; i < 100; i++)
@@ -78,12 +80,17 @@ namespace Tests.PlayMode
             System.GC.Collect();
             yield return null;
 
-            int finalObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int finalObjectCount = Object
+                .FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+                .Length;
             int objectDelta = finalObjectCount - initialObjectCount;
 
             // Should create at most 1 cached temporary object, not 100
-            Assert.LessOrEqual(objectDelta, 1,
-                $"Expected at most 1 new GameObject (cached), found {objectDelta}. Memory leak detected.");
+            Assert.LessOrEqual(
+                objectDelta,
+                1,
+                $"Expected at most 1 new GameObject (cached), found {objectDelta}. Memory leak detected."
+            );
         }
 
         [UnityTest]
@@ -92,7 +99,9 @@ namespace Tests.PlayMode
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             targetObject.transform.position = new Vector3(1f, 1f, 1f);
 
-            int initialObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int initialObjectCount = Object
+                .FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+                .Length;
 
             // Call SetTarget with grasp planning 100 times
             for (int i = 0; i < 100; i++)
@@ -106,11 +115,16 @@ namespace Tests.PlayMode
             System.GC.Collect();
             yield return null;
 
-            int finalObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int finalObjectCount = Object
+                .FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+                .Length;
             int objectDelta = finalObjectCount - initialObjectCount;
 
-            Assert.LessOrEqual(objectDelta, 1,
-                $"Expected at most 1 new GameObject (cached), found {objectDelta}. Memory leak detected.");
+            Assert.LessOrEqual(
+                objectDelta,
+                1,
+                $"Expected at most 1 new GameObject (cached), found {objectDelta}. Memory leak detected."
+            );
 
             Object.Destroy(targetObject);
         }
@@ -118,7 +132,9 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator Memory_SetTargetWithRotation_DoesNotLeak()
         {
-            int initialObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int initialObjectCount = Object
+                .FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+                .Length;
 
             // Call SetTarget with rotation multiple times
             for (int i = 0; i < 100; i++)
@@ -135,12 +151,17 @@ namespace Tests.PlayMode
             System.GC.Collect();
             yield return null;
 
-            int finalObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int finalObjectCount = Object
+                .FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+                .Length;
             int objectDelta = finalObjectCount - initialObjectCount;
 
             // Should create at most 1 cached temporary object, not 100
-            Assert.LessOrEqual(objectDelta, 1,
-                $"Expected at most 1 new GameObject (cached temp target), found {objectDelta}. Memory leak from repeated SetTarget with rotation.");
+            Assert.LessOrEqual(
+                objectDelta,
+                1,
+                $"Expected at most 1 new GameObject (cached temp target), found {objectDelta}. Memory leak from repeated SetTarget with rotation."
+            );
         }
 
         [UnityTest]
@@ -149,21 +170,27 @@ namespace Tests.PlayMode
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             targetObject.transform.position = new Vector3(1f, 1f, 1f);
 
-            int initialObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int initialObjectCount = Object
+                .FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+                .Length;
 
             // Mix different SetTarget calls
             for (int i = 0; i < 50; i++)
             {
                 if (i % 3 == 0)
                 {
-                    _robotController.SetTarget(new Vector3(i * 0.01f, 0f, 0f), GraspOptions.MoveOnly);
+                    _robotController.SetTarget(
+                        new Vector3(i * 0.01f, 0f, 0f),
+                        GraspOptions.MoveOnly
+                    );
                 }
                 else if (i % 3 == 1)
                 {
                     _robotController.SetTarget(
                         new Vector3(i * 0.01f, 0f, 0f),
                         Quaternion.identity,
-                        GraspOptions.MoveOnly);
+                        GraspOptions.MoveOnly
+                    );
                 }
                 else
                 {
@@ -177,12 +204,17 @@ namespace Tests.PlayMode
             System.GC.Collect();
             yield return null;
 
-            int finalObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int finalObjectCount = Object
+                .FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+                .Length;
             int objectDelta = finalObjectCount - initialObjectCount;
 
             // Should create at most 2 cached objects (grasp target + temp target), not 50
-            Assert.LessOrEqual(objectDelta, 2,
-                $"Expected at most 2 new GameObjects (cached targets), found {objectDelta}. Cached objects are not being reused.");
+            Assert.LessOrEqual(
+                objectDelta,
+                2,
+                $"Expected at most 2 new GameObjects (cached targets), found {objectDelta}. Cached objects are not being reused."
+            );
 
             Object.Destroy(targetObject);
         }
@@ -199,7 +231,9 @@ namespace Tests.PlayMode
             _robotController.SetTarget(targetObject, GraspOptions.Default);
             yield return null;
 
-            int countBeforeDestroy = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int countBeforeDestroy = Object
+                .FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+                .Length;
 
             // Destroy robot controller
             Object.Destroy(_robotObject);
@@ -207,18 +241,19 @@ namespace Tests.PlayMode
 
             yield return null;
 
-            int countAfterDestroy = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int countAfterDestroy = Object
+                .FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+                .Length;
 
             // Should have fewer objects after destruction
-            Assert.Less(countAfterDestroy, countBeforeDestroy,
-                "Cached GameObjects should be destroyed when RobotController is destroyed");
+            Assert.Less(
+                countAfterDestroy,
+                countBeforeDestroy,
+                "Cached GameObjects should be destroyed when RobotController is destroyed"
+            );
 
             Object.Destroy(targetObject);
         }
-
-        #endregion
-
-        #region IK Solver Performance Tests
 
         [UnityTest]
         public IEnumerator IKSolver_ConvergenceTime_LessThan500ms()
@@ -250,12 +285,17 @@ namespace Tests.PlayMode
             // Verify convergence time
             if (_robotController.TargetReached)
             {
-                Assert.Less(stopwatch.ElapsedMilliseconds, 500,
-                    $"IK convergence should complete in < 500ms, took {stopwatch.ElapsedMilliseconds}ms");
+                Assert.Less(
+                    stopwatch.ElapsedMilliseconds,
+                    500,
+                    $"IK convergence should complete in < 500ms, took {stopwatch.ElapsedMilliseconds}ms"
+                );
             }
             else
             {
-                UnityEngine.Debug.LogWarning($"Target not reached within {maxWaitTime}s - IK may need tuning");
+                UnityEngine.Debug.LogWarning(
+                    $"Target not reached within {maxWaitTime}s - IK may need tuning"
+                );
             }
 
             TestHelpers.DestroyAll(target);
@@ -274,11 +314,18 @@ namespace Tests.PlayMode
                 joints[i] = new JointInfo(new Vector3(0, i * 0.1f, 0), Vector3.right);
 
             var current = new IKState(new Vector3(0.1f, 0.3f, 0.1f), Quaternion.identity);
-            var target  = new IKState(new Vector3(0.15f, 0.5f, 0.15f), Quaternion.Euler(10, 20, 5));
+            var target = new IKState(new Vector3(0.15f, 0.5f, 0.15f), Quaternion.Euler(10, 20, 5));
 
             // Warm up: let MathNet's internal static caches settle before measuring
             for (int i = 0; i < 10; i++)
-                _ = solver.ComputeJointDeltasWithVelocity(current, target, Vector3.zero, Vector3.zero, joints, 0.001f);
+                _ = solver.ComputeJointDeltasWithVelocity(
+                    current,
+                    target,
+                    Vector3.zero,
+                    Vector3.zero,
+                    joints,
+                    0.001f
+                );
 
             yield return null; // one frame to let GC settle
 
@@ -287,18 +334,24 @@ namespace Tests.PlayMode
 
             const int iterations = 100;
             for (int i = 0; i < iterations; i++)
-                _ = solver.ComputeJointDeltasWithVelocity(current, target, Vector3.zero, Vector3.zero, joints, 0.001f);
+                _ = solver.ComputeJointDeltasWithVelocity(
+                    current,
+                    target,
+                    Vector3.zero,
+                    Vector3.zero,
+                    joints,
+                    0.001f
+                );
 
             long memoryAfter = System.GC.GetTotalMemory(false);
             long memoryDelta = memoryAfter - memoryBefore;
 
-            Assert.Less(memoryDelta, 1024 * 1024,
-                $"IK solver should use pre-allocated matrices. Allocated {memoryDelta / 1024}KB in {iterations} iterations.");
+            Assert.Less(
+                memoryDelta,
+                1024 * 1024,
+                $"IK solver should use pre-allocated matrices. Allocated {memoryDelta / 1024}KB in {iterations} iterations."
+            );
         }
-
-        #endregion
-
-        #region Grasp Planning Performance Tests
 
         [UnityTest]
         public IEnumerator GraspPlanning_PipelineExecution_LessThan200ms()
@@ -319,8 +372,11 @@ namespace Tests.PlayMode
             stopwatch.Stop();
 
             // Pipeline should execute within configured budget
-            Assert.Less(stopwatch.ElapsedMilliseconds, 200,
-                $"Grasp planning should complete in < 200ms, took {stopwatch.ElapsedMilliseconds}ms");
+            Assert.Less(
+                stopwatch.ElapsedMilliseconds,
+                200,
+                $"Grasp planning should complete in < 200ms, took {stopwatch.ElapsedMilliseconds}ms"
+            );
 
             Object.Destroy(targetCube);
         }
@@ -350,17 +406,17 @@ namespace Tests.PlayMode
             stopwatch2.Stop();
 
             // Time should scale roughly linearly (allow 3x tolerance for overhead)
-            float ratio = (float)stopwatch2.ElapsedMilliseconds / (float)stopwatch1.ElapsedMilliseconds;
-            Assert.Less(ratio, 3.0f,
-                $"Candidate generation should scale linearly. Ratio: {ratio:F2}x");
+            float ratio =
+                (float)stopwatch2.ElapsedMilliseconds / (float)stopwatch1.ElapsedMilliseconds;
+            Assert.Less(
+                ratio,
+                3.0f,
+                $"Candidate generation should scale linearly. Ratio: {ratio:F2}x"
+            );
 
             Object.Destroy(targetCube);
             Object.DestroyImmediate(graspConfig);
         }
-
-        #endregion
-
-        #region Coordination Performance Tests
 
         [UnityTest]
         public IEnumerator Coordination_CollisionCheck_LessThan10ms()
@@ -383,8 +439,11 @@ namespace Tests.PlayMode
             stopwatch.Stop();
 
             // Collision check should be fast (< 10ms)
-            Assert.Less(stopwatch.ElapsedMilliseconds, 10,
-                $"Collision check should complete in < 10ms, took {stopwatch.ElapsedMilliseconds}ms");
+            Assert.Less(
+                stopwatch.ElapsedMilliseconds,
+                10,
+                $"Collision check should complete in < 10ms, took {stopwatch.ElapsedMilliseconds}ms"
+            );
 
             Object.Destroy(robot1.gameObject);
             Object.Destroy(robot2.gameObject);
@@ -412,16 +471,15 @@ namespace Tests.PlayMode
             stopwatch.Stop();
 
             // State sync should be fast
-            Assert.Less(stopwatch.ElapsedMilliseconds, 50,
-                $"State sync should complete in < 50ms, took {stopwatch.ElapsedMilliseconds}ms");
+            Assert.Less(
+                stopwatch.ElapsedMilliseconds,
+                50,
+                $"State sync should complete in < 50ms, took {stopwatch.ElapsedMilliseconds}ms"
+            );
 
             Object.Destroy(manager.gameObject);
             Object.DestroyImmediate(config);
         }
-
-        #endregion
-
-        #region Stress Tests
 
         [UnityTest]
         public IEnumerator Stress_100SequentialSetTargetCalls_Completes()
@@ -442,8 +500,11 @@ namespace Tests.PlayMode
             stopwatch.Stop();
 
             // Should complete in reasonable time (< 10 seconds)
-            Assert.Less(stopwatch.ElapsedMilliseconds, 10000,
-                $"100 SetTarget calls should complete in < 10s, took {stopwatch.ElapsedMilliseconds}ms");
+            Assert.Less(
+                stopwatch.ElapsedMilliseconds,
+                10000,
+                $"100 SetTarget calls should complete in < 10s, took {stopwatch.ElapsedMilliseconds}ms"
+            );
         }
 
         [UnityTest]
@@ -463,10 +524,7 @@ namespace Tests.PlayMode
             // Set targets for all robots
             for (int i = 0; i < robots.Count; i++)
             {
-                robots[i].SetTarget(
-                    new Vector3(i * 0.2f, 0.3f, 0.3f),
-                    GraspOptions.MoveOnly
-                );
+                robots[i].SetTarget(new Vector3(i * 0.2f, 0.3f, 0.3f), GraspOptions.MoveOnly);
             }
 
             // Wait until all robots have targets (or a few frames)
@@ -475,8 +533,11 @@ namespace Tests.PlayMode
             stopwatch.Stop();
 
             // All robots should remain responsive
-            Assert.Less(stopwatch.ElapsedMilliseconds, 2000,
-                "Multiple robots should not cause significant performance degradation");
+            Assert.Less(
+                stopwatch.ElapsedMilliseconds,
+                2000,
+                "Multiple robots should not cause significant performance degradation"
+            );
 
             // Cleanup
             foreach (var robot in robots)
@@ -484,10 +545,6 @@ namespace Tests.PlayMode
                 Object.Destroy(robot.gameObject);
             }
         }
-
-        #endregion
-
-        #region Frame Rate Tests
 
         [UnityTest]
         public IEnumerator FrameRate_MaintainsTargetFPS_DuringSimulation()
@@ -510,15 +567,14 @@ namespace Tests.PlayMode
             float actualFPS = frameCount;
 
             // Should be close to target FPS (allow 20% variance)
-            Assert.GreaterOrEqual(actualFPS, config.targetFrameRate * 0.8f,
-                $"Frame rate should be >= {config.targetFrameRate * 0.8f} FPS, got {actualFPS} FPS");
+            Assert.GreaterOrEqual(
+                actualFPS,
+                config.targetFrameRate * 0.8f,
+                $"Frame rate should be >= {config.targetFrameRate * 0.8f} FPS, got {actualFPS} FPS"
+            );
 
             Object.DestroyImmediate(config);
         }
-
-        #endregion
-
-        #region Memory Profiling Tests
 
         [UnityTest]
         public IEnumerator Memory_TotalAllocation_RemainsStable()
@@ -547,10 +603,11 @@ namespace Tests.PlayMode
             long memoryGrowth = memoryEnd - memoryStart;
 
             // Memory growth should be minimal (< 10MB for 100 iterations)
-            Assert.Less(memoryGrowth, 10 * 1024 * 1024,
-                $"Memory should remain stable. Grew by {memoryGrowth / 1024}KB in 100 iterations.");
+            Assert.Less(
+                memoryGrowth,
+                10 * 1024 * 1024,
+                $"Memory should remain stable. Grew by {memoryGrowth / 1024}KB in 100 iterations."
+            );
         }
-
-        #endregion
     }
 }

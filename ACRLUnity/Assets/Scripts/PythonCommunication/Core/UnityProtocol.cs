@@ -55,8 +55,6 @@ namespace PythonCommunication.Core
             offset += INT_SIZE;
         }
 
-        #region Header Encoding/Decoding
-
         /// <summary>
         /// Encode message header (type + request_id).
         /// </summary>
@@ -116,10 +114,6 @@ namespace PythonCommunication.Core
 
             return offset;
         }
-
-        #endregion
-
-        #region Image Messages (Unity → Python)
 
         /// <summary>
         /// Encode an image message for sending to Python ImageServer.
@@ -311,9 +305,6 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        /// <summary>
-        /// Decode an image message (for testing).
-        /// </summary>
         /// <param name="data">Raw message bytes</param>
         /// <param name="requestId">Decoded request ID</param>
         /// <param name="cameraId">Decoded camera ID</param>
@@ -349,10 +340,6 @@ namespace PythonCommunication.Core
             imageBytes = new byte[imageLen];
             Buffer.BlockCopy(data, offset, imageBytes, 0, imageLen);
         }
-
-        #endregion
-
-        #region Result Messages (Python → Unity)
 
         /// <summary>
         /// Decode a result message received from Python CommandServer or SequenceServer.
@@ -435,10 +422,6 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        #endregion
-
-        #region RAG Query Messages (Unity → Python)
-
         /// <summary>
         /// Encode a RAG query message for sending to Python SequenceServer (integrated RAG).
         /// Format: [type:1][request_id:4][query_len:4][query_text:N][top_k:4][filters_json_len:4][filters_json:N]
@@ -497,9 +480,6 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        /// <summary>
-        /// Decode a RAG query message (for testing).
-        /// </summary>
         public static void DecodeRagQuery(
             byte[] data,
             out uint requestId,
@@ -529,10 +509,6 @@ namespace PythonCommunication.Core
             offset += INT_SIZE;
             filtersJson = Encoding.UTF8.GetString(data, offset, filtersLen);
         }
-
-        #endregion
-
-        #region RAG Response Messages (Python → Unity)
 
         /// <summary>
         /// Decode a RAG response message received from Python SequenceServer (integrated RAG).
@@ -573,9 +549,6 @@ namespace PythonCommunication.Core
             return Encoding.UTF8.GetString(data, offset, jsonLength);
         }
 
-        /// <summary>
-        /// Encode a RAG response message (for testing).
-        /// </summary>
         public static byte[] EncodeRagResponse(string operationContextJson, uint requestId = 0)
         {
             if (string.IsNullOrEmpty(operationContextJson))
@@ -599,10 +572,6 @@ namespace PythonCommunication.Core
 
             return message;
         }
-
-        #endregion
-
-        #region Status Query Messages (Unity → Python)
 
         /// <summary>
         /// Encode a status query message for sending to Python CommandServer.
@@ -643,9 +612,6 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        /// <summary>
-        /// Decode a status query message (for testing).
-        /// </summary>
         public static void DecodeStatusQuery(
             byte[] data,
             out uint requestId,
@@ -669,10 +635,6 @@ namespace PythonCommunication.Core
 
             detailed = data[offset] != 0;
         }
-
-        #endregion
-
-        #region Status Response Messages (Python → Unity / Unity → Python)
 
         /// <summary>
         /// Decode a status response message received from Python CommandServer or sent by WorldStatePublisher.
@@ -743,10 +705,6 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        #endregion
-
-        #region AutoRT Command Messages (Unity → Python)
-
         /// <summary>
         /// Encode an AutoRT command message for sending to Python SequenceServer.
         /// Format: [type:1][request_id:4][cmd_type_len:4][cmd_type:N][params_json_len:4][params_json:N]
@@ -809,9 +767,6 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        /// <summary>
-        /// Decode an AutoRT command message (for testing).
-        /// </summary>
         public static void DecodeAutoRTCommand(
             byte[] data,
             out uint requestId,
@@ -837,10 +792,6 @@ namespace PythonCommunication.Core
             offset += INT_SIZE;
             paramsJson = Encoding.UTF8.GetString(data, offset, paramsLen);
         }
-
-        #endregion
-
-        #region AutoRT Response Messages (Python → Unity)
 
         /// <summary>
         /// Decode an AutoRT response message received from Python SequenceServer.
@@ -881,9 +832,6 @@ namespace PythonCommunication.Core
             return Encoding.UTF8.GetString(data, offset, jsonLength);
         }
 
-        /// <summary>
-        /// Encode an AutoRT response message (for testing).
-        /// </summary>
         public static byte[] EncodeAutoRTResponse(string responseJson, uint requestId = 0)
         {
             if (string.IsNullOrEmpty(responseJson))
@@ -907,13 +855,6 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        #endregion
-
-        #region Validation Helpers
-
-        /// <summary>
-        /// Validate that image data is within the protocol's size limits
-        /// </summary>
         public static bool IsValidImageSize(byte[] imageBytes)
         {
             if (imageBytes == null)
@@ -956,7 +897,5 @@ namespace PythonCommunication.Core
 
             return BitConverter.ToUInt32(data, TYPE_SIZE);
         }
-
-        #endregion
     }
 }

@@ -9,18 +9,6 @@ namespace RobotScripts
     /// </summary>
     public static class CartesianPathGenerator
     {
-        /// <summary>
-        /// Generate a linear Cartesian path from start pose to target pose.
-        /// Creates waypoints at regular intervals along a straight line in 3D space.
-        /// </summary>
-        /// <param name="startPos">Starting position in local coordinates</param>
-        /// <param name="startRot">Starting rotation</param>
-        /// <param name="targetPos">Target position in local coordinates</param>
-        /// <param name="targetRot">Target rotation</param>
-        /// <param name="waypointSpacing">Distance between waypoints in meters (default 3cm)</param>
-        /// <param name="maxVelocity">Maximum path velocity in m/s (default 0.2)</param>
-        /// <param name="acceleration">Path acceleration in m/s² (default 0.5)</param>
-        /// <returns>CartesianPath with linearly interpolated waypoints</returns>
         public static CartesianPath GenerateLinearPath(
             Vector3 startPos,
             Quaternion startRot,

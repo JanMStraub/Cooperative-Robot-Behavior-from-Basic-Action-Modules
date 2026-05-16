@@ -24,7 +24,9 @@ namespace Simulation
         private int _rosPort = CommunicationConstants.ROS_TCP_ENDPOINT_PORT;
 
         [Header("Connection Management")]
-        [Tooltip("Attempt to connect on start. Mirrors AUTO_CONNECT_ROS in ACRLPython/config/ROS.py (default: true)")]
+        [Tooltip(
+            "Attempt to connect on start. Mirrors AUTO_CONNECT_ROS in ACRLPython/config/ROS.py (default: true)"
+        )]
         [SerializeField]
         private bool _connectOnStart = true;
 
@@ -56,14 +58,8 @@ namespace Simulation
             && _rosConnection.HasConnectionThread
             && !_rosConnection.HasConnectionError;
 
-        /// <summary>
-        /// The configured ROS host IP.
-        /// </summary>
         public string ROSHost => _rosHost;
 
-        /// <summary>
-        /// The configured ROS port.
-        /// </summary>
         public int ROSPort => _rosPort;
 
         private void Awake()
@@ -120,9 +116,6 @@ namespace Simulation
             Debug.Log($"{_logPrefix} ROS connection initiated: {_rosHost}:{_rosPort}");
         }
 
-        /// <summary>
-        /// Initialize the ROS connection with configured settings.
-        /// </summary>
         public void InitializeConnection()
         {
             _rosConnection = ROSConnection.GetOrCreateInstance();
@@ -140,9 +133,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Periodic health check that monitors connection status.
-        /// </summary>
         private IEnumerator HealthCheckLoop()
         {
             var wait = new WaitForSeconds(_healthCheckInterval);
@@ -170,9 +160,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Reconfigure and reconnect with new settings.
-        /// </summary>
         public void Reconnect(string host, int port)
         {
             _rosHost = host;

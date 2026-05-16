@@ -1,4 +1,5 @@
 """Tests for FeatureFlagContext — apply/restore in server process."""
+
 from __future__ import annotations
 
 import struct
@@ -8,8 +9,8 @@ import pytest
 import config.Servers as srv_cfg
 import config.ROS as ros_cfg
 import config.Negotiation as neg_cfg
-from servers.feature_flag_context import FeatureFlagContext
-from benchmarks.feature_flags import BenchmarkFeatureFlags
+from servers.FeatureFlagContext import FeatureFlagContext
+from benchmarks.FeatureFlags import BenchmarkFeatureFlags
 
 
 def test_no_flags_changes_nothing():
@@ -57,6 +58,7 @@ def test_negotiation_flag_applied_and_restored():
 
 def test_reflexion_patches_sequenceexecutor_module():
     import orchestrators.SequenceExecutor as seq_mod
+
     original = seq_mod.REFLEXION_ENABLED
     flags = BenchmarkFeatureFlags(use_reflexion=not original)
     with FeatureFlagContext(flags):
@@ -98,4 +100,4 @@ def test_flags_field_parsed_from_message():
 def test_no_flags_field_backward_compatible():
     msg_no_flags = _make_sequence_msg("Robot Robot1: wait 100ms", "Robot1")
     # auto_execute=True is the last byte before flags_len field
-    assert msg_no_flags[-5:-4] == b'\x01'  # auto_execute byte before flags_len(4)
+    assert msg_no_flags[-5:-4] == b"\x01"  # auto_execute byte before flags_len(4)

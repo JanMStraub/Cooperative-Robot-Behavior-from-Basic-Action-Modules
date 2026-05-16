@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test Vector Math Utilities
-===========================
-
-Edge-case and correctness tests for utils/VectorMath.py.
-
-Covers:
-- vector_angle: zero-length input vectors
-- vector_slerp: anti-parallel inputs, boundary values (t=0, t=1)
-- vectors_orthonormal_basis: edge-case forward vectors
-"""
+"""Test Vector Math Utilities"""
 
 import sys
 import os
@@ -25,9 +15,7 @@ from utils.VectorMath import (
     vector_normalize,
 )
 
-# ---------------------------------------------------------------------------
 # vector_angle
-# ---------------------------------------------------------------------------
 
 
 def test_vector_angle_zero_first():
@@ -72,9 +60,7 @@ def test_vector_angle_no_nan():
     assert not np.isnan(result), "vector_angle produced NaN"
 
 
-# ---------------------------------------------------------------------------
 # vector_slerp: anti-parallel case
-# ---------------------------------------------------------------------------
 
 
 def test_slerp_antiparallel_t0():
@@ -117,9 +103,7 @@ def test_slerp_antiparallel_unit_magnitude():
     ), f"t=0.5 anti-parallel magnitude: expected 1.0, got {mag}"
 
 
-# ---------------------------------------------------------------------------
 # vector_slerp: boundary values (t=0, t=1)
-# ---------------------------------------------------------------------------
 
 
 def test_slerp_t0_returns_v1():
@@ -158,9 +142,7 @@ def test_slerp_midpoint_perpendicular():
     ), f"Midpoint slerp: expected {expected}, got {result_norm}"
 
 
-# ---------------------------------------------------------------------------
 # vectors_orthonormal_basis
-# ---------------------------------------------------------------------------
 
 
 def test_orthonormal_basis_standard():

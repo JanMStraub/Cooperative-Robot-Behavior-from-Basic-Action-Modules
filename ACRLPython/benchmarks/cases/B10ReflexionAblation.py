@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import List
 
 
-def get_tasks() -> List[str]:
+def get_tasks(config=None) -> List[str]:
     """
     Return failure-prone NL tasks for reflexion ablation.
 
@@ -14,8 +14,6 @@ def get_tasks() -> List[str]:
     attempts are likely to fail, giving reflexion retries a chance to recover.
     Covers NAVIGATION, MANIPULATION, and PERCEPTION eligible categories.
 
-    Returns:
-        List of natural language task strings.
     """
     # Boundary coords stress IK reachability; low y risks table collision;
     # "nearest object" is ambiguous, forcing perception retry on first miss.

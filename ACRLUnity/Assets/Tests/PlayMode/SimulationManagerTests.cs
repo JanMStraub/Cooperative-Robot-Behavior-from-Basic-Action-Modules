@@ -1,9 +1,9 @@
-using NUnit.Framework;
 using System.Collections;
+using NUnit.Framework;
+using Robotics;
+using Simulation;
 using UnityEngine;
 using UnityEngine.TestTools;
-using Simulation;
-using Robotics;
 
 namespace Tests.PlayMode
 {
@@ -50,8 +50,6 @@ namespace Tests.PlayMode
             yield return null; // Let Unity process pending Destroy calls before next test
         }
 
-        #region Singleton Tests
-
         [Test]
         public void SimulationManager_Singleton_IsSet()
         {
@@ -73,17 +71,18 @@ namespace Tests.PlayMode
             Assert.IsTrue(secondManager == null);
         }
 
-        #endregion
-
-        #region State Property Tests
-
         [Test]
         public void SimulationManager_InitialState_IsInitializingOrPausedOrError()
         {
             // State depends on whether config has autoStart and if robots exist
             // Without robots in scene, state transitions to Error
             var state = _manager.CurrentState;
-            Assert.That(state, Is.EqualTo(SimulationState.Initializing).Or.EqualTo(SimulationState.Paused).Or.EqualTo(SimulationState.Error));
+            Assert.That(
+                state,
+                Is.EqualTo(SimulationState.Initializing)
+                    .Or.EqualTo(SimulationState.Paused)
+                    .Or.EqualTo(SimulationState.Error)
+            );
         }
 
         [Test]
@@ -109,10 +108,6 @@ namespace Tests.PlayMode
             Assert.IsTrue(_manager.ShouldStopRobots);
         }
 
-        #endregion
-
-        #region State Transition Tests
-
         [UnityTest]
         public IEnumerator SimulationManager_StartSimulation_ChangesToRunning()
         {
@@ -121,7 +116,12 @@ namespace Tests.PlayMode
             // With autoStart=false (default), state goes to Paused
             // Without robots, state goes to Error
             // With robots + autoStart=true, state goes to Running
-            Assert.That(_manager.CurrentState, Is.EqualTo(SimulationState.Error).Or.EqualTo(SimulationState.Running).Or.EqualTo(SimulationState.Paused));
+            Assert.That(
+                _manager.CurrentState,
+                Is.EqualTo(SimulationState.Error)
+                    .Or.EqualTo(SimulationState.Running)
+                    .Or.EqualTo(SimulationState.Paused)
+            );
         }
 
         [UnityTest]
@@ -132,7 +132,10 @@ namespace Tests.PlayMode
             // State goes to Error without robots, so pause won't work as expected
             // Test verifies the method doesn't throw
             _manager.PauseSimulation();
-            Assert.That(_manager.CurrentState, Is.EqualTo(SimulationState.Error).Or.EqualTo(SimulationState.Paused));
+            Assert.That(
+                _manager.CurrentState,
+                Is.EqualTo(SimulationState.Error).Or.EqualTo(SimulationState.Paused)
+            );
         }
 
         [UnityTest]
@@ -143,7 +146,10 @@ namespace Tests.PlayMode
             // State goes to Error without robots
             // Test verifies the methods don't throw
             _manager.ResumeSimulation();
-            Assert.That(_manager.CurrentState, Is.EqualTo(SimulationState.Error).Or.EqualTo(SimulationState.Running));
+            Assert.That(
+                _manager.CurrentState,
+                Is.EqualTo(SimulationState.Error).Or.EqualTo(SimulationState.Running)
+            );
         }
 
         [UnityTest]
@@ -155,12 +161,13 @@ namespace Tests.PlayMode
             // Test verifies the method doesn't throw
             _manager.ResetSimulation();
             var state = _manager.CurrentState;
-            Assert.That(state, Is.EqualTo(SimulationState.Error).Or.EqualTo(SimulationState.Resetting).Or.EqualTo(SimulationState.Paused));
+            Assert.That(
+                state,
+                Is.EqualTo(SimulationState.Error)
+                    .Or.EqualTo(SimulationState.Resetting)
+                    .Or.EqualTo(SimulationState.Paused)
+            );
         }
-
-        #endregion
-
-        #region Event Tests
 
         [UnityTest]
         public IEnumerator SimulationManager_OnStateChanged_FiresOnTransition()
@@ -182,12 +189,13 @@ namespace Tests.PlayMode
 
             // Event should fire during reset transition
             Assert.IsTrue(eventFired);
-            Assert.That(newState, Is.EqualTo(SimulationState.Paused).Or.EqualTo(SimulationState.Resetting).Or.EqualTo(SimulationState.Error));
+            Assert.That(
+                newState,
+                Is.EqualTo(SimulationState.Paused)
+                    .Or.EqualTo(SimulationState.Resetting)
+                    .Or.EqualTo(SimulationState.Error)
+            );
         }
-
-        #endregion
-
-        #region Configuration Tests
 
         [Test]
         public void SimulationManager_CreatesDefaultConfig_WhenNull()
@@ -196,10 +204,6 @@ namespace Tests.PlayMode
             Assert.IsNotNull(_manager.config);
         }
 
-        #endregion
-
-        #region NotifyTargetReached Tests
-
         [UnityTest]
         public IEnumerator NotifyTargetReached_UpdatesCoordinationState()
         {
@@ -207,10 +211,13 @@ namespace Tests.PlayMode
 
             // Test that NotifyTargetReached can be called without crashing
             // Actual coordination behavior depends on robots being present
-            Assert.DoesNotThrow(() =>
-            {
-                _manager.NotifyTargetReached("TestRobot", true);
-            }, "NotifyTargetReached should not throw even without robots");
+            Assert.DoesNotThrow(
+                () =>
+                {
+                    _manager.NotifyTargetReached("TestRobot", true);
+                },
+                "NotifyTargetReached should not throw even without robots"
+            );
         }
 
         [UnityTest]
@@ -219,10 +226,13 @@ namespace Tests.PlayMode
             yield return null;
 
             // Notify that target was NOT reached
-            Assert.DoesNotThrow(() =>
-            {
-                _manager.NotifyTargetReached("TestRobot", false);
-            }, "NotifyTargetReached(false) should not throw");
+            Assert.DoesNotThrow(
+                () =>
+                {
+                    _manager.NotifyTargetReached("TestRobot", false);
+                },
+                "NotifyTargetReached(false) should not throw"
+            );
         }
 
         [UnityTest]
@@ -231,17 +241,16 @@ namespace Tests.PlayMode
             yield return null;
 
             // Notify for multiple robots
-            Assert.DoesNotThrow(() =>
-            {
-                _manager.NotifyTargetReached("Robot1", true);
-                _manager.NotifyTargetReached("Robot2", false);
-                _manager.NotifyTargetReached("Robot3", true);
-            }, "Should handle multiple robot notifications");
+            Assert.DoesNotThrow(
+                () =>
+                {
+                    _manager.NotifyTargetReached("Robot1", true);
+                    _manager.NotifyTargetReached("Robot2", false);
+                    _manager.NotifyTargetReached("Robot3", true);
+                },
+                "Should handle multiple robot notifications"
+            );
         }
-
-        #endregion
-
-        #region Stronger State Transition Tests (Refactored)
 
         [UnityTest]
         public IEnumerator StateTransition_InitializingToRunning_WithAutoStart()
@@ -250,9 +259,11 @@ namespace Tests.PlayMode
             // left Initializing (the key invariant) and that the manager is not null.
             yield return null;
 
-            Assert.That(_manager.CurrentState,
+            Assert.That(
+                _manager.CurrentState,
                 Is.Not.EqualTo(SimulationState.Initializing),
-                "State machine should leave Initializing after Start()");
+                "State machine should leave Initializing after Start()"
+            );
             Assert.IsNotNull(_manager);
         }
 
@@ -263,9 +274,11 @@ namespace Tests.PlayMode
             // of autoStart. Verify the transition completed and state is deterministic.
             yield return null;
 
-            Assert.That(_manager.CurrentState,
+            Assert.That(
+                _manager.CurrentState,
                 Is.EqualTo(SimulationState.Error),
-                "Without robots, Start() should always end in Error state");
+                "Without robots, Start() should always end in Error state"
+            );
         }
 
         [UnityTest]
@@ -273,22 +286,30 @@ namespace Tests.PlayMode
         {
             // Set to Paused state
             _manager.PauseSimulation();
-            yield return TestHelpers.WaitUntil(() => _manager.CurrentState != SimulationState.Initializing, 1.0f);
+            yield return TestHelpers.WaitUntil(
+                () => _manager.CurrentState != SimulationState.Initializing,
+                1.0f
+            );
 
             var initialState = _manager.CurrentState;
 
             // Resume simulation
             _manager.ResumeSimulation();
             yield return TestHelpers.WaitUntil(
-                () => _manager.CurrentState == SimulationState.Running || _manager.CurrentState == SimulationState.Error,
-                1.0f);
+                () =>
+                    _manager.CurrentState == SimulationState.Running
+                    || _manager.CurrentState == SimulationState.Error,
+                1.0f
+            );
 
             // Should transition from Paused to Running (or stay in Error if no robots)
             if (initialState == SimulationState.Paused)
             {
-                Assert.That(_manager.CurrentState,
+                Assert.That(
+                    _manager.CurrentState,
                     Is.EqualTo(SimulationState.Running).Or.EqualTo(SimulationState.Error),
-                    "Should transition from Paused to Running via ResumeSimulation");
+                    "Should transition from Paused to Running via ResumeSimulation"
+                );
             }
         }
 
@@ -298,22 +319,31 @@ namespace Tests.PlayMode
             // Try to get to Running state first
             _manager.StartSimulation();
             yield return TestHelpers.WaitUntil(
-                () => _manager.CurrentState == SimulationState.Running || _manager.CurrentState == SimulationState.Error,
-                1.0f);
+                () =>
+                    _manager.CurrentState == SimulationState.Running
+                    || _manager.CurrentState == SimulationState.Error,
+                1.0f
+            );
 
             var initialState = _manager.CurrentState;
 
             // Pause simulation
             _manager.PauseSimulation();
             yield return TestHelpers.WaitUntil(
-                () => _manager.CurrentState == SimulationState.Paused || _manager.CurrentState == SimulationState.Error,
-                1.0f);
+                () =>
+                    _manager.CurrentState == SimulationState.Paused
+                    || _manager.CurrentState == SimulationState.Error,
+                1.0f
+            );
 
             // Should transition from Running to Paused
             if (initialState == SimulationState.Running)
             {
-                Assert.AreEqual(SimulationState.Paused, _manager.CurrentState,
-                    "Should transition from Running to Paused via PauseSimulation");
+                Assert.AreEqual(
+                    SimulationState.Paused,
+                    _manager.CurrentState,
+                    "Should transition from Running to Paused via PauseSimulation"
+                );
             }
         }
 
@@ -329,11 +359,13 @@ namespace Tests.PlayMode
             yield return null; // Wait one frame
 
             // After reset, should be in Paused or back to initial state
-            Assert.That(_manager.CurrentState,
+            Assert.That(
+                _manager.CurrentState,
                 Is.EqualTo(SimulationState.Paused)
-                  .Or.EqualTo(SimulationState.Resetting)
-                  .Or.EqualTo(SimulationState.Error),
-                "Should transition through Resetting to Paused (or Error if issues)");
+                    .Or.EqualTo(SimulationState.Resetting)
+                    .Or.EqualTo(SimulationState.Error),
+                "Should transition through Resetting to Paused (or Error if issues)"
+            );
         }
 
         [UnityTest]
@@ -341,7 +373,10 @@ namespace Tests.PlayMode
         {
             // Wait for initialization to complete (state leaves Initializing)
             float deadline = UnityEngine.Time.time + 1.0f;
-            while (_manager.CurrentState == SimulationState.Initializing && UnityEngine.Time.time < deadline)
+            while (
+                _manager.CurrentState == SimulationState.Initializing
+                && UnityEngine.Time.time < deadline
+            )
             {
                 yield return null;
             }
@@ -353,20 +388,21 @@ namespace Tests.PlayMode
                 yield return null;
 
                 // Should stay in Error state (cannot start from Error without reset)
-                Assert.AreEqual(SimulationState.Error, _manager.CurrentState,
-                    "Should not transition from Error to Running without reset");
+                Assert.AreEqual(
+                    SimulationState.Error,
+                    _manager.CurrentState,
+                    "Should not transition from Error to Running without reset"
+                );
             }
             else
             {
                 // Without robots, the sim transitions to Paused (not Error).
                 // Verify StartSimulation cannot bypass the Error guard in non-Error states too.
-                Assert.Pass("Simulation settled in non-Error state; Error->Running guard tested by StartSimulation unit logic");
+                Assert.Pass(
+                    "Simulation settled in non-Error state; Error->Running guard tested by StartSimulation unit logic"
+                );
             }
         }
-
-        #endregion
-
-        #region Python Server Lifecycle Tests (Added)
 
         [UnityTest]
         public IEnumerator PythonServers_AutoStart_WhenEnabled()
@@ -374,13 +410,18 @@ namespace Tests.PlayMode
             // This test verifies PythonServerManager integration
             // (Actual behavior depends on PythonServerManager component)
 
-            yield return TestHelpers.WaitUntil(() => _manager.CurrentState != SimulationState.Initializing, 2.0f);
+            yield return TestHelpers.WaitUntil(
+                () => _manager.CurrentState != SimulationState.Initializing,
+                2.0f
+            );
 
             // Verify SimulationManager can run regardless of Python server state
             Assert.IsNotNull(_manager, "SimulationManager should be valid");
-            Assert.That(_manager.CurrentState,
+            Assert.That(
+                _manager.CurrentState,
                 Is.Not.EqualTo(SimulationState.Initializing),
-                "Should complete initialization even without Python servers");
+                "Should complete initialization even without Python servers"
+            );
         }
 
         [UnityTest]
@@ -388,18 +429,19 @@ namespace Tests.PlayMode
         {
             // Simulation should continue even if Python backend is unavailable
             _manager.StartSimulation();
-            yield return TestHelpers.WaitUntil(() => _manager.CurrentState != SimulationState.Initializing, 2.0f);
+            yield return TestHelpers.WaitUntil(
+                () => _manager.CurrentState != SimulationState.Initializing,
+                2.0f
+            );
 
             // State should transition (either to Running, Paused, or Error)
             // Should NOT hang indefinitely waiting for Python
-            Assert.That(_manager.CurrentState,
+            Assert.That(
+                _manager.CurrentState,
                 Is.Not.EqualTo(SimulationState.Initializing),
-                "Should not hang in Initializing state waiting for Python");
+                "Should not hang in Initializing state waiting for Python"
+            );
         }
-
-        #endregion
-
-        #region State Machine Validation Tests (Added)
 
         [UnityTest]
         public IEnumerator StateMachine_InvalidTransition_LogsWarning()
@@ -411,9 +453,11 @@ namespace Tests.PlayMode
             // Attempt to call internal methods would require reflection
             // Instead, verify that valid transitions work
             var state = _manager.CurrentState;
-            Assert.That(state,
+            Assert.That(
+                state,
                 Is.EqualTo(SimulationState.Paused).Or.EqualTo(SimulationState.Error),
-                "Should be in valid state");
+                "Should be in valid state"
+            );
         }
 
         [UnityTest]
@@ -432,10 +476,11 @@ namespace Tests.PlayMode
             _manager.ResetSimulation();
             yield return null; // Wait for Resetting->Paused coroutine
 
-            Assert.Greater(transitionCount, 0,
-                "OnStateChanged should fire during ResetSimulation transitions");
+            Assert.Greater(
+                transitionCount,
+                0,
+                "OnStateChanged should fire during ResetSimulation transitions"
+            );
         }
-
-        #endregion
     }
 }

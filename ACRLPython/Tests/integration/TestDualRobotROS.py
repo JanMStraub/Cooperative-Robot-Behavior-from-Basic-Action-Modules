@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test Dual-Robot ROS Control
-============================
-
-Tests the multi-robot MoveIt setup with separate instances for Robot1 and Robot2.
-
-Requirements:
-- Docker ROS services running: cd ros_unity_integration && ./start_ros_endpoint.sh
-- Unity simulation running with both Robot1 and Robot2
-- Both robots publishing joint states to namespaced topics
-
-Test flow:
-1. Connect to ROS bridge
-2. Send commands to Robot1 (should route to moveit_robot1 container)
-3. Send commands to Robot2 (should route to moveit_robot2 container)
-4. Verify both robots move independently
-"""
+"""Test Dual-Robot ROS Control"""
 
 import sys
 import os
@@ -70,7 +54,6 @@ def test_dual_robot_connection():
 
 
 def test_robot1_motion():
-    """Test motion planning for Robot1."""
     logger.info("=" * 60)
     logger.info("Test 2: Robot1 Motion Planning")
     logger.info("=" * 60)
@@ -99,7 +82,6 @@ def test_robot1_motion():
 
 
 def test_robot2_motion():
-    """Test motion planning for Robot2."""
     logger.info("=" * 60)
     logger.info("Test 3: Robot2 Motion Planning")
     logger.info("=" * 60)
@@ -128,7 +110,6 @@ def test_robot2_motion():
 
 
 def test_simultaneous_motion():
-    """Test simultaneous motion planning for both robots."""
     logger.info("=" * 60)
     logger.info("Test 4: Simultaneous Dual-Robot Motion")
     logger.info("=" * 60)
@@ -180,7 +161,6 @@ def test_simultaneous_motion():
 
 
 def test_gripper_control():
-    """Test gripper control for both robots."""
     logger.info("=" * 60)
     logger.info("Test 5: Dual-Robot Gripper Control")
     logger.info("=" * 60)
@@ -224,7 +204,6 @@ def test_gripper_control():
 
 
 def test_get_joint_states():
-    """Test getting joint states for both robots."""
     logger.info("=" * 60)
     logger.info("Test 6: Get Joint States")
     logger.info("=" * 60)

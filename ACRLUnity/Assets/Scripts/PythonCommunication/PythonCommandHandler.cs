@@ -208,10 +208,8 @@ namespace PythonCommunication
                 return null;
             }
 
-            /// <summary>Return true if a callback is registered for the given key.</summary>
             public bool Contains(string key) => _listeners.ContainsKey(key);
 
-            /// <summary>Remove all entries.</summary>
             public void ClearAll() => _listeners.Clear();
         }
 
@@ -237,11 +235,6 @@ namespace PythonCommunication
         // Helper variable
         private const string _logPrefix = "[PYTHON_COMMAND_HANDLER]";
 
-        #region Unity Lifecycle
-
-        /// <summary>
-        /// Initialize singleton and subscribe to events
-        /// </summary>
         private void Awake()
         {
             if (Instance == null)
@@ -273,10 +266,6 @@ namespace PythonCommunication
 
             Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
         }
-
-        #endregion
-
-        #region Command Processing
 
         /// <summary>
         /// Public method to handle commands routed from UnifiedPythonReceiver
@@ -403,10 +392,6 @@ namespace PythonCommunication
             }
         }
 
-        #endregion
-
-        #region Validation Helpers
-
         /// <summary>
         /// Validate and retrieve robot instance with controller.
         /// Handles error logging and failed command counting.
@@ -491,10 +476,6 @@ namespace PythonCommunication
 
             return false;
         }
-
-        #endregion
-
-        #region Command Implementations
 
         // TODO: Future enhancement - expose grasp planning parameters to Python
         // Example: Add to CommandParameters struct:
@@ -964,11 +945,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Parse approach type string to GraspApproach enum.
-        /// </summary>
-        /// <param name="approachStr">Approach string ("auto", "top", "front", "side")</param>
-        /// <returns>GraspApproach enum value, or null for auto</returns>
         private GraspApproach? ParseApproachType(string approachStr)
         {
             if (string.IsNullOrEmpty(approachStr) || approachStr.ToLower() == "auto")
@@ -1061,11 +1037,6 @@ namespace PythonCommunication
             return result;
         }
 
-        /// <summary>
-        /// Parse approach vector from TargetPosition.
-        /// </summary>
-        /// <param name="vector">Target position representing direction vector</param>
-        /// <returns>Vector3 or null if not provided</returns>
         private Vector3? ParseApproachVector(TargetPosition vector)
         {
             if (vector == null)
@@ -1435,9 +1406,10 @@ namespace PythonCommunication
                 Vector3 placePos = targetPos + new Vector3(0f, tcpOffset, 0f);
 
                 // Top-down orientation: robot base rotation × Euler(0,0,0) points gripper straight down.
-                Quaternion baseRotation = robotInstance.robotGameObject != null
-                    ? robotInstance.robotGameObject.transform.rotation
-                    : Quaternion.identity;
+                Quaternion baseRotation =
+                    robotInstance.robotGameObject != null
+                        ? robotInstance.robotGameObject.transform.rotation
+                        : Quaternion.identity;
                 Quaternion topDownOrientation = baseRotation * Quaternion.Euler(0f, 0f, 0f);
 
                 StartCoroutine(
@@ -1930,9 +1902,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Execute align_object command - align held object to target orientation.
-        /// </summary>
         private void ExecuteAlignObject(RobotCommand command)
         {
             try
@@ -2915,11 +2884,16 @@ namespace PythonCommunication
                 float elapsed = 0f;
                 while (elapsed < wristDuration)
                 {
-                    if (controller == null) yield break;
+                    if (controller == null)
+                        yield break;
                     elapsed += Time.fixedDeltaTime;
                     float t = Mathf.Clamp01(elapsed / wristDuration);
                     float smoothT = t * t * (3f - 2f * t);
-                    for (int i = 3; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                    for (
+                        int i = 3;
+                        i < controller.robotJoints.Length && i < targetJoints.Length;
+                        i++
+                    )
                     {
                         float currentTarget = Mathf.Lerp(startJoints[i], targetJoints[i], smoothT);
                         controller.jointDriveTargets[i] = currentTarget;
@@ -2953,11 +2927,16 @@ namespace PythonCommunication
                 elapsed = 0f;
                 while (elapsed < armDuration)
                 {
-                    if (controller == null) yield break;
+                    if (controller == null)
+                        yield break;
                     elapsed += Time.fixedDeltaTime;
                     float t = Mathf.Clamp01(elapsed / armDuration);
                     float smoothT = t * t * (3f - 2f * t);
-                    for (int i = 0; i < Mathf.Min(3, controller.robotJoints.Length) && i < targetJoints.Length; i++)
+                    for (
+                        int i = 0;
+                        i < Mathf.Min(3, controller.robotJoints.Length) && i < targetJoints.Length;
+                        i++
+                    )
                     {
                         float currentTarget = Mathf.Lerp(startJoints[i], targetJoints[i], smoothT);
                         controller.jointDriveTargets[i] = currentTarget;
@@ -3467,10 +3446,6 @@ namespace PythonCommunication
             return UnifiedPythonReceiver.Instance.SendCompletion(statusJson, requestId);
         }
 
-        #endregion
-
-        #region Helper Methods
-
         /// <summary>
         /// Find GameObject with flexible name matching.
         /// Tries multiple strategies to handle naming mismatches between Python and Unity.
@@ -3657,10 +3632,6 @@ namespace PythonCommunication
             return result;
         }
 
-        #endregion
-
-        #region Public API
-
         /// <summary>
         /// Get command processing statistics
         /// </summary>
@@ -3700,7 +3671,11 @@ namespace PythonCommunication
         /// Triggers SimulationManager.ResetSimulation() then waits for it to finish
         /// before sending completion back to Python.
         /// </summary>
-        private System.Collections.IEnumerator ResetAndConfirm(SimulationManager sim, string robotId, uint requestId)
+        private System.Collections.IEnumerator ResetAndConfirm(
+            SimulationManager sim,
+            string robotId,
+            uint requestId
+        )
         {
             sim.ResetSimulation();
             // Wait until SimulationManager leaves the Resetting state
@@ -3725,7 +3700,5 @@ namespace PythonCommunication
             _failedCommands = 0;
             Debug.Log($"{_logPrefix} Statistics reset");
         }
-
-        #endregion
     }
 }

@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for CommandServer.py
-
-Tests the bidirectional command and results server including:
-- Connection management and lifecycle
-- Bidirectional command flow
-- Request ID correlation (Protocol V2)
-- Completion callback handling
-- Broadcasting to multiple clients
-- Error recovery and timeout handling
-"""
+"""Unit tests for CommandServer.py"""
 
 import pytest
 import socket
@@ -25,19 +15,11 @@ from servers.CommandServer import (
 )
 from core.UnityProtocol import UnityProtocol, MessageType
 
-# ============================================================================
 # Fixtures
-# ============================================================================
 
 
 @pytest.fixture
 def command_broadcaster():
-    """
-    Create a fresh CommandBroadcaster instance for testing.
-
-    Returns:
-        CommandBroadcaster instance with no server attached
-    """
     # Reset singleton
     CommandBroadcaster._instance = None
     broadcaster = CommandBroadcaster()
@@ -46,15 +28,6 @@ def command_broadcaster():
 
 @pytest.fixture
 def command_server(server_config):
-    """
-    Create a CommandServer instance for testing.
-
-    Args:
-        server_config: ServerConfig fixture
-
-    Returns:
-        CommandServer instance (not started)
-    """
     server = CommandServer(server_config)
     yield server
     # Cleanup
@@ -64,12 +37,6 @@ def command_server(server_config):
 
 @pytest.fixture
 def mock_client_socket():
-    """
-    Create a mock client socket for testing.
-
-    Returns:
-        Mock socket configured for CommandServer testing
-    """
     sock = Mock(spec=socket.socket)
     sock.recv = Mock(return_value=b"")
     sock.sendall = Mock(return_value=None)
@@ -78,9 +45,7 @@ def mock_client_socket():
     return sock
 
 
-# ============================================================================
 # Test Class: CommandBroadcaster
-# ============================================================================
 
 
 class TestCommandBroadcaster:
@@ -94,7 +59,6 @@ class TestCommandBroadcaster:
         assert broadcaster1 is broadcaster2
 
     def test_send_command_no_server(self, command_broadcaster):
-        """Test sending command when no server is attached."""
         command = {"command_type": "test", "data": "value"}
 
         result = command_broadcaster.send_command(command, request_id=1)
@@ -102,7 +66,6 @@ class TestCommandBroadcaster:
         assert result is False
 
     def test_send_command_with_server(self, command_broadcaster, command_server):
-        """Test sending command with server attached."""
         command_broadcaster.set_server(command_server)
         command_server.broadcast_to_all_clients = Mock(return_value=1)
 
@@ -116,7 +79,6 @@ class TestCommandBroadcaster:
     def test_send_command_queue_when_no_clients(
         self, command_broadcaster, command_server
     ):
-        """Test command is queued when no clients are connected."""
         command_broadcaster.set_server(command_server)
         command_server.broadcast_to_all_clients = Mock(return_value=0)  # No clients
 
@@ -142,7 +104,6 @@ class TestCommandBroadcaster:
         command_server.broadcast_to_all_clients.assert_called_once()
 
     def test_completion_queue_lifecycle(self, command_broadcaster):
-        """Test creating, using, and removing completion queues."""
         request_id = 789
 
         # Create queue
@@ -170,21 +131,16 @@ class TestCommandBroadcaster:
         assert result is None
 
     def test_put_completion_no_queue(self, command_broadcaster):
-        """Test putting completion when no queue exists (should log warning)."""
         # Should not raise exception
         command_broadcaster.put_completion(999, {"data": "test"})
 
 
-# ============================================================================
 # Test Class: CommandServer - Connection Management
-# ============================================================================
 
 
 class TestCommandServerConnection:
-    """Test CommandServer connection management and lifecycle."""
 
     def test_server_initialization(self, server_config):
-        """Test server initializes with correct configuration."""
         server = CommandServer(server_config)
 
         assert server._config == server_config
@@ -192,7 +148,6 @@ class TestCommandServerConnection:
         assert server._broadcaster is not None
 
     def test_server_start_stop(self, command_server):
-        """Test server can start and stop cleanly."""
         # Start server
         command_server.start()
         time.sleep(0.1)  # Give it time to start
@@ -206,7 +161,6 @@ class TestCommandServerConnection:
         assert not command_server.is_running()
 
     def test_multiple_client_connections(self, command_server):
-        """Test server can handle multiple simultaneous client connections."""
         command_server.start()
         time.sleep(0.1)
 
@@ -225,7 +179,6 @@ class TestCommandServerConnection:
     def test_client_reconnection_after_disconnect(
         self, command_server, mock_client_socket
     ):
-        """Test client can reconnect after disconnecting."""
         command_server.start()
         time.sleep(0.1)
 
@@ -243,16 +196,12 @@ class TestCommandServerConnection:
         command_server.stop()
 
 
-# ============================================================================
 # Test Class: CommandServer - Command Handling
-# ============================================================================
 
 
 class TestCommandServerCommands:
-    """Test CommandServer command handling functionality."""
 
     def test_receive_completion_valid(self, command_server, mock_client_socket):
-        """Test receiving a valid completion message from Unity."""
         request_id = 123
         completion = {"success": True, "result": "movement complete"}
 
@@ -275,7 +224,6 @@ class TestCommandServerCommands:
         assert result["request_id"] == request_id
 
     def test_receive_completion_invalid_type(self, command_server, mock_client_socket):
-        """Test receiving message with invalid type (should be rejected)."""
         # Create message with wrong type
         header = struct.pack("<B", 0xFF) + struct.pack("<I", 123)  # Invalid type
         json_data = json.dumps({"test": "data"}).encode("utf-8")
@@ -305,7 +253,6 @@ class TestCommandServerCommands:
         assert result is None
 
     def test_send_queued_results(self, command_server, mock_client_socket):
-        """Test sending queued results to newly connected client."""
         # Queue some results
         command_server._broadcaster.send_command({"type": "test1"}, 1)
         command_server._broadcaster.send_command({"type": "test2"}, 2)
@@ -317,9 +264,7 @@ class TestCommandServerCommands:
         assert mock_client_socket.sendall.call_count >= 0
 
 
-# ============================================================================
 # Test Class: CommandServer - Protocol V2
-# ============================================================================
 
 
 class TestCommandServerProtocolV2:
@@ -351,7 +296,6 @@ class TestCommandServerProtocolV2:
         assert result["request_id"] == request_id
 
     def test_multiple_pending_requests(self, command_broadcaster):
-        """Test handling multiple pending requests simultaneously."""
         request_ids = [1, 2, 3]
 
         # Create queues for all requests
@@ -373,9 +317,7 @@ class TestCommandServerProtocolV2:
         assert result3["id"] == 3
 
 
-# ============================================================================
 # Test Class: CommandServer - Error Handling
-# ============================================================================
 
 
 class TestCommandServerErrors:
@@ -397,7 +339,6 @@ class TestCommandServerErrors:
         assert result is None
 
     def test_client_disconnect_during_receive(self, command_server, mock_client_socket):
-        """Test handling client disconnect during message reception."""
         # Simulate disconnection (recv returns empty bytes)
         mock_client_socket.recv = Mock(return_value=b"")
 
@@ -417,7 +358,6 @@ class TestCommandServerErrors:
             command_server._receive_completion(mock_client_socket)
 
     def test_world_state_update_handling(self, command_server, mock_client_socket):
-        """Test handling world_state_update messages (should not return as completion)."""
         request_id = 100
         world_state_update = {
             "type": "world_state_update",
@@ -440,16 +380,12 @@ class TestCommandServerErrors:
         assert result is None
 
 
-# ============================================================================
 # Integration Test
-# ============================================================================
 
 
 class TestCommandServerIntegration:
-    """Integration tests for full command flow."""
 
     def test_bidirectional_command_flow(self, command_server):
-        """Test complete bidirectional command flow (send command, receive completion)."""
         command_server.start()
         time.sleep(0.1)
 

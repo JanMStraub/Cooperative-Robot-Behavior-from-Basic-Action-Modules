@@ -25,9 +25,6 @@ namespace Configuration
         public bool enableVSync = true;
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Validate configuration values.
-        /// </summary>
         private void OnValidate()
         {
             timeScale = Mathf.Max(0.1f, timeScale);

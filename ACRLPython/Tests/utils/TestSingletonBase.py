@@ -39,11 +39,6 @@ class SingletonTestMixin:
 
         Must be implemented by subclass.
 
-        Returns:
-            Singleton instance
-
-        Raises:
-            NotImplementedError: If not implemented by subclass
         """
         raise NotImplementedError("Subclass must implement get_singleton_instance()")
 
@@ -53,8 +48,6 @@ class SingletonTestMixin:
 
         Optional - only needed if cleanup fixture exists.
 
-        Returns:
-            Optional[str]: Name of cleanup fixture, or None if no cleanup needed
         """
         return None
 
@@ -75,7 +68,6 @@ class SingletonTestMixin:
         assert id(instance1) == id(instance2), "Singleton instances should have same id"
 
     def test_singleton_returns_same_instance(self, request):
-        """Test multiple calls return same instance (alias for clarity)."""
         cleanup_fixture = self.get_cleanup_fixture_name()
         if cleanup_fixture and hasattr(request, "getfixturevalue"):
             try:
@@ -172,9 +164,7 @@ class ResetableSingletonTestMixin(SingletonTestMixin):
         assert instance2 is not None
 
 
-# ============================================================================
 # Example Usage (for documentation)
-# ============================================================================
 
 
 class ExampleSingletonTest(SingletonTestMixin):
@@ -201,9 +191,7 @@ class ExampleSingletonTest(SingletonTestMixin):
     # - test_singleton_thread_safe_initialization()
 
 
-# ============================================================================
 # Consolidated Singleton Tests
-# ============================================================================
 
 
 class TestConsolidatedSingletons:

@@ -18,10 +18,6 @@ class GraspApproachSettings:
     """
     Settings for a specific grasp approach type.
 
-    Attributes:
-        approach_type: Approach direction ("top", "front", "side")
-        enabled: True if this approach should be used
-        preference_weight: Preference multiplier (higher = more preferred)
     """
 
     approach_type: str  # "top", "front", "side"
@@ -37,35 +33,6 @@ class GraspConfig:
     Controls candidate generation, filtering, scoring, and execution.
     All distances are in meters, angles in degrees.
 
-    Attributes:
-        candidates_per_approach: Number of candidates to generate per approach type
-        enabled_approaches: List of enabled approach types with weights
-        pre_grasp_distance_factor: Multiplier for object size to determine pre-grasp distance
-        min_pre_grasp_distance: Minimum pre-grasp distance (meters)
-        max_pre_grasp_distance: Maximum pre-grasp distance (meters)
-        enable_retreat: Enable post-grasp retreat motion
-        retreat_distance_factor: Multiplier for object size to determine retreat distance
-        retreat_direction: Direction for retreat motion (typically upward)
-        gripper_geometry: Gripper geometry for validation
-        target_grasp_depth: Target grasp depth as fraction of object size [0-1]
-        ik_score_weight: Weight for IK quality score
-        approach_score_weight: Weight for approach preference score
-        depth_score_weight: Weight for grasp depth score
-        stability_score_weight: Weight for stability score
-        antipodal_score_weight: Weight for antipodal grasp quality score
-        enable_collision_checking: Enable collision checking along approach path
-        collision_check_waypoints: Number of waypoints to check along approach
-        collision_check_radius: Radius of sphere for collision checking (meters)
-        enable_ik_validation: Enable IK validation for candidate filtering
-        max_ik_validation_iterations: Maximum IK iterations for validation
-        ik_validation_threshold: Distance threshold for IK convergence (meters)
-        ik_rotation_tolerance: Rotation tolerance for IK convergence (degrees)
-        max_joint_step_per_iteration: Maximum joint step per IK iteration (radians)
-        max_reach_distance: Maximum reach distance for quick rejection (meters)
-        angle_variation_range: Angular variation for candidate generation (degrees)
-        distance_variation_range: Distance variation factor for candidate generation
-        depth_variation_range: Depth variation factor for candidate generation
-        max_pipeline_time_ms: Maximum time budget for full pipeline (milliseconds)
     """
 
     # Candidate generation
@@ -128,11 +95,7 @@ class GraspConfig:
         """
         Get preference weight for a specific approach type.
 
-        Args:
-            approach: Approach type ("top", "front", "side")
 
-        Returns:
-            Preference weight (0.0 if disabled)
         """
         for settings in self.enabled_approaches:
             if settings.approach_type == approach:
@@ -143,11 +106,7 @@ class GraspConfig:
         """
         Check if a specific approach type is enabled.
 
-        Args:
-            approach: Approach type ("top", "front", "side")
 
-        Returns:
-            True if enabled
         """
         for settings in self.enabled_approaches:
             if settings.approach_type == approach:
@@ -159,8 +118,6 @@ class GraspConfig:
         """
         Create default AR4 grasp configuration.
 
-        Returns:
-            GraspConfig with default AR4 values
         """
         return GraspConfig()
 
@@ -169,8 +126,6 @@ class GraspConfig:
         """
         Create fast grasp configuration with reduced candidates.
 
-        Returns:
-            GraspConfig optimized for speed
         """
         config = GraspConfig()
         config.candidates_per_approach = 4
@@ -183,8 +138,6 @@ class GraspConfig:
         """
         Create precise grasp configuration with more candidates.
 
-        Returns:
-            GraspConfig optimized for quality
         """
         config = GraspConfig()
         config.candidates_per_approach = 12

@@ -1,27 +1,11 @@
 #!/usr/bin/env python3
-"""
-AutoRT Autonomous Task Generation
-
-Usage:
-    # Default: Human-in-loop with dual-arm robots
-    python -m orchestrators.RunAutoRT
-
-    # Fully autonomous mode (opt-in)
-    python -m orchestrators.RunAutoRT --autonomous
-
-    # Single robot only
-    python -m orchestrators.RunAutoRT --robots Robot1
-
-    # Custom settings
-    python -m orchestrators.RunAutoRT --robots Robot1 Robot2 --strategy explore --loop-delay 10
-"""
+"""AutoRT autonomous task generation orchestrator."""
 
 import argparse
 import sys
 
 
 def main():
-    """Entry point for AutoRT"""
     parser = argparse.ArgumentParser(description="AutoRT Autonomous Task Generation")
     parser.add_argument(
         "--robots",
@@ -57,7 +41,6 @@ def main():
     )
     args = parser.parse_args()
 
-    # Configure logging
     from core.LoggingSetup import setup_logging, enable_file_logging
 
     setup_logging()
@@ -67,7 +50,6 @@ def main():
 
         _logging.getLogger().setLevel(_logging.DEBUG)
 
-    # Override config if --num-tasks specified
     if args.num_tasks:
         from config import AutoRT as config
 

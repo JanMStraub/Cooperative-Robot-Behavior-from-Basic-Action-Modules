@@ -378,16 +378,12 @@ class TestQuickVerifyOperation:
         assert len(result.violations) > 0
 
 
-# ============================================================================
 # Test Class: Spatial Predicate Accuracy
-# ============================================================================
 
 
 class TestSpatialPredicateAccuracy:
-    """Test accuracy of spatial predicate calculations."""
 
     def test_distance_calculation_accuracy(self, cleanup_world_state):
-        """Test distance calculation is accurate to millimeter precision."""
         from operations.WorldState import get_world_state
         import math
 
@@ -418,7 +414,6 @@ class TestSpatialPredicateAccuracy:
         assert abs(actual_distance - expected_distance) < 0.001
 
     def test_within_reach_predicate_3d_distance(self, cleanup_world_state):
-        """Test target_within_reach predicate uses 3D Euclidean distance."""
         from operations.SpatialPredicates import evaluate_predicate
         from config.Robot import ROBOT_BASE_POSITIONS, MAX_ROBOT_REACH
         import math
@@ -449,7 +444,6 @@ class TestSpatialPredicateAccuracy:
             ), f"Expected out of reach: {expected_distance:.3f}m > {MAX_ROBOT_REACH}m"
 
     def test_object_at_location_tolerance(self, cleanup_world_state):
-        """Test object location tolerance checking using WorldState."""
         from operations.WorldState import get_world_state
         import math
 
@@ -478,7 +472,6 @@ class TestSpatialPredicateAccuracy:
         assert distance_far > 0.01  # Outside 1cm
 
     def test_complex_spatial_and_predicate(self, cleanup_world_state):
-        """Test combining multiple spatial conditions (simulating AND logic)."""
         from operations.WorldState import get_world_state
         from operations.SpatialPredicates import evaluate_predicate
         from config.Robot import MAX_ROBOT_REACH
@@ -510,7 +503,6 @@ class TestSpatialPredicateAccuracy:
         assert isinstance(is_reachable, bool)
 
     def test_complex_spatial_or_predicate(self, cleanup_world_state):
-        """Test combining spatial conditions (simulating OR logic)."""
         from operations.WorldState import get_world_state
         from operations.SpatialPredicates import evaluate_predicate
 
@@ -544,7 +536,6 @@ class TestSpatialPredicateAccuracy:
         assert can_proceed_2 is False  # Both false
 
     def test_robot_to_object_distance_exact(self, cleanup_world_state):
-        """Test exact distance calculation between robot and object."""
         from operations.WorldState import get_world_state
         import math
 
@@ -630,7 +621,6 @@ class TestSpatialPredicateAccuracy:
             assert is_valid_out is False  # Should be outside
 
     def test_multiple_object_distance_comparisons(self, cleanup_world_state):
-        """Test distance comparisons with multiple objects."""
         from operations.WorldState import get_world_state
         import math
 
@@ -677,7 +667,6 @@ class TestSpatialPredicateAccuracy:
         assert abs(dist_far - 1.0) < 0.001
 
     def test_collision_distance_threshold(self, cleanup_world_state):
-        """Test collision detection based on distance threshold."""
         from operations.WorldState import get_world_state
         import math
 
@@ -709,7 +698,6 @@ class TestSpatialPredicateAccuracy:
         assert distance > 0.1  # But further than 10cm
 
     def test_large_scale_spatial_performance(self, cleanup_world_state):
-        """Test WorldState performance with many objects."""
         from operations.WorldState import get_world_state
         import math
         import time
@@ -748,7 +736,6 @@ class TestSpatialPredicateAccuracy:
         assert len(distances) == 100
 
     def test_predicate_with_negative_coordinates(self, cleanup_world_state):
-        """Test distance calculations work correctly with negative coordinates."""
         from operations.WorldState import get_world_state
         import math
 
@@ -824,9 +811,7 @@ class TestSpatialPredicateAccuracy:
         assert obj_999 is not None  # Object should exist
 
 
-# ============================================================================
 # Test Class: Recovery Suggestion Effectiveness
-# ============================================================================
 
 
 class TestRecoverySuggestions:
@@ -885,7 +870,6 @@ class TestRecoverySuggestions:
         )
 
     def test_missing_object_recovery_suggestion(self, cleanup_world_state):
-        """Test detection of missing object in WorldState."""
         from operations.WorldState import get_world_state
 
         world_state = get_world_state()

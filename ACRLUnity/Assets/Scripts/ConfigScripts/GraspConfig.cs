@@ -164,56 +164,10 @@ namespace Configuration
         public float graspConfirmationWaitSeconds = 0.3f;
 
         /// <summary>
-        /// Initialize with default AR4 grasp configuration.
+        /// Ensures all fields are set to their default values. Called by tests and editor initialization.
         /// </summary>
-        public void InitializeDefaultConfig()
-        {
-            candidatesPerApproach = 8;
-            preGraspDistanceFactor = 1.5f;
-            minPreGraspDistance = 0.05f;
-            maxPreGraspDistance = 0.15f;
-            enableRetreat = true;
-            retreatDistanceFactor = 2.0f;
-            retreatDirection = Vector3.up;
-            gripperGeometry = GripperGeometry.Default();
-            targetGraspDepth = 0.5f;
+        public void InitializeDefaultConfig() { }
 
-            ikScoreWeight = 1.0f;
-            approachScoreWeight = 0.8f;
-            depthScoreWeight = 1.0f;
-            stabilityScoreWeight = 1.2f;
-            antipodalScoreWeight = 1.0f;
-
-            enableCollisionChecking = true;
-            collisionCheckWaypoints = 5;
-            collisionCheckRadius = 0.03f;
-            collisionLayerMask = -1;
-
-            enableIKValidation = true;
-            maxIKValidationIterations = 50;
-            ikValidationThreshold = 0.005f;
-            ikRotationTolerance = 20.0f;
-            maxJointStepPerIteration = 0.2f;
-            maxReachDistance = 0.6f;
-            angleVariationRange = 15f;
-            distanceVariationRange = 0.3f;
-            depthVariationRange = 0.2f;
-
-            maxPipelineTimeMs = 200;
-
-            enabledApproaches = new GraspApproachSettings[]
-            {
-                new GraspApproachSettings(GraspApproach.Top, true, 1.2f),
-                new GraspApproachSettings(GraspApproach.Front, true, 1.0f),
-                new GraspApproachSettings(GraspApproach.Side, true, 0.8f),
-            };
-        }
-
-        /// <summary>
-        /// Get preference weight for a specific approach type.
-        /// </summary>
-        /// <param name="approach">Approach type to query</param>
-        /// <returns>Preference weight (0 if disabled)</returns>
         public float GetApproachWeight(GraspApproach approach)
         {
             for (int i = 0; i < enabledApproaches.Length; i++)
@@ -227,11 +181,6 @@ namespace Configuration
             return 0f;
         }
 
-        /// <summary>
-        /// Check if an approach type is enabled.
-        /// </summary>
-        /// <param name="approach">Approach type to check</param>
-        /// <returns>True if enabled</returns>
         public bool IsApproachEnabled(GraspApproach approach)
         {
             for (int i = 0; i < enabledApproaches.Length; i++)
@@ -256,11 +205,6 @@ namespace Configuration
             return Mathf.Clamp(distance, minPreGraspDistance, maxPreGraspDistance);
         }
 
-        /// <summary>
-        /// Calculate retreat distance based on object size.
-        /// </summary>
-        /// <param name="objectSize">Size of target object</param>
-        /// <returns>Retreat distance</returns>
         public float CalculateRetreatDistance(Vector3 objectSize)
         {
             float avgSize = (objectSize.x + objectSize.y + objectSize.z) / 3f;
@@ -268,9 +212,6 @@ namespace Configuration
         }
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Validate configuration values to ensure consistency.
-        /// </summary>
         private void OnValidate()
         {
             // Candidate generation

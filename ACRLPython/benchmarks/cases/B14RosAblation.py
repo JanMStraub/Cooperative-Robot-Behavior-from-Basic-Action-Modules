@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import List
 
+
 def get_tasks() -> List[str]:
     """
     Return NL movement tasks for ROS/MoveIt vs Unity-TCP ablation.
@@ -15,8 +16,6 @@ def get_tasks() -> List[str]:
     Live mode exposes success-rate and timing differences (MoveIt planning overhead);
     offline mode verifies the parse and dispatch path for both conditions.
 
-    Returns:
-        List of natural language task strings.
     """
     return [
         "Robot2: Move to position (0.2, 0.15, 0.1).",

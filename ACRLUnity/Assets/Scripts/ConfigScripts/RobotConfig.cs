@@ -2,6 +2,9 @@ using UnityEngine;
 
 namespace Configuration
 {
+    /// <summary>
+    /// PD control parameters and joint limits for a single articulation joint.
+    /// </summary>
     [System.Serializable]
     public class JointConfiguration
     {
@@ -36,6 +39,9 @@ namespace Configuration
         [Range(0.1f, 1f)]
         public float adjustmentSpeed = 0.5f;
 
+        /// <summary>
+        /// Populates joints array with factory-calibrated AR4 stiffness, damping, force, and limit values.
+        /// </summary>
         public void InitializeDefaultAR4Profile()
         {
             joints = new JointConfiguration[6]
@@ -50,9 +56,6 @@ namespace Configuration
         }
 
 #if UNITY_EDITOR
-        /// <summary>
-        /// Validate configuration values to ensure consistency.
-        /// </summary>
         private void OnValidate()
         {
             // Validate adjustment speed

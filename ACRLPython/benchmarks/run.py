@@ -16,9 +16,9 @@ import argparse
 import socket
 import sys
 
-from .config import BenchmarkConfig, DualRobotConfig
-from .reporter import print_summary, write_json
-from .runner import BenchmarkRunner
+from .Config import BenchmarkConfig, DualRobotConfig
+from .Reporter import print_summary, write_json
+from .Runner import BenchmarkRunner
 
 _DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 11}
 _PARSE_ONLY_BENCHMARKS = {9, 12}  # no server required
@@ -52,12 +52,7 @@ def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig
     """
     Instantiate the appropriate config type for a given benchmark.
 
-    Args:
-        benchmark_id: Benchmark number 1–12.
-        args: Parsed CLI arguments.
 
-    Returns:
-        BenchmarkConfig or DualRobotConfig instance.
     """
     live = not args.dry_run and benchmark_id not in _PARSE_ONLY_BENCHMARKS
     kwargs = dict(
@@ -85,13 +80,7 @@ def _run_benchmarks(
     """
     Execute the requested benchmarks and write results.
 
-    Args:
-        runner: BenchmarkRunner instance.
-        benchmark_ids: List of benchmark IDs to run.
-        args: Parsed CLI arguments.
 
-    Returns:
-        Exit code: 0 if all passed, 1 if any failed.
     """
     exit_code = 0
     for bid in benchmark_ids:
@@ -140,19 +129,29 @@ def main() -> None:
         help="Enable Reflexion LLM retry on operation failure (live mode only)",
     )
     parser.add_argument(
-        "--no-rag", action="store_true", help="Disable RAG retrieval (B9 ablation: disabled condition)"
+        "--no-rag",
+        action="store_true",
+        help="Disable RAG retrieval (B9 ablation: disabled condition)",
     )
     parser.add_argument(
-        "--no-kg", action="store_true", help="Disable Knowledge Graph context (B12 ablation: disabled condition)"
+        "--no-kg",
+        action="store_true",
+        help="Disable Knowledge Graph context (B12 ablation: disabled condition)",
     )
     parser.add_argument(
-        "--no-negotiation", action="store_true", help="Disable LLM negotiation (B11 ablation: disabled condition)"
+        "--no-negotiation",
+        action="store_true",
+        help="Disable LLM negotiation (B11 ablation: disabled condition)",
     )
     parser.add_argument(
-        "--no-vgn", action="store_true", help="Disable VGN neural grasp (B13 ablation: disabled condition)"
+        "--no-vgn",
+        action="store_true",
+        help="Disable VGN neural grasp (B13 ablation: disabled condition)",
     )
     parser.add_argument(
-        "--no-ros", action="store_true", help="Disable ROS/MoveIt movement (B14 ablation: disabled condition)"
+        "--no-ros",
+        action="store_true",
+        help="Disable ROS/MoveIt movement (B14 ablation: disabled condition)",
     )
     parser.add_argument(
         "--output-dir",

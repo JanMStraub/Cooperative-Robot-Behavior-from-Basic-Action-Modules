@@ -31,11 +31,7 @@ def select_file(title, file_types, root):
 
 
 def parse_yolo_label(label_path):
-    """
-    Parse YOLO format label file
-    Format: class_id x_center y_center width height (normalized 0-1)
-    Returns: List of (class_id, x_center, y_center, width, height)
-    """
+    """Parse YOLO format label file. Format: class_id x_center y_center width height (normalized 0-1)."""
     boxes = []
 
     if not os.path.exists(label_path):
@@ -66,17 +62,7 @@ def parse_yolo_label(label_path):
 
 
 def draw_bounding_boxes(image, boxes, class_names=None):
-    """
-    Draw bounding boxes on image
-
-    Args:
-        image: OpenCV image (numpy array)
-        boxes: List of (class_id, x_center, y_center, width, height) in normalized coords
-        class_names: Optional list of class names for labels
-
-    Returns:
-        Image with bounding boxes drawn
-    """
+    """Draw bounding boxes on image. boxes in normalized coords (class_id, x_center, y_center, width, height)."""
     img_height, img_width = image.shape[:2]
     result_image = image.copy()
 

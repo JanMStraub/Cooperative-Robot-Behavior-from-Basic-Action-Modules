@@ -23,7 +23,7 @@ def generate_launch_description():
     robot_id_arg = DeclareLaunchArgument(
         "robot_id",
         default_value="Robot1",
-        description="Robot namespace for topic routing (e.g., Robot1, Robot2)"
+        description="Robot namespace for topic routing (e.g., Robot1, Robot2)",
     )
 
     # Get launch configuration
@@ -33,16 +33,18 @@ def generate_launch_description():
     with open(urdf_path, "r") as f:
         robot_description = f.read()
 
-    return LaunchDescription([
-        robot_id_arg,
-        Node(
-            package="robot_state_publisher",
-            executable="robot_state_publisher",
-            namespace=robot_id,  # Namespace all topics with robot ID
-            output="screen",
-            parameters=[
-                {"robot_description": robot_description},
-                {"use_sim_time": False},
-            ],
-        ),
-    ])
+    return LaunchDescription(
+        [
+            robot_id_arg,
+            Node(
+                package="robot_state_publisher",
+                executable="robot_state_publisher",
+                namespace=robot_id,  # Namespace all topics with robot ID
+                output="screen",
+                parameters=[
+                    {"robot_description": robot_description},
+                    {"use_sim_time": False},
+                ],
+            ),
+        ]
+    )

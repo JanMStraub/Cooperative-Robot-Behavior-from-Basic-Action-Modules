@@ -42,7 +42,6 @@ def _make_task(
 
 
 class TestAutoRTHandler(unittest.TestCase):
-    """Test suite for AutoRTHandler class."""
 
     def setUp(self):
         """Set up test fixtures."""
@@ -69,7 +68,6 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertIs(handler1, self.handler, "Should match initial instance")
 
     def test_initial_state(self):
-        """Test initial state of handler."""
         self.assertIsNone(
             self.handler._orchestrator, "Orchestrator should be lazy-initialized"
         )
@@ -81,14 +79,12 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertIsNone(self.handler._task_callback, "No callback initially")
 
     def test_set_task_callback(self):
-        """Test setting task callback."""
         mock_callback = Mock()
         self.handler.set_task_callback(mock_callback)
 
         self.assertEqual(self.handler._task_callback, mock_callback)
 
     def test_generate_tasks_success(self):
-        """Test successful task generation."""
         # Mock AutoRTOrchestrator by pre-setting it on the handler
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
@@ -143,7 +139,6 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertEqual(len(self.handler._pending_tasks), 2, "Tasks should be cached")
 
     def test_generate_tasks_validation_filters_invalid(self):
-        """Test that invalid tasks are filtered out during generation."""
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
 
@@ -183,7 +178,6 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertEqual(len(result["tasks"]), 2, "Should only return valid tasks")
 
     def test_generate_tasks_no_candidates(self):
-        """Test generation when no candidates are produced."""
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
 
@@ -202,7 +196,6 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertIsNone(result["error"])
 
     def test_generate_tasks_error_handling(self):
-        """Test error handling during task generation."""
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
 
@@ -217,7 +210,6 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertIn("Scene capture failed", result["error"])
 
     def test_start_loop_success(self):
-        """Test starting continuous loop."""
         result = self.handler.start_loop(loop_delay=0.1)
 
         self.assertTrue(result["success"])
@@ -231,7 +223,6 @@ class TestAutoRTHandler(unittest.TestCase):
             self.assertTrue(self.handler._loop_thread.is_alive())
 
     def test_start_loop_already_running(self):
-        """Test starting loop when already running."""
         self.handler.start_loop(loop_delay=0.1)
 
         # Try to start again
@@ -242,7 +233,6 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertIn("already running", result["error"].lower())
 
     def test_stop_loop_success(self):
-        """Test stopping continuous loop."""
         # Pre-set mock orchestrator so the loop thread doesn't try to initialize the real one
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
@@ -277,14 +267,12 @@ class TestAutoRTHandler(unittest.TestCase):
             self.assertFalse(self.handler._loop_thread.is_alive())
 
     def test_stop_loop_not_running(self):
-        """Test stopping loop when not running."""
         result = self.handler.stop_loop()
 
         self.assertTrue(result["success"])
         self.assertFalse(result["loop_running"])
 
     def test_execute_task_success(self):
-        """Test executing a cached task."""
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
 
@@ -315,7 +303,6 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertIn("not found", result["error"].lower())
 
     def test_execute_task_error(self):
-        """Test error handling during task execution."""
         # execute_task submits asynchronously; to test error path directly,
         # we verify that a missing task returns the not-found error response.
         result = self.handler.execute_task("nonexistent_id_for_error_test")
@@ -325,7 +312,6 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertIsNotNone(result["error"])
 
     def test_get_status(self):
-        """Test getting handler status."""
         # Cache some tasks
         self.handler._cache_task(_make_task("Task 1"))
         self.handler._cache_task(_make_task("Task 2"))
@@ -339,7 +325,6 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertIsNone(status["error"])
 
     def test_task_caching(self):
-        """Test task caching mechanism."""
         task = _make_task("Test task")
 
         task_id = self.handler._cache_task(task)
@@ -351,7 +336,6 @@ class TestAutoRTHandler(unittest.TestCase):
             self.assertIs(cached_task, task)
 
     def test_cache_size_limit(self):
-        """Test that cache respects size limit."""
         # Fill cache to limit
         for i in range(TASK_CACHE_SIZE + 5):
             task = _make_task(f"Task {i}")
@@ -384,7 +368,6 @@ class TestAutoRTHandler(unittest.TestCase):
             self.assertNotIn(task_id, self.handler._pending_tasks)
 
     def test_serialize_task(self):
-        """Test task serialization for Unity."""
         from autort.DataModels import ProposedTask, Operation
 
         # Create a ProposedTask object (not a dict) to match method signature
@@ -411,7 +394,6 @@ class TestAutoRTHandler(unittest.TestCase):
         self.assertEqual(serialized["reasoning"], "Need to pick up object")
 
     def test_loop_worker_generates_tasks(self):
-        """Test that loop worker generates tasks periodically."""
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
 
@@ -476,7 +458,6 @@ class TestAutoRTProtocol(unittest.TestCase):
     """Test suite for AutoRT protocol encoding/decoding."""
 
     def test_command_encoding_decoding(self):
-        """Test AutoRT command message encoding and decoding."""
         from core.UnityProtocol import UnityProtocol
 
         command_type = "generate"
@@ -498,7 +479,6 @@ class TestAutoRTProtocol(unittest.TestCase):
         self.assertEqual(decoded_params["robot_ids"], ["Robot1", "Robot2"])
 
     def test_response_encoding_decoding(self):
-        """Test AutoRT response message encoding and decoding."""
         from core.UnityProtocol import UnityProtocol
 
         response_data = {

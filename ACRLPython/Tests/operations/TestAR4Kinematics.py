@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for AR4Kinematics.py
-
-Verifies the URDF-based forward kinematics solver produces geometrically
-correct end-effector poses without requiring Unity or network access.
-
-Key invariants tested:
-- Zero pose outputs a position above the robot base (arm points up by default)
-- Position type and shape are correct
-- Quaternion output is unit-length
-- Robot2 mirrored base (180° yaw) produces an X-mirrored position
-- Invalid joint angle count raises ValueError
-- FK position stays within AR4 kinematic reach (0.64 m)
-"""
+"""Unit tests for AR4Kinematics.py"""
 
 import math
 import pytest
@@ -29,10 +16,7 @@ MAX_REACH = 0.64  # metres, from config/Robot.py MAX_ROBOT_REACH
 
 ZERO_ANGLES = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-
-# ============================================================================
 # Basic output shape / type tests
-# ============================================================================
 
 
 def test_returns_tuple_pair():
@@ -72,9 +56,7 @@ def test_quaternion_unit_for_nonzero_config():
     assert abs(norm - 1.0) < 1e-6
 
 
-# ============================================================================
 # Zero pose sanity checks
-# ============================================================================
 
 
 def test_zero_pose_position_is_near_base():
@@ -99,9 +81,7 @@ def test_zero_pose_height_above_table():
     assert pos[1] >= -0.5, f"EE Y at zero pose unexpectedly low: {pos[1]:.3f}"
 
 
-# ============================================================================
 # Workspace reach check
-# ============================================================================
 
 
 def test_fk_within_max_reach_several_configs():
@@ -121,9 +101,7 @@ def test_fk_within_max_reach_several_configs():
         ), f"Config {angles}: EE dist {dist:.3f} m exceeds max reach {MAX_REACH} m"
 
 
-# ============================================================================
 # Robot2 mirroring
-# ============================================================================
 
 
 def test_robot2_mirrored_x():
@@ -161,9 +139,7 @@ def test_robot2_z_negated_relative_to_robot1():
     ), f"Robot1 dz={dz1:.4f} and Robot2 dz={dz2:.4f} are not negatives of each other"
 
 
-# ============================================================================
 # Error handling
-# ============================================================================
 
 
 def test_wrong_joint_count_raises():
@@ -178,9 +154,7 @@ def test_too_many_joints_raises():
         compute_end_effector_pose([0.0] * 7, ROBOT1_BASE)
 
 
-# ============================================================================
 # Convenience wrapper
-# ============================================================================
 
 
 def test_position_only_wrapper():
@@ -190,9 +164,7 @@ def test_position_only_wrapper():
     assert pos_short == pos_full
 
 
-# ============================================================================
 # Determinism
-# ============================================================================
 
 
 def test_deterministic():
@@ -203,10 +175,7 @@ def test_deterministic():
     assert result_a == result_b
 
 
-# ============================================================================
 # compute_link_poses: multi-link FK snapshot
-# ============================================================================
-
 
 from operations.AR4Kinematics import compute_link_poses
 
@@ -226,6 +195,6 @@ def test_compute_link_poses_all_within_reach():
     bx, by, bz = ROBOT1_BASE
     for i, (pos, _) in enumerate(result):
         dist = math.sqrt((pos[0] - bx) ** 2 + (pos[1] - by) ** 2 + (pos[2] - bz) ** 2)
-        assert dist <= MAX_REACH + 0.05, (
-            f"Link {i} pos {pos} dist {dist:.3f} exceeds reach"
-        )
+        assert (
+            dist <= MAX_REACH + 0.05
+        ), f"Link {i} pos {pos} dist {dist:.3f} exceeds reach"

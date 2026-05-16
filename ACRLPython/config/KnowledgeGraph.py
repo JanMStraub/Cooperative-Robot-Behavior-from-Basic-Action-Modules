@@ -25,7 +25,6 @@ KNOWLEDGE_GRAPH_ENABLED = os.environ.get("KNOWLEDGE_GRAPH_ENABLED", "true").lowe
     "yes",
 )
 
-# Distance threshold for NEAR edges (meters)
 # Objects/robots closer than this threshold will be connected by a NEAR edge.
 try:
     KG_NEAR_THRESHOLD = float(os.environ.get("KG_NEAR_THRESHOLD", "0.35"))
@@ -38,12 +37,14 @@ except ValueError:
 # ---------------------------------------------------------------------------
 
 # Automatically save a PNG snapshot after every graph update.
-KG_VIZ_AUTO_SAVE = os.environ.get("KG_VIZ_AUTO_SAVE", "false").lower() in ("true", "1", "yes")
+KG_VIZ_AUTO_SAVE = os.environ.get("KG_VIZ_AUTO_SAVE", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
-# Directory where auto-saved PNGs are written.
 KG_VIZ_OUTPUT_DIR = os.environ.get("KG_VIZ_OUTPUT_DIR", "./kg_snapshots")
 
-# PNG resolution (dots per inch).
 try:
     KG_VIZ_DPI = int(os.environ.get("KG_VIZ_DPI", "150"))
 except ValueError:

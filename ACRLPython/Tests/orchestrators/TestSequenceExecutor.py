@@ -1,22 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for SequenceExecutor
-================================
-
-Tests command dispatch, variable passing, abort, metrics, and reflexion retry
-without any live Unity connection. All external collaborators are mocked.
-
-Coverage:
-- Sequential execution: success path, failure stops sequence
-- Variable capture and resolution ($var, $var.x, $var.z + offset)
-- Auto-inject parameters from ParameterFlow
-- Abort flag halts mid-sequence
-- Metrics tracker (Welford online mean, success rate)
-- _extract_waypoint_from_verification helper
-- Parallel group execution
-- Operation alias (return_to_start → return_to_start_position)
-- Reflexion retry skipped for non-eligible categories
-"""
+"""Unit tests for SequenceExecutor"""
 
 import threading
 import time
@@ -24,10 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
+
 
 def _make_op_result(success: bool, result=None, error_code=None, error_msg=None):
     """Create a mock OperationResult."""
@@ -41,6 +22,7 @@ def _make_op_result(success: bool, result=None, error_code=None, error_msg=None)
 def _make_op_def(name: str, category=None):
     """Create a minimal mock operation definition."""
     from operations.Base import OperationCategory
+
     op = MagicMock()
     op.name = name
     op.operation_id = name
@@ -80,24 +62,23 @@ def _make_executor(enable_verification=False, check_completion=False):
         return executor, registry
 
 
-# ---------------------------------------------------------------------------
 # _extract_waypoint_from_verification
-# ---------------------------------------------------------------------------
+
 
 class TestExtractWaypoint:
     def test_returns_none_when_no_waypoint(self):
         from orchestrators.SequenceExecutor import _extract_waypoint_from_verification
+
         result = _extract_waypoint_from_verification({})
         assert result is None
 
     def test_parses_waypoint_string(self):
         from orchestrators.SequenceExecutor import _extract_waypoint_from_verification
+
         vr = {
             "details": {
                 "coordination_check": {
-                    "issues": [
-                        {"resolution_suggestions": ["WAYPOINT:0.1,0.2,0.3"]}
-                    ]
+                    "issues": [{"resolution_suggestions": ["WAYPOINT:0.1,0.2,0.3"]}]
                 }
             }
         }
@@ -106,25 +87,24 @@ class TestExtractWaypoint:
 
     def test_returns_none_on_malformed_waypoint(self):
         from orchestrators.SequenceExecutor import _extract_waypoint_from_verification
+
         vr = {
             "details": {
                 "coordination_check": {
-                    "issues": [
-                        {"resolution_suggestions": ["WAYPOINT:bad,data"]}
-                    ]
+                    "issues": [{"resolution_suggestions": ["WAYPOINT:bad,data"]}]
                 }
             }
         }
         assert _extract_waypoint_from_verification(vr) is None
 
 
-# ---------------------------------------------------------------------------
 # _MetricsTracker
-# ---------------------------------------------------------------------------
+
 
 class TestMetricsTracker:
     def _tracker(self):
         from orchestrators.SequenceExecutor import SequenceExecutor
+
         return SequenceExecutor._MetricsTracker()
 
     def test_initial_snapshot_zeros(self):
@@ -166,7 +146,9 @@ class TestMetricsTracker:
 
     def test_thread_safe_concurrent_records(self):
         t = self._tracker()
-        threads = [threading.Thread(target=lambda: t.record(True, 10.0)) for _ in range(20)]
+        threads = [
+            threading.Thread(target=lambda: t.record(True, 10.0)) for _ in range(20)
+        ]
         for th in threads:
             th.start()
         for th in threads:
@@ -174,9 +156,8 @@ class TestMetricsTracker:
         assert t.snapshot()["ops_executed"] == 20
 
 
-# ---------------------------------------------------------------------------
 # _resolve_variables / _resolve_dotted_variable / _resolve_expression
-# ---------------------------------------------------------------------------
+
 
 class TestVariableResolution:
     def setup_method(self):
@@ -248,9 +229,8 @@ class TestVariableResolution:
         assert self.executor._variables["field_d_result"] == result
 
 
-# ---------------------------------------------------------------------------
 # execute_sequence — sequential mode
-# ---------------------------------------------------------------------------
+
 
 class TestExecuteSequenceSequential:
     def _setup(self):
@@ -297,7 +277,9 @@ class TestExecuteSequenceSequential:
     def test_alias_return_to_start(self):
         executor, registry = self._setup()
         op_def = _make_op_def("return_to_start_position")
-        registry.get_operation_by_name.side_effect = lambda name: op_def if name == "return_to_start_position" else None
+        registry.get_operation_by_name.side_effect = lambda name: (
+            op_def if name == "return_to_start_position" else None
+        )
         registry.execute_operation_by_name.return_value = _make_op_result(True)
 
         result = executor.execute_sequence([self._cmd("return_to_start")])
@@ -331,6 +313,7 @@ class TestExecuteSequenceSequential:
         executor, registry = self._setup()
         detect_op = _make_op_def("detect_object_stereo")
         from operations.Base import OperationCategory
+
         detect_op.category = OperationCategory.PERCEPTION
         move_op = _make_op_def("move_to_coordinate")
 
@@ -343,8 +326,15 @@ class TestExecuteSequenceSequential:
         )
 
         cmds = [
-            {"operation": "detect_object_stereo", "params": {"robot_id": "Robot1"}, "capture_var": "target"},
-            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": "$target.x"}},
+            {
+                "operation": "detect_object_stereo",
+                "params": {"robot_id": "Robot1"},
+                "capture_var": "target",
+            },
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot1", "x": "$target.x"},
+            },
         ]
         result = executor.execute_sequence(cmds)
         assert result["success"] is True
@@ -378,9 +368,8 @@ class TestExecuteSequenceSequential:
         assert metrics["ops_succeeded"] == 1
 
 
-# ---------------------------------------------------------------------------
 # execute_sequence — parallel groups
-# ---------------------------------------------------------------------------
+
 
 class TestExecuteSequenceParallelGroups:
     def _setup(self):
@@ -393,8 +382,16 @@ class TestExecuteSequenceParallelGroups:
         registry.execute_operation_by_name.return_value = _make_op_result(True)
 
         cmds = [
-            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1"}, "parallel_group": 0},
-            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot2"}, "parallel_group": 0},
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot1"},
+                "parallel_group": 0,
+            },
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot2"},
+                "parallel_group": 0,
+            },
         ]
         result = executor.execute_sequence(cmds)
         assert result["success"] is True
@@ -417,9 +414,21 @@ class TestExecuteSequenceParallelGroups:
         registry.execute_operation_by_name.side_effect = side_effect
 
         cmds = [
-            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1"}, "parallel_group": 0},
-            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot2"}, "parallel_group": 0},
-            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1"}, "parallel_group": 1},
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot1"},
+                "parallel_group": 0,
+            },
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot2"},
+                "parallel_group": 0,
+            },
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot1"},
+                "parallel_group": 1,
+            },
         ]
         result = executor.execute_sequence(cmds)
         # Group 1 fails → group 2 not executed
@@ -427,9 +436,8 @@ class TestExecuteSequenceParallelGroups:
         assert call_count == 2  # only group 0 executed
 
 
-# ---------------------------------------------------------------------------
 # abort and progress callbacks
-# ---------------------------------------------------------------------------
+
 
 class TestAbortAndCallbacks:
     def test_abort_sets_flag(self):
@@ -446,7 +454,9 @@ class TestAbortAndCallbacks:
         events = []
         executor.add_progress_callback(lambda i, t, op, s: events.append(s))
 
-        executor.execute_sequence([{"operation": "move_to_coordinate", "params": {"robot_id": "Robot1"}}])
+        executor.execute_sequence(
+            [{"operation": "move_to_coordinate", "params": {"robot_id": "Robot1"}}]
+        )
         assert "executing" in events
         assert "completed" in events
 
@@ -456,14 +466,17 @@ class TestAbortAndCallbacks:
         registry.get_operation_by_name.return_value = op_def
         registry.execute_operation_by_name.return_value = _make_op_result(True)
 
-        executor.add_progress_callback(lambda *a: (_ for _ in ()).throw(RuntimeError("boom")))
+        executor.add_progress_callback(
+            lambda *a: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
         # Should not raise
-        executor.execute_sequence([{"operation": "move_to_coordinate", "params": {"robot_id": "Robot1"}}])
+        executor.execute_sequence(
+            [{"operation": "move_to_coordinate", "params": {"robot_id": "Robot1"}}]
+        )
 
 
-# ---------------------------------------------------------------------------
 # get_variable / set_variable
-# ---------------------------------------------------------------------------
+
 
 class TestVariableAccessors:
     def test_get_set(self):

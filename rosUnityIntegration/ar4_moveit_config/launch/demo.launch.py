@@ -11,15 +11,17 @@ def generate_launch_description():
     """Generate demo launch combining robot state publisher and move_group."""
     pkg_dir = get_package_share_directory("ar4_moveit_config")
 
-    return LaunchDescription([
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(pkg_dir, "launch", "robot_state_publisher.launch.py")
+    return LaunchDescription(
+        [
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(pkg_dir, "launch", "robot_state_publisher.launch.py")
+                ),
             ),
-        ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(pkg_dir, "launch", "move_group.launch.py")
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(pkg_dir, "launch", "move_group.launch.py")
+                ),
             ),
-        ),
-    ])
+        ]
+    )

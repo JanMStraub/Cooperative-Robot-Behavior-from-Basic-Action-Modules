@@ -1,4 +1,5 @@
 """Tests for shared perception context injection in CommandParser."""
+
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -8,6 +9,7 @@ def _make_parser(mock_ws=None):
     ws = mock_ws or MagicMock()
     with patch("core.Imports.get_world_state", return_value=ws):
         from orchestrators.CommandParser import CommandParser
+
         parser = CommandParser.__new__(CommandParser)
         parser._world_state = ws
         return parser, ws

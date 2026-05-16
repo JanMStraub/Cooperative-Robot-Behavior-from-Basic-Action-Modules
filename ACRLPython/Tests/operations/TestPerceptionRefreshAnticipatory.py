@@ -1,4 +1,3 @@
-"""Tests for anticipatory perception refresh triggered by robot intent."""
 import threading
 import pytest
 from unittest.mock import MagicMock, patch
@@ -7,6 +6,7 @@ from unittest.mock import MagicMock, patch
 def _make_loop():
     """Construct a PerceptionRefreshLoop with mocked world_state."""
     from operations.PerceptionRefresh import PerceptionRefreshLoop
+
     mock_ws = MagicMock()
     loop = PerceptionRefreshLoop.__new__(PerceptionRefreshLoop)
     loop._world_state = mock_ws
@@ -90,6 +90,7 @@ class TestIntentTriggersRefresh:
     def test_trigger_from_external_caller(self):
         """trigger_anticipatory_refresh can be called externally with any object list."""
         from operations.PerceptionRefresh import PerceptionRefreshLoop
+
         loop, _ = _make_loop()
         loop.trigger_anticipatory_refresh(["green_cylinder"])
         with loop._anticipatory_lock:
@@ -102,6 +103,7 @@ class TestGraspObjectSetsIntent:
     def test_grasp_sets_moving_toward_object(self):
         mock_ws = MagicMock()
         import core.Imports as _ci
+
         with (
             patch.object(_ci, "get_world_state", return_value=mock_ws),
             patch.object(_ci, "get_perception_refresh_daemon", return_value=None),
@@ -109,6 +111,7 @@ class TestGraspObjectSetsIntent:
             patch("config.Servers.VGN_ENABLED", False),
         ):
             from operations.GraspOperations import grasp_object
+
             try:
                 grasp_object(robot_id="Robot1", object_id="red_cube", request_id=0)
             except Exception:
@@ -116,7 +119,8 @@ class TestGraspObjectSetsIntent:
 
         update_calls = mock_ws.update_robot_state.call_args_list
         intent_set = [
-            c for c in update_calls
+            c
+            for c in update_calls
             if isinstance(c[0][1], dict)
             and c[0][1].get("moving_toward_object") == "red_cube"
         ]
@@ -125,6 +129,7 @@ class TestGraspObjectSetsIntent:
     def test_grasp_clears_intent_after_completion(self):
         mock_ws = MagicMock()
         import core.Imports as _ci
+
         with (
             patch.object(_ci, "get_world_state", return_value=mock_ws),
             patch.object(_ci, "get_perception_refresh_daemon", return_value=None),
@@ -132,6 +137,7 @@ class TestGraspObjectSetsIntent:
             patch("config.Servers.VGN_ENABLED", False),
         ):
             from operations.GraspOperations import grasp_object
+
             try:
                 grasp_object(robot_id="Robot1", object_id="red_cube", request_id=0)
             except Exception:
@@ -139,8 +145,8 @@ class TestGraspObjectSetsIntent:
 
         update_calls = mock_ws.update_robot_state.call_args_list
         intent_cleared = [
-            c for c in update_calls
-            if isinstance(c[0][1], dict)
-            and c[0][1].get("moving_toward_object") is None
+            c
+            for c in update_calls
+            if isinstance(c[0][1], dict) and c[0][1].get("moving_toward_object") is None
         ]
         assert len(intent_cleared) >= 1

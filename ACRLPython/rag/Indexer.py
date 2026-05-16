@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Index Builder for RAG System
-=============================
-
-Build searchable index from operations registry.
-"""
+"""Build searchable RAG index from the operations registry."""
 
 from typing import Optional, List, Dict, Any
 
@@ -15,25 +10,18 @@ from typing import Optional, List, Dict, Any
 from .Embeddings import EmbeddingGenerator
 from .vector_store import VectorStore
 
-# Import config
 try:
     from config.Rag import RAG_AUTO_SAVE_INDEX
 except ImportError:
     from ..config.Rag import RAG_AUTO_SAVE_INDEX
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
 
 
 class OperationIndexer:
-    """
-    Build searchable index from operations registry.
-
-    This class takes operations from the registry, generates embeddings
-    for their RAG documents, and stores them in a vector store.
-    """
+    """Build searchable embeddings index from the operations and workflow registries."""
 
     def __init__(
         self,
@@ -43,14 +31,6 @@ class OperationIndexer:
         ] = None,  # Changed to Any to avoid circular import
         embedding_generator: Optional[EmbeddingGenerator] = None,
     ):
-        """
-        Initialize the indexer.
-
-        Args:
-            registry: Operation registry (default: global registry)
-            workflow_registry: Workflow pattern registry (default: global workflow registry)
-            embedding_generator: Embedding generator (default: new instance)
-        """
         # Lazy imports
         from core.Imports import get_global_registry
         from operations.WorkflowPatterns import get_global_workflow_registry
@@ -60,18 +40,9 @@ class OperationIndexer:
         self.embedding_generator = embedding_generator or EmbeddingGenerator()
 
     def _get_multi_robot_context_documents(self) -> List[Dict[str, Any]]:
-        """
-        Generate context documents for multi-robot coordination.
-
-        These documents provide the LLM with workspace layout, robot
-        positions, typical coordination patterns, and safety constraints.
-
-        Returns:
-            List of context document dicts with 'text' and 'metadata' keys
-        """
+        """Generate context documents for workspace layout, coordination patterns, and safety constraints."""
         context_docs = []
 
-        # Document 1: Robot Workspace Layout
         workspace_doc = """
         MULTI-ROBOT WORKSPACE LAYOUT
 
@@ -116,7 +87,6 @@ class OperationIndexer:
             }
         )
 
-        # Document 2: Coordination Patterns
         coordination_doc = """
         MULTI-ROBOT COORDINATION PATTERNS
 
@@ -176,7 +146,6 @@ class OperationIndexer:
             }
         )
 
-        # Document 3: Safety Constraints
         safety_doc = """
         MULTI-ROBOT SAFETY CONSTRAINTS
 
@@ -226,7 +195,6 @@ class OperationIndexer:
             }
         )
 
-        # Document 4: Parallel Execution Guide
         parallel_doc = """
         PARALLEL EXECUTION WITH PARALLEL_GROUP
 
@@ -284,22 +252,7 @@ class OperationIndexer:
         return context_docs
 
     def build_index(self, save: bool = True) -> VectorStore:
-        """
-        Build index from all operations in the registry.
-
-        Args:
-            save: Whether to save the index to disk (default: True)
-
-        Returns:
-            Populated VectorStore
-
-        Example:
-            >>> indexer = OperationIndexer()
-            >>> store = indexer.build_index()
-            Building index for 5 operations...
-            Generated embeddings for 5 operations
-            Saved vector store to .rag_index.pkl (5 operations)
-        """
+        """Build and return a populated VectorStore from all operations and workflows."""
         operations = self.registry.get_all_operations()
         workflows = self.workflow_registry.get_all_patterns()
         context_docs = self._get_multi_robot_context_documents()
@@ -312,20 +265,13 @@ class OperationIndexer:
             f"Building index for {len(operations)} operations, {len(workflows)} workflows, and {len(context_docs)} context documents..."
         )
 
-        # Create new vector store
         store = VectorStore()
-
-        # Collect texts to embed
         texts_to_embed = []
         operation_data = []
 
-        # Index operations
         for op in operations:
-            # Generate RAG document text
             rag_text = op.to_rag_document()
             texts_to_embed.append(rag_text)
-
-            # Store operation data including parameters for confidence scoring
             operation_data.append(
                 {
                     "operation_id": op.operation_id,
@@ -342,13 +288,9 @@ class OperationIndexer:
                 }
             )
 
-        # Index workflow patterns
         for workflow in workflows:
-            # Generate RAG document text
             rag_text = workflow.to_rag_document()
             texts_to_embed.append(rag_text)
-
-            # Store workflow data
             operation_data.append(
                 {
                     "operation_id": workflow.pattern_id,
@@ -366,7 +308,6 @@ class OperationIndexer:
                 }
             )
 
-        # Index multi-robot context documents
         for context_doc in context_docs:
             texts_to_embed.append(context_doc["text"])
             operation_data.append(
@@ -376,10 +317,8 @@ class OperationIndexer:
                 }
             )
 
-        # Generate embeddings for all documents
         embeddings = self.embedding_generator.generate_embeddings(texts_to_embed)
 
-        # Add to vector store
         for data, embedding in zip(operation_data, embeddings):
             store.add_operation(
                 operation_id=data["operation_id"],
@@ -391,7 +330,6 @@ class OperationIndexer:
             f"Index built with {len(operations)} operations, {len(workflows)} workflows, {len(context_docs)} context docs"
         )
 
-        # Save to disk
         if save and RAG_AUTO_SAVE_INDEX:
             store.save()
 
@@ -400,29 +338,7 @@ class OperationIndexer:
     def refresh_index(
         self, existing_store: VectorStore, save: bool = True
     ) -> VectorStore:
-        """
-        Incrementally add new operations and workflows to an existing index.
-
-        Unlike build_index() (full rebuild) or update_index() (alias for rebuild),
-        this method only embeds and adds documents that are not already present in
-        existing_store, making it suitable for the self-improvement loop where new
-        generated operations are approved and need to be indexed without discarding
-        accumulated outcome metadata on existing entries.
-
-        Args:
-            existing_store: The currently active VectorStore to extend.
-            save: Whether to persist the updated store to disk (default True).
-
-        Returns:
-            The same existing_store with new entries appended.
-
-        Example:
-            >>> indexer = OperationIndexer()
-            >>> store = VectorStore.load()
-            >>> store = indexer.refresh_index(store)
-            Refreshing index: checking 5 operations, 2 workflows, 4 context docs...
-            Added 1 new document(s); 11 documents already indexed
-        """
+        """Incrementally add only new operations/workflows to an existing index, preserving accumulated metadata."""
         operations = self.registry.get_all_operations()
         workflows = self.workflow_registry.get_all_patterns()
         context_docs = self._get_multi_robot_context_documents()
@@ -515,38 +431,15 @@ class OperationIndexer:
         return existing_store
 
     def rebuild_index(self) -> VectorStore:
-        """
-        Rebuild index from scratch (clears existing index).
-
-        Returns:
-            New VectorStore with fresh index
-        """
+        """Rebuild index from scratch."""
         return self.build_index(save=True)
 
     def update_index(self, existing_store: VectorStore) -> VectorStore:
-        """
-        Update existing index with new/changed operations.
-
-        Args:
-            existing_store: Existing vector store to update
-
-        Returns:
-            Updated VectorStore
-
-        Note:
-            Currently rebuilds entire index. Incremental updates
-            could be added in the future.
-        """
-        # For now, just rebuild the entire index
+        """Update existing index (currently rebuilds entire index)."""
         return self.build_index(save=True)
 
     def get_indexer_stats(self) -> dict:
-        """
-        Get statistics about the indexer and its components.
-
-        Returns:
-            Dict with registry info and embedding generator info
-        """
+        """Return statistics about the indexer and embedding generator."""
         operations = self.registry.get_all_operations()
 
         return {
@@ -561,26 +454,10 @@ def build_index_from_registry(
     registry: Optional[Any] = None,  # Changed to Any to avoid circular import
     save_path: Optional[str] = None,
 ) -> VectorStore:
-    """
-    Convenience function to build index from registry.
-
-    Args:
-        registry: Operation registry (default: global registry)
-        save_path: Path to save index (default from config)
-
-    Returns:
-        Populated VectorStore
-
-    Example:
-        >>> from rag.indexer import build_index_from_registry
-        >>> store = build_index_from_registry()
-        Building index for 5 operations...
-        Index built with 5 operations
-    """
+    """Convenience function to build index from the global operation registry."""
     indexer = OperationIndexer(registry=registry)
     store = indexer.build_index(save=True)
 
-    # Save to custom path if specified
     if save_path:
         store.save(save_path)
 

@@ -1,19 +1,9 @@
 #!/usr/bin/env python3
-"""
-Spatial Reasoning Operations
-=============================
-
-This module implements spatial reasoning operations for robot navigation
-based on relationships to objects and workspace regions.
-
-Operations:
-- move_relative_to_object: Move to a position relative to an object (left_of, right_of, above, etc.)
-"""
+"""Spatial reasoning operations: move relative to objects/regions (left_of, above, etc.)."""
 
 import time
 from typing import Tuple, Union, Optional
 
-# Import from centralized lazy import system (prevents circular dependencies)
 try:
     from ..core.Imports import get_world_state
 except ImportError:
@@ -30,15 +20,9 @@ from .Base import (
     OperationRelationship,
 )
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
-
-
-# ============================================================================
-# Implementation: Move Relative to Object
-# ============================================================================
 
 
 def move_relative_to_object(
@@ -50,37 +34,10 @@ def move_relative_to_object(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """
-    Move robot to a position relative to an object or position.
-
-    Calculates target position based on spatial relation (left_of, right_of, above, etc.)
-    and applies offset distance. Useful for approach movements or positioning relative
-    to detected objects.
-
-    Args:
-        robot_id: Robot identifier (e.g., "Robot1")
-        object_ref: Either object_id (str) or position tuple (x, y, z)
-        relation: Spatial relation - one of: "left_of", "right_of", "above", "below",
-                 "in_front_of", "behind"
-        offset: Distance from object in meters (default: 0.1m)
-        z_override: Optional Z coordinate override (useful for maintaining height)
-        request_id: Request tracking ID
-        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
-
-    Returns:
-        OperationResult with success status and target position
-
-    Example:
-        >>> # Move to the left of detected object
-        >>> move_relative_to_object("Robot1", "cube_01", "left_of", offset=0.15)
-
-        >>> # Move above a specific position
-        >>> move_relative_to_object("Robot1", (0.3, 0.2, 0.1), "above", offset=0.1)
-    """
+    """Move robot to a position relative to an object (left_of, right_of, above, below, in_front_of, behind)."""
     try:
         # Get object position
         if isinstance(object_ref, str):
-            # Object ID - query from world state
             world_state = get_world_state()
             position = world_state.get_object_position(object_ref)
             if position is None:
@@ -94,14 +51,11 @@ def move_relative_to_object(
                     ],
                 )
         else:
-            # Direct position
             position = object_ref
 
-        # Normalize common aliases before validation
         _aliases = {"right": "right_of", "left": "left_of", "front": "in_front_of"}
         relation = _aliases.get(relation, relation)
 
-        # Validate relation
         valid_relations = [
             "left_of",
             "right_of",
@@ -117,7 +71,6 @@ def move_relative_to_object(
                 [f"Use one of the valid relations: {', '.join(valid_relations)}"],
             )
 
-        # Validate offset
         if not (0.0 <= offset <= 0.5):
             return OperationResult.error_result(
                 "INVALID_OFFSET",
@@ -125,7 +78,6 @@ def move_relative_to_object(
                 ["Use offset between 0.0 and 0.5 meters"],
             )
 
-        # Calculate target position based on relation
         x, y, z = position
         target_x, target_y, target_z = x, y, z
 
@@ -142,11 +94,9 @@ def move_relative_to_object(
         elif relation == "behind":
             target_y = y - offset
 
-        # Apply z_override if provided
         if z_override is not None:
             target_z = z_override
 
-        # Execute movement using move_to_coordinate
         logger.info(
             f"Moving {robot_id} {relation} object at ({x:.3f}, {y:.3f}, {z:.3f}) "
             f"-> target: ({target_x:.3f}, {target_y:.3f}, {target_z:.3f})"
@@ -164,7 +114,6 @@ def move_relative_to_object(
         if not move_result.success:
             return move_result
 
-        # Return success with target info
         return OperationResult.success_result(
             {
                 "robot_id": robot_id,
@@ -185,13 +134,7 @@ def move_relative_to_object(
         )
 
 
-# ============================================================================
-# BasicOperation Definitions
-# ============================================================================
-
-
 def create_move_relative_to_object_operation() -> BasicOperation:
-    """Create BasicOperation definition for move_relative_to_object."""
     return BasicOperation(
         operation_id="spatial_move_relative_001",
         name="move_relative_to_object",
@@ -273,5 +216,4 @@ def create_move_relative_to_object_operation() -> BasicOperation:
     )
 
 
-# Export operation instances
 MOVE_RELATIVE_TO_OBJECT_OPERATION = create_move_relative_to_object_operation()

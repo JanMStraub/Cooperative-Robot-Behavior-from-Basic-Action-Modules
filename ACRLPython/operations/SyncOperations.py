@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Synchronization Operations
-===========================
-
-Provides pub/sub synchronization primitives for multi-robot coordination.
-Enables LLM-driven coordination without hardcoded coordination operations.
-
-Operations:
-- signal: Emit named event for other robots to wait on
-- wait_for_signal: Block until named event is received
-- wait: Simple time-based pause
-"""
+"""Pub/sub synchronization primitives for multi-robot coordination (signal, wait_for_signal, wait)."""
 
 import time
 import threading
@@ -57,7 +46,6 @@ class EventBus(SingletonBase):
 
     def _singleton_init(self):
         """Initialize the event bus (called once by SingletonBase)."""
-        # Maps event_name -> threading.Condition (with its own internal Lock)
         self._conditions: Dict[str, threading.Condition] = {}
         # Maps event_name -> monotonic signal generation counter.
         # Incremented on each signal(). Waiters compare against a baseline snapshot
@@ -68,14 +56,7 @@ class EventBus(SingletonBase):
         self._event_lock = threading.Lock()
 
     def _ensure_event(self, event_name: str) -> None:
-        """
-        Ensure the Condition, generation counter, and waiter count exist for event_name.
-
-        Must be called with self._event_lock held.
-
-        Args:
-            event_name: Name of the event to initialize
-        """
+        """Ensure the Condition, generation counter, and waiter count exist. Must hold _event_lock."""
         if event_name not in self._conditions:
             self._conditions[event_name] = threading.Condition(threading.Lock())
             self._generations[event_name] = 0
@@ -83,38 +64,15 @@ class EventBus(SingletonBase):
 
     @property
     def _events(self) -> Dict[str, threading.Condition]:
-        """
-        Backward-compatible accessor: expose the Condition objects keyed by event name.
-
-        Tests can check `event_name in event_bus._events` to verify an event exists.
-        To check if an event has been signaled, use `_is_signaled(event_name)` instead
-        of `_events[name].is_set()` (Condition objects have no is_set() method).
-        """
+        """Backward-compatible accessor. Tests: use _is_signaled() not _events[name].is_set() (Condition has no is_set)."""
         return self._conditions
 
     def _is_signaled(self, event_name: str) -> bool:
-        """
-        Return True if the event has been signaled at least once since last reset/clear.
-
-        Args:
-            event_name: Name of the event to check
-
-        Returns:
-            True if the event's generation counter > 0
-        """
+        """True if event signaled at least once since last reset/clear (generation > 0)."""
         return self._generations.get(event_name, 0) > 0
 
     def signal(self, event_name: str) -> None:
-        """
-        Increment the generation counter and wake all waiting threads atomically.
-
-        notify_all() wakes every thread currently blocked in wait_for() under the
-        Condition lock. Because each waiter uses a predicate, they all wake and check
-        `gen != baseline` — all pass, all return True, regardless of order.
-
-        Args:
-            event_name: Name of the event to signal
-        """
+        """Increment generation counter and wake all waiting threads (notify_all under Condition lock)."""
         with self._event_lock:
             self._ensure_event(event_name)
             cond = self._conditions[event_name]
@@ -124,20 +82,7 @@ class EventBus(SingletonBase):
             cond.notify_all()
 
     def wait_for_signal(self, event_name: str, timeout_ms: int = 30000) -> bool:
-        """
-        Wait for an event to be signaled.
-
-        Takes a generation snapshot before sleeping. wait_for() evaluates the predicate
-        immediately under the lock, so if signal() already fired (generation changed),
-        the call returns True without sleeping at all.
-
-        Args:
-            event_name: Name of the event to wait for
-            timeout_ms: Maximum wait time in milliseconds
-
-        Returns:
-            True if event was signaled (or was already signaled), False if timeout
-        """
+        """Wait for event. Returns True immediately if already signaled (generation snapshot before sleep)."""
         with self._event_lock:
             self._ensure_event(event_name)
             cond = self._conditions[event_name]
@@ -166,15 +111,7 @@ class EventBus(SingletonBase):
         return received
 
     def clear_event(self, event_name: str) -> None:
-        """
-        Reset the generation counter for an event to "un-signaled" state.
-
-        After clearing, future wait_for_signal() calls will wait until signal() is
-        called again. Existing in-progress waits are unaffected.
-
-        Args:
-            event_name: Name of the event to clear
-        """
+        """Reset generation counter to 0 (un-signaled). In-progress waits are unaffected."""
         with self._event_lock:
             if event_name in self._generations:
                 self._generations[event_name] = 0
@@ -191,37 +128,12 @@ class EventBus(SingletonBase):
     # ------------------------------------------------------------------
 
     def is_event_signaled(self, event_name: str) -> bool:
-        """
-        Return True if the event has been signaled at least once since last reset.
-
-        Provides a stable public API for tests instead of direct ``._events`` access.
-
-        Args:
-            event_name: Name of the event to check.
-
-        Returns:
-            True if the event's generation counter > 0.
-        """
+        """True if event generation counter > 0 (stable public API for tests)."""
         return self._generations.get(event_name, 0) > 0
 
     def get_waiter_count(self, event_name: str) -> int:
-        """
-        Return the number of threads currently waiting on an event.
-
-        Provides a stable public API for tests instead of direct ``._waiter_counts`` access.
-
-        Args:
-            event_name: Name of the event to query.
-
-        Returns:
-            Number of active waiters, or 0 if no waiters or event is unknown.
-        """
+        """Number of threads currently waiting on event (stable public API for tests)."""
         return self._waiter_counts.get(event_name, 0)
-
-
-# ============================================================================
-# SIGNAL OPERATION
-# ============================================================================
 
 
 def _execute_signal(
@@ -230,18 +142,7 @@ def _execute_signal(
     robot_id: Optional[str] = None,
     use_ros: bool = False,
 ) -> OperationResult:
-    """
-    Emit a named event for other robots to wait on.
-
-    Args:
-        event_name: Name of the event to signal
-        request_id: Optional request ID for tracking (ignored for sync operations)
-        robot_id: Optional robot ID (ignored, sync operations are global)
-        use_ros: Optional ROS flag (ignored, sync operations are local)
-
-    Returns:
-        OperationResult with success status
-    """
+    """Emit a named event. request_id/robot_id/use_ros ignored for sync ops."""
     try:
         event_bus = EventBus()
         event_bus.signal(event_name)
@@ -290,11 +191,6 @@ SIGNAL_OPERATION = BasicOperation(
 )
 
 
-# ============================================================================
-# WAIT_FOR_SIGNAL OPERATION
-# ============================================================================
-
-
 def _execute_wait_for_signal(
     event_name: str,
     timeout_ms: int = 30000,
@@ -302,19 +198,7 @@ def _execute_wait_for_signal(
     robot_id: Optional[str] = None,
     use_ros: bool = False,
 ) -> OperationResult:
-    """
-    Block until a named event is received.
-
-    Args:
-        event_name: Name of the event to wait for
-        timeout_ms: Maximum wait time in milliseconds (default 30 seconds)
-        request_id: Optional request ID for tracking (ignored for sync operations)
-        robot_id: Optional robot ID (ignored, sync operations are global)
-        use_ros: Optional ROS flag (ignored, sync operations are local)
-
-    Returns:
-        OperationResult with success if event received, error if timeout
-    """
+    """Block until named event received. request_id/robot_id/use_ros ignored."""
     try:
         event_bus = EventBus()
         start_time = time.time()
@@ -389,29 +273,13 @@ WAIT_FOR_SIGNAL_OPERATION = BasicOperation(
 )
 
 
-# ============================================================================
-# WAIT OPERATION
-# ============================================================================
-
-
 def _execute_wait(
     duration_ms: int,
     request_id: Optional[int] = None,
     robot_id: Optional[str] = None,
     use_ros: bool = False,
 ) -> OperationResult:
-    """
-    Pause execution for specified duration.
-
-    Args:
-        duration_ms: Time to wait in milliseconds
-        request_id: Optional request ID for tracking (ignored for sync operations)
-        robot_id: Optional robot ID (ignored, sync operations are global)
-        use_ros: Optional ROS flag (ignored, sync operations are local)
-
-    Returns:
-        OperationResult with success status
-    """
+    """Pause execution for duration_ms milliseconds."""
     try:
         if duration_ms < 0:
             return OperationResult.error_result(

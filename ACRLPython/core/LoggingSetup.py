@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
-"""
-LoggingSetup.py - Centralized logging configuration for all servers and modules
-
-This module provides a single function to configure Python's logging system
-with both console and optional file output, including log rotation.
-"""
+"""Centralized logging configuration: console output + optional file rotation."""
 
 import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-# Import config
 try:
     from config.Servers import (
         LOG_LEVEL,
@@ -35,37 +29,21 @@ _logging_configured = False
 
 def setup_logging(module_name: Optional[str] = None) -> logging.Logger:
     """
-    Configure centralized logging with console and optional file output.
+    Configure centralized logging (idempotent). Returns a module-specific or root logger.
 
-    This function should be called once at the start of each server/orchestrator.
-    It configures the root logger with handlers for both console and file output
-    (if enabled in config), ensuring all subsequent logging calls use the same
-    configuration.
-
-    Args:
-        module_name: Optional module name for creating a per-module logger.
-                    If None, returns the root logger.
-
-    Returns:
-        logging.Logger: Configured logger instance (module-specific or root)
+    Call once per server/orchestrator; subsequent calls are no-ops on the root config.
 
     Example:
-        # In server initialization:
         logger = setup_logging(__name__)
         logger.info("Server starting...")
     """
     global _logging_configured
 
-    # Only configure root logger once to avoid duplicate handlers
     if not _logging_configured:
-        # Get root logger
         root_logger = logging.getLogger()
         root_logger.setLevel(getattr(logging, LOG_LEVEL))
+        root_logger.handlers.clear()  # Avoid duplicate handlers on re-import.
 
-        # Clear any existing handlers to avoid duplicates
-        root_logger.handlers.clear()
-
-        # Create console handler
         console_handler = logging.StreamHandler()
         console_handler.setLevel(getattr(logging, LOG_LEVEL))
         console_formatter = logging.Formatter(LOG_FORMAT)
@@ -74,7 +52,6 @@ def setup_logging(module_name: Optional[str] = None) -> logging.Logger:
 
         _logging_configured = True
 
-    # Return module-specific logger or root logger
     if module_name:
         return logging.getLogger(module_name)
     else:
@@ -82,23 +59,7 @@ def setup_logging(module_name: Optional[str] = None) -> logging.Logger:
 
 
 def get_logger(module_name: str) -> logging.Logger:
-    """
-    Get a logger for a specific module.
-
-    This is a convenience function for getting a module-specific logger
-    after setup_logging() has been called. If setup_logging() hasn't been
-    called yet, this will call it automatically.
-
-    Args:
-        module_name: Module name (typically __name__)
-
-    Returns:
-        logging.Logger: Module-specific logger instance
-
-    Example:
-        logger = get_logger(__name__)
-        logger.info("Processing request...")
-    """
+    """Get a module-specific logger, calling setup_logging() if not yet configured."""
     if not _logging_configured:
         setup_logging()
 
@@ -118,7 +79,6 @@ def enable_file_logging() -> None:
 
     root_logger = logging.getLogger()
 
-    # Skip if a FileHandler is already attached
     if any(isinstance(h, logging.FileHandler) for h in root_logger.handlers):
         return
 
@@ -126,7 +86,6 @@ def enable_file_logging() -> None:
         log_dir = Path(LOG_DIR)
         log_dir.mkdir(parents=True, exist_ok=True)
 
-        # Delete oldest log files if at or above the backup limit
         existing_logs = sorted(
             log_dir.glob("server_logs_*.txt"), key=lambda p: p.stat().st_mtime
         )
@@ -160,19 +119,16 @@ class SafeStreamHandler(logging.StreamHandler):
     """
     StreamHandler that silently ignores I/O errors from closed streams.
 
-    Prevents logging errors when pytest closes log handlers before
-    background threads finish executing.
+    Prevents spurious errors when pytest closes handlers before background threads finish.
     """
 
     def emit(self, record):
-        """Emit a record, catching I/O errors from closed streams."""
         try:
             super().emit(record)
         except (ValueError, OSError):
             pass
 
     def handleError(self, record):
-        """Handle errors during logging, suppressing I/O errors from closed streams."""
         import sys
 
         if sys.exc_info()[0] in (ValueError, OSError):
@@ -183,16 +139,9 @@ class SafeStreamHandler(logging.StreamHandler):
 
 def _safe_log(log_func, message: str, *args, **kwargs):
     """
-    Safely log a message, catching I/O errors from closed streams.
+    Safely log a message, patching any new handlers added dynamically (e.g. by pytest).
 
-    Lazily patches any new handlers added after module import (pytest adds
-    handlers dynamically).
-
-    Args:
-        log_func: Logger function (logger.info, logger.error, etc.)
-        message: Log message
-        *args: Additional positional arguments for log function
-        **kwargs: Additional keyword arguments for log function
+    Lazily patches handlers to suppress I/O errors from closed streams.
     """
     import logging as _logging
 
@@ -210,7 +159,6 @@ def _safe_log(log_func, message: str, *args, **kwargs):
 
 
 def _make_handler_safe(handler):
-    """Patch a handler's emit method to catch I/O errors from closed streams."""
     if not hasattr(handler, "_original_emit"):
         handler._original_emit = handler.__class__.emit
         handler._original_handleError = handler.__class__.handleError
@@ -222,7 +170,6 @@ def _make_handler_safe(handler):
             pass
 
     def safe_handleError(record):
-        """Override handleError to suppress I/O error diagnostics."""
         import sys
 
         exc_type = sys.exc_info()[0]
@@ -237,10 +184,7 @@ def _make_handler_safe(handler):
 
 
 class WebSocketLogHandler(logging.Handler):
-    """
-    A custom logging handler that broadcasts log records to a generic callback.
-    Used by WebUIServer to stream live logs to the frontend UI.
-    """
+    """Broadcasts log records via callback; used by WebUIServer to stream logs to the frontend."""
 
     def __init__(self, callback):
         super().__init__()
@@ -258,17 +202,15 @@ class WebSocketLogHandler(logging.Handler):
             else:
                 level = "info"
 
-            # Non-blocking callback
             self.callback(msg, level)
         except Exception:
             self.handleError(record)
 
 
 def add_websocket_handler(callback):
-    """Adds the websocket broadcast handler to the root logger."""
+    """Add the WebSocket broadcast handler to the root logger."""
     root_logger = logging.getLogger()
     handler = WebSocketLogHandler(callback)
-    # Only send INFO and above to the UI to avoid flooding
-    handler.setLevel(logging.INFO)
+    handler.setLevel(logging.INFO)  # INFO+ only to avoid flooding the UI.
     root_logger.addHandler(handler)
     return handler

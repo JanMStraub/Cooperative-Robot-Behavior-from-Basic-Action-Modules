@@ -1,7 +1,3 @@
-/* ============================================================
-   Layout — Two-column dashboard (Command left / Perception right)
-   ============================================================ */
-
 .app-container {
 	display: flex;
 	flex-direction: column;

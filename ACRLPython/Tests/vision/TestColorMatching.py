@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test color matching logic for VisionOperations
-"""
+"""Test color matching logic for VisionOperations"""
 
 import sys
 import os

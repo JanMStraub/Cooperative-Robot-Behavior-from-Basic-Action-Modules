@@ -56,14 +56,8 @@ namespace Robotics
         // Helper variables
         private const string _logPrefix = "[ROBOT_MANAGER]";
 
-        /// <summary>
-        /// Gets a list of all registered robot IDs.
-        /// </summary>
         public List<string> AllRobotIds => new List<string>(_robotInstances.Keys);
 
-        /// <summary>
-        /// Gets an array of tuples containing robot IDs and their parent GameObjects.
-        /// </summary>
         public (string id, GameObject parentGameObject)[] Robots
         {
             get
@@ -79,9 +73,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Unity Awake callback - initializes singleton instance.
-        /// </summary>
         private void Awake()
         {
             if (Instance == null)
@@ -96,9 +87,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Initializes the RobotManager and creates default robot profile if needed.
-        /// </summary>
         private void InitializeManager()
         {
             try
@@ -128,9 +116,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Unity Start callback - initializes component references and discovers robots in the scene.
-        /// </summary>
         private void Start()
         {
             try
@@ -143,9 +128,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Automatically discovers all RobotController and SimpleRobotController components in the scene and registers them.
-        /// </summary>
         private void DiscoverRobots()
         {
             RobotController[] controllers = FindObjectsByType<RobotController>(
@@ -181,9 +163,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Unity Update callback - checks for target position changes at regular intervals.
-        /// </summary>
         private void Update()
         {
             if (_enableTargetChangeDetection && Time.time >= _nextTargetCheckTime)
@@ -243,7 +222,6 @@ namespace Robotics
         /// issues SetTarget calls for it. Call this after a successful grasp when the robot
         /// should hold its position rather than continue tracking the (now-held) object.
         /// </summary>
-        /// <param name="robotId">The robot identifier</param>
         public void ClearRobotTarget(string robotId)
         {
             if (_robotInstances.TryGetValue(robotId, out RobotInstance robot))
@@ -253,11 +231,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Generates a unique robot ID based on a base name. If the ID already exists, appends a counter.
-        /// </summary>
-        /// <param name="baseName">The base name to use for ID generation (typically GameObject name)</param>
-        /// <returns>A unique robot ID</returns>
         private string GenerateUniqueRobotId(string baseName)
         {
             string cleanBaseName = baseName;
@@ -283,10 +256,6 @@ namespace Robotics
         /// Registers a robot with the RobotManager and applies its configuration profile.
         /// If robotId is null or empty, a unique ID will be generated automatically.
         /// </summary>
-        /// <param name="robotId">Unique identifier for the robot (auto-generated if null/empty)</param>
-        /// <param name="robotObject">The robot's GameObject containing RobotController</param>
-        /// <param name="targetObject">Optional target GameObject for the robot to track</param>
-        /// <param name="profile">Optional custom RobotConfig profile, uses default if null</param>
         public void RegisterRobot(
             string robotId,
             GameObject robotObject,
@@ -383,20 +352,11 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Checks if a robot is already registered.
-        /// </summary>
-        /// <param name="robotId">The robot identifier to check</param>
-        /// <returns>True if the robot is registered, false otherwise</returns>
         public bool IsRobotRegistered(string robotId)
         {
             return _robotInstances.ContainsKey(robotId);
         }
 
-        /// <summary>
-        /// Unregisters a robot from the RobotManager.
-        /// </summary>
-        /// <param name="robotId">The robot identifier to unregister</param>
         public void UnregisterRobot(string robotId)
         {
             if (_robotInstances.Remove(robotId))
@@ -406,10 +366,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Applies the robot's configuration profile to all its joints.
-        /// </summary>
-        /// <param name="robotId">The robot identifier</param>
         private void ApplyProfileToRobot(string robotId)
         {
             if (!_robotInstances.TryGetValue(robotId, out RobotInstance robot))
@@ -477,11 +433,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Gets the profile for a specific robot by robotId
-        /// </summary>
-        /// <param name="robotId">The robot identifier</param>
-        /// <returns>The robot's profile or null if robot not found</returns>
         public RobotConfig GetRobotProfile(string robotId)
         {
             return _robotInstances.TryGetValue(robotId, out RobotInstance robot)
@@ -489,9 +440,6 @@ namespace Robotics
                 : null;
         }
 
-        /// <summary>
-        /// Unity OnDestroy callback - cleans up singleton instance.
-        /// </summary>
         private void OnDestroy()
         {
             if (Instance == this)

@@ -1,22 +1,11 @@
 #!/usr/bin/env python3
-"""
-AutoRTServer.py - Dedicated TCP server for AutoRT Unity integration
-
-Listens on AUTORT_SERVER_PORT (config/Servers.py) for AutoRT commands from Unity's AutoRTManager.
-Handles task generation, loop control, and task execution approval workflow.
-
-Architecture:
-- Dedicated port to avoid conflicts with SequenceServer
-- Thread-safe AutoRTHandler singleton
-- Protocol V2 with AUTORT_COMMAND/AUTORT_RESPONSE message types
-"""
+"""Dedicated TCP server for AutoRT Unity integration (AUTORT_SERVER_PORT)."""
 
 import logging
 import socket
 import struct
 from typing import Any, Dict, Optional
 
-# Configure logging
 try:
     from core.LoggingSetup import setup_logging
 
@@ -28,7 +17,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Import server base and protocol
 try:
     from core.TCPServerBase import TCPServerBase, ServerConfig
     from core.UnityProtocol import UnityProtocol, MessageType
@@ -38,7 +26,6 @@ except ImportError:
     from ..core.UnityProtocol import UnityProtocol, MessageType
     from ..config.Servers import DEFAULT_HOST, AUTORT_SERVER_PORT
 
-# AutoRT integration
 try:
     from servers.AutoRTIntegration import AutoRTHandler
 except ImportError:
@@ -56,34 +43,16 @@ class AutoRTServer(TCPServerBase):
     """
 
     def __init__(self, config: Optional[ServerConfig] = None):
-        """
-        Initialize AutoRT server.
-
-        Args:
-            config: Server configuration (defaults to AUTORT_SERVER_PORT from config/Servers.py)
-        """
         if config is None:
             config = ServerConfig(host=DEFAULT_HOST, port=AUTORT_SERVER_PORT)
         super().__init__(config)
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
-        """
-        Handle a client connection.
-
-        Receives AutoRT commands and returns responses.
-
-        Args:
-            client: Client socket
-            address: Client address
-        """
         logger.info(f"AutoRT client connected from {address}")
-
-        # Set socket timeout for persistent connection
         client.settimeout(5.0)
 
         while self._running:
             try:
-                # Protocol V2: Read header (type:1 + request_id:4)
                 header_bytes = self._recv_exact(client, 5)
                 if not header_bytes:
                     break
@@ -120,16 +89,7 @@ class AutoRTServer(TCPServerBase):
     def _handle_autort_command(
         self, client: socket.socket, header_bytes: bytes, request_id: int
     ):
-        """
-        Handle AutoRT command from Unity.
-
-        Args:
-            client: Client socket
-            header_bytes: Already-read header (5 bytes)
-            request_id: Request ID from header
-        """
         try:
-            # Receive complete message
             complete_message = self._receive_complete_autort_command(
                 client, header_bytes
             )
@@ -140,17 +100,14 @@ class AutoRTServer(TCPServerBase):
                 )
                 return
 
-            # Decode command
             request_id, command_type, params = UnityProtocol.decode_autort_command(
                 complete_message
             )
 
             logger.info(f"AutoRT command received: {command_type} (params={params})")
 
-            # Get AutoRT handler singleton
             handler = AutoRTHandler.get_instance()
 
-            # Route command to appropriate method
             if command_type == "generate":
                 result = handler.generate_tasks(
                     num_tasks=params.get("num_tasks"),
@@ -182,7 +139,6 @@ class AutoRTServer(TCPServerBase):
                     "error": f"Unknown command type: {command_type}",
                 }
 
-            # Send AUTORT_RESPONSE
             self._send_autort_response(client, request_id, result)
 
         except Exception as e:
@@ -198,16 +154,7 @@ class AutoRTServer(TCPServerBase):
     def _send_autort_response(
         self, client: socket.socket, request_id: int, result: Dict[str, Any]
     ):
-        """
-        Send AutoRT response to Unity client.
-
-        Args:
-            client: Client socket
-            request_id: Request ID for correlation
-            result: Result dictionary
-        """
         try:
-            # Encode using UnityProtocol
             response_bytes = UnityProtocol.encode_autort_response(result, request_id)
             client.sendall(response_bytes)
             logger.info(
@@ -219,14 +166,6 @@ class AutoRTServer(TCPServerBase):
             logger.error(f"Failed to send AutoRT response: {e}")
 
     def _send_error(self, client: socket.socket, request_id: int, error_msg: str):
-        """
-        Send error response to client.
-
-        Args:
-            client: Client socket
-            request_id: Request ID
-            error_msg: Error message
-        """
         error_result = {
             "success": False,
             "tasks": [],
@@ -237,17 +176,9 @@ class AutoRTServer(TCPServerBase):
 
     def _recv_exact(self, client: socket.socket, num_bytes: int) -> Optional[bytes]:
         """
-        Receive exact number of bytes from client.
+        Receive exact number of bytes.
 
-        Args:
-            client: Client socket
-            num_bytes: Number of bytes to receive
-
-        Returns:
-            Received bytes or None if connection closed
-
-        Raises:
-            socket.timeout: If read times out (should be caught by caller for persistent connections)
+        Raises socket.timeout if read times out — caller must handle for persistent connections.
         """
         data = b""
         while len(data) < num_bytes:

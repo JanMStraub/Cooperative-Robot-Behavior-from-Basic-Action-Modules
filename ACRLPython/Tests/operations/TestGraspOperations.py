@@ -1,48 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for GraspOperations module
-======================================
-
-Tests the grasp_object operation and GRASP_OBJECT_OPERATION definition.
-
-Coverage:
-- Basic grasp operation execution
-- Custom approach vectors and parameters
-- Error handling (invalid inputs)
-- Grasp trajectory validation (NEW)
-  - Three-waypoint trajectory (pre-grasp, grasp, retreat)
-  - Approach direction accuracy (Top/Front/Side)
-  - Collision avoidance checking
-- Grasp force estimation (NEW)
-  - Force threshold verification
-  - Force balance checking
-  - Insufficient force detection
-- Contact sensor integration (NEW)
-  - Dual-finger contact detection
-  - Early contact during approach
-  - Partial contact handling
-- Grasp failure recovery (NEW)
-  - Object slip detection
-  - Multi-criteria success verification
-  - Retry mechanisms
-  - Unstable grasp detection
-
-NOT Covered:
-- Real Unity grasp execution (requires Unity)
-- Actual force sensor readings
-- Physical gripper hardware integration
-
-Dependencies:
-- Mock CommandBroadcaster for Unity communication
-- Mock registry for operation validation
-- pytest fixtures for test setup
-
-Run tests:
-    pytest tests/TestGraspOperations.py -v
-
-Run specific test class:
-    pytest tests/TestGraspOperations.py::TestGraspTrajectoryValidation -v
-"""
+"""Unit tests for GraspOperations module"""
 
 import pytest
 from unittest.mock import patch, MagicMock
@@ -51,7 +8,6 @@ from operations.Base import OperationCategory, OperationComplexity
 
 
 class TestGraspObjectOperation:
-    """Test suite for grasp_object operation function."""
 
     @pytest.fixture
     def mock_broadcaster(self):
@@ -65,11 +21,9 @@ class TestGraspObjectOperation:
             yield broadcaster
 
     def test_grasp_object_success(self, mock_broadcaster):
-        """Test successful grasp operation."""
         # Setup mock response - operation sends command without waiting
         mock_broadcaster.send_command.return_value = True
 
-        # Execute operation
         result = grasp_object(
             robot_id="Robot1",
             object_id="Cube_01",
@@ -96,7 +50,6 @@ class TestGraspObjectOperation:
         assert call_args["request_id"] == 42
 
     def test_grasp_object_with_custom_approach_vector(self, mock_broadcaster):
-        """Test grasp with custom approach vector."""
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(
@@ -113,7 +66,6 @@ class TestGraspObjectOperation:
         assert call_args["parameters"]["custom_approach_vector"]["z"] == 0.5
 
     def test_grasp_object_with_retreat_disabled(self, mock_broadcaster):
-        """Test grasp without retreat motion."""
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(
@@ -141,7 +93,6 @@ class TestGraspObjectOperation:
         assert call_args["parameters"]["retreat_distance"] == 0.15
 
     def test_grasp_object_invalid_robot_id(self, mock_broadcaster):
-        """Test error handling for invalid robot_id."""
         result = grasp_object(robot_id="", object_id="Cube_01")
 
         assert result["success"] is False
@@ -150,7 +101,6 @@ class TestGraspObjectOperation:
         mock_broadcaster.send_command.assert_not_called()
 
     def test_grasp_object_invalid_object_id(self, mock_broadcaster):
-        """Test error handling for invalid object_id."""
         result = grasp_object(robot_id="Robot1", object_id="")
 
         assert result["success"] is False
@@ -159,7 +109,6 @@ class TestGraspObjectOperation:
         mock_broadcaster.send_command.assert_not_called()
 
     def test_grasp_object_invalid_approach(self, mock_broadcaster):
-        """Test error handling for invalid preferred_approach."""
         result = grasp_object(
             robot_id="Robot1",
             object_id="Cube_01",
@@ -173,7 +122,6 @@ class TestGraspObjectOperation:
         mock_broadcaster.send_command.assert_not_called()
 
     def test_grasp_object_invalid_approach_vector(self, mock_broadcaster):
-        """Test error handling for invalid custom_approach_vector."""
         # Test with wrong length
         result = grasp_object(
             robot_id="Robot1",
@@ -197,7 +145,6 @@ class TestGraspObjectOperation:
         mock_broadcaster.send_command.assert_not_called()
 
     def test_grasp_object_broadcaster_not_available(self, mock_broadcaster):
-        """Test error handling when CommandBroadcaster is not available."""
         mock_broadcaster.return_value = None
 
         with patch(
@@ -210,7 +157,6 @@ class TestGraspObjectOperation:
         assert "CommandBroadcaster not available" in result["error"]["message"]
 
     def test_grasp_object_execution_failed(self, mock_broadcaster):
-        """Test error handling when command send fails."""
         mock_broadcaster.send_command.return_value = False
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
@@ -220,7 +166,6 @@ class TestGraspObjectOperation:
         assert "Failed to send grasp command" in result["error"]["message"]
 
     def test_grasp_object_no_response(self, mock_broadcaster):
-        """Test error handling when broadcaster not available."""
         with patch(
             "operations.GraspOperations._get_command_broadcaster", return_value=None
         ):
@@ -231,7 +176,6 @@ class TestGraspObjectOperation:
         assert "CommandBroadcaster not available" in result["error"]["message"]
 
     def test_grasp_object_exception_handling(self, mock_broadcaster):
-        """Test exception handling during operation."""
         mock_broadcaster.send_command.side_effect = Exception("Network error")
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
@@ -241,7 +185,6 @@ class TestGraspObjectOperation:
         assert "Network error" in result["error"]["message"]
 
     def test_grasp_object_all_approaches(self, mock_broadcaster):
-        """Test all valid approach directions."""
         mock_broadcaster.send_command.return_value = True
 
         valid_approaches = ["auto", "top", "front", "side"]
@@ -252,7 +195,6 @@ class TestGraspObjectOperation:
             assert result["success"] is True
 
     def test_grasp_object_timeout_parameter(self, mock_broadcaster):
-        """Test that command is sent with request_id for tracking."""
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01", request_id=123)
@@ -262,17 +204,14 @@ class TestGraspObjectOperation:
 
 
 class TestGraspObjectOperationDefinition:
-    """Test suite for GRASP_OBJECT_OPERATION registry definition."""
 
     def test_operation_basic_properties(self):
-        """Test basic operation properties."""
         assert GRASP_OBJECT_OPERATION.operation_id == "manipulation_grasp_object_001"
         assert GRASP_OBJECT_OPERATION.name == "grasp_object"
         assert GRASP_OBJECT_OPERATION.category == OperationCategory.MANIPULATION
         assert GRASP_OBJECT_OPERATION.complexity == OperationComplexity.COMPLEX
 
     def test_operation_description(self):
-        """Test operation has proper description."""
         assert "MoveIt2" in GRASP_OBJECT_OPERATION.description
         assert "candidate generation" in GRASP_OBJECT_OPERATION.description
         assert "IK validation" in GRASP_OBJECT_OPERATION.description
@@ -280,7 +219,6 @@ class TestGraspObjectOperationDefinition:
         assert "scoring" in GRASP_OBJECT_OPERATION.description
 
     def test_operation_parameters(self):
-        """Test all required parameters are defined."""
         param_names = [p.name for p in GRASP_OBJECT_OPERATION.parameters]
 
         # Required parameters
@@ -296,7 +234,6 @@ class TestGraspObjectOperationDefinition:
         assert "custom_approach_vector" in param_names
 
     def test_operation_parameter_requirements(self):
-        """Test parameter required flags."""
         params = {p.name: p for p in GRASP_OBJECT_OPERATION.parameters}
 
         # Required parameters
@@ -309,7 +246,6 @@ class TestGraspObjectOperationDefinition:
         assert params["enable_retreat"].required is False
 
     def test_operation_parameter_defaults(self):
-        """Test parameter default values."""
         params = {p.name: p for p in GRASP_OBJECT_OPERATION.parameters}
 
         assert params["use_advanced_planning"].default is True
@@ -320,7 +256,6 @@ class TestGraspObjectOperationDefinition:
         assert params["custom_approach_vector"].default is None
 
     def test_operation_parameter_types(self):
-        """Test parameter types."""
         params = {p.name: p for p in GRASP_OBJECT_OPERATION.parameters}
 
         assert params["robot_id"].type == "str"
@@ -333,7 +268,6 @@ class TestGraspObjectOperationDefinition:
         assert params["custom_approach_vector"].type == "list"
 
     def test_operation_relationships(self):
-        """Test operation relationships structure."""
         # Relationships may be None if using simple lists
         # Just check it doesn't error when accessed
         rels = GRASP_OBJECT_OPERATION.relationships
@@ -342,11 +276,9 @@ class TestGraspObjectOperationDefinition:
             assert hasattr(rels, "operation_id")
 
     def test_operation_implementation_function(self):
-        """Test implementation function is set."""
         assert GRASP_OBJECT_OPERATION.implementation == grasp_object
 
     def test_operation_examples(self):
-        """Test operation has examples."""
         assert len(GRASP_OBJECT_OPERATION.usage_examples) >= 3
 
         # Check for basic example (top-down default)
@@ -356,7 +288,6 @@ class TestGraspObjectOperationDefinition:
         )
 
     def test_operation_tags(self):
-        """Test operation description contains key tags."""
         # BasicOperation doesn't have a 'tags' field, but we can check description
         desc = GRASP_OBJECT_OPERATION.description.lower()
         long_desc = GRASP_OBJECT_OPERATION.long_description.lower()
@@ -367,14 +298,12 @@ class TestGraspObjectOperationDefinition:
         assert "moveit2" in combined
 
     def test_operation_version(self):
-        """Test operation has stable interface."""
         # BasicOperation doesn't have a version field
         # Just verify the operation_id which serves as version identifier
         assert GRASP_OBJECT_OPERATION.operation_id == "manipulation_grasp_object_001"
 
 
 class TestGraspObjectIntegration:
-    """Integration tests for grasp_object operation with real components."""
 
     @pytest.fixture
     def mock_world_state(self):
@@ -387,7 +316,6 @@ class TestGraspObjectIntegration:
             yield state
 
     def test_grasp_object_with_all_parameters(self, mock_world_state):
-        """Test grasp operation with all parameters specified."""
         with (
             patch("operations.GraspOperations._get_command_broadcaster") as mock_bc,
             patch("config.ROS.ROS_ENABLED", False),
@@ -427,7 +355,6 @@ class TestGraspObjectIntegration:
 
 
 class TestGraspTrajectoryValidation:
-    """Test grasp trajectory planning and waypoint validation."""
 
     @pytest.fixture
     def mock_broadcaster(self):
@@ -441,7 +368,6 @@ class TestGraspTrajectoryValidation:
             yield broadcaster
 
     def test_three_waypoint_grasp_trajectory(self, mock_broadcaster):
-        """Test grasp command is sent with proper parameters (trajectory executed in Unity)."""
         # Async mode - command is sent without waiting
         mock_broadcaster.send_command.return_value = True
 
@@ -459,7 +385,6 @@ class TestGraspTrajectoryValidation:
         # which is handled by SequenceExecutor, not the operation itself
 
     def test_approach_direction_accuracy(self, mock_broadcaster):
-        """Test approach direction is correctly sent in command."""
         test_cases = ["top", "front", "side"]
         mock_broadcaster.send_command.return_value = True
 
@@ -487,7 +412,6 @@ class TestGraspTrajectoryValidation:
         # Note: Actual grasp and pre-grasp positions calculated by Unity's GraspPlanningPipeline
 
     def test_trajectory_collision_avoidance_check(self, mock_broadcaster):
-        """Test command sent for grasp (collision checking done in Unity)."""
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
@@ -498,10 +422,8 @@ class TestGraspTrajectoryValidation:
 
 
 class TestGraspForceEstimation:
-    """Test grasp force estimation and verification."""
 
     def test_grasp_force_estimation(self, mock_broadcaster):
-        """Test grasp command sent (force estimation done by Unity GripperContactSensor)."""
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
@@ -511,7 +433,6 @@ class TestGraspForceEstimation:
         # Note: Force estimation performed by Unity's GripperContactSensor during execution
 
     def test_grasp_force_threshold_check(self, mock_broadcaster):
-        """Test grasp command sent (force verification done by Unity)."""
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
@@ -532,7 +453,6 @@ class TestGraspForceEstimation:
             yield broadcaster
 
     def test_contact_sensor_detection(self, mock_broadcaster):
-        """Test grasp command sent (contact detection done by Unity)."""
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
@@ -542,7 +462,6 @@ class TestGraspForceEstimation:
         # Note: Contact sensor detection performed by Unity's GripperContactSensor
 
     def test_early_contact_during_approach(self, mock_broadcaster):
-        """Test grasp command sent (early contact handled by Unity)."""
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
@@ -579,7 +498,6 @@ class TestGraspFailureRecovery:
 
 
 class TestComputeHandoffApproachVector:
-    """Tests for _compute_handoff_approach_vector helper."""
 
     def test_approach_vector_along_x_axis(self):
         """When the object is wider on X, approach vector should be along X."""

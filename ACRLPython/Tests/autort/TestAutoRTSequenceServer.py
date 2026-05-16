@@ -29,7 +29,6 @@ TEST_SEQUENCE_PORT = 15013
 
 
 class TestAutoRTSequenceServerIntegration(unittest.TestCase):
-    """Integration tests for AutoRT message handling in SequenceServer."""
 
     @classmethod
     def setUpClass(cls):
@@ -69,7 +68,6 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
             time.sleep(0.1)
 
     def test_generate_command_routing(self):
-        """Test that generate command is routed to AutoRTHandler."""
         # Arrange
         command_type = "generate"
         params = {"num_tasks": 3, "robot_ids": ["Robot1"], "strategy": "balanced"}
@@ -109,7 +107,6 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
             self.assertIn("loop_running", response)
 
     def test_start_loop_command_routing(self):
-        """Test that start_loop command is routed correctly."""
         # Arrange - pre-set mock orchestrator so the loop thread doesn't call LLM
         handler = AutoRTHandler.get_instance()
         mock_orch = MagicMock()
@@ -154,7 +151,6 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
         self._receive_complete_response()  # Consume response
 
     def test_stop_loop_command_routing(self):
-        """Test that stop_loop command is routed correctly."""
         # Arrange - pre-set mock orchestrator so the loop thread doesn't call LLM
         handler = AutoRTHandler.get_instance()
         mock_orch = MagicMock()
@@ -191,7 +187,6 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
         self.assertFalse(response["loop_running"])
 
     def test_get_status_command_routing(self):
-        """Test that get_status command returns handler status."""
         # Arrange
         command_type = "get_status"
         request_id = 10006
@@ -213,7 +208,6 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
         self.assertIn("loop_config", response)
 
     def test_execute_task_command_routing(self):
-        """Test that execute_task command is routed correctly."""
         # Arrange - cache a ProposedTask object first
         from autort.DataModels import ProposedTask, Operation
 
@@ -255,7 +249,6 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
         self.assertIn("result", response)
 
     def test_unknown_command_error_handling(self):
-        """Test error handling for unknown command types."""
         # Arrange
         command_type = "unknown_command_xyz"
         request_id = 10008

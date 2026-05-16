@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Tests for core.LLMUtils.extract_json
-
-Covers all extraction stages:
-  - Clean JSON (stage 1: direct parse)
-  - Markdown-fenced JSON (stage 2)
-  - Markdown + JS // comments (stage 2 with comment stripping)
-  - Bare JSON embedded in prose (stage 3)
-  - Bare JSON + JS // comments (stage 3 with comment stripping)
-  - Unparseable response → None
-  - Empty string → None
-"""
+"""Tests for core.LLMUtils.extract_json"""
 
 import pytest
 

@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for ImageStorage (formerly ImageServer)
-
-Tests the image storage and retrieval system including:
-- Image storage and retrieval
-- Camera ID management
-- Stereo pair handling
-- Image age tracking
-- Memory management
-- Concurrent image reception
-"""
+"""Unit tests for ImageStorage (formerly ImageServer)"""
 
 import pytest
 import numpy as np
@@ -18,19 +8,11 @@ import threading
 
 from servers.ImageServer import UnifiedImageStorage
 
-# ============================================================================
 # Fixtures
-# ============================================================================
 
 
 @pytest.fixture
 def image_storage():
-    """
-    Create a fresh ImageStorage instance for testing.
-
-    Returns:
-        ImageStorage instance
-    """
     # Reset singleton
     UnifiedImageStorage._instance = None
     # Cameras are now managed internally
@@ -40,12 +22,6 @@ def image_storage():
 
 @pytest.fixture
 def sample_image():
-    """
-    Create a sample test image.
-
-    Returns:
-        numpy array representing a 100x100 RGB image
-    """
     # Create a simple 100x100 RGB image with some color
     image = np.zeros((100, 100, 3), dtype=np.uint8)
     image[:, :] = [128, 64, 32]  # BGR color
@@ -54,12 +30,6 @@ def sample_image():
 
 @pytest.fixture
 def sample_stereo_pair():
-    """
-    Create a sample stereo image pair.
-
-    Returns:
-        Tuple of (left_image, right_image)
-    """
     left = np.zeros((100, 100, 3), dtype=np.uint8)
     left[:, :] = [255, 0, 0]  # Blue
 
@@ -69,9 +39,7 @@ def sample_stereo_pair():
     return left, right
 
 
-# ============================================================================
 # Test ImageStorage Singleton
-# ============================================================================
 
 
 class TestImageStorageSingleton:
@@ -103,9 +71,7 @@ class TestImageStorageSingleton:
         assert all(inst is instances[0] for inst in instances)
 
 
-# ============================================================================
 # Test Image Storage and Retrieval
-# ============================================================================
 
 
 class TestImageStorageBasics:
@@ -160,9 +126,7 @@ class TestImageStorageBasics:
         np.testing.assert_array_equal(retrieved1, retrieved2)
 
 
-# ============================================================================
 # Test Camera ID Management
-# ============================================================================
 
 
 class TestCameraIDManagement:
@@ -190,9 +154,7 @@ class TestCameraIDManagement:
         assert set(camera_ids) == {"cam1", "cam2", "cam3"}
 
 
-# ============================================================================
 # Test Stereo Pair Handling
-# ============================================================================
 
 
 class TestStereoPairHandling:
@@ -229,9 +191,7 @@ class TestStereoPairHandling:
         assert image_storage.get_single_image("right_camera") is not None
 
 
-# ============================================================================
 # Test Prompt and Age Tracking
-# ============================================================================
 
 
 class TestPromptAndAgeTracking:
@@ -282,9 +242,7 @@ class TestPromptAndAgeTracking:
         assert age is None
 
 
-# ============================================================================
 # Test Memory Management
-# ============================================================================
 
 
 class TestMemoryManagement:
@@ -343,9 +301,7 @@ class TestMemoryManagement:
         assert image_storage.get_single_image("old") is None
 
 
-# ============================================================================
 # Test Concurrent Access
-# ============================================================================
 
 
 class TestConcurrentAccess:

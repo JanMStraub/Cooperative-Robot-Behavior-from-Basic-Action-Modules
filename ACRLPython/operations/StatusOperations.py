@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
-"""
-Status Check Operations for Robot Control
-==========================================
-
-This module implements simple status checking operations that query
-robot state without causing any movement or changes.
-"""
+"""Status check operations — read-only robot state queries, no movement."""
 
 import time
 
-# Lazy import to avoid circular dependency with servers module
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -19,7 +12,6 @@ from .Base import (
     OperationResult,
 )
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
@@ -27,65 +19,17 @@ logger = get_logger(__name__)
 
 from ._imports import get_command_broadcaster as _get_command_broadcaster
 
-# ============================================================================
-# Implementation: Check Robot Status
-# ============================================================================
-
 
 def check_robot_status(
     robot_id: str, detailed: bool = False, request_id: int = 0
 ) -> OperationResult:
     """
-    Query the current status of a robot.
+    Query current robot status (position, joint angles, operational state).
 
-    This operation sends a status check request to Unity to retrieve
-    the current state of the robot including position, joint angles,
-    and operational status. This is a read-only operation that does
-    not cause any movement or state changes.
-
-    Args:
-        robot_id: ID of the robot to check (e.g., "Robot1", "AR4_Robot")
-        detailed: If True, return detailed joint information. If False, return basic status only.
-
-    Returns:
-        Dict with the following structure:
-        {
-            "success": bool,           # True if command was sent successfully
-            "result": dict or None,    # Result data if successful
-            "error": dict or None      # Error information if failed
-        }
-
-        Success result structure:
-        {
-            "robot_id": str,
-            "detailed": bool,
-            "status": "query_sent",
-            "timestamp": float
-        }
-
-        Error structure:
-        {
-            "code": str,                    # Error code (e.g., "INVALID_ROBOT_ID")
-            "message": str,                 # Human-readable error message
-            "recovery_suggestions": list    # List of suggested actions
-        }
-
-    Example:
-        >>> # Check basic robot status
-        >>> result = check_robot_status("Robot1")
-        >>> if result["success"]:
-        ...     print("Status check sent")
-
-        >>> # Get detailed status with joint information
-        >>> result = check_robot_status("Robot1", detailed=True)
-
-    Note:
-        This operation is asynchronous. It sends the query to Unity and returns
-        immediately. Unity will respond with robot status via the same TCP connection.
-        Listen for status response events in Unity's LLMResultsReceiver.
+    Asynchronous — sends query to Unity and returns immediately. Unity responds
+    via the same TCP connection to LLMResultsReceiver.
     """
     try:
-        # Validate robot_id
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
@@ -96,7 +40,6 @@ def check_robot_status(
                 ],
             )
 
-        # Validate detailed parameter
         if not isinstance(detailed, bool):
             return OperationResult.error_result(
                 "INVALID_DETAILED_PARAMETER",
@@ -106,7 +49,6 @@ def check_robot_status(
                 ],
             )
 
-        # Construct status query command
         command = {
             "command_type": "check_robot_status",
             "robot_id": robot_id,
@@ -117,7 +59,6 @@ def check_robot_status(
             "request_id": request_id,
         }
 
-        # Send to Unity via CommandBroadcaster
         logger.debug(f"Sending status check to {robot_id} (detailed={detailed})")
 
         success = _get_command_broadcaster().send_command(command, request_id)
@@ -134,7 +75,6 @@ def check_robot_status(
                 ],
             )
 
-        # Return success
         logger.info(f"Successfully sent status check to {robot_id}")
 
         return OperationResult.success_result(
@@ -160,24 +100,12 @@ def check_robot_status(
         )
 
 
-# ============================================================================
-# BasicOperation Definition - For RAG System
-# ============================================================================
-
-
 def create_check_robot_status_operation() -> BasicOperation:
-    """
-    Create the BasicOperation definition for check_robot_status.
-
-    This provides rich metadata for RAG retrieval and LLM task planning.
-    """
     return BasicOperation(
-        # Identity
         operation_id="status_check_robot_001",
         name="check_robot_status",
         category=OperationCategory.STATE_CHECK,
         complexity=OperationComplexity.ATOMIC,
-        # Descriptions for RAG
         description="Query the current status and state of a robot without causing any movement",
         long_description="""
             This operation sends a status check request to Unity to retrieve
@@ -200,7 +128,6 @@ def create_check_robot_status_operation() -> BasicOperation:
             "Verify robot reached target by checking status after movement",
             "Monitor robot state during multi-step task execution",
         ],
-        # Parameters
         parameters=[
             OperationParameter(
                 name="robot_id",
@@ -216,20 +143,17 @@ def create_check_robot_status_operation() -> BasicOperation:
                 default=False,
             ),
         ],
-        # Conditions
         preconditions=[
             "robot_is_initialized(robot_id)",
         ],
         postconditions=[],
-        # Performance
-        average_duration_ms=50.0,  # Very fast - just a query
-        success_rate=0.99,  # Very reliable
+        average_duration_ms=50.0,
+        success_rate=0.99,
         failure_modes=[
             "Robot ID not found in RobotManager",
             "Communication failed - Unity not connected to CommandServer",
             "Invalid parameter type for 'detailed'",
         ],
-        # Relationships
         relationships=OperationRelationship(
             operation_id="status_check_robot_001",
             required_operations=[],
@@ -243,10 +167,8 @@ def create_check_robot_status_operation() -> BasicOperation:
                 "manipulation_grasp_object_001",
             ],
         ),
-        # Implementation
         implementation=check_robot_status,
     )
 
 
-# Create the operation instance for export
 CHECK_ROBOT_STATUS_OPERATION = create_check_robot_status_operation()

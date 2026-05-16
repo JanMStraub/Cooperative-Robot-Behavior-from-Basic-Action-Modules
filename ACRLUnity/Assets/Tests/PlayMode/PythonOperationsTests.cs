@@ -1,10 +1,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
-using UnityEngine;
-using UnityEngine.TestTools;
 using PythonCommunication;
 using Tests.EditMode;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Tests.PlayMode
 {
@@ -24,8 +24,6 @@ namespace Tests.PlayMode
         private SequenceClient _sequenceClient;
         private bool _pythonBackendAvailable;
 
-        #region Setup/Teardown
-
         [UnitySetUp]
         public IEnumerator SetUp()
         {
@@ -44,7 +42,9 @@ namespace Tests.PlayMode
 
             if (!_pythonBackendAvailable)
             {
-                Debug.LogWarning("[PYTHON_OPERATIONS_TESTS] Python backend not available - some tests will be skipped");
+                Debug.LogWarning(
+                    "[PYTHON_OPERATIONS_TESTS] Python backend not available - some tests will be skipped"
+                );
             }
         }
 
@@ -57,19 +57,12 @@ namespace Tests.PlayMode
             }
         }
 
-        /// <summary>
-        /// Check if Python backend is running (port 5008 listening)
-        /// </summary>
         private bool IsPythonBackendAvailable()
         {
             // Check if SequenceClient successfully connected
             // The SequenceClient auto-connects to port 5008 on Start()
             return _sequenceClient != null && _sequenceClient.IsConnected;
         }
-
-        #endregion
-
-        #region Command Sending Tests
 
         [Test]
         public void SequenceClient_Initialization_CreatesInstance()
@@ -81,7 +74,12 @@ namespace Tests.PlayMode
         [Test]
         public void ExecuteSequence_WithNullCommand_ReturnsFalse()
         {
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
+            LogAssert.Expect(
+                LogType.Error,
+                new System.Text.RegularExpressions.Regex(
+                    ".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"
+                )
+            );
             bool result = _sequenceClient.ExecuteSequence(null);
             Assert.IsFalse(result, "ExecuteSequence should return false for null command");
         }
@@ -89,7 +87,12 @@ namespace Tests.PlayMode
         [Test]
         public void ExecuteSequence_WithEmptyCommand_ReturnsFalse()
         {
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
+            LogAssert.Expect(
+                LogType.Error,
+                new System.Text.RegularExpressions.Regex(
+                    ".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"
+                )
+            );
             bool result = _sequenceClient.ExecuteSequence("");
             Assert.IsFalse(result, "ExecuteSequence should return false for empty command");
         }
@@ -116,42 +119,61 @@ namespace Tests.PlayMode
             // Verify command format (would be sent via ExecuteSequence)
             Assert.IsNotNull(command, "Command should be constructed");
             Assert.IsTrue(command.Contains("move to"), "Command should contain move directive");
-            Assert.IsTrue(command.Contains("close the gripper"), "Command should contain gripper directive");
+            Assert.IsTrue(
+                command.Contains("close the gripper"),
+                "Command should contain gripper directive"
+            );
         }
 
         [Test]
         public void Pick_ConstructsMultiStepCommand()
         {
             // Validate pick command construction: move, close, lift
-            float x = 0.3f, y = 0.2f, z = 0.1f, liftHeight = 0.1f;
+            float x = 0.3f,
+                y = 0.2f,
+                z = 0.1f,
+                liftHeight = 0.1f;
             float liftZ = z + liftHeight;
 
-            var expectedCommand = $"move to ({x}, {y}, {z}), then close the gripper, then move to ({x}, {y}, {liftZ})";
+            var expectedCommand =
+                $"move to ({x}, {y}, {z}), then close the gripper, then move to ({x}, {y}, {liftZ})";
 
             // Verify multi-step structure
             Assert.IsTrue(expectedCommand.Contains("move to"), "Pick should include move");
-            Assert.IsTrue(expectedCommand.Contains("close the gripper"), "Pick should include gripper close");
-            Assert.IsTrue(expectedCommand.Contains("then"), "Pick should use sequential 'then' syntax");
+            Assert.IsTrue(
+                expectedCommand.Contains("close the gripper"),
+                "Pick should include gripper close"
+            );
+            Assert.IsTrue(
+                expectedCommand.Contains("then"),
+                "Pick should use sequential 'then' syntax"
+            );
         }
 
         [Test]
         public void Place_ConstructsMultiStepCommand()
         {
             // Validate place command construction: move, open, lift
-            float x = 0.3f, y = 0.2f, z = 0.1f, liftHeight = 0.1f;
+            float x = 0.3f,
+                y = 0.2f,
+                z = 0.1f,
+                liftHeight = 0.1f;
             float liftZ = z + liftHeight;
 
-            var expectedCommand = $"move to ({x}, {y}, {z}), then open the gripper, then move to ({x}, {y}, {liftZ})";
+            var expectedCommand =
+                $"move to ({x}, {y}, {z}), then open the gripper, then move to ({x}, {y}, {liftZ})";
 
             // Verify multi-step structure
             Assert.IsTrue(expectedCommand.Contains("move to"), "Place should include move");
-            Assert.IsTrue(expectedCommand.Contains("open the gripper"), "Place should include gripper open");
-            Assert.IsTrue(expectedCommand.Contains("then"), "Place should use sequential 'then' syntax");
+            Assert.IsTrue(
+                expectedCommand.Contains("open the gripper"),
+                "Place should include gripper open"
+            );
+            Assert.IsTrue(
+                expectedCommand.Contains("then"),
+                "Place should use sequential 'then' syntax"
+            );
         }
-
-        #endregion
-
-        #region Data Model Tests
 
         [Test]
         public void SequenceResult_DefaultConstruction_HasValidDefaults()
@@ -183,20 +205,39 @@ namespace Tests.PlayMode
                 completed_commands = 3,
                 results = new List<CommandResult>
                 {
-                    new CommandResult { index = 0, operation = "move_to_coordinate", success = true },
-                    new CommandResult { index = 1, operation = "control_gripper", success = true },
-                    new CommandResult { index = 2, operation = "move_to_coordinate", success = true }
-                }
+                    new CommandResult
+                    {
+                        index = 0,
+                        operation = "move_to_coordinate",
+                        success = true,
+                    },
+                    new CommandResult
+                    {
+                        index = 1,
+                        operation = "control_gripper",
+                        success = true,
+                    },
+                    new CommandResult
+                    {
+                        index = 2,
+                        operation = "move_to_coordinate",
+                        success = true,
+                    },
+                },
             };
 
             Assert.AreEqual(3, sequenceResult.results.Count, "Should store 3 command results");
-            Assert.AreEqual("move_to_coordinate", sequenceResult.results[0].operation, "First operation should be move_to_coordinate");
-            Assert.AreEqual("control_gripper", sequenceResult.results[1].operation, "Second operation should be control_gripper");
+            Assert.AreEqual(
+                "move_to_coordinate",
+                sequenceResult.results[0].operation,
+                "First operation should be move_to_coordinate"
+            );
+            Assert.AreEqual(
+                "control_gripper",
+                sequenceResult.results[1].operation,
+                "Second operation should be control_gripper"
+            );
         }
-
-        #endregion
-
-        #region Command Parsing Tests (Expected Operations)
 
         [Test]
         public void Command_DetectObject_ParsesCorrectly()
@@ -215,7 +256,10 @@ namespace Tests.PlayMode
             var command = "move to (0.3, 0.2, 0.1)";
 
             Assert.IsNotNull(command, "Move command should be valid");
-            Assert.IsTrue(command.Contains("move to"), "Command should contain 'move to' directive");
+            Assert.IsTrue(
+                command.Contains("move to"),
+                "Command should contain 'move to' directive"
+            );
             Assert.IsTrue(command.Contains("("), "Command should contain coordinate parentheses");
         }
 
@@ -224,13 +268,17 @@ namespace Tests.PlayMode
         {
             // Expected operation: control_gripper (close)
             var commandClose = "close the gripper";
-            Assert.IsTrue(commandClose.Contains("close") && commandClose.Contains("gripper"),
-                "Close gripper command should be valid");
+            Assert.IsTrue(
+                commandClose.Contains("close") && commandClose.Contains("gripper"),
+                "Close gripper command should be valid"
+            );
 
             // Expected operation: control_gripper (open)
             var commandOpen = "open the gripper";
-            Assert.IsTrue(commandOpen.Contains("open") && commandOpen.Contains("gripper"),
-                "Open gripper command should be valid");
+            Assert.IsTrue(
+                commandOpen.Contains("open") && commandOpen.Contains("gripper"),
+                "Open gripper command should be valid"
+            );
         }
 
         [Test]
@@ -250,8 +298,10 @@ namespace Tests.PlayMode
             var command = "move 0.1m above the red cube";
 
             Assert.IsNotNull(command, "Relative move command should be valid");
-            Assert.IsTrue(command.Contains("above") || command.Contains("relative"),
-                "Command should indicate relative positioning");
+            Assert.IsTrue(
+                command.Contains("above") || command.Contains("relative"),
+                "Command should indicate relative positioning"
+            );
         }
 
         [Test]
@@ -271,8 +321,10 @@ namespace Tests.PlayMode
             var command = "wait for signal ready";
 
             Assert.IsNotNull(command, "Wait for signal command should be valid");
-            Assert.IsTrue(command.Contains("wait") && command.Contains("signal"),
-                "Command should contain wait and signal keywords");
+            Assert.IsTrue(
+                command.Contains("wait") && command.Contains("signal"),
+                "Command should contain wait and signal keywords"
+            );
         }
 
         [Test]
@@ -285,10 +337,6 @@ namespace Tests.PlayMode
             Assert.IsTrue(command.Contains("wait"), "Command should contain wait keyword");
         }
 
-        #endregion
-
-        #region Variable Passing Tests
-
         [Test]
         public void Command_VariableAssignment_ParsesCorrectly()
         {
@@ -296,8 +344,10 @@ namespace Tests.PlayMode
             var command = "detect the blue cube -> $target";
 
             Assert.IsNotNull(command, "Variable assignment command should be valid");
-            Assert.IsTrue(command.Contains("->") && command.Contains("$"),
-                "Command should contain variable assignment syntax");
+            Assert.IsTrue(
+                command.Contains("->") && command.Contains("$"),
+                "Command should contain variable assignment syntax"
+            );
         }
 
         [Test]
@@ -323,10 +373,6 @@ namespace Tests.PlayMode
             Assert.IsTrue(command.Contains("then"), "Should have sequential steps");
         }
 
-        #endregion
-
-        #region Integration Tests (require Python backend)
-
         [UnityTest]
         public IEnumerator ExecuteSequence_SimpleMove_WithPythonBackend()
         {
@@ -350,7 +396,11 @@ namespace Tests.PlayMode
             if (lastResult != null)
             {
                 Assert.IsNotNull(lastResult, "Should receive a result");
-                Assert.Greater(lastResult.total_commands, 0, "Should have parsed at least 1 command");
+                Assert.Greater(
+                    lastResult.total_commands,
+                    0,
+                    "Should have parsed at least 1 command"
+                );
             }
         }
 
@@ -376,7 +426,11 @@ namespace Tests.PlayMode
             if (lastResult != null)
             {
                 Assert.IsNotNull(lastResult, "Should receive a result");
-                Assert.AreEqual(2, lastResult.total_commands, "Should have 2 commands (detect + move)");
+                Assert.AreEqual(
+                    2,
+                    lastResult.total_commands,
+                    "Should have 2 commands (detect + move)"
+                );
             }
         }
 
@@ -401,7 +455,11 @@ namespace Tests.PlayMode
             if (pickResult != null)
             {
                 Assert.IsNotNull(pickResult, "Should receive pick result");
-                Assert.AreEqual(3, pickResult.total_commands, "Pick should have 3 steps (move, close, lift)");
+                Assert.AreEqual(
+                    3,
+                    pickResult.total_commands,
+                    "Pick should have 3 steps (move, close, lift)"
+                );
             }
 
             yield return new WaitForSeconds(1f);
@@ -416,7 +474,11 @@ namespace Tests.PlayMode
             if (placeResult != null)
             {
                 Assert.IsNotNull(placeResult, "Should receive place result");
-                Assert.AreEqual(3, placeResult.total_commands, "Place should have 3 steps (move, open, lift)");
+                Assert.AreEqual(
+                    3,
+                    placeResult.total_commands,
+                    "Place should have 3 steps (move, open, lift)"
+                );
             }
         }
 
@@ -456,10 +518,6 @@ namespace Tests.PlayMode
             }
         }
 
-        #endregion
-
-        #region Error Handling Tests
-
         [Test]
         public void SequenceResult_WithError_StoresErrorMessage()
         {
@@ -468,7 +526,7 @@ namespace Tests.PlayMode
                 success = false,
                 error = "Robot not found: TestRobot",
                 total_commands = 1,
-                completed_commands = 0
+                completed_commands = 0,
             };
 
             Assert.IsFalse(result.success, "Result should be marked as failed");
@@ -484,12 +542,16 @@ namespace Tests.PlayMode
                 index = 0,
                 operation = "move_to_coordinate",
                 success = false,
-                error = "Target position unreachable"
+                error = "Target position unreachable",
             };
 
             Assert.IsFalse(result.success, "Command should be marked as failed");
             Assert.IsNotNull(result.error, "Error message should be stored");
-            Assert.AreEqual("Target position unreachable", result.error, "Error message should match");
+            Assert.AreEqual(
+                "Target position unreachable",
+                result.error,
+                "Error message should match"
+            );
         }
 
         [Test]
@@ -504,8 +566,13 @@ namespace Tests.PlayMode
                 {
                     new CommandResult { index = 0, success = true },
                     new CommandResult { index = 1, success = true },
-                    new CommandResult { index = 2, success = false, error = "Gripper jam" }
-                }
+                    new CommandResult
+                    {
+                        index = 2,
+                        success = false,
+                        error = "Gripper jam",
+                    },
+                },
             };
 
             Assert.IsFalse(result.success, "Overall sequence should fail");
@@ -513,15 +580,18 @@ namespace Tests.PlayMode
             Assert.IsFalse(result.results[2].success, "Third command should be marked as failed");
         }
 
-        #endregion
-
-        #region Recent Commands Tracking Tests
-
         [Test]
         public void RecentCommands_InitiallyEmpty()
         {
-            Assert.IsNotNull(_sequenceClient.RecentCommands, "RecentCommands should be initialized");
-            Assert.AreEqual(0, _sequenceClient.RecentCommands.Count, "RecentCommands should start empty");
+            Assert.IsNotNull(
+                _sequenceClient.RecentCommands,
+                "RecentCommands should be initialized"
+            );
+            Assert.AreEqual(
+                0,
+                _sequenceClient.RecentCommands.Count,
+                "RecentCommands should start empty"
+            );
         }
 
         [Test]
@@ -531,10 +601,6 @@ namespace Tests.PlayMode
             _sequenceClient.ClearPrompt();
             Assert.AreEqual("", _sequenceClient.Prompt, "Prompt should be cleared");
         }
-
-        #endregion
-
-        #region Mock Operation Tests (Unit Testing Without Backend)
 
         [Test]
         public void MockOperation_DetectObject_ReturnsExpectedStructure()
@@ -554,14 +620,18 @@ namespace Tests.PlayMode
                         index = 0,
                         operation = "detect_object",
                         success = true,
-                        duration_ms = 150f
-                    }
+                        duration_ms = 150f,
+                    },
                 },
-                total_duration_ms = 150f
+                total_duration_ms = 150f,
             };
 
             Assert.IsTrue(mockResult.success, "Mock detect should succeed");
-            Assert.AreEqual("detect_object", mockResult.results[0].operation, "Operation should be detect_object");
+            Assert.AreEqual(
+                "detect_object",
+                mockResult.results[0].operation,
+                "Operation should be detect_object"
+            );
         }
 
         [Test]
@@ -581,13 +651,17 @@ namespace Tests.PlayMode
                         index = 0,
                         operation = "move_to_coordinate",
                         success = true,
-                        duration_ms = 2500f
-                    }
-                }
+                        duration_ms = 2500f,
+                    },
+                },
             };
 
             Assert.IsTrue(mockResult.success, "Mock move should succeed");
-            Assert.AreEqual("move_to_coordinate", mockResult.results[0].operation, "Operation should be move_to_coordinate");
+            Assert.AreEqual(
+                "move_to_coordinate",
+                mockResult.results[0].operation,
+                "Operation should be move_to_coordinate"
+            );
         }
 
         [Test]
@@ -607,15 +681,17 @@ namespace Tests.PlayMode
                         index = 0,
                         operation = "control_gripper",
                         success = true,
-                        duration_ms = 500f
-                    }
-                }
+                        duration_ms = 500f,
+                    },
+                },
             };
 
             Assert.IsTrue(mockResult.success, "Mock gripper control should succeed");
-            Assert.AreEqual("control_gripper", mockResult.results[0].operation, "Operation should be control_gripper");
+            Assert.AreEqual(
+                "control_gripper",
+                mockResult.results[0].operation,
+                "Operation should be control_gripper"
+            );
         }
-
-        #endregion
     }
 }

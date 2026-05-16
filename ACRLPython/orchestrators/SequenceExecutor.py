@@ -40,11 +40,9 @@ except ImportError:
     from core.Imports import get_world_state
     from config.Servers import REFLEXION_ENABLED, REFLEXION_MAX_RETRIES
 
-# Configure logging with safe handler for background threads
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Import pytest-safe logging helpers from LoggingSetup
 try:
     from ..core.LoggingSetup import _safe_log, _make_handler_safe
 except ImportError:
@@ -67,7 +65,9 @@ def _extract_waypoint_from_verification(
     resolution_suggestions list.  Returns the first match as a float tuple, or None.
     """
     details = verification_result.get("details", {})
-    coord_check = details.get("coordination_check", {}) if isinstance(details, dict) else {}
+    coord_check = (
+        details.get("coordination_check", {}) if isinstance(details, dict) else {}
+    )
     issues = coord_check.get("issues", []) if isinstance(coord_check, dict) else []
     for issue in issues:
         for suggestion in issue.get("resolution_suggestions", []):
@@ -177,7 +177,6 @@ class SequenceExecutor:
             check_completion: Whether to check for operation completion via StatusServer
             enable_verification: Whether to enable formal verification (preconditions/postconditions)
         """
-        # Import from centralized lazy import system (prevents circular dependencies)
         from core.Imports import get_global_registry
 
         self.registry = get_global_registry()
@@ -194,7 +193,6 @@ class SequenceExecutor:
         # Operation metrics — delegated to nested _MetricsTracker
         self._metrics = self._MetricsTracker()
 
-        # Initialize verification components
         if enable_verification:
             self.verifier = OperationVerifier()
             self.coordination_verifier = CoordinationVerifier()
@@ -319,7 +317,8 @@ class SequenceExecutor:
                         if _var_name not in self._variables:
                             logger.warning(
                                 "Pre-exec: param '%s' references $%s which is not yet captured",
-                                _k, _var_name,
+                                _k,
+                                _var_name,
                             )
 
                 # Resolve variable references in params (manual $ references)
@@ -784,7 +783,11 @@ class SequenceExecutor:
         self._metrics.reset()
 
     def _execute_single_command(
-        self, operation: str, params: Dict[str, Any], timeout: float, _replan_depth: int = 0
+        self,
+        operation: str,
+        params: Dict[str, Any],
+        timeout: float,
+        _replan_depth: int = 0,
     ) -> Dict[str, Any]:
         """
         Execute a single command and wait for completion.
@@ -851,8 +854,12 @@ class SequenceExecutor:
                         )
                         if wp_result.success:
                             # Waypoint dispatched — retry original command (no further replanning)
-                            return self._execute_single_command(operation, params, timeout, _replan_depth=1)
-                        logger.warning("Waypoint move failed — aborting original command")
+                            return self._execute_single_command(
+                                operation, params, timeout, _replan_depth=1
+                            )
+                        logger.warning(
+                            "Waypoint move failed — aborting original command"
+                        )
                     _result = {
                         "success": False,
                         "result": None,
@@ -1021,7 +1028,9 @@ class SequenceExecutor:
 
             # Detect mid-execution proximity freeze reported by Unity
             if self.world_state is not None:
-                for robot_id, robot_state in list(self.world_state._robot_states.items()):
+                for robot_id, robot_state in list(
+                    self.world_state._robot_states.items()
+                ):
                     if getattr(robot_state, "proximity_frozen", False):
                         logger.warning(
                             f"Robot {robot_id} frozen by proximity mid-execution of {operation}"
@@ -1417,7 +1426,7 @@ class SequenceExecutor:
         op_def = self.registry.get_operation_by_name(operation_name)
         if not op_def:
             return params
-        relationships = getattr(op_def, 'relationships', None)
+        relationships = getattr(op_def, "relationships", None)
         if not relationships:
             return params
 

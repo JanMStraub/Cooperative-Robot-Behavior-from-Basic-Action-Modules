@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for config modules
-
-Tests configuration constants from the modular config system:
-- config/Servers.py - Network, ports, LLM settings, logging
-- config/Vision.py - Image processing, detection, stereo
-- config/Rag.py - RAG system settings
-- config/Robot.py - Multi-robot coordination
-"""
+"""Unit tests for config modules"""
 
 import os
 

@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 """
-ROS Integration Configuration
-==============================
-
 Central configuration for ROS 2 / MoveIt integration.
 Controls whether the Python backend routes motion commands through ROS or
 the existing TCP path to Unity.

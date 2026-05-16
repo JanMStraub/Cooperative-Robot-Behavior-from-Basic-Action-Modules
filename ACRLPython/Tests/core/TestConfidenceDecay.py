@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test suite for object confidence decay and liveness tracking.
-
-Tests the WorldState confidence decay mechanism, including:
-- Confidence decay when objects disappear from detection
-- TTL-based cleanup of stale objects
-- Flicker scenarios (objects appearing/disappearing/reappearing)
-- Staleness threshold marking
-"""
+"""Test suite for object confidence decay and liveness tracking"""
 
 import unittest
 import time
@@ -25,7 +17,6 @@ _CONFIDENCE_TOL = 1e-9
 
 
 class TestConfidenceDecay(unittest.TestCase):
-    """Test confidence decay and liveness tracking."""
 
     def setUp(self):
         """Reset world state before each test."""
@@ -48,7 +39,6 @@ class TestConfidenceDecay(unittest.TestCase):
         self.assertFalse(obj.stale)
 
     def test_confidence_decay_on_miss(self):
-        """Test that missing objects have confidence decayed."""
         # Register an object
         self.world_state.register_object("obj1", position=(0.1, 0.2, 0.3))
 
@@ -124,7 +114,6 @@ class TestConfidenceDecay(unittest.TestCase):
         self.assertNotIn("obj1", self.world_state._objects)
 
     def test_ttl_not_expired_stays(self):
-        """Test that objects within TTL are not deleted."""
         # Register an object
         self.world_state.register_object("obj1", position=(0.1, 0.2, 0.3))
 
@@ -161,7 +150,6 @@ class TestConfidenceDecay(unittest.TestCase):
         self.assertFalse(obj.stale, "Should not be stale")
 
     def test_multiple_objects_independent_decay(self):
-        """Test that multiple objects decay independently."""
         # Register two objects
         self.world_state.register_object("obj1", position=(0.1, 0.2, 0.3))
         self.world_state.register_object("obj2", position=(0.4, 0.5, 0.6))
@@ -197,7 +185,6 @@ class TestConfidenceDecay(unittest.TestCase):
         self.assertTrue(obj.stale, "Below threshold should be stale")
 
     def test_rapid_updates_preserve_liveness(self):
-        """Test that rapid detection updates keep object alive."""
         # Register object
         self.world_state.register_object("obj1", position=(0.1, 0.2, 0.3))
 
@@ -212,7 +199,6 @@ class TestConfidenceDecay(unittest.TestCase):
         self.assertIn("obj1", self.world_state._objects)
 
     def test_last_seen_timestamp_updated(self):
-        """Test that last_seen timestamp is updated on detection."""
         # Register object
         self.world_state.register_object("obj1", position=(0.1, 0.2, 0.3))
 
@@ -230,7 +216,6 @@ class TestConfidenceDecay(unittest.TestCase):
         self.assertGreater(new_last_seen, initial_last_seen)
 
     def test_empty_seen_set(self):
-        """Test decay with empty seen set (no detections)."""
         # Register multiple objects
         self.world_state.register_object("obj1", position=(0.1, 0.2, 0.3))
         self.world_state.register_object("obj2", position=(0.4, 0.5, 0.6))
@@ -243,7 +228,6 @@ class TestConfidenceDecay(unittest.TestCase):
             self.assertAlmostEqual(obj.confidence, 1.0 - CONFIDENCE_DECAY_PER_FRAME)
 
     def test_all_objects_seen(self):
-        """Test decay when all objects are detected."""
         # Register multiple objects
         self.world_state.register_object("obj1", position=(0.1, 0.2, 0.3))
         self.world_state.register_object("obj2", position=(0.4, 0.5, 0.6))

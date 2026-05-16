@@ -20,13 +20,7 @@ def quaternion_from_euler(
 
     Uses the ZYX convention (yaw-pitch-roll) to match Unity's Quaternion.Euler behavior.
 
-    Args:
-        roll: Rotation around X-axis (radians)
-        pitch: Rotation around Y-axis (radians)
-        yaw: Rotation around Z-axis (radians)
 
-    Returns:
-        Quaternion as (x, y, z, w) tuple
     """
     cy = np.cos(yaw * 0.5)
     sy = np.sin(yaw * 0.5)
@@ -52,11 +46,7 @@ def euler_from_quaternion(
 
     Returns Euler angles in ZYX convention (yaw-pitch-roll) to match Unity.
 
-    Args:
-        x, y, z, w: Quaternion components
 
-    Returns:
-        Tuple of (roll, pitch, yaw) in radians
     """
     # Roll (x-axis rotation)
     sinr_cosp = 2.0 * (w * x + y * z)
@@ -87,12 +77,7 @@ def quaternion_multiply(
     Performs Hamilton product: q1 * q2. The order matters - this represents
     applying q2 first, then q1 (like matrix multiplication).
 
-    Args:
-        q1: First quaternion (x, y, z, w)
-        q2: Second quaternion (x, y, z, w)
 
-    Returns:
-        Resulting quaternion (x, y, z, w)
     """
     x1, y1, z1, w1 = q1
     x2, y2, z2, w2 = q2
@@ -114,12 +99,7 @@ def quaternion_rotate_vector(
     Uses the formula: v' = q * v * q^(-1)
     Optimized implementation avoids explicit quaternion multiplication.
 
-    Args:
-        quat: Rotation quaternion (x, y, z, w)
-        vec: 3D vector as numpy array [x, y, z]
 
-    Returns:
-        Rotated vector as numpy array [x, y, z]
     """
     x, y, z, w = quat
 
@@ -142,12 +122,7 @@ def quaternion_angle(
 
     Returns the minimum angle needed to rotate from q1 to q2.
 
-    Args:
-        q1: First quaternion (x, y, z, w)
-        q2: Second quaternion (x, y, z, w)
 
-    Returns:
-        Angle in degrees [0, 180]
     """
     # Normalize quaternions
     q1_norm = np.array(q1) / np.linalg.norm(q1)
@@ -175,11 +150,7 @@ def quaternion_inverse(
     For a unit quaternion, the inverse equals the conjugate: (x, y, z, w)^(-1) = (-x, -y, -z, w)
     This function assumes the input is a unit quaternion (or normalizes it).
 
-    Args:
-        quat: Quaternion (x, y, z, w)
 
-    Returns:
-        Inverse quaternion (x, y, z, w)
     """
     x, y, z, w = quat
 
@@ -201,11 +172,7 @@ def quaternion_normalize(
     """
     Normalize a quaternion to unit length.
 
-    Args:
-        quat: Quaternion (x, y, z, w)
 
-    Returns:
-        Normalized quaternion (x, y, z, w)
     """
     x, y, z, w = quat
     norm = np.sqrt(x * x + y * y + z * z + w * w)
@@ -221,8 +188,6 @@ def quaternion_identity() -> Tuple[float, float, float, float]:
     """
     Return the identity quaternion (no rotation).
 
-    Returns:
-        Identity quaternion (0, 0, 0, 1)
     """
     return (0.0, 0.0, 0.0, 1.0)
 
@@ -233,12 +198,7 @@ def quaternion_from_axis_angle(
     """
     Create a quaternion from an axis-angle representation.
 
-    Args:
-        axis: 3D rotation axis (will be normalized)
-        angle_rad: Rotation angle in radians
 
-    Returns:
-        Quaternion (x, y, z, w)
     """
     # Normalize axis — guard against zero-length axis
     norm = np.linalg.norm(axis)

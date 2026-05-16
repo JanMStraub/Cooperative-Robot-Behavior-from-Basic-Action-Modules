@@ -18,9 +18,6 @@ namespace PythonCommunication
         /// </summary>
         public string rawJson;
 
-        /// <summary>
-        /// Request ID for Protocol V2 correlation
-        /// </summary>
         public uint request_id;
     }
 
@@ -45,21 +42,12 @@ namespace PythonCommunication
 
         protected override string LogPrefix => "[RESULTS_CLIENT]";
 
-        #region Initialization
-
-        /// <summary>
-        /// Initialize the client and set the port
-        /// </summary>
         protected override void Awake()
         {
             base.Awake();
             _serverPort = CommunicationConstants.COMMAND_SERVER_PORT;
             _autoConnect = true; // Auto-connect on start
         }
-
-        #endregion
-
-        #region Protocol V2 Implementation
 
         /// <summary>
         /// Receive and decode a result message from the stream.
@@ -102,9 +90,6 @@ namespace PythonCommunication
             return new GenericResult { rawJson = json, request_id = requestId };
         }
 
-        /// <summary>
-        /// Extract request_id from response for correlation
-        /// </summary>
         protected override uint GetResponseRequestId(GenericResult response)
         {
             return response?.request_id ?? 0;
@@ -134,10 +119,6 @@ namespace PythonCommunication
                 Debug.LogError($"{LogPrefix} Error in OnJsonReceived handler: {ex.Message}");
             }
         }
-
-        #endregion
-
-        #region Sending Completions
 
         /// <summary>
         /// Send a completion message back to Python on the same connection.
@@ -177,18 +158,9 @@ namespace PythonCommunication
             }
         }
 
-        #endregion
-
-        #region Public API
-
-        /// <summary>
-        /// Enable or disable verbose logging at runtime
-        /// </summary>
         public void SetVerboseLogging(bool verbose)
         {
             _verboseLogging = verbose;
         }
-
-        #endregion
     }
 }

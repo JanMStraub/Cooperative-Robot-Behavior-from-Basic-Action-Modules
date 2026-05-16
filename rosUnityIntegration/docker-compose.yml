@@ -20,48 +20,48 @@ services:
       "
 
   ros_tcp_endpoint:
-      <<: *ros-base
-      container_name: acrl_ros_endpoint
-      ports:
-        - "10000:10000"
-      command: >
-        /bin/bash -c "
-          source /opt/ros/humble/setup.bash &&
-          source /ros_ws/install/setup.bash &&
-          ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=0.0.0.0
-        "
+    <<: *ros-base
+    container_name: acrl_ros_endpoint
+    ports:
+      - "10000:10000"
+    command: >
+      /bin/bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=0.0.0.0
+      "
 
   # Robot1 MoveIt instance
   moveit_robot1:
-      <<: *ros-base
-      container_name: acrl_moveit_robot1
-      depends_on:
-        - robot_state_publisher_robot1
-      volumes:
-        - ./ar4_moveit_config/config:/ros_ws/src/ar4_moveit_config/config
-      command: >
-        /bin/bash -c "
-          sleep 15 &&
-          source /opt/ros/humble/setup.bash &&
-          source /ros_ws/install/setup.bash &&
-          ros2 launch ar4_moveit_config move_group.launch.py robot_id:=Robot1 use_sim_time:=false
-        "
+    <<: *ros-base
+    container_name: acrl_moveit_robot1
+    depends_on:
+      - robot_state_publisher_robot1
+    volumes:
+      - ./ar4_moveit_config/config:/ros_ws/src/ar4_moveit_config/config
+    command: >
+      /bin/bash -c "
+        sleep 15 &&
+        source /opt/ros/humble/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        ros2 launch ar4_moveit_config move_group.launch.py robot_id:=Robot1 use_sim_time:=false
+      "
 
   # Robot2 MoveIt instance
   moveit_robot2:
-      <<: *ros-base
-      container_name: acrl_moveit_robot2
-      depends_on:
-        - robot_state_publisher_robot2
-      volumes:
-        - ./ar4_moveit_config/config:/ros_ws/src/ar4_moveit_config/config
-      command: >
-        /bin/bash -c "
-          sleep 15 &&
-          source /opt/ros/humble/setup.bash &&
-          source /ros_ws/install/setup.bash &&
-          ros2 launch ar4_moveit_config move_group.launch.py robot_id:=Robot2 use_sim_time:=false
-        "
+    <<: *ros-base
+    container_name: acrl_moveit_robot2
+    depends_on:
+      - robot_state_publisher_robot2
+    volumes:
+      - ./ar4_moveit_config/config:/ros_ws/src/ar4_moveit_config/config
+    command: >
+      /bin/bash -c "
+        sleep 15 &&
+        source /opt/ros/humble/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        ros2 launch ar4_moveit_config move_group.launch.py robot_id:=Robot2 use_sim_time:=false
+      "
 
   # Robot1 state publisher
   robot_state_publisher_robot1:

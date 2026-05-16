@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Knowledge Graph Schema Definitions
-===================================
-
-Dataclass models for graph nodes. Uses Python dataclasses (not Pydantic)
-to avoid adding dependencies.
-
-Node Types:
-- RobotNode: Represents a robot with position, workspace, gripper state
-- ObjectNode: Represents a detected object with liveness tracking
-- RegionNode: Represents a workspace region with allocation info
-"""
+"""Dataclass node models for the knowledge graph (no Pydantic dependency)."""
 
 import time
 from dataclasses import dataclass, field
@@ -19,19 +8,6 @@ from typing import Optional, Tuple
 
 @dataclass
 class RobotNode:
-    """
-    Robot node in knowledge graph.
-
-    Attributes:
-        node_id: Unique node identifier (e.g., "Robot1")
-        node_type: Always "robot"
-        position: End effector position (x, y, z) in world coordinates
-        workspace_region: Current workspace region (e.g., "left_workspace")
-        gripper_state: "open", "closed", or "unknown"
-        is_moving: True if robot is currently moving
-        confidence: Detection/tracking confidence (0.0 - 1.0)
-        timestamp: Time of last update
-    """
 
     node_id: str
     node_type: str = "robot"
@@ -43,7 +19,6 @@ class RobotNode:
     timestamp: float = field(default_factory=time.time)
 
     def to_dict(self):
-        """Convert to dictionary for NetworkX node attributes."""
         return {
             "node_type": self.node_type,
             "position": self.position,
@@ -57,21 +32,6 @@ class RobotNode:
 
 @dataclass
 class ObjectNode:
-    """
-    Object node in knowledge graph.
-
-    Attributes:
-        node_id: Unique node identifier (e.g., "RedCube")
-        node_type: Always "object"
-        position: Object position (x, y, z) in world coordinates
-        color: Object color (e.g., "red", "blue")
-        object_type: Object type (e.g., "cube", "sphere")
-        is_graspable: True if object can be grasped
-        grasped_by: Robot ID if currently grasped, None otherwise
-        confidence: Detection confidence (0.0 - 1.0)
-        stale: True if confidence < threshold (not seen recently)
-        timestamp: Time of last detection
-    """
 
     node_id: str
     node_type: str = "object"
@@ -85,7 +45,6 @@ class ObjectNode:
     timestamp: float = field(default_factory=time.time)
 
     def to_dict(self):
-        """Convert to dictionary for NetworkX node attributes."""
         return {
             "node_type": self.node_type,
             "position": self.position,
@@ -101,15 +60,6 @@ class ObjectNode:
 
 @dataclass
 class RegionNode:
-    """
-    Workspace region node in knowledge graph.
-
-    Attributes:
-        node_id: Unique node identifier (e.g., "left_workspace")
-        node_type: Always "region"
-        bounds: Dictionary with x_min, x_max, y_min, y_max, z_min, z_max
-        allocated_to: Robot ID if region is allocated, None otherwise
-    """
 
     node_id: str
     node_type: str = "region"
@@ -117,7 +67,6 @@ class RegionNode:
     allocated_to: Optional[str] = None
 
     def to_dict(self):
-        """Convert to dictionary for NetworkX node attributes."""
         return {
             "node_type": self.node_type,
             "bounds": self.bounds,

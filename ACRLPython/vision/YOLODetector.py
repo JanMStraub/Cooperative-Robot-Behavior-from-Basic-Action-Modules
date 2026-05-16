@@ -1,49 +1,5 @@
 #!/usr/bin/env python3
-"""
-YOLODetector.py - YOLO-based object detection for robot vision
-
-Uses YOLOv8 for robust ML-based object detection.
-Designed as drop-in replacement for HSV-based CubeDetector.
-
-Supports detection of 16+ object classes including:
-- Cubes: red_cube, blue_cube
-- Field markers: Field_a, Field_b, Field_c (or field_a, field_b, field_c)
-- Robot parts: Robot, Plate, Base, Shoulder, Elbow, Wrist1, Wrist2
-- Gripper components: Gripper_Joint, Gripper_Base, Gripper_Jaw_Left, Gripper_Jaw_Right
-
-Note: Both lowercase_underscore and PascalCase naming conventions are supported
-for compatibility with different model training configurations.
-
-Features:
-- Automatic class name extraction from model metadata
-- Class filtering to detect only specific object types
-- Stereo depth estimation for 3D world positions
-- Debug visualization with automatic color generation
-- ONNX and PyTorch model support
-
-Usage:
-    # Basic detection (IMPORTANT: specify task='detect' for ONNX models)
-    detector = YOLODetector(
-        model_path="models/robot_detector.onnx",
-        task='detect'  # Fixes ONNX warning
-    )
-    result = detector.detect_objects(image, camera_id="AR4Left")
-
-    # Filtered detection (class names depend on model training)
-    result = detector.detect_objects(
-        image,
-        filter_classes=['red_cube', 'blue_cube']  # or ['Red_Cube', 'Blue_Cube']
-    )
-
-    # Filter robot parts
-    result = detector.detect_objects(
-        image,
-        filter_classes=['Robot', 'Base', 'Shoulder']  # PascalCase convention
-    )
-
-    # Stereo mode with 3D positions
-    result = detector.detect_objects_stereo(imgL, imgR, camera_config)
-"""
+"""YOLOv8-based object detector. Drop-in replacement for HSV-based CubeDetector. Supports ONNX/PyTorch, stereo depth, class filtering."""
 
 import logging
 import math
@@ -64,7 +20,6 @@ except ImportError:
     YOLO_AVAILABLE = False
     YOLO = None  # type: ignore
 
-# Import config
 try:
     from config.Vision import (
         YOLO_CONFIDENCE_THRESHOLD,
@@ -98,13 +53,11 @@ except ImportError:
         DEPTH_SAMPLE_INNER_PERCENT,
     )
 
-# Import detection data models from shared module
 try:
     from .DetectionDataModels import DetectionObject, DetectionResult
 except ImportError:
     from vision.DetectionDataModels import DetectionObject, DetectionResult
 
-# Import stereo depth estimation if available
 try:
     try:
         from .StereoConfig import CameraConfig, DEFAULT_CAMERA_CONFIG
@@ -135,43 +88,7 @@ except ImportError:
 
 
 class YOLODetector:
-    """
-    YOLO-based object detector for robot vision system
-
-    Supports detection of 16+ object classes using YOLOv8, including cubes,
-    field markers, robot parts, and gripper components.
-
-    Compatible with CubeDetector interface for drop-in replacement.
-
-    Key Features:
-    - ONNX and PyTorch (.pt) model support
-    - Automatic class name extraction from model metadata
-    - Class filtering to detect only specific object types
-    - Stereo depth estimation for 3D world positions
-    - Debug visualization with 16+ predefined colors
-    - Explicit task parameter to avoid ONNX warnings
-
-    Example:
-        # Basic usage with ONNX model
-        detector = YOLODetector(
-            model_path="models/robot_detector.onnx",
-            task='detect'  # Avoids ONNX warning
-        )
-
-        # Detect all objects
-        result = detector.detect_objects(image)
-
-        # Filter by class (class names depend on model training)
-        result = detector.detect_objects(
-            image,
-            filter_classes=['red_cube', 'blue_cube']  # lowercase convention
-        )
-        # or
-        result = detector.detect_objects(
-            image,
-            filter_classes=['Robot', 'Base', 'Shoulder']  # PascalCase convention
-        )
-    """
+    """YOLO-based object detector. Supports ONNX/PyTorch, class filtering, stereo depth."""
 
     # Class name mapping for all detected object types.
     # Mirrors the class list embedded in field_detector.onnx (the authoritative source).
@@ -200,42 +117,14 @@ class YOLODetector:
         self,
         model_path: Optional[str] = None,
         class_mapping: Optional[dict] = None,
-        task: str = "detect",  # Maybe use segment for object boundaries
+        task: str = "detect",  # Specify explicitly for ONNX models to avoid "Unable to guess task" warning
     ):
-        """
-        Initialize YOLO detector for robot vision system
-
-        IMPORTANT: Always specify task='detect' when using ONNX models to avoid
-        the "Unable to automatically guess model task" warning.
-
-        Args:
-            model_path: Path to YOLO model file (.pt or .onnx)
-                       If None, uses pretrained YOLOv8n (for testing only, not for robot detection)
-                       Recommended: "models/robot_detector.onnx" trained on cube_dataset.yaml
-            class_mapping: Dict mapping YOLO class IDs to class names (optional)
-                          If None, automatically extracts from model metadata or uses DEFAULT_CLASS_MAPPING
-                          Example: {0: "red_cube", 1: "blue_cube", ...}
-            task: YOLO task type ('detect', 'segment', 'classify', 'pose', 'obb')
-                 Default: 'detect' - for object detection (bounding boxes)
-                 MUST be specified for ONNX models to avoid warning
-
-        Raises:
-            ImportError: If ultralytics YOLO package is not installed
-            Exception: If model file cannot be loaded
-
-        Example:
-            detector = YOLODetector(
-                model_path="models/robot_detector.onnx",
-                task='detect'  # Fixes ONNX warning
-            )
-        """
         if not YOLO_AVAILABLE:
             raise ImportError(
                 "YOLO not available. Install with: "
                 "pip install ultralytics torch torchvision"
             )
 
-        # Load YOLO model
         if model_path is None:
             # Use pretrained model for testing (will detect common objects, not robot/cubes)
             logging.warning(
@@ -252,11 +141,9 @@ class YOLODetector:
             if YOLO is None:
                 raise ImportError("YOLO not available")
 
-            # Load model with explicit task to avoid ONNX warning
             self.model = YOLO(str(self.model_path), task=task)
             logging.debug(f"YOLO model loaded successfully")
 
-            # Try to extract class names from model metadata
             if hasattr(self.model, "names") and self.model.names:
                 model_classes = self.model.names
                 logging.debug(
@@ -269,10 +156,6 @@ class YOLODetector:
             logging.error(f"Failed to load YOLO model: {e}")
             raise
 
-        # Set class mapping priority:
-        # 1. User-provided class_mapping (highest priority)
-        # 2. Model metadata names
-        # 3. DEFAULT_CLASS_MAPPING (fallback)
         if class_mapping is not None:
             self.class_mapping = class_mapping
             logging.debug(
@@ -289,19 +172,16 @@ class YOLODetector:
                 f"Using default class mapping: {list(self.DEFAULT_CLASS_MAPPING.values())}"
             )
 
-        # Detection thresholds
         self.conf_threshold = YOLO_CONFIDENCE_THRESHOLD
         self.iou_threshold = YOLO_IOU_THRESHOLD
         self.min_area = MIN_CUBE_AREA_PX
         self.max_area = MAX_CUBE_AREA_PX
 
-        # Debug settings
         self.enable_debug = ENABLE_DEBUG_IMAGES
         if self.enable_debug:
             self.debug_dir = Path(DEBUG_IMAGES_DIR)
             self.debug_dir.mkdir(parents=True, exist_ok=True)
 
-        # Log initialization summary
         num_classes = len(self.class_mapping)
         class_names = (
             list(self.class_mapping.values())
@@ -316,15 +196,6 @@ class YOLODetector:
         )
 
     def get_class_name(self, class_id: int) -> str:
-        """
-        Get class name for a given class ID
-
-        Args:
-            class_id: YOLO class ID
-
-        Returns:
-            Class name string
-        """
         if isinstance(self.class_mapping, dict):
             return self.class_mapping.get(class_id, f"unknown_{class_id}")
         else:
@@ -335,12 +206,6 @@ class YOLODetector:
                 return f"unknown_{class_id}"
 
     def get_all_class_names(self) -> list:
-        """
-        Get list of all class names
-
-        Returns:
-            List of class name strings
-        """
         if isinstance(self.class_mapping, dict):
             return list(self.class_mapping.values())
         else:
@@ -352,56 +217,12 @@ class YOLODetector:
         camera_id: str = "unknown",
         filter_classes: Optional[List[str]] = None,
     ) -> DetectionResult:
-        """
-        Detect objects in an image using YOLO
-
-        Detects all configured object classes (cubes, robot parts, field markers, etc.)
-        or filters to specific classes if filter_classes is provided.
-
-        Args:
-            image: OpenCV image (BGR format, typically 640x480 or higher)
-            camera_id: ID of the camera for metadata and logging
-            filter_classes: Optional list of class names to filter detections
-                          If None, returns all detected objects
-                          If specified, only returns objects matching these class names
-                          Example: ['red_cube', 'blue_cube'] - only detect cubes
-                          Example: ['robot', 'base', 'shoulder'] - only detect robot parts
-
-        Returns:
-            DetectionResult containing all detected objects with:
-            - camera_id: Camera identifier
-            - image_width, image_height: Image dimensions
-            - detections: List of DetectionObject instances with:
-                - object_id: Unique ID within this frame
-                - color: Class name (e.g., "red_cube", "robot", "base")
-                - bbox: Bounding box (x, y, width, height) in pixels
-                - confidence: Detection confidence (0.0-1.0)
-                - center_x, center_y: Center point in pixels
-
-        Example:
-            # Detect all objects
-            result = detector.detect_objects(image, camera_id="AR4Left")
-
-            # Detect only cubes
-            result = detector.detect_objects(
-                image,
-                camera_id="AR4Left",
-                filter_classes=['red_cube', 'blue_cube']
-            )
-
-            # Detect only robot parts
-            result = detector.detect_objects(
-                image,
-                filter_classes=['Robot', 'Base', 'Shoulder', 'Elbow']
-            )
-        """
         if image is None or image.size == 0:
             logging.warning("Empty image provided to YOLO detector")
             return DetectionResult(camera_id, 0, 0, [])
 
         height, width = image.shape[:2]
 
-        # Run YOLO inference
         try:
             results = self.model.predict(
                 image,
@@ -413,7 +234,6 @@ class YOLODetector:
             logging.error(f"YOLO inference failed: {e}")
             return DetectionResult(camera_id, width, height, [])
 
-        # Parse YOLO results
         detections = []
         object_id = 0
 
@@ -482,7 +302,6 @@ class YOLODetector:
                     f"- confidence: {confidence:.3f}, area: {area}px"
                 )
 
-        # Save debug image if enabled
         if self.enable_debug:
             self._save_debug_image(image, detections, camera_id)
 
@@ -500,52 +319,6 @@ class YOLODetector:
         camera_position: Optional[List[float]] = None,
         filter_classes: Optional[List[str]] = None,
     ) -> DetectionResult:
-        """
-        Detect objects in stereo images and estimate 3D world positions using YOLO
-
-        Performs object detection on left camera image, then uses stereo disparity
-        to compute 3D world coordinates for each detected object.
-
-        Args:
-            imgL: Left camera image (BGR format, must match imgR dimensions)
-            imgR: Right camera image (BGR format, must match imgL dimensions)
-            camera_config: Camera calibration parameters (baseline, FOV, etc.)
-                          If None, uses DEFAULT_CAMERA_CONFIG
-            camera_id: ID of the camera for metadata and logging
-            camera_rotation: Camera rotation [pitch, yaw, roll] in degrees (optional)
-                           Used to transform from camera space to world space
-            camera_position: Camera position [x, y, z] in world space (optional)
-                           Used to transform from camera space to world space
-            filter_classes: Optional list of class names to filter detections
-                          If None, returns all detected objects
-                          Example: ['red_cube', 'blue_cube'] - only detect cubes
-                          Example: ['robot', 'base'] - only detect robot parts
-
-        Returns:
-            DetectionResult containing detected objects with 3D world positions:
-            - Each detection includes:
-                - All 2D fields from detect_objects()
-                - world_position: (x, y, z) in meters (world coordinates)
-                - depth_m: Distance from camera in meters
-                - disparity: Disparity value in pixels
-
-        Example:
-            # Detect all objects with 3D positions
-            result = detector.detect_objects_stereo(imgL, imgR, camera_config)
-
-            # Detect only cubes with 3D positions
-            result = detector.detect_objects_stereo(
-                imgL, imgR,
-                camera_config=camera_config,
-                filter_classes=['red_cube', 'blue_cube']
-            )
-
-            # Access 3D positions
-            for det in result.detections:
-                if det.world_position:
-                    x, y, z = det.world_position
-                    print(f"{det.color}: ({x:.3f}, {y:.3f}, {z:.3f})m")
-        """
         if not STEREO_AVAILABLE:
             logging.error(
                 "Stereo depth estimation not available - missing dependencies"
@@ -571,23 +344,19 @@ class YOLODetector:
                 logging.error("No camera config available")
                 return DetectionResult(camera_id, 0, 0, [])
 
-        # Stereo validation: Detect in both images and match (optional)
         enable_stereo_validation = ENABLE_STEREO_VALIDATION
 
         if enable_stereo_validation:
             logging.debug("Stereo validation enabled - detecting in both L/R images")
 
-            # Detect in left image
             detection_result_left = self.detect_objects(
                 imgL, camera_id=camera_id + "_L", filter_classes=filter_classes
             )
 
-            # Detect in right image
             detection_result_right = self.detect_objects(
                 imgR, camera_id=camera_id + "_R", filter_classes=filter_classes
             )
 
-            # Match detections between left and right
             max_y_diff = STEREO_MAX_Y_DIFF
             max_size_ratio = STEREO_MAX_SIZE_RATIO
             min_iou = STEREO_MIN_IOU
@@ -600,7 +369,6 @@ class YOLODetector:
                 min_iou=min_iou,
             )
 
-            # Use only validated detections (left image detections that matched right)
             validated_detections = [pair[0] for pair in matched_pairs]
             detection_result = DetectionResult(
                 camera_id,
@@ -615,22 +383,18 @@ class YOLODetector:
                 f"{len(validated_detections)} validated"
             )
         else:
-            # Standard mode: detect only in left image
             detection_result = self.detect_objects(
                 imgL, camera_id=camera_id, filter_classes=filter_classes
             )
 
-        # If no detections, return early
         if len(detection_result.detections) == 0:
             logging.info("No objects detected in stereo images")
             return detection_result
 
-        # Compute disparity map once for all detections (major performance optimization)
         logging.debug(
             f"Computing disparity map for {len(detection_result.detections)} detections"
         )
 
-        # Convert to grayscale if needed
         imgL_gray = (
             cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY) if len(imgL.shape) == 3 else imgL
         )
@@ -638,10 +402,8 @@ class YOLODetector:
             cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY) if len(imgR.shape) == 3 else imgR
         )
 
-        # Compute disparity map using default reconstruction config (or adaptive preset)
         from .StereoConfig import DEFAULT_RECONSTRUCTION_CONFIG
 
-        # Runtime check for stereo functions (sanity check)
         if (
             calc_disparity is None
             or estimate_object_world_position_from_disparity is None
@@ -651,10 +413,7 @@ class YOLODetector:
             )
             return DetectionResult(camera_id, 0, 0, [])
 
-        # Calculate stereo disparity map (shared across all detections for efficiency)
-        # Use adaptive SGBM if enabled, otherwise use default config
         if ENABLE_ADAPTIVE_SGBM:
-            # Import SGBM preset functions
             try:
                 from .DepthEstimator import (
                     select_sgbm_preset,
@@ -666,7 +425,6 @@ class YOLODetector:
                     calc_disparity_with_preset,
                 )
 
-            # Estimate prior distance from WorldState known object positions
             estimated_distance = None
             if camera_position is not None:
                 try:
@@ -708,18 +466,14 @@ class YOLODetector:
                 imgL_gray, imgR_gray, DEFAULT_RECONSTRUCTION_CONFIG
             )
 
-        # Save disparity map for debugging (if enabled in config)
         if save_disparity_map_debug is not None:
             save_disparity_map_debug(disparity)
 
-        # Estimate 3D world position for each detected object
         detections_with_depth = []
         h, w = imgL.shape[:2]
 
-        # Import bbox-guided depth function if enabled
         use_bbox_sampling = DEPTH_SAMPLING_STRATEGY is not None
 
-        # Import functions unconditionally to avoid "possibly unbound" errors
         try:
             from .DepthEstimator import (
                 estimate_depth_from_bbox,
@@ -799,20 +553,18 @@ class YOLODetector:
                 camera_position=camera_position,
             )
 
-            # Create new detection object with 3D world position, depth, and disparity
             det_with_depth = DetectionObject(
                 object_id=det.object_id,
-                color=det.color,  # Class name (e.g., "red_cube", "robot", "base")
+                color=det.color,
                 bbox=(det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h),
                 confidence=det.confidence,
-                world_position=world_pos,  # (x, y, z) in meters
-                depth_m=depth_m,  # Z distance from camera in meters
-                disparity=disp_value,  # Disparity in pixels
+                world_position=world_pos,
+                depth_m=depth_m,
+                disparity=disp_value,
             )
 
             detections_with_depth.append(det_with_depth)
 
-            # Log detection with 3D coordinates
             if world_pos:
                 depth_str = f"{depth_m:.3f}m" if depth_m is not None else "N/A"
                 disp_str = f"{disp_value:.1f}px" if disp_value is not None else "N/A"
@@ -835,26 +587,7 @@ class YOLODetector:
         )
 
     def _get_class_color(self, class_name: str) -> Tuple[int, int, int]:
-        """
-        Get visualization color for a class name (for debug image annotations)
-
-        Returns predefined BGR colors for known classes, or generates a
-        deterministic color from the class name hash for unknown classes.
-
-        Args:
-            class_name: Name of the detected class (e.g., "red_cube", "robot", "base")
-
-        Returns:
-            BGR color tuple (B, G, R) for OpenCV visualization
-            Values range from 0-255 for each channel
-
-        Example:
-            color = detector._get_class_color("red_cube")  # Returns (0, 0, 255) - Red
-            color = detector._get_class_color("robot")     # Returns (255, 165, 0) - Orange
-        """
-        # Predefined BGR colors for all 16 dataset classes + extras
-        # Format: class_name: (B, G, R) tuple
-        # Supports both naming conventions (lowercase with underscores and PascalCase)
+        """Return BGR debug color for class. Predefined for known classes, hash-derived for unknown."""
         color_map = {
             # Cubes
             "red_cube": (0, 0, 255),  # Red
@@ -894,50 +627,29 @@ class YOLODetector:
             "Gripper_Jaw_Right": (221, 160, 221),  # Plum (PascalCase)
         }
 
-        # Return predefined color if available
         if class_name in color_map:
             return color_map[class_name]
 
-        # For unknown classes, generate deterministic color from class name hash
-        # This ensures same class always gets same color across runs
-        hash_val = hash(class_name) % 360  # Map to hue angle (0-360°)
-
-        # Use HSV color space for better color distribution
-        # H=hash_val, S=0.8 (high saturation), V=0.9 (high brightness)
+        hash_val = hash(class_name) % 360
         import colorsys
 
         rgb = colorsys.hsv_to_rgb(hash_val / 360.0, 0.8, 0.9)
-
-        # Convert RGB to BGR for OpenCV
         bgr = (int(rgb[2] * 255), int(rgb[1] * 255), int(rgb[0] * 255))
         return bgr
 
     def _calculate_iou(
         self, bbox1: Tuple[int, int, int, int], bbox2: Tuple[int, int, int, int]
     ) -> float:
-        """
-        Calculate Intersection over Union (IOU) of two bounding boxes.
-
-        Args:
-            bbox1: First bbox as (x, y, width, height)
-            bbox2: Second bbox as (x, y, width, height)
-
-        Returns:
-            IOU value between 0.0 and 1.0
-        """
         x1, y1, w1, h1 = bbox1
         x2, y2, w2, h2 = bbox2
 
-        # Calculate intersection rectangle
         xi1 = max(x1, x2)
         yi1 = max(y1, y2)
         xi2 = min(x1 + w1, x2 + w2)
         yi2 = min(y1 + h1, y2 + h2)
 
-        # Calculate intersection area
         inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
 
-        # Calculate union area
         box1_area = w1 * h1
         box2_area = w2 * h2
         union_area = box1_area + box2_area - inter_area
@@ -952,26 +664,6 @@ class YOLODetector:
         max_size_ratio: float = 0.3,
         min_iou: float = 0.0,
     ) -> List[Tuple[DetectionObject, DetectionObject]]:
-        """
-        Match detections between left and right stereo images.
-
-        Matching criteria (all must be satisfied):
-        - Same class (color/object type)
-        - Similar Y coordinate (±max_y_diff pixels, assuming rectified cameras)
-        - Similar bbox size (within max_size_ratio fraction)
-        - Right detection is LEFT of left detection (positive disparity)
-        - Optional: Minimum IOU threshold
-
-        Args:
-            detections_left: Detections from left image
-            detections_right: Detections from right image
-            max_y_diff: Maximum Y coordinate difference (pixels)
-            max_size_ratio: Maximum bbox size difference (fraction, e.g., 0.3 = 30%)
-            min_iou: Minimum IOU for match (0.0 = disabled)
-
-        Returns:
-            List of matched pairs: [(left_det, right_det), ...]
-        """
         matched_pairs = []
         used_right = set()
 
@@ -983,27 +675,24 @@ class YOLODetector:
                 if idx in used_right:
                     continue
 
-                # 1. Same class?
                 if det_l.color != det_r.color:
                     continue
 
-                # 2. Similar Y coordinate? (rectified cameras should have same Y)
+                # Rectified cameras: same Y within tolerance
                 y_diff = abs(det_l.center_y - det_r.center_y)
                 if y_diff > max_y_diff:
                     continue
 
-                # 3. Similar size?
                 l_area = det_l.bbox_w * det_l.bbox_h
                 r_area = det_r.bbox_w * det_r.bbox_h
                 size_ratio = abs(l_area - r_area) / max(l_area, r_area)
                 if size_ratio > max_size_ratio:
                     continue
 
-                # 4. Positive disparity? (right image LEFT of left image)
+                # Positive disparity: right detection must be left of left detection
                 if det_r.center_x >= det_l.center_x:
                     continue
 
-                # 5. Optional IOU check
                 if min_iou > 0:
                     bbox_l = (det_l.bbox_x, det_l.bbox_y, det_l.bbox_w, det_l.bbox_h)
                     bbox_r = (det_r.bbox_x, det_r.bbox_y, det_r.bbox_w, det_r.bbox_h)
@@ -1011,7 +700,6 @@ class YOLODetector:
                     if iou < min_iou:
                         continue
 
-                # Score based on Y difference (lower is better)
                 score = 1.0 / (1.0 + y_diff)
 
                 if score > best_score:
@@ -1027,32 +715,11 @@ class YOLODetector:
     def _save_debug_image(
         self, image: np.ndarray, detections: List[DetectionObject], camera_id: str
     ):
-        """
-        Save annotated image with bounding boxes for debugging and visualization
-
-        Creates a copy of the input image and draws:
-        - Colored bounding boxes (one color per class)
-        - Center point markers
-        - Labels with class name and confidence score
-
-        Saved to debug_dir with timestamp in filename.
-
-        Args:
-            image: Original image (BGR format)
-            detections: List of detected objects to visualize
-            camera_id: Camera ID for filename (e.g., "AR4Left", "stereo")
-
-        Output:
-            Saves image to: {debug_dir}/yolo_{camera_id}_{timestamp}.jpg
-        """
         debug_image = image.copy()
 
-        # Draw bounding boxes and labels for each detection
         for det in detections:
-            # Get class-specific color
             color = self._get_class_color(det.color)
 
-            # Draw bounding box rectangle
             cv2.rectangle(
                 debug_image,
                 (det.bbox_x, det.bbox_y),
@@ -1061,7 +728,6 @@ class YOLODetector:
                 thickness=2,
             )
 
-            # Draw center point marker
             cv2.circle(
                 debug_image,
                 (det.center_x, det.center_y),
@@ -1070,19 +736,17 @@ class YOLODetector:
                 thickness=-1,  # Filled circle
             )
 
-            # Draw label with class name and confidence
             label = f"{det.color} {det.confidence:.2f}"
             cv2.putText(
                 debug_image,
                 label,
-                (det.bbox_x, det.bbox_y - 10),  # Position above bounding box
+                (det.bbox_x, det.bbox_y - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 fontScale=0.5,
                 color=color,
                 thickness=2,
             )
 
-        # Save annotated image to debug directory with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = self.debug_dir / f"yolo_{camera_id}_{timestamp}.jpg"
         cv2.imwrite(str(filename), debug_image)
@@ -1090,36 +754,10 @@ class YOLODetector:
 
 
 def main():
-    """
-    Command-line interface for YOLO object detection
-
-    Supports:
-    - Detection on single images
-    - Class filtering (e.g., only detect cubes or robot parts)
-    - Adjustable confidence threshold
-    - Debug mode with annotated output images
-    - Verbose logging for debugging
-
-    Usage:
-        python -m vision.YOLODetector <image_path> [options]
-
-    Examples:
-        # Basic detection
-        python -m vision.YOLODetector test.jpg --model models/robot_detector.onnx --task detect
-
-        # Detect only cubes (class names depend on model training)
-        python -m vision.YOLODetector test.jpg --filter red_cube blue_cube
-
-        # Detect robot parts (PascalCase convention)
-        python -m vision.YOLODetector test.jpg --filter Robot Base Shoulder
-
-        # High confidence with debug output
-        python -m vision.YOLODetector test.jpg --conf 0.7 --debug --verbose
-    """
+    """CLI for YOLO detection on a single image."""
     import sys
     import argparse
 
-    # Parse command-line arguments
     parser = argparse.ArgumentParser(
         description="YOLO-based object detector for robot vision system",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -1177,11 +815,9 @@ Examples:
 
     args = parser.parse_args()
 
-    # Setup logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
 
-    # Load image
     image = cv2.imread(args.image_path)
     if image is None:
         logging.error(f"Could not read image from {args.image_path}")
@@ -1189,12 +825,10 @@ Examples:
 
     logging.info(f"Loaded image: {args.image_path} ({image.shape[1]}x{image.shape[0]})")
 
-    # Initialize YOLO detector
     try:
         logging.info("Initializing YOLO detector...")
         detector = YOLODetector(model_path=args.model, task=args.task)
 
-        # Override config settings from command-line arguments
         if args.conf != 0.5:
             detector.conf_threshold = args.conf
             logging.info(f"Confidence threshold: {args.conf}")
@@ -1211,13 +845,11 @@ Examples:
         logging.error("  pip install ultralytics torch torchvision")
         sys.exit(1)
 
-    # Run object detection
     logging.info("Running YOLO detection...")
     result = detector.detect_objects(
         image, camera_id="test", filter_classes=args.filter
     )
 
-    # Print formatted results
     print(f"\n{'='*60}")
     print(f"YOLO Detection Results")
     print(f"{'='*60}")
@@ -1241,7 +873,6 @@ Examples:
 
     print(f"{'='*60}")
 
-    # Print all available classes from model
     print(
         f"\nAvailable classes in model ({len(detector.get_all_class_names())} total):"
     )

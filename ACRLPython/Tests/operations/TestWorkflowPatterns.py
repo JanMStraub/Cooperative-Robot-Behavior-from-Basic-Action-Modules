@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for WorkflowPatterns.py — HANDOFF_PATTERN step sequence.
-
-Verifies:
-- workflow_handoff_001 uses grasp_object for source robot
-- workflow_handoff_001 uses receive_handoff (not the removed orient_gripper_for_handoff_receive)
-- return_to_start_position precedes move to presentation position
-- signal/wait pair is present
-- Step ordering: detect → grasp → return_start → move_present → signal/wait →
-                 detect → receive_handoff → release
-"""
+"""Unit tests for WorkflowPatterns.py — HANDOFF_PATTERN step sequence"""
 
 from operations.WorkflowPatterns import HANDOFF_PATTERN
 

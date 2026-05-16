@@ -1,66 +1,5 @@
 #!/usr/bin/env python3
-"""
-All Operations Integration Test
-================================
-
-Comprehensive integration test that exercises all 23 registered operations
-against a live Unity + Python backend via the BackendClient → SequenceServer
-(port 5008) path.
-
-Prerequisites
--------------
-1. Start Unity (6000.3.0f1) and load the AR4 scene.
-2. Start the Python backend::
-
-       cd ACRLPython
-       source acrl/bin/activate
-       python -m orchestrators.RunRobotController
-
-3. Run these tests::
-
-       # All operations:
-       python -m pytest tests/integration/TestAllOperations.py -v
-
-       # Only fast ops (no IK/grasp planning):
-       python -m pytest tests/integration/TestAllOperations.py -v -k "Status or Sync or Gripper"
-
-       # Multi-robot ops with extended timeout:
-       python -m pytest tests/integration/TestAllOperations.py -v -m multi_robot --timeout=360
-
-Coverage
---------
-All 23 operations registered in operations/Registry.py (plus variable chaining):
-
-    Level 1-2 Basic (16):
-        Navigation:   move_to_coordinate, adjust_end_effector_orientation,
-                      return_to_start, pick_object_at_coordinate
-        Gripper:      control_gripper, release_object, place_object
-        Perception:   detect_object_stereo, analyze_scene, generate_point_cloud
-        Field:        detect_field, detect_all_fields
-        Status:       check_robot_status
-        Sync:         wait (duration), signal + wait_for_signal (paired, threaded)
-
-    Level 3 Intermediate (2):
-        grasp_object, move_relative_to_object
-
-    Level 4 Multi-Robot (3):
-        detect_other_robot, mirror_movement, receive_handoff
-
-    Level 5 Collaborative (1):
-        stabilize_object
-
-    Variable chaining:
-        detect_object_stereo → $target → move_to_coordinate
-
-Design Decisions
-----------------
-- Negotiation left enabled: Multi-robot tests use 120 s+ timeouts and exercise
-  the full LLM negotiation stack (the point of Level 4/5 ops).
-- Per-category timeouts: Status 30 s, Navigation 60 s, Grasp 120 s, Multi 240 s.
-- Signal + wait pair: Tested in two threads; wait thread starts first, signal
-  fires after 1 s to ensure the wait is registered before the signal is sent.
-- Field operations: Always use camera_id="TableStereoCamera" (stereo camera).
-"""
+"""All Operations Integration Test"""
 
 import os
 import threading
@@ -69,16 +8,14 @@ from typing import Any, Dict
 
 import pytest
 
-from backend_client import (  # type: ignore[import]
+from BackendClient import (  # type: ignore[import]
     BackendClient,
     backend_available,
     port_open,
     reset_simulation,
 )
 
-# ---------------------------------------------------------------------------
 # Availability guard
-# ---------------------------------------------------------------------------
 
 BACKEND_AVAILABLE = backend_available()
 SKIP_REASON = (
@@ -91,10 +28,7 @@ SKIP_REASON = (
 _R1_COORD = (-0.25, 0.30, 0.10)  # x, y, z  — Robot1 reachable point
 _R2_COORD = (0.25, 0.30, 0.10)  # x, y, z  — Robot2 reachable point
 
-
-# ---------------------------------------------------------------------------
 # Shared helpers
-# ---------------------------------------------------------------------------
 
 
 def _cmd(
@@ -111,15 +45,6 @@ def _cmd(
     Helper that encapsulates BackendClient construction so each test body
     stays focused on the assertion rather than the framing.
 
-    Args:
-        command: Command string forwarded to CommandParser.
-        robot_id: Target robot identifier.
-        camera_id: Camera identifier (use "TableStereoCamera" for vision ops).
-        timeout: Socket timeout in seconds.
-        request_id: Protocol V2 correlation ID.
-
-    Returns:
-        JSON response dict with at least a "success" key.
     """
     with BackendClient(timeout=timeout) as client:
         return client.send_command(
@@ -130,16 +55,13 @@ def _cmd(
         )
 
 
-# ---------------------------------------------------------------------------
 # Status Operations (timeout: 15 s)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
 class TestStatusOps:
-    """Tests for check_robot_status (Level 1)."""
 
     def test_check_robot_status_robot1(self):
         """check_robot_status returns a successful result for Robot1."""
@@ -166,16 +88,13 @@ class TestStatusOps:
         ), f"check_robot_status failed for Robot2: {result.get('error')}"
 
 
-# ---------------------------------------------------------------------------
 # Sync Operations (timeout: 15–30 s)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
 class TestSyncOps:
-    """Tests for wait, signal, and wait_for_signal (Level 1 sync primitives)."""
 
     def test_wait_duration(self):
         """wait(duration=0.5) completes in reasonable wall-clock time."""
@@ -253,16 +172,13 @@ class TestSyncOps:
         ), f"wait_for_signal failed: {results.get('wait', {}).get('error')}"
 
 
-# ---------------------------------------------------------------------------
 # Gripper Operations (timeout: 15 s)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
 class TestGripperOps:
-    """Tests for control_gripper and release_object (Level 1)."""
 
     def test_control_gripper_open(self):
         """control_gripper(open) succeeds for Robot1."""
@@ -301,9 +217,7 @@ class TestGripperOps:
         ), f"release_object failed: {result.get('error')}"
 
 
-# ---------------------------------------------------------------------------
 # Navigation Operations (timeout: 30 s)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
@@ -373,9 +287,7 @@ class TestNavigationOps:
         ), f"return_to_start failed: {result.get('error')}"
 
 
-# ---------------------------------------------------------------------------
 # Perception Operations (timeout: 30 s)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
@@ -429,9 +341,7 @@ class TestPerceptionOps:
         assert result.get("success") is True, f"analyze_scene failed: {error}"
 
 
-# ---------------------------------------------------------------------------
 # Field Operations (timeout: 30 s, camera_id="TableStereoCamera")
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
@@ -471,16 +381,13 @@ class TestFieldOps:
         ), "detect_all_fields returned an unexpected response"
 
 
-# ---------------------------------------------------------------------------
 # Spatial / Intermediate Operations (timeout: 30–60 s)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
 class TestSpatialOps:
-    """Tests for move_relative_to_object (Level 3)."""
 
     @pytest.fixture(autouse=True)
     def reset_before_each(self):
@@ -500,9 +407,7 @@ class TestSpatialOps:
         ), "move_relative_to_object returned an unexpected response"
 
 
-# ---------------------------------------------------------------------------
 # Grasp Operations (timeout: 60 s)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
@@ -572,9 +477,7 @@ class TestGraspOps:
         ), "place_object returned an unexpected response"
 
 
-# ---------------------------------------------------------------------------
 # Multi-Robot Operations (timeout: 120 s, negotiation-aware)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
@@ -639,9 +542,7 @@ class TestMultiRobotOps:
         ), "grasp_object returned an unexpected response"
 
 
-# ---------------------------------------------------------------------------
 # Collaborative Operations (timeout: 120 s)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
@@ -674,9 +575,7 @@ class TestCollaborativeOps:
         ), "stabilize_object returned an unexpected response"
 
 
-# ---------------------------------------------------------------------------
 # Variable Chaining (timeout: 30–60 s)
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
@@ -745,9 +644,7 @@ class TestVariableChaining:
         ), "dotted variable pipeline returned an unexpected response"
 
 
-# ---------------------------------------------------------------------------
 # Entry point
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import sys

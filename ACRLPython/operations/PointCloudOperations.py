@@ -66,25 +66,14 @@ except ImportError:
     )
 
 
-# ============================================================================
-# Module-Level Constants
-# ============================================================================
-
 # Maximum age (seconds) of cached stereo images before rejecting.
-# If the images are older than this the scene may have changed significantly.
 # 30s allows for LLM parse latency (typically 3-5s) while still catching truly stale images.
 _DEFAULT_MAX_AGE_SECONDS: float = 30.0
 
 # Uniform random downsample target: limits point cloud size for downstream inference.
 _DEFAULT_MAX_POINTS: int = 50_000
 
-# Default camera pair identifier stored in UnifiedImageStorage.
 _DEFAULT_CAMERA_PAIR_ID: str = "stereo"
-
-
-# ============================================================================
-# Debug Helpers
-# ============================================================================
 
 
 def _save_debug_point_cloud(
@@ -95,25 +84,12 @@ def _save_debug_point_cloud(
     camera_rotation: list,
     timestamp: float,
 ) -> None:
-    """Save a point cloud to disk as a binary PLY file for inspection in Blender.
+    """Save point cloud to disk as binary PLY for Blender inspection.
 
-    PLY (Polygon File Format) is natively supported by Blender's built-in
-    "Import PLY" operator (File → Import → Stanford PLY).  Per-vertex RGB
-    colors are stored as uchar properties and displayed immediately when the
-    viewport shading is set to "Vertex Color".
-
-    The file is written to DEBUG_POINT_CLOUD_DIR and named using the robot ID
-    and a human-readable UTC timestamp so successive captures do not overwrite
-    each other.  Errors are logged but never propagated — debug saves must
-    never break the main operation flow.
-
-    Args:
-        robot_id: Robot whose camera produced this cloud.
-        points: Float32 array of shape (N, 3) in camera frame.
-        colors: Uint8 array of shape (N, 3) RGB colours.
-        camera_position: [x, y, z] world-space camera origin.
-        camera_rotation: [x, y, z, w] or Euler camera rotation.
-        timestamp: Unix epoch of the stereo capture.
+    PLY is natively supported by Blender's built-in "Import PLY" operator.
+    Per-vertex RGB stored as uchar, displayed when viewport shading = "Vertex Color".
+    Named with robot ID + UTC timestamp so successive captures don't overwrite.
+    Errors logged but never propagated — debug saves must not break main flow.
     """
     import os
     import struct
@@ -129,7 +105,7 @@ def _save_debug_point_cloud(
         pts = points.astype(np.float32)
         clrs = colors.astype(np.uint8)
 
-        # Build ASCII PLY header
+        # PLY header
         header = (
             "ply\n"
             "format binary_little_endian 1.0\n"
@@ -161,25 +137,11 @@ def _save_debug_point_cloud(
         logger.warning(f"[{robot_id}] Failed to save debug point cloud: {exc}")
 
 
-# ============================================================================
-# Internal helpers
-# ============================================================================
-
-
 def _apply_camera_rotation(points: np.ndarray, quaternion: list) -> np.ndarray:
-    """Rotate points from Unity camera frame to Unity world frame.
+    """Rotate (N,3) points from Unity camera frame to Unity world frame.
 
-    Expects points already in Unity camera frame (X-right, Y-up, Z-forward).
-    The Q-matrix output is (X-right, Y-up, Z-negative); callers must negate Z
-    before calling this function.  Applies the camera's world-space rotation
-    quaternion to go from Unity camera space to Unity world space.
-
-    Args:
-        points: Float32 (N, 3) in Unity camera frame (Q-matrix output).
-        quaternion: Camera world rotation ``[x, y, z, w]`` from Unity metadata.
-
-    Returns:
-        Float32 (N, 3) in Unity world frame.
+    Q-matrix output is (X-right, Y-up, Z-negative); callers must negate Z before
+    calling so points are in Unity camera frame (X-right, Y-up, Z-forward).
     """
     x, y, z, w = [float(v) for v in quaternion]
     # Guard against non-finite or zero-length quaternions from Unity metadata.
@@ -225,33 +187,15 @@ def _clean_point_cloud(
 ) -> tuple:
     """Remove background points and statistical outliers from a point cloud.
 
-    Three-stage pipeline (each stage independently skippable via config):
-
-    1. **Depth clip** — discard points with Z (camera-forward) outside
-       [POINT_CLOUD_MIN_DEPTH, POINT_CLOUD_MAX_DEPTH].  Fast numpy operation;
-       removes far-field sky/floor noise before the more expensive steps.
-
-    2. **Color-based background removal** — removes points whose RGB color
-       closely matches known Unity background/floor colors (configured in
-       POINT_CLOUD_BG_COLORS).  Adapted from RoboScan's ``remove_colors()``.
-       Uses per-channel absolute tolerance so near-matches are also caught.
-
-    3. **Statistical outlier removal** — removes points whose mean distance
-       to their k nearest neighbors exceeds mean + std_ratio * σ.  Uses
-       Open3D if available; silently skipped otherwise.  Adapted from
-       RoboScan's ``filter_repeating_points()`` final pass.
-
-    Args:
-        points: Float32 (N, 3) point positions in world frame.
-        colors: Uint8 (N, 3) RGB colors.
-
-    Returns:
-        Tuple of (filtered_points, filtered_colors) as (float32, uint8) arrays.
+    Three-stage pipeline (each independently skippable via config):
+    1. Depth clip — Z outside [MIN_DEPTH, MAX_DEPTH]. Fast; removes far-field noise.
+    2. Color-based background removal — per-channel absolute tolerance match.
+    3. Statistical outlier removal — Open3D; silently skipped if unavailable.
     """
     if len(points) == 0:
         return points, colors
 
-    # --- Stage 1: depth clip (Z axis = camera forward = scene depth) ---
+    # Stage 1: depth clip (Z axis = camera forward = scene depth)
     z = points[:, 2]
     depth_mask = (z >= POINT_CLOUD_MIN_DEPTH) & (z <= POINT_CLOUD_MAX_DEPTH)
     points = points[depth_mask]
@@ -264,9 +208,8 @@ def _clean_point_cloud(
     if len(points) == 0:
         return points, colors
 
-    # --- Stage 2: color-based background removal ---
+    # Stage 2: color-based background removal
     if POINT_CLOUD_BG_COLORS_ENABLED and len(POINT_CLOUD_BG_COLORS) > 0:
-        # Build a boolean mask: True = keep (not background)
         keep = np.ones(len(points), dtype=bool)
         colors_f = colors.astype(np.float32)
         for rgb_tuple, tol in POINT_CLOUD_BG_COLORS:
@@ -282,7 +225,7 @@ def _clean_point_cloud(
     if len(points) == 0:
         return points, colors
 
-    # --- Stage 3: statistical outlier removal (Open3D) ---
+    # Stage 3: statistical outlier removal (Open3D)
     try:
         import open3d as o3d  # type: ignore[import]
 
@@ -310,11 +253,6 @@ def _clean_point_cloud(
     return points, colors
 
 
-# ============================================================================
-# Implementation
-# ============================================================================
-
-
 def generate_point_cloud(
     robot_id: str,
     camera_pair_id: str = _DEFAULT_CAMERA_PAIR_ID,
@@ -322,47 +260,13 @@ def generate_point_cloud(
     max_age_seconds: float = _DEFAULT_MAX_AGE_SECONDS,
     request_id: int = 0,
 ) -> OperationResult:
-    """Generate a dense 3D point cloud from the latest stereo image pair.
+    """Generate dense 3D point cloud from latest stereo image pair via SGBM disparity.
 
-    Uses the stereo images stored in UnifiedImageStorage (captured from
-    Unity's stereo camera rig) to reconstruct a 3D point cloud via
-    semi-global block-matching disparity estimation.
-
-    The output points are expressed in Unity world frame: OpenCV camera-space
-    points are Y-flipped (OpenCV→Unity camera convention), rotated by the
-    camera's world-space quaternion, and translated by the camera's world
-    position.  Camera extrinsics are also returned for reference.
-
-    Args:
-        robot_id: Robot whose camera pair is queried (e.g., "Robot1").
-        camera_pair_id: Identifier of the stereo pair in UnifiedImageStorage.
-            Usually "stereo" (default).
-        max_points: Maximum number of points to return.  A uniform random
-            subsample is applied when the raw cloud exceeds this limit.
-        max_age_seconds: Reject images older than this many seconds (default: 30.0).
-        request_id: Protocol V2 request identifier (pass-through).
-
-    Returns:
-        OperationResult.  On success the ``result`` dict contains:
-
-        .. code-block:: python
-
-            {
-                "points":          [[x, y, z], ...],   # Unity camera frame, X-negated (LH)
-                "colors":          [[r, g, b], ...],   # 0-255 per channel
-                "point_count":     int,
-                "camera_position": [x, y, z],          # Unity world
-                "camera_rotation": [x, y, z, w],       # Unity quaternion
-                "fov":             float,               # horizontal FOV degrees
-                "baseline":        float,               # camera separation metres
-                "timestamp":       float,               # Unix epoch of capture
-            }
-
-        On failure ``error`` contains a code, human-readable message, and
-        recovery suggestions (standard OperationResult convention).
+    Output points in Unity world frame (Q-matrix points Y-flipped, rotated by
+    camera quaternion, translated by camera position). Camera extrinsics returned
+    alongside points for downstream transforms.
     """
     try:
-        # --- Retrieve latest stereo pair ---
         storage = get_unified_image_storage()
         stereo_data = storage.get_latest_stereo_image()
 
@@ -388,7 +292,6 @@ def generate_point_cloud(
                 ],
             )
 
-        # --- Staleness check ---
         # Guard against callers (e.g. LLM) passing None, 0 or negative values.
         effective_max_age = (
             max_age_seconds
@@ -407,7 +310,6 @@ def generate_point_cloud(
                 ],
             )
 
-        # --- Extract camera intrinsics / extrinsics from metadata ---
         try:
             from .StereoUtils import camera_config_from_metadata
         except ImportError:
@@ -506,7 +408,6 @@ def generate_point_cloud(
                     ],
                 )
 
-        # --- Uniform random downsample ---
         # Guard against callers (e.g. LLM) passing None or non-positive values.
         effective_max_points = (
             max_points
@@ -524,7 +425,6 @@ def generate_point_cloud(
 
         point_count = raw_points.shape[0]
 
-        # Convert to Python lists for JSON serialisation
         points_list = raw_points.tolist()
         colors_list = raw_colors.tolist()
 
@@ -533,10 +433,8 @@ def generate_point_cloud(
             f"(camera_position={camera_position})"
         )
 
-        # --- Optional debug save ---
-        # For Blender inspection apply camera→world transform so the PLY is
-        # axis-aligned (table horizontal, robot upright).  The live pipeline
-        # (VGNClient) does its own transform from the raw camera-frame points.
+        # Optional debug save: apply camera→world transform for Blender inspection.
+        # VGNClient does its own transform from raw camera-frame points.
         if SAVE_DEBUG_POINT_CLOUDS:
             # Convert Q-matrix output to Unity camera frame before rotating.
             # Q output is (X-right, Y-up, Z-negative) — only Z needs negating to
@@ -556,7 +454,6 @@ def generate_point_cloud(
                 timestamp,
             )
 
-        # --- WebUI broadcast ---
         try:
             from servers.WebUIServer import broadcast_stereo_pointcloud
 
@@ -603,10 +500,6 @@ def generate_point_cloud(
             ],
         )
 
-
-# ============================================================================
-# Operation Definition for Registry
-# ============================================================================
 
 GENERATE_POINT_CLOUD_OPERATION = BasicOperation(
     operation_id="perception_generate_point_cloud_001",

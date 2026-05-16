@@ -19,9 +19,7 @@ from orchestrators.CommandParser import CommandParser
 from servers.CommandServer import CommandBroadcaster
 from servers.ImageStorageCore import UnifiedImageStorage
 
-# ============================================================================
 # Network Failure Tests
-# ============================================================================
 
 
 class TestNetworkFailureRecovery:
@@ -112,9 +110,7 @@ class TestNetworkFailureRecovery:
             assert received is True
 
 
-# ============================================================================
 # Resource Exhaustion Tests
-# ============================================================================
 
 
 class TestResourceExhaustion:
@@ -185,9 +181,7 @@ class TestResourceExhaustion:
         assert small_queue.get() == 0  # Can still retrieve
 
 
-# ============================================================================
 # External Dependency Failure Tests
-# ============================================================================
 
 
 class TestExternalDependencyFailures:
@@ -234,9 +228,7 @@ class TestExternalDependencyFailures:
         assert isinstance(result.detections, list)
 
 
-# ============================================================================
 # Graceful Degradation Tests
-# ============================================================================
 
 
 class TestGracefulDegradation:
@@ -296,9 +288,7 @@ class TestGracefulDegradation:
             assert result["success"] is True
 
 
-# ============================================================================
 # Concurrent Failure Tests
-# ============================================================================
 
 
 class TestConcurrentFailures:
@@ -360,9 +350,7 @@ class TestConcurrentFailures:
         assert result["success"] is True
 
 
-# ============================================================================
 # State Recovery Tests
-# ============================================================================
 
 
 class TestStateRecovery:

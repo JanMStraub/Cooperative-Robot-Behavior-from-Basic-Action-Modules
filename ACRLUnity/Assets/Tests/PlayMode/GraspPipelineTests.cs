@@ -1,11 +1,11 @@
-using NUnit.Framework;
-using UnityEngine;
-using UnityEngine.TestTools;
 using System.Collections;
 using System.Collections.Generic;
+using Configuration;
+using NUnit.Framework;
 using Robotics;
 using Robotics.Grasp;
-using Configuration;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Tests.PlayMode
 {
@@ -97,8 +97,6 @@ namespace Tests.PlayMode
             }
         }
 
-        #region Candidate Generator Tests
-
         [Test]
         public void CandidateGenerator_GeneratesCandidates()
         {
@@ -116,7 +114,7 @@ namespace Tests.PlayMode
             // Enable only top approach
             _testConfig.enabledApproaches = new GraspApproachSettings[]
             {
-                new GraspApproachSettings(GraspApproach.Top, true, 1.0f)
+                new GraspApproachSettings(GraspApproach.Top, true, 1.0f),
             };
 
             var generator = new GraspCandidateGenerator(_testConfig);
@@ -125,8 +123,11 @@ namespace Tests.PlayMode
             // All candidates should be top approach
             foreach (var candidate in candidates)
             {
-                Assert.AreEqual(GraspApproach.Top, candidate.approachType,
-                    "All candidates should use top approach when others are disabled");
+                Assert.AreEqual(
+                    GraspApproach.Top,
+                    candidate.approachType,
+                    "All candidates should use top approach when others are disabled"
+                );
             }
         }
 
@@ -139,16 +140,18 @@ namespace Tests.PlayMode
             foreach (var candidate in candidates)
             {
                 float distance = candidate.approachDistance;
-                Assert.GreaterOrEqual(distance, _testConfig.minPreGraspDistance,
-                    "Approach distance should be >= min");
-                Assert.LessOrEqual(distance, _testConfig.maxPreGraspDistance,
-                    "Approach distance should be <= max");
+                Assert.GreaterOrEqual(
+                    distance,
+                    _testConfig.minPreGraspDistance,
+                    "Approach distance should be >= min"
+                );
+                Assert.LessOrEqual(
+                    distance,
+                    _testConfig.maxPreGraspDistance,
+                    "Approach distance should be <= max"
+                );
             }
         }
-
-        #endregion
-
-        #region Scorer Tests
 
         [Test]
         public void Scorer_AssignsScoresToCandidates()
@@ -160,8 +163,11 @@ namespace Tests.PlayMode
             Vector3 objectSize = _testObject.GetComponent<Collider>().bounds.size;
             var scoredCandidates = scorer.ScoreAndRank(candidates, objectSize, Vector3.zero);
 
-            Assert.AreEqual(candidates.Count, scoredCandidates.Count,
-                "Should return same number of candidates");
+            Assert.AreEqual(
+                candidates.Count,
+                scoredCandidates.Count,
+                "Should return same number of candidates"
+            );
 
             foreach (var candidate in scoredCandidates)
             {
@@ -182,19 +188,24 @@ namespace Tests.PlayMode
             // Verify sorted in descending order
             for (int i = 1; i < scoredCandidates.Count; i++)
             {
-                Assert.GreaterOrEqual(scoredCandidates[i - 1].totalScore, scoredCandidates[i].totalScore,
-                    "Candidates should be sorted by score (highest first)");
+                Assert.GreaterOrEqual(
+                    scoredCandidates[i - 1].totalScore,
+                    scoredCandidates[i].totalScore,
+                    "Candidates should be sorted by score (highest first)"
+                );
             }
         }
-
-        #endregion
-
-        #region IK Filter Tests
 
         [Test]
         public void IKFilter_FiltersUnreachablePoses()
         {
-            var ikFilter = new GraspIKFilter(_testConfig, _mockJoints, _mockIKFrame, _mockEndEffector, _ikConfig);
+            var ikFilter = new GraspIKFilter(
+                _testConfig,
+                _mockJoints,
+                _mockIKFrame,
+                _mockEndEffector,
+                _ikConfig
+            );
             var generator = new GraspCandidateGenerator(_testConfig);
 
             // Generate candidates with some intentionally unreachable
@@ -210,32 +221,45 @@ namespace Tests.PlayMode
             );
             candidates.Add(unreachableCandidate);
 
-            var filteredCandidates = ikFilter.FilterCandidates(candidates, _mockEndEffector.position);
+            var filteredCandidates = ikFilter.FilterCandidates(
+                candidates,
+                _mockEndEffector.position
+            );
 
             // Should filter out unreachable candidates
-            Assert.LessOrEqual(filteredCandidates.Count, candidates.Count,
-                "Filtered count should be <= original count");
+            Assert.LessOrEqual(
+                filteredCandidates.Count,
+                candidates.Count,
+                "Filtered count should be <= original count"
+            );
         }
 
         [Test]
         public void IKFilter_SetsIKValidatedFlag()
         {
-            var ikFilter = new GraspIKFilter(_testConfig, _mockJoints, _mockIKFrame, _mockEndEffector, _ikConfig);
+            var ikFilter = new GraspIKFilter(
+                _testConfig,
+                _mockJoints,
+                _mockIKFrame,
+                _mockEndEffector,
+                _ikConfig
+            );
             var generator = new GraspCandidateGenerator(_testConfig);
             var candidates = generator.GenerateCandidates(_testObject, _mockEndEffector.position);
 
-            var filteredCandidates = ikFilter.FilterCandidates(candidates, _mockEndEffector.position);
+            var filteredCandidates = ikFilter.FilterCandidates(
+                candidates,
+                _mockEndEffector.position
+            );
 
             foreach (var candidate in filteredCandidates)
             {
-                Assert.IsTrue(candidate.ikValidated,
-                    "Filtered candidates should have ikValidated flag set");
+                Assert.IsTrue(
+                    candidate.ikValidated,
+                    "Filtered candidates should have ikValidated flag set"
+                );
             }
         }
-
-        #endregion
-
-        #region Collision Filter Tests
 
         [Test]
         public void CollisionFilter_DetectsObstacles()
@@ -253,8 +277,11 @@ namespace Tests.PlayMode
 
             // Should filter out candidates with collision paths
             // (exact count depends on obstacle position relative to approach paths)
-            Assert.LessOrEqual(filteredCandidates.Count, candidates.Count,
-                "Should filter out some candidates due to obstacle");
+            Assert.LessOrEqual(
+                filteredCandidates.Count,
+                candidates.Count,
+                "Should filter out some candidates due to obstacle"
+            );
 
             Object.Destroy(obstacle);
         }
@@ -270,8 +297,10 @@ namespace Tests.PlayMode
 
             foreach (var candidate in filteredCandidates)
             {
-                Assert.IsTrue(candidate.collisionValidated,
-                    "Filtered candidates should have collisionValidated flag set");
+                Assert.IsTrue(
+                    candidate.collisionValidated,
+                    "Filtered candidates should have collisionValidated flag set"
+                );
             }
         }
 
@@ -287,13 +316,12 @@ namespace Tests.PlayMode
             var filteredCandidates = collisionFilter.FilterCandidates(candidates, _testObject);
 
             // When disabled, should pass all candidates through
-            Assert.AreEqual(candidates.Count, filteredCandidates.Count,
-                "With collision checking disabled, all candidates should pass");
+            Assert.AreEqual(
+                candidates.Count,
+                filteredCandidates.Count,
+                "With collision checking disabled, all candidates should pass"
+            );
         }
-
-        #endregion
-
-        #region Full Pipeline Tests
 
         [Test]
         public void Pipeline_ExecutesFullPlanningSequence()
@@ -330,8 +358,11 @@ namespace Tests.PlayMode
 
             if (result != null)
             {
-                Assert.AreEqual(GraspApproach.Top, result.approachType,
-                    "Should use overridden approach direction");
+                Assert.AreEqual(
+                    GraspApproach.Top,
+                    result.approachType,
+                    "Should use overridden approach direction"
+                );
             }
         }
 
@@ -350,7 +381,11 @@ namespace Tests.PlayMode
                 _ikConfig
             );
 
-            var result = pipeline.PlanGrasp(unreachableObject, _mockEndEffector.position, GraspOptions.Advanced);
+            var result = pipeline.PlanGrasp(
+                unreachableObject,
+                _mockEndEffector.position,
+                GraspOptions.Advanced
+            );
 
             Assert.IsNull(result, "Should return null for unreachable object");
 
@@ -369,20 +404,23 @@ namespace Tests.PlayMode
             );
 
             var startTime = Time.realtimeSinceStartup;
-            var result = pipeline.PlanGrasp(_testObject, _mockEndEffector.position, GraspOptions.Advanced);
+            var result = pipeline.PlanGrasp(
+                _testObject,
+                _mockEndEffector.position,
+                GraspOptions.Advanced
+            );
             var elapsedTime = (Time.realtimeSinceStartup - startTime) * 1000f; // Convert to ms
 
             Debug.Log($"Pipeline execution time: {elapsedTime:F2}ms");
 
-            Assert.Less(elapsedTime, 200f,
-                $"Pipeline should execute in <200ms, actual: {elapsedTime:F2}ms");
+            Assert.Less(
+                elapsedTime,
+                200f,
+                $"Pipeline should execute in <200ms, actual: {elapsedTime:F2}ms"
+            );
 
             yield return null;
         }
-
-        #endregion
-
-        #region Config Tests
 
         [Test]
         public void GraspConfig_CalculatesAdaptiveDistances()
@@ -393,8 +431,11 @@ namespace Tests.PlayMode
             float smallDistance = _testConfig.CalculatePreGraspDistance(smallObject);
             float largeDistance = _testConfig.CalculatePreGraspDistance(largeObject);
 
-            Assert.Greater(largeDistance, smallDistance,
-                "Larger objects should have larger pre-grasp distances");
+            Assert.Greater(
+                largeDistance,
+                smallDistance,
+                "Larger objects should have larger pre-grasp distances"
+            );
 
             Assert.GreaterOrEqual(smallDistance, _testConfig.minPreGraspDistance);
             Assert.LessOrEqual(largeDistance, _testConfig.maxPreGraspDistance);
@@ -409,16 +450,12 @@ namespace Tests.PlayMode
             // Disable top approach
             _testConfig.enabledApproaches = new GraspApproachSettings[]
             {
-                new GraspApproachSettings(GraspApproach.Top, false, 0f)
+                new GraspApproachSettings(GraspApproach.Top, false, 0f),
             };
 
             var disabledWeight = _testConfig.GetApproachWeight(GraspApproach.Top);
             Assert.AreEqual(0, disabledWeight, "Disabled approach should have weight = 0");
         }
-
-        #endregion
-
-        #region GraspCandidate Tests
 
         [Test]
         public void GraspCandidate_CreateMethod()
@@ -427,7 +464,13 @@ namespace Tests.PlayMode
             var grasp = new Vector3(0.3f, 0.2f, 0.3f);
             var rotation = Quaternion.Euler(90, 0, 0);
 
-            var candidate = GraspCandidate.Create(preGrasp, rotation, grasp, rotation, GraspApproach.Top);
+            var candidate = GraspCandidate.Create(
+                preGrasp,
+                rotation,
+                grasp,
+                rotation,
+                GraspApproach.Top
+            );
 
             Assert.AreEqual(preGrasp, candidate.preGraspPosition);
             Assert.AreEqual(grasp, candidate.graspPosition);
@@ -440,8 +483,10 @@ namespace Tests.PlayMode
         public void GraspCandidate_IsValidProperty()
         {
             var candidate = GraspCandidate.Create(
-                Vector3.zero, Quaternion.identity,
-                Vector3.zero, Quaternion.identity,
+                Vector3.zero,
+                Quaternion.identity,
+                Vector3.zero,
+                Quaternion.identity,
                 GraspApproach.Top
             );
 
@@ -454,7 +499,5 @@ namespace Tests.PlayMode
 
             Assert.IsTrue(candidate.isValid, "Candidate should be valid when both flags are true");
         }
-
-        #endregion
     }
 }

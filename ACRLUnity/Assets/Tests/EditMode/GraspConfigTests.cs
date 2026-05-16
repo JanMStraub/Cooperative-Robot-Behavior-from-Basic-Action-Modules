@@ -1,6 +1,6 @@
+using Configuration;
 using NUnit.Framework;
 using UnityEngine;
-using Configuration;
 
 namespace Tests.EditMode
 {
@@ -29,15 +29,16 @@ namespace Tests.EditMode
             }
         }
 
-        #region Precision Improvement Tests (January 2026)
-
         [Test]
         public void InitializeDefaultConfig_CandidatesPerApproach_IsEight()
         {
             // Test that default candidates per approach was increased from 5 to 8
             // for better grasp selection (Phase 5.2)
-            Assert.AreEqual(8, _config.candidatesPerApproach,
-                "Candidates per approach should be 8 for improved grasp selection");
+            Assert.AreEqual(
+                8,
+                _config.candidatesPerApproach,
+                "Candidates per approach should be 8 for improved grasp selection"
+            );
         }
 
         [Test]
@@ -45,8 +46,11 @@ namespace Tests.EditMode
         {
             // Test that max IK iterations was increased from 20 to 50
             // for better convergence (Phase 5.2)
-            Assert.AreEqual(50, _config.maxIKValidationIterations,
-                "Max IK iterations should be 50 for better convergence");
+            Assert.AreEqual(
+                50,
+                _config.maxIKValidationIterations,
+                "Max IK iterations should be 50 for better convergence"
+            );
         }
 
         [Test]
@@ -54,8 +58,12 @@ namespace Tests.EditMode
         {
             // Test that IK validation threshold was tightened from 0.01f to 0.005f
             // for more precise validation (Phase 5.2)
-            Assert.AreEqual(0.005f, _config.ikValidationThreshold, 0.0001f,
-                "IK validation threshold should be 0.005f (5mm) for tighter validation");
+            Assert.AreEqual(
+                0.005f,
+                _config.ikValidationThreshold,
+                0.0001f,
+                "IK validation threshold should be 0.005f (5mm) for tighter validation"
+            );
         }
 
         [Test]
@@ -87,8 +95,7 @@ namespace Tests.EditMode
         public void InitializeDefaultConfig_IKValidationEnabled()
         {
             // IK validation should be enabled by default
-            Assert.IsTrue(_config.enableIKValidation,
-                "IK validation should be enabled by default");
+            Assert.IsTrue(_config.enableIKValidation, "IK validation should be enabled by default");
         }
 
         [Test]
@@ -116,22 +123,19 @@ namespace Tests.EditMode
             Assert.Less(_config.depthVariationRange, 1f);
         }
 
-        #endregion
-
-        #region Basic Configuration Tests
-
         [Test]
         public void InitializeDefaultConfig_EnablesRetreat()
         {
-            Assert.IsTrue(_config.enableRetreat,
-                "Retreat should be enabled by default");
+            Assert.IsTrue(_config.enableRetreat, "Retreat should be enabled by default");
         }
 
         [Test]
         public void InitializeDefaultConfig_EnablesCollisionChecking()
         {
-            Assert.IsTrue(_config.enableCollisionChecking,
-                "Collision checking should be enabled by default");
+            Assert.IsTrue(
+                _config.enableCollisionChecking,
+                "Collision checking should be enabled by default"
+            );
         }
 
         [Test]
@@ -144,8 +148,7 @@ namespace Tests.EditMode
         [Test]
         public void InitializeDefaultConfig_GripperGeometry_IsValid()
         {
-            Assert.IsNotNull(_config.gripperGeometry,
-                "Gripper geometry should be initialized");
+            Assert.IsNotNull(_config.gripperGeometry, "Gripper geometry should be initialized");
         }
 
         [Test]
@@ -154,7 +157,5 @@ namespace Tests.EditMode
             Assert.Greater(_config.targetGraspDepth, 0f);
             Assert.LessOrEqual(_config.targetGraspDepth, 1f);
         }
-
-        #endregion
     }
 }

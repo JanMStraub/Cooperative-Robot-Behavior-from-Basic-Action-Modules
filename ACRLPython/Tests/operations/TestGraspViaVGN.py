@@ -1,27 +1,5 @@
 #!/usr/bin/env python3
-"""
-Integration tests for _grasp_via_vgn orchestration
-=====================================================
-
-Tests the full VGN fast-path inside ``grasp_object`` by mocking every
-external collaborator so no live Unity, model checkpoint, or stereo cameras are
-required.  The goal is to verify that the orchestration logic correctly
-chains the components and falls back to the geometric pipeline when any
-step fails.
-
-Coverage:
-- Happy path: point cloud → detection → VGN → transform → broadcaster
-- Fallback when VGN model is unavailable
-- Fallback when point cloud generation fails
-- Fallback when VGN returns no candidates
-- Fallback when frame transform produces no valid poses
-- Broadcaster unavailable → error result (not fallback)
-- Broadcaster send failure → error result
-- Pre-grasp position computed along approach direction
-- Correct number of candidates forwarded to Unity
-- grasp_object routes to VGN path when VGN_ENABLED=true
-- grasp_object falls back to TCP path when VGN returns None
-"""
+"""Integration tests for _grasp_via_vgn orchestration"""
 
 import pytest
 from unittest.mock import MagicMock, patch
@@ -30,9 +8,7 @@ import numpy as np
 from operations.GraspOperations import _grasp_via_vgn, grasp_object
 from operations.Base import OperationResult
 
-# ---------------------------------------------------------------------------
 # Shared fixtures and helpers
-# ---------------------------------------------------------------------------
 
 
 def _pc_success(n_pts: int = 200):
@@ -188,13 +164,10 @@ class _VGNPatch:
         _um.patch.stopall()
 
 
-# ---------------------------------------------------------------------------
 # _grasp_via_vgn happy path
-# ---------------------------------------------------------------------------
 
 
 class TestGraspViaVGNHappyPath:
-    """Tests for the successful execution path."""
 
     def test_returns_success_result(self):
         """Happy path returns a successful OperationResult."""
@@ -322,13 +295,10 @@ class TestGraspViaVGNHappyPath:
             assert cmd["request_id"] == 42
 
 
-# ---------------------------------------------------------------------------
 # Fallback paths (return None → caller uses geometric pipeline)
-# ---------------------------------------------------------------------------
 
 
 class TestGraspViaVGNFallback:
-    """Tests for scenarios where _grasp_via_vgn returns None."""
 
     def test_returns_none_when_vgn_unavailable(self):
         """Model not available → None (no exception)."""
@@ -406,13 +376,10 @@ class TestGraspViaVGNFallback:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
 # Error results (not fallback — definitive failures)
-# ---------------------------------------------------------------------------
 
 
 class TestGraspViaVGNErrors:
-    """Tests for scenarios where _grasp_via_vgn returns an error OperationResult."""
 
     def test_error_when_broadcaster_unavailable(self):
         """Missing broadcaster → error result (not None)."""
@@ -451,13 +418,10 @@ class TestGraspViaVGNErrors:
         assert result.error["code"] == "COMMUNICATION_ERROR"
 
 
-# ---------------------------------------------------------------------------
 # grasp_object routing tests
-# ---------------------------------------------------------------------------
 
 
 class TestGraspObjectVGNRouting:
-    """Tests that grasp_object correctly routes through the VGN path."""
 
     def test_uses_vgn_path_when_enabled_and_available(self):
         """When VGN_ENABLED and model is available, _grasp_via_vgn is called."""
@@ -515,9 +479,7 @@ class TestGraspObjectVGNRouting:
         mock_vgn.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
 # _grasp_via_vgn_with_ros helpers and tests
-# ---------------------------------------------------------------------------
 
 
 class _VGNROSPatch:
@@ -615,13 +577,10 @@ class _VGNROSPatch:
         _um.patch.stopall()
 
 
-# ---------------------------------------------------------------------------
 # Happy path
-# ---------------------------------------------------------------------------
 
 
 class TestGraspViaVGNWithROSHappyPath:
-    """Tests for the successful execution path of _grasp_via_vgn_with_ros."""
 
     def test_returns_success_result(self):
         """Full pipeline succeeds → OperationResult with success=True."""
@@ -710,7 +669,9 @@ class TestGraspViaVGNWithROSHappyPath:
         # yaw≈-5.8° (small angle, object nearly ahead of robot) → check orientation is a
         # valid unit quaternion rather than asserting exact values (depends on yaw solver).
         orient = call_kwargs["orientation"]
-        norm_sq = orient["x"]**2 + orient["y"]**2 + orient["z"]**2 + orient["w"]**2
+        norm_sq = (
+            orient["x"] ** 2 + orient["y"] ** 2 + orient["z"] ** 2 + orient["w"] ** 2
+        )
         assert abs(norm_sq - 1.0) < 1e-4, f"Orientation quaternion not unit: {orient}"
 
     def test_cartesian_descent_called_at_grasp_position(self):
@@ -770,13 +731,10 @@ class TestGraspViaVGNWithROSHappyPath:
             mock_follow.assert_called_once()
 
 
-# ---------------------------------------------------------------------------
 # Fallback paths (return None)
-# ---------------------------------------------------------------------------
 
 
 class TestGraspViaVGNWithROSFallback:
-    """Tests for scenarios where _grasp_via_vgn_with_ros returns None."""
 
     def test_returns_none_when_vgn_unavailable(self):
         """VGN model not available → None."""
@@ -875,13 +833,10 @@ class TestGraspViaVGNWithROSFallback:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
 # Error results (definitive failures after arm has moved)
-# ---------------------------------------------------------------------------
 
 
 class TestGraspViaVGNWithROSErrors:
-    """Tests for scenarios that return an error OperationResult (not None)."""
 
     def test_error_when_gripper_close_fails(self):
         """Arm descended but gripper close failed → GRIPPER_CLOSE_FAILED error result."""
@@ -903,13 +858,10 @@ class TestGraspViaVGNWithROSErrors:
         assert result.error["code"] == "GRIPPER_CLOSE_FAILED"
 
 
-# ---------------------------------------------------------------------------
 # Routing tests via grasp_object() with both ROS and VGN enabled
-# ---------------------------------------------------------------------------
 
 
 class TestGraspObjectRoutingWithBothEnabled:
-    """Tests that grasp_object routes correctly when both VGN_ENABLED and ROS are on."""
 
     def _make_world_state(self):
         """Return a minimal WorldState mock that satisfies grasp_object's resolution logic."""

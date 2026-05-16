@@ -61,9 +61,6 @@ namespace RobotScripts
         }
     }
 
-    /// <summary>
-    /// Represents a single waypoint along a Cartesian path.
-    /// </summary>
     public struct CartesianWaypoint
     {
         public Vector3 position;

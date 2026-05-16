@@ -32,7 +32,6 @@ except ImportError:
         COLLISION_SAFETY_MARGIN,
     )
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
@@ -42,17 +41,7 @@ PREDICATE_REGISTRY: Dict[str, Callable] = {}
 
 
 def register_predicate(name: str):
-    """
-    Decorator to register a predicate function.
-
-    Args:
-        name: Predicate name for lookup
-
-    Example:
-        @register_predicate("target_within_reach")
-        def target_within_reach(robot_id, x, y, z, world_state=None):
-            ...
-    """
+    """Decorator to register a predicate function by name."""
 
     def decorator(func: Callable) -> Callable:
         PREDICATE_REGISTRY[name] = func
@@ -62,55 +51,28 @@ def register_predicate(name: str):
 
 
 def get_predicate(name: str) -> Optional[Callable]:
-    """
-    Get a registered predicate function by name.
-
-    Args:
-        name: Predicate name
-
-    Returns:
-        Predicate function or None if not found
-    """
+    """Get a registered predicate function by name."""
     return PREDICATE_REGISTRY.get(name)
-
-
-# ============================================================================
-# Core Spatial Predicates (Week 1)
-# ============================================================================
 
 
 @register_predicate("target_within_reach")
 def target_within_reach(
     robot_id: str, x: float, y: float, z: float, world_state=None
 ) -> Tuple[bool, str]:
-    """
-    Check if a target position is within the robot's maximum reach distance.
-
-    Args:
-        robot_id: Robot identifier (e.g., "Robot1")
-        x, y, z: Target position in world coordinates
-        world_state: Optional WorldState instance for querying robot info
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if target is within robot's maximum reach distance."""
     try:
-        # Guard against None coordinates (e.g. from LLM that omits values)
         if x is None or y is None or z is None:
             return False, f"Target coordinates contain None: ({x}, {y}, {z})"
 
-        # Get robot base position
         base_pos = ROBOT_BASE_POSITIONS.get(robot_id)
         if base_pos is None:
             return False, f"Unknown robot '{robot_id}' - not in ROBOT_BASE_POSITIONS"
 
-        # Calculate distance from base to target
         dx = x - base_pos[0]
         dy = y - base_pos[1]
         dz = z - base_pos[2]
         distance = math.sqrt(dx * dx + dy * dy + dz * dz)
 
-        # Check against maximum reach
         max_reach = MAX_ROBOT_REACH
         if distance > max_reach:
             return (
@@ -129,24 +91,12 @@ def target_within_reach(
 def is_in_robot_workspace(
     robot_id: str, x: float, y: float, z: float, world_state=None
 ) -> Tuple[bool, str]:
-    """
-    Check if a position is within the robot's assigned workspace region.
-
-    Args:
-        robot_id: Robot identifier
-        x, y, z: Position in world coordinates
-        world_state: Optional WorldState instance
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if position is within robot's assigned workspace region."""
     try:
-        # Get robot's assigned workspace
         workspace_name = ROBOT_WORKSPACE_ASSIGNMENTS.get(robot_id)
         if workspace_name is None:
             return False, f"Robot '{robot_id}' has no assigned workspace"
 
-        # Get workspace bounds
         workspace = WORKSPACE_REGIONS.get(workspace_name)
         if workspace is None:
             return (
@@ -154,7 +104,6 @@ def is_in_robot_workspace(
                 f"Workspace '{workspace_name}' not defined in WORKSPACE_REGIONS",
             )
 
-        # Check bounds
         if not (workspace["x_min"] <= x <= workspace["x_max"]):
             return (
                 False,
@@ -182,21 +131,12 @@ def is_in_robot_workspace(
 
 @register_predicate("is_in_shared_zone")
 def is_in_shared_zone(x: float, y: float, z: float) -> Tuple[bool, str]:
-    """
-    Check if a position is in the shared workspace zone.
-
-    Args:
-        x, y, z: Position in world coordinates
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if position is in the shared workspace zone."""
     try:
         shared_zone = WORKSPACE_REGIONS.get("shared_zone")
         if shared_zone is None:
             return False, "Shared zone not defined in WORKSPACE_REGIONS"
 
-        # Check bounds
         in_zone = (
             shared_zone["x_min"] <= x <= shared_zone["x_max"]
             and shared_zone["y_min"] <= y <= shared_zone["y_max"]
@@ -215,22 +155,11 @@ def is_in_shared_zone(x: float, y: float, z: float) -> Tuple[bool, str]:
 
 @register_predicate("robot_is_initialized")
 def robot_is_initialized(robot_id: str, world_state=None) -> Tuple[bool, str]:
-    """
-    Check if a robot is initialized and ready for commands.
-
-    Args:
-        robot_id: Robot identifier
-        world_state: WorldState instance for querying robot status
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if robot is initialized and ready for commands."""
     try:
-        # Check if robot exists in configuration
         if robot_id not in ROBOT_BASE_POSITIONS:
             return False, f"Robot '{robot_id}' not found in system configuration"
 
-        # If world_state is provided, query actual status
         if world_state is not None:
             try:
                 status = world_state.get_robot_status(robot_id)
@@ -254,7 +183,6 @@ def robot_is_initialized(robot_id: str, world_state=None) -> Tuple[bool, str]:
                 logger.warning(f"Could not query robot status: {e}")
                 # Fall through to basic check
 
-        # Basic check: robot exists in config
         return True, ""
 
     except Exception as e:
@@ -264,26 +192,15 @@ def robot_is_initialized(robot_id: str, world_state=None) -> Tuple[bool, str]:
 
 @register_predicate("robot_is_stationary")
 def robot_is_stationary(robot_id: str, world_state=None) -> Tuple[bool, str]:
-    """
-    Check if a robot is stationary (not currently moving).
-
-    Args:
-        robot_id: Robot identifier
-        world_state: WorldState instance for querying robot status
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if robot is stationary (not moving)."""
     try:
         if world_state is None:
             return False, "WorldState required to check robot movement"
 
-        # Query robot status
         status = world_state.get_robot_status(robot_id)
         if status is None:
             return False, f"Robot '{robot_id}' status unavailable"
 
-        # Check if robot is moving
         is_moving = status.get("is_moving", False)
         if is_moving:
             return False, f"Robot '{robot_id}' is currently moving"
@@ -297,26 +214,15 @@ def robot_is_stationary(robot_id: str, world_state=None) -> Tuple[bool, str]:
 
 @register_predicate("gripper_is_open")
 def gripper_is_open(robot_id: str, world_state=None) -> Tuple[bool, str]:
-    """
-    Check if a robot's gripper is in the open state.
-
-    Args:
-        robot_id: Robot identifier
-        world_state: WorldState instance for querying gripper state
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if robot gripper is open."""
     try:
         if world_state is None:
             return False, "WorldState required to check gripper state"
 
-        # Query robot status
         status = world_state.get_robot_status(robot_id)
         if status is None:
             return False, f"Robot '{robot_id}' status unavailable"
 
-        # Check gripper state
         gripper_state = status.get("gripper_state", "unknown")
         if gripper_state == "open":
             return True, ""
@@ -332,26 +238,15 @@ def gripper_is_open(robot_id: str, world_state=None) -> Tuple[bool, str]:
 
 @register_predicate("gripper_is_closed")
 def gripper_is_closed(robot_id: str, world_state=None) -> Tuple[bool, str]:
-    """
-    Check if a robot's gripper is in the closed state.
-
-    Args:
-        robot_id: Robot identifier
-        world_state: WorldState instance for querying gripper state
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if robot gripper is closed."""
     try:
         if world_state is None:
             return False, "WorldState required to check gripper state"
 
-        # Query robot status
         status = world_state.get_robot_status(robot_id)
         if status is None:
             return False, f"Robot '{robot_id}' status unavailable"
 
-        # Check gripper state
         gripper_state = status.get("gripper_state", "unknown")
         if gripper_state == "closed":
             return True, ""
@@ -369,33 +264,18 @@ def gripper_is_closed(robot_id: str, world_state=None) -> Tuple[bool, str]:
 def object_accessible_by_robot(
     robot_id: str, object_position: Tuple[float, float, float], world_state=None
 ) -> Tuple[bool, str]:
-    """
-    Check if an object at a given position is accessible by the robot.
-
-    This checks both reachability (within max reach) and workspace constraints.
-
-    Args:
-        robot_id: Robot identifier
-        object_position: Tuple of (x, y, z) world coordinates
-        world_state: Optional WorldState instance
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if object at position is accessible: within reach AND in workspace or shared zone."""
     try:
         x, y, z = object_position
 
-        # Check reachability
         is_reachable, reach_reason = target_within_reach(robot_id, x, y, z, world_state)
         if not is_reachable:
             return False, f"Object not reachable: {reach_reason}"
 
-        # Check workspace (objects in shared zone are accessible by all robots)
         is_shared, _ = is_in_shared_zone(x, y, z)
         if is_shared:
-            return True, ""  # Shared zone objects accessible by all
+            return True, ""
 
-        # Check if in robot's workspace
         is_in_workspace, workspace_reason = is_in_robot_workspace(
             robot_id, x, y, z, world_state
         )
@@ -409,11 +289,6 @@ def object_accessible_by_robot(
         return False, f"Error checking accessibility: {str(e)}"
 
 
-# ============================================================================
-# Multi-Robot Predicates (Week 2)
-# ============================================================================
-
-
 @register_predicate("robots_will_collide")
 def robots_will_collide(
     robot1_id: str,
@@ -422,27 +297,12 @@ def robots_will_collide(
     target2: Tuple[float, float, float],
     world_state=None,
 ) -> Tuple[bool, str]:
-    """
-    Check if two robots will collide if they move to their respective targets.
+    """Check if two robots will collide moving to respective targets.
 
-    This performs a simplified collision check based on:
-    1. Distance between target positions
-    2. Workspace overlap
-    3. Path intersection (simplified linear path assumption)
-
-    Args:
-        robot1_id: First robot identifier
-        target1: Target position for robot1 (x, y, z)
-        robot2_id: Second robot identifier
-        target2: Target position for robot2 (x, y, z)
-        world_state: WorldState instance for current positions
-
-    Returns:
-        (will_collide, reason)
-        Note: Returns (True, reason) if collision detected, (False, "") if safe
+    Simplified check: target separation, linear path intersection, exclusive workspace overlap.
+    Returns (True, reason) if collision detected, (False, "") if safe.
     """
     try:
-        # Check 1: Target positions too close
         dx = target1[0] - target2[0]
         dy = target1[1] - target2[1]
         dz = target1[2] - target2[2]
@@ -455,15 +315,11 @@ def robots_will_collide(
                 f"(minimum separation: {min_separation}m)"
             )
 
-        # Check 2: Path intersection (simplified - assume linear paths)
         if world_state is not None:
             pos1 = world_state.get_robot_position(robot1_id)
             pos2 = world_state.get_robot_position(robot2_id)
 
             if pos1 is not None and pos2 is not None:
-                # Calculate minimum distance between two line segments
-                # Line 1: pos1 -> target1
-                # Line 2: pos2 -> target2
                 min_path_distance = _calculate_segment_distance(
                     pos1, target1, pos2, target2
                 )
@@ -475,13 +331,10 @@ def robots_will_collide(
                         f"(safety margin: {safety_margin}m)"
                     )
 
-        # Check 3: Both targets in same restricted workspace
-        # (Shared zone is allowed, but not exclusive workspaces)
         is_shared1, _ = is_in_shared_zone(*target1)
         is_shared2, _ = is_in_shared_zone(*target2)
 
         if not is_shared1 and not is_shared2:
-            # Both in exclusive workspaces - check if same workspace
             workspace1 = _get_workspace_containing_point(*target1)
             workspace2 = _get_workspace_containing_point(*target2)
 
@@ -494,7 +347,6 @@ def robots_will_collide(
                     f"Both robots targeting same exclusive workspace: {workspace1}"
                 )
 
-        # No collision detected
         return False, ""
 
     except Exception as e:
@@ -508,36 +360,17 @@ def _calculate_segment_distance(
     p2_start: Tuple[float, float, float],
     p2_end: Tuple[float, float, float],
 ) -> float:
-    """
-    Calculate minimum distance between two line segments in 3D.
-
-    Uses parametric line representation and finds minimum distance
-    between any two points on the segments.
-
-    Args:
-        p1_start: Start point of segment 1
-        p1_end: End point of segment 1
-        p2_start: Start point of segment 2
-        p2_end: End point of segment 2
-
-    Returns:
-        Minimum distance between segments
-    """
-    # Direction vectors
+    """Minimum distance between two 3D line segments via parametric representation."""
     d1 = tuple(p1_end[i] - p1_start[i] for i in range(3))
     d2 = tuple(p2_end[i] - p2_start[i] for i in range(3))
-
-    # Vector between start points
     r = tuple(p1_start[i] - p2_start[i] for i in range(3))
 
-    # Dot products
     a = sum(d1[i] * d1[i] for i in range(3))
     b = sum(d1[i] * d2[i] for i in range(3))
     c = sum(d2[i] * d2[i] for i in range(3))
     d = sum(d1[i] * r[i] for i in range(3))
     e = sum(d2[i] * r[i] for i in range(3))
 
-    # Avoid division by zero
     denominator = a * c - b * b
     if abs(denominator) < 1e-10:
         # Segments are parallel — evaluate all 4 endpoint-to-opposite-segment distances
@@ -580,33 +413,18 @@ def _calculate_segment_distance(
             _point_to_seg2_dist(p1_end),
         )
 
-    # Calculate parameters for closest points
-    t1 = (b * e - c * d) / denominator
-    t2 = (a * e - b * d) / denominator
+    t1 = max(0.0, min(1.0, (b * e - c * d) / denominator))
+    t2 = max(0.0, min(1.0, (a * e - b * d) / denominator))
 
-    # Clamp to segment bounds [0, 1]
-    t1 = max(0.0, min(1.0, t1))
-    t2 = max(0.0, min(1.0, t2))
-
-    # Calculate closest points
     point1 = tuple(p1_start[i] + t1 * d1[i] for i in range(3))
     point2 = tuple(p2_start[i] + t2 * d2[i] for i in range(3))
 
-    # Calculate distance
     dist = math.sqrt(sum((point1[i] - point2[i]) ** 2 for i in range(3)))
     return dist
 
 
 def _get_workspace_containing_point(x: float, y: float, z: float) -> Optional[str]:
-    """
-    Find which workspace region contains a given point.
-
-    Args:
-        x, y, z: Point coordinates
-
-    Returns:
-        Workspace region name or None if not in any region
-    """
+    """Find which workspace region contains a point, or None."""
     for region_name, bounds in WORKSPACE_REGIONS.items():
         if (
             bounds["x_min"] <= x <= bounds["x_max"]
@@ -617,26 +435,9 @@ def _get_workspace_containing_point(x: float, y: float, z: float) -> Optional[st
     return None
 
 
-# ============================================================================
-# Object Liveness and Grasp Predicates (Knowledge Graph Stage A)
-# ============================================================================
-
-
 @register_predicate("object_not_stale")
 def object_not_stale(object_id: str, world_state=None) -> Tuple[bool, str]:
-    """
-    Check if object is still fresh (confidence above stale threshold).
-
-    An object becomes stale when its detection confidence drops below
-    the threshold due to not being seen in recent frames.
-
-    Args:
-        object_id: Object identifier
-        world_state: Optional WorldState instance
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if object confidence is above stale threshold (i.e. seen in recent frames)."""
     if world_state is None:
         try:
             from .WorldState import get_world_state
@@ -644,7 +445,6 @@ def object_not_stale(object_id: str, world_state=None) -> Tuple[bool, str]:
             from operations.WorldState import get_world_state
         world_state = get_world_state()
 
-    # Get object from world state
     obj = world_state._objects.get(object_id)
     if obj is None:
         return False, f"Object '{object_id}' not found in world state"
@@ -662,17 +462,7 @@ def object_not_stale(object_id: str, world_state=None) -> Tuple[bool, str]:
 def object_not_grasped_by_other(
     object_id: str, robot_id: str, world_state=None
 ) -> Tuple[bool, str]:
-    """
-    Check that object is not currently grasped by a different robot.
-
-    Args:
-        object_id: Object identifier
-        robot_id: Robot that wants to grasp the object
-        world_state: Optional WorldState instance
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check that object is not grasped by a different robot."""
     if world_state is None:
         try:
             from .WorldState import get_world_state
@@ -680,7 +470,6 @@ def object_not_grasped_by_other(
             from operations.WorldState import get_world_state
         world_state = get_world_state()
 
-    # Get object from world state
     obj = world_state._objects.get(object_id)
     if obj is None:
         return False, f"Object '{object_id}' not found in world state"
@@ -698,20 +487,7 @@ def object_not_grasped_by_other(
 def region_available_for_robot(
     region: str, robot_id: str, world_state=None
 ) -> Tuple[bool, str]:
-    """
-    Check that a workspace region is not allocated to a different robot.
-
-    Regions can be unallocated (available to all) or allocated to the
-    requesting robot (available), but not allocated to another robot.
-
-    Args:
-        region: Region name (e.g., "left_workspace", "shared_zone")
-        robot_id: Robot that wants to use the region
-        world_state: Optional WorldState instance
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check that workspace region is unallocated or allocated to this robot (not another)."""
     if world_state is None:
         try:
             from .WorldState import get_world_state
@@ -719,40 +495,20 @@ def region_available_for_robot(
             from operations.WorldState import get_world_state
         world_state = get_world_state()
 
-    # Check if region exists
     if region not in WORKSPACE_REGIONS:
         return False, f"Unknown workspace region: '{region}'"
 
-    # Get current allocation
     owner = world_state.get_workspace_owner(region)
 
-    # Region is available if unallocated or allocated to this robot
     if owner is None or owner == robot_id:
         return True, ""
 
     return False, f"Region '{region}' is allocated to {owner}"
 
 
-# ============================================================================
-# Gripper and Image Availability Predicates
-# ============================================================================
-
-
 @register_predicate("gripper_holding_object")
 def gripper_holding_object(robot_id: str, world_state=None) -> Tuple[bool, str]:
-    """
-    Check if the robot's gripper is currently closed (holding an object).
-
-    Uses the gripper_state field from WorldState RobotState, which is updated
-    from Unity via WorldStateServer messages.
-
-    Args:
-        robot_id: Robot identifier
-        world_state: Optional WorldState instance
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if gripper is closed (holding an object) via WorldState RobotState."""
     if world_state is None:
         try:
             from .WorldState import get_world_state
@@ -777,19 +533,7 @@ def gripper_holding_object(robot_id: str, world_state=None) -> Tuple[bool, str]:
 def stereo_images_available(
     max_age_seconds: float = 30.0, world_state=None
 ) -> Tuple[bool, str]:
-    """
-    Check if a recent stereo image pair is available in UnifiedImageStorage.
-
-    Queries the image storage singleton for the latest stereo pair timestamp
-    and rejects pairs older than max_age_seconds.
-
-    Args:
-        max_age_seconds: Maximum acceptable age of stereo images in seconds
-        world_state: Unused; accepted for predicate system compatibility
-
-    Returns:
-        (is_valid, reason_if_invalid)
-    """
+    """Check if a recent stereo image pair is available (not older than max_age_seconds)."""
     import time
 
     try:
@@ -805,7 +549,7 @@ def stereo_images_available(
     if latest_ts == 0.0:
         return False, "No stereo images in storage"
 
-    # Guard against None, 0 or negative values (e.g. from LLM or missing params).
+    # Guard against None, 0, or negative values from LLM.
     effective_max_age = (
         max_age_seconds
         if (max_age_seconds is not None and max_age_seconds > 0)
@@ -822,30 +566,8 @@ def stereo_images_available(
     return True, ""
 
 
-# ============================================================================
-# Utility Functions
-# ============================================================================
-
-
 def evaluate_predicate(predicate_name: str, **kwargs) -> Tuple[bool, str]:
-    """
-    Evaluate a predicate by name with given arguments.
-
-    Args:
-        predicate_name: Name of registered predicate
-        **kwargs: Arguments to pass to predicate
-
-    Returns:
-        (is_valid, reason_if_invalid)
-
-    Example:
-        is_valid, reason = evaluate_predicate(
-            "target_within_reach",
-            robot_id="Robot1",
-            x=0.3, y=0.2, z=0.1,
-            world_state=world_state
-        )
-    """
+    """Evaluate a registered predicate by name."""
     predicate = get_predicate(predicate_name)
     if predicate is None:
         return False, f"Unknown predicate: {predicate_name}"
@@ -858,10 +580,5 @@ def evaluate_predicate(predicate_name: str, **kwargs) -> Tuple[bool, str]:
 
 
 def list_predicates() -> list[str]:
-    """
-    List all registered predicate names.
-
-    Returns:
-        List of predicate names
-    """
+    """List all registered predicate names."""
     return list(PREDICATE_REGISTRY.keys())

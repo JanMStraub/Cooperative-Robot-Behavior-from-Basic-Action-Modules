@@ -3,10 +3,6 @@ using UnityEngine;
 
 namespace PythonCommunication
 {
-    // ============================================================================
-    // LLM RESULT DATA MODELS (from LLMResultsReceiver)
-    // ============================================================================
-
     /// <summary>
     /// Data structure for LLM analysis results received from Python
     /// </summary>
@@ -31,10 +27,6 @@ namespace PythonCommunication
         public string prompt;
         public string full_prompt;
     }
-
-    // ============================================================================
-    // DETECTION RESULT DATA MODELS
-    // ============================================================================
 
     /// <summary>
     /// Complete detection result from Python detector including all detected cubes in a single frame

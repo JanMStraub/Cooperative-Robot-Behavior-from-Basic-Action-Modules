@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""
-ImageServer.py - Stereo image receiving server
-
-Receives stereo image pairs from Unity on port 5006.
-"""
+"""Stereo image receiver (port 5006)."""
 
 import socket
 import struct
@@ -56,7 +52,6 @@ class StereoImageServer(TCPServerBase):
         self._storage = UnifiedImageStorage()
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
-        """Handle stereo image pair reception."""
         client.settimeout(None)
 
         try:
@@ -74,7 +69,6 @@ class StereoImageServer(TCPServerBase):
                     logger.error(f"Expected STEREO_IMAGE, got {msg_type}")
                     break
 
-                # Read camera_pair_id
                 pair_id_len = self._read_int(client)
                 if pair_id_len is None or pair_id_len > MAX_STRING_LENGTH:
                     break
@@ -83,19 +77,16 @@ class StereoImageServer(TCPServerBase):
                     break
                 camera_pair_id = pair_id_bytes.decode("utf-8")
 
-                # Read camera_L_id (not used but part of protocol)
                 cam_L_len = self._read_int(client)
                 if cam_L_len is None:
                     break
                 self._recv_exactly(client, cam_L_len)
 
-                # Read camera_R_id (not used but part of protocol)
                 cam_R_len = self._read_int(client)
                 if cam_R_len is None:
                     break
                 self._recv_exactly(client, cam_R_len)
 
-                # Read prompt
                 prompt_len = self._read_int(client)
                 if prompt_len is None or prompt_len > MAX_STRING_LENGTH:
                     break
@@ -107,7 +98,6 @@ class StereoImageServer(TCPServerBase):
                 else:
                     prompt = ""
 
-                # Read left image
                 img_L_len = self._read_int(client)
                 if img_L_len is None or img_L_len > MAX_IMAGE_SIZE:
                     break
@@ -115,7 +105,6 @@ class StereoImageServer(TCPServerBase):
                 if not img_L_data:
                     break
 
-                # Read right image
                 img_R_len = self._read_int(client)
                 if img_R_len is None or img_R_len > MAX_IMAGE_SIZE:
                     break
@@ -123,7 +112,6 @@ class StereoImageServer(TCPServerBase):
                 if not img_R_data:
                     break
 
-                # Read metadata (if available)
                 metadata = {}
                 try:
                     meta_len = self._read_int(client)
@@ -171,30 +159,21 @@ class ImageServer:
         stereo_port: int = STEREO_DETECTION_PORT,
         host: str = DEFAULT_HOST,
     ):
-        """
-        Args:
-            stereo_port: Port for stereo image pairs
-            host: Host to bind to
-        """
         self._stereo_config = ServerConfig(host=host, port=stereo_port)
         self._stereo_server = StereoImageServer(self._stereo_config)
         self._storage = UnifiedImageStorage()
 
     def start(self):
-        """Start the stereo image server."""
         self._stereo_server.start()
 
     def stop(self):
-        """Stop the stereo image server."""
         self._stereo_server.stop()
         logger.info("ImageServer stopped")
 
     def is_running(self) -> bool:
-        """Check if the server is running."""
         return self._stereo_server.is_running()
 
     def get_storage(self) -> UnifiedImageStorage:
-        """Get the unified image storage."""
         return self._storage
 
 
@@ -202,16 +181,7 @@ def run_image_server_background(
     stereo_port: int = STEREO_DETECTION_PORT,
     host: str = DEFAULT_HOST,
 ) -> ImageServer:
-    """
-    Start the ImageServer in a background thread.
-
-    Args:
-        stereo_port: Port for stereo image pairs
-        host: Host to bind to
-
-    Returns:
-        ImageServer instance
-    """
+    """Start ImageServer in background thread."""
     server = ImageServer(stereo_port, host)
     server.start()
     return server

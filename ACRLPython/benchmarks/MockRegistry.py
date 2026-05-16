@@ -32,9 +32,6 @@ class _MockOperation:
         """
         Initialise mock from real operation.
 
-        Args:
-            real_op: The real BasicOperation instance.
-            profile: One of PROFILES controlling stub behaviour.
         """
         self.__dict__.update(real_op.__dict__)
         self._real_op = real_op
@@ -88,6 +85,7 @@ class _MockOperation:
 
         if self._profile == "first_fail_nav":
             from operations.Base import OperationCategory
+
             is_nav = getattr(self, "category", None) == OperationCategory.NAVIGATION
             if is_nav:
                 key = getattr(self, "name", id(self))
@@ -108,11 +106,7 @@ def install_mock(profile: str = "always_succeed") -> Callable:
     """
     Monkeypatch get_operation_by_name on the global registry singleton.
 
-    Args:
-        profile: Stub profile — one of PROFILES.
 
-    Returns:
-        The original get_operation_by_name method for later restoration.
     """
     from core.Imports import get_global_registry
 
@@ -140,8 +134,6 @@ def restore_mock(original: Callable) -> None:
     """
     Restore get_operation_by_name to original implementation.
 
-    Args:
-        original: The callable returned by install_mock().
     """
     from core.Imports import get_global_registry
 

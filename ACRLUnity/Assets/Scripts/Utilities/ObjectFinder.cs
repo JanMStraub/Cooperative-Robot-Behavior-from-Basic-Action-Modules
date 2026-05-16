@@ -361,11 +361,6 @@ namespace Utilities
             return isRobotPart;
         }
 
-        /// <summary>
-        /// Checks if a GameObject is part of the ground/floor/environment.
-        /// </summary>
-        /// <param name="obj">GameObject to check</param>
-        /// <returns>True if the object is ground/floor</returns>
         private bool IsGroundObject(GameObject obj)
         {
             return obj.CompareTag("Ground")

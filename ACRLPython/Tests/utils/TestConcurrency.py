@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Concurrency and Thread Safety Tests
-
-Tests concurrent operations, thread safety, and race conditions across
-the robot control system including:
-- Concurrent image storage and retrieval
-- Parallel command execution
-- Multi-threaded registry access
-- Race conditions in singletons
-- Concurrent variable updates
-- Thread-safe queue operations
-"""
+"""Concurrency and Thread Safety Tests"""
 
 import numpy as np
 import threading
@@ -29,9 +18,7 @@ from operations.Base import (
 from operations.MoveOperations import move_to_coordinate
 from operations.WorldState import WorldState
 
-# ============================================================================
 # Test Concurrent Image Operations
-# ============================================================================
 
 
 class TestConcurrentImageOperations:
@@ -165,9 +152,7 @@ class TestConcurrentImageOperations:
         assert len(errors) == 0
 
 
-# ============================================================================
 # Test Concurrent Command Broadcasting
-# ============================================================================
 
 
 class TestConcurrentCommandBroadcasting:
@@ -256,9 +241,7 @@ class TestConcurrentCommandBroadcasting:
         assert len(errors) == 0
 
 
-# ============================================================================
 # Test Concurrent Registry Operations
-# ============================================================================
 
 
 class TestConcurrentRegistryOperations:
@@ -361,9 +344,7 @@ class TestConcurrentRegistryOperations:
         assert lookup_count[0] == 2000
 
 
-# ============================================================================
 # Test Concurrent World State Updates
-# ============================================================================
 
 
 class TestConcurrentWorldStateUpdates:
@@ -504,9 +485,7 @@ class TestConcurrentWorldStateUpdates:
         assert write_count[0] == 1500  # 3 writers * 50 iterations * 10 robots
 
 
-# ============================================================================
 # Test Singleton Thread Safety
-# ============================================================================
 
 
 class TestSingletonThreadSafety:
@@ -571,9 +550,7 @@ class TestSingletonThreadSafety:
         assert all(inst is instances[0] for inst in instances)
 
 
-# ============================================================================
 # Test Race Conditions
-# ============================================================================
 
 
 class TestRaceConditions:

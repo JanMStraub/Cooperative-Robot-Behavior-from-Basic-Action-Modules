@@ -1,22 +1,5 @@
 #!/usr/bin/env python3
-"""
-AutoRTIntegration.py - Unity ↔ Python AutoRT handler
-
-Provides integration between Unity's AutoRTManager and Python's AutoRTOrchestrator.
-Handles task generation WITHOUT automatic execution - Unity approves tasks first.
-
-Architecture:
-- Singleton handler integrates with SequenceServer
-- Manages background loop thread for continuous task generation
-- Caches generated tasks by ID for later execution
-- Sends tasks to Unity via AUTORT_RESPONSE messages
-
-Usage:
-    handler = AutoRTHandler.get_instance()
-    result = handler.generate_tasks(num_tasks=5, robot_ids=["Robot1", "Robot2"])
-    result = handler.start_loop(loop_delay=5.0)
-    result = handler.execute_task(task_id="task_12345")
-"""
+"""Unity ↔ Python AutoRT handler. Tasks generated but NOT executed until Unity approves."""
 
 import logging
 import threading
@@ -24,7 +7,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
-# Configure logging
 try:
     from core.LoggingSetup import setup_logging
 
@@ -36,7 +18,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Import config
 try:
     from config.AutoRT import (
         MAX_TASK_CANDIDATES,
@@ -73,7 +54,6 @@ class AutoRTHandler:
     _lock = threading.Lock()
 
     def __init__(self):
-        """Initialize AutoRT handler (private - use get_instance)."""
         self._orchestrator = None
         self._loop_thread = None
         self._loop_running = False
@@ -111,12 +91,7 @@ class AutoRTHandler:
         return cls._instance
 
     def set_task_callback(self, callback):
-        """
-        Set callback function for sending tasks to Unity.
-
-        Args:
-            callback: Function(response_dict, request_id) -> None
-        """
+        """Set callback Function(response_dict, request_id) -> None for sending tasks to Unity."""
         self._task_callback = callback
         logger.info("Task callback registered")
 
@@ -131,7 +106,6 @@ class AutoRTHandler:
             return
 
         try:
-            # Import here to avoid circular dependencies
             from autort.AutoRTLoop import AutoRTOrchestrator
 
             self._orchestrator = AutoRTOrchestrator()
@@ -146,7 +120,6 @@ class AutoRTHandler:
             raise RuntimeError(f"AutoRT initialization failed: {e}")
 
     def _cleanup_expired_tasks(self):
-        """Remove expired tasks from cache."""
         now = datetime.now()
         expiration_threshold = timedelta(seconds=TASK_EXPIRATION_SECONDS)
 
@@ -165,15 +138,6 @@ class AutoRTHandler:
                 logger.info(f"Cleaned up {len(expired_ids)} expired tasks")
 
     def _cache_task(self, task) -> str:
-        """
-        Cache a generated task.
-
-        Args:
-            task: ProposedTask object from AutoRTOrchestrator
-
-        Returns:
-            Task ID (uses existing task.task_id)
-        """
         task_id = task.task_id
         timestamp = datetime.now()
 
@@ -193,16 +157,7 @@ class AutoRTHandler:
         return task_id
 
     def _serialize_task(self, task) -> dict:
-        """
-        Convert ProposedTask to Unity-compatible format.
-
-        Args:
-            task: ProposedTask object
-
-        Returns:
-            Serialized task dict
-        """
-        # Convert Operation objects to dicts
+        """Convert ProposedTask to Unity-compatible format."""
         operations_list = []
         for op in task.operations:
             operations_list.append(
@@ -228,22 +183,10 @@ class AutoRTHandler:
         robot_ids: Optional[List[str]] = None,
         strategy: str = "balanced",
     ) -> dict:
-        """
-        Generate new tasks without executing them.
-
-        Args:
-            num_tasks: Number of tasks to generate (default: config value)
-            robot_ids: Robot IDs to use (default: config value)
-            strategy: Selection strategy ("balanced", "explore", "exploit", "random")
-
-        Returns:
-            Response dict: {success, tasks[], error}
-        """
         try:
             self._initialize_orchestrator()
             self._cleanup_expired_tasks()
 
-            # Type guard: ensure orchestrator is initialized
             if self._orchestrator is None:
                 raise RuntimeError("Orchestrator initialization failed")
 
@@ -254,10 +197,8 @@ class AutoRTHandler:
                 f"Generating {num_tasks} tasks for robots {robot_ids} with strategy '{strategy}'"
             )
 
-            # Capture scene state
             scene_state = self._orchestrator._capture_scene()
 
-            # Generate task candidates using TaskGenerator
             candidates = self._orchestrator.task_generator.generate_tasks(
                 scene_state,
                 robot_ids=robot_ids,
@@ -276,7 +217,6 @@ class AutoRTHandler:
                     "error": None,
                 }
 
-            # Filter through constitution (safety validation) - skip if disabled
             if ENABLE_SAFETY_VALIDATION:
                 validated_tasks = []
                 for candidate in candidates:
@@ -303,7 +243,6 @@ class AutoRTHandler:
                         "error": "All tasks rejected by safety filters",
                     }
             else:
-                # Skip safety validation
                 logger.warning("Safety validation DISABLED - accepting all tasks")
                 validated_tasks = candidates
 
@@ -320,7 +259,6 @@ class AutoRTHandler:
                 else:
                     break
 
-            # Cache tasks and serialize for Unity
             serialized_tasks = []
             for task in selected_tasks:
                 self._cache_task(task)  # Cache using task.task_id
@@ -351,17 +289,6 @@ class AutoRTHandler:
         robot_ids: Optional[List[str]] = None,
         strategy: str = "balanced",
     ) -> dict:
-        """
-        Start continuous task generation loop in background thread.
-
-        Args:
-            loop_delay: Seconds between generations (default: config value)
-            robot_ids: Robot IDs to use (default: config value)
-            strategy: Selection strategy
-
-        Returns:
-            Response dict: {success, loop_running}
-        """
         if self._loop_running:
             logger.warning("Loop already running")
             return {
@@ -405,12 +332,6 @@ class AutoRTHandler:
             }
 
     def stop_loop(self) -> dict:
-        """
-        Stop continuous task generation loop.
-
-        Returns:
-            Response dict: {success, loop_running}
-        """
         if not self._loop_running:
             logger.info("Loop not running")
             return {
@@ -424,7 +345,6 @@ class AutoRTHandler:
             self._loop_stop_event.set()
             self._loop_running = False
 
-            # Wait for thread to finish (max 5 seconds)
             if self._loop_thread and self._loop_thread.is_alive():
                 self._loop_thread.join(timeout=5.0)
 
@@ -445,19 +365,8 @@ class AutoRTHandler:
             }
 
     def execute_task(self, task_id: str) -> dict:
-        """
-        Execute a previously generated task (approved by Unity).
-
-        Returns immediately with acknowledgment. Task executes asynchronously.
-
-        Args:
-            task_id: Task ID from cache
-
-        Returns:
-            Response dict: {success, result, error, status}
-        """
+        """Execute approved task. Returns immediately; execution is async."""
         try:
-            # Retrieve task from cache
             with self._task_lock:
                 if task_id not in self._pending_tasks:
                     logger.warning(f"Task not found in cache: {task_id}")
@@ -469,18 +378,14 @@ class AutoRTHandler:
                     }
 
                 task, _ = self._pending_tasks[task_id]
-                # Remove from cache after retrieval
                 del self._pending_tasks[task_id]
 
             logger.info(f"Starting execution of approved task: {task_id}")
 
-            # Execute task asynchronously in background thread
-            # This allows immediate response to Unity
             def execute_async():
                 try:
                     self._initialize_orchestrator()
 
-                    # Type guard: ensure orchestrator is initialized
                     if self._orchestrator is None:
                         logger.error("Orchestrator initialization failed")
                         return
@@ -493,10 +398,8 @@ class AutoRTHandler:
                 except Exception as e:
                     logger.error(f"Async task execution failed: {e}", exc_info=True)
 
-            # Submit to bounded pool (max_workers=2) to cap concurrency
             self._exec_pool.submit(execute_async)
 
-            # Return immediately with acknowledgment
             logger.info(
                 f"Task {task_id} submitted to executor pool, returning immediate response"
             )
@@ -517,12 +420,6 @@ class AutoRTHandler:
             }
 
     def get_status(self) -> dict:
-        """
-        Get current AutoRT status.
-
-        Returns:
-            Status dict: {loop_running, pending_tasks_count, loop_config}
-        """
         with self._task_lock:
             pending_count = len(self._pending_tasks)
 
@@ -559,14 +456,12 @@ class AutoRTHandler:
 
         while not self._loop_stop_event.is_set():
             try:
-                # Generate tasks
                 response = self.generate_tasks(
                     num_tasks=MAX_TASK_CANDIDATES,
                     robot_ids=self._loop_robot_ids,
                     strategy=self._loop_strategy,
                 )
 
-                # Send to Unity via callback (if registered and Unity integration enabled)
                 if (
                     UNITY_INTEGRATION_ENABLED
                     and self._task_callback
@@ -577,7 +472,6 @@ class AutoRTHandler:
                         f"Sent {len(response['tasks'])} tasks to Unity via callback"
                     )
 
-                # Push to web dashboard via WebSocket broadcast (if registered)
                 if self._web_broadcast_callback and response.get("tasks"):
                     try:
                         self._web_broadcast_callback(
@@ -590,12 +484,10 @@ class AutoRTHandler:
                     except Exception as cb_err:
                         logger.error(f"Web broadcast callback failed: {cb_err}")
 
-                # Wait with interruptible sleep
                 self._loop_stop_event.wait(timeout=self._loop_delay)
 
             except Exception as e:
                 logger.error(f"Loop iteration error: {e}", exc_info=True)
-                # Continue loop despite errors
                 self._loop_stop_event.wait(timeout=self._loop_delay)
 
         logger.info("AutoRT loop worker stopped")

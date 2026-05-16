@@ -1,16 +1,5 @@
 #!/usr/bin/env python3
-"""
-Grasp Utility Helpers
-=====================
-
-Shared helpers used by both ``GraspOperations`` and ``VGNClient``.  Placing
-them here breaks the circular import that would arise if VGNClient imported
-from GraspOperations directly.
-
-Currently contains:
-    - ``_build_segmentation_mask`` — project 3D camera points to 2D and mask
-      to a YOLO bounding box.
-"""
+"""Shared grasp helpers for GraspOperations and VGNClient (split to avoid circular import)."""
 
 import math
 from typing import TYPE_CHECKING, Optional
@@ -50,24 +39,6 @@ def _build_segmentation_mask(
     metres.  This removes background and table-surface points that project into
     the object's 2D footprint but lie at a different depth, reducing TSDF noise.
 
-    Args:
-        points_camera:   (N, 3) float32 array in right-handed camera frame.
-        yolo_bbox:       (x, y, w, h) pixel bounding box from detect_objects().
-        image_width:     Width of the stereo image in pixels.
-        image_height:    Height of the stereo image in pixels.
-        fov:             Horizontal field-of-view in degrees.
-        preferred_approach: "auto", "top", "front", or "side".
-        depth_hint:      Optional expected camera-frame depth in metres
-                         (positive = in front of camera, equal to ``-Z`` in the
-                         Q-matrix frame).  Derived from WorldState object position
-                         converted to camera frame.  ``None`` disables depth
-                         filtering and preserves prior behaviour.
-        depth_margin:    Half-width of the depth acceptance window in metres.
-                         Default 0.07 m (±7 cm) covers a 5 cm cube with ±2 cm
-                         WorldState position uncertainty.
-
-    Returns:
-        Boolean ndarray of shape (N,) — True for points to include.
     """
     import numpy as np
 

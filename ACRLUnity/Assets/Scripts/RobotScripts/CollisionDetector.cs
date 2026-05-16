@@ -61,9 +61,6 @@ namespace Robotics
         // Helper variables
         private const string _logPrefix = "[COLLISION_DETECTOR]";
 
-        /// <summary>
-        /// Unity Awake callback - auto-detects target ID if not set.
-        /// </summary>
         private void Awake()
         {
             if (string.IsNullOrEmpty(targetId))
@@ -72,9 +69,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Unity Start callback - initializes component references and validates configuration.
-        /// </summary>
         private void Start()
         {
             try
@@ -95,9 +89,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Validates the collision configuration and corrects invalid values.
-        /// </summary>
         private void ValidateConfiguration()
         {
             if (config.collisionCooldown < 0)
@@ -116,10 +107,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Unity OnTriggerEnter callback - processes collision when collider enters trigger.
-        /// </summary>
-        /// <param name="other">The collider that entered the trigger</param>
         private void OnTriggerEnter(Collider other)
         {
             if (!config.enableCollisionDetection)
@@ -137,10 +124,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Unity OnTriggerStay callback - processes collision while collider remains in trigger.
-        /// </summary>
-        /// <param name="other">The collider that is inside the trigger</param>
         private void OnTriggerStay(Collider other)
         {
             if (!config.enableCollisionDetection)
@@ -158,11 +141,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Processes a collision event by filtering, cooldown checking, and handling robot collision.
-        /// </summary>
-        /// <param name="other">The collider that triggered the collision</param>
-        /// <param name="collisionType">The type of collision (trigger_enter, trigger_stay)</param>
         private void ProcessCollision(Collider other, string collisionType)
         {
             if ((config.robotLayerMask.value & (1 << other.gameObject.layer)) == 0)
@@ -185,24 +163,12 @@ namespace Robotics
             HandleRobotCollision(other, robotController, robotId, collisionType);
         }
 
-        /// <summary>
-        /// Checks if a robot is within the collision cooldown period.
-        /// </summary>
-        /// <param name="robotId">The robot identifier to check</param>
-        /// <returns>True if in cooldown period, false otherwise</returns>
         private bool IsInCooldown(string robotId)
         {
             return _lastCollisionTime.ContainsKey(robotId)
                 && Time.time - _lastCollisionTime[robotId] < config.collisionCooldown;
         }
 
-        /// <summary>
-        /// Handles a robot collision by calculating collision details and logging the event.
-        /// </summary>
-        /// <param name="other">The collider that triggered the collision</param>
-        /// <param name="robotController">The robot controller component</param>
-        /// <param name="robotId">The robot identifier</param>
-        /// <param name="collisionType">The type of collision event</param>
         private void HandleRobotCollision(
             Collider other,
             RobotController robotController,
@@ -249,11 +215,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Calculates the approach speed of a colliding object.
-        /// </summary>
-        /// <param name="other">The collider to calculate speed for</param>
-        /// <returns>The magnitude of the linear velocity, or 0 if no rigidbody</returns>
         private float CalculateApproachSpeed(Collider other)
         {
             try
@@ -271,19 +232,11 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Updates collision metrics by incrementing the total collision count.
-        /// </summary>
-        /// <param name="robotId">The robot identifier</param>
-        /// <param name="collisionData">The collision data</param>
         private void UpdateCollisionMetrics(string robotId, CollisionData collisionData)
         {
             _totalCollisions++;
         }
 
-        /// <summary>
-        /// Resets all collision metrics and tracking data.
-        /// </summary>
         public void ResetMetrics()
         {
             _totalCollisions = 0;
@@ -292,19 +245,12 @@ namespace Robotics
             Debug.Log($"{_logPrefix}  Metrics reset for target: {targetId}");
         }
 
-        /// <summary>
-        /// Sets the target reward value for this collision target.
-        /// </summary>
-        /// <param name="rewardValue">The new reward value</param>
         public void SetTargetReward(float rewardValue)
         {
             targetRewardValue = rewardValue;
             Debug.Log($"{_logPrefix}  Target reward changed: {targetId}, NewReward: {rewardValue}");
         }
 
-        /// <summary>
-        /// Unity OnDrawGizmos callback - visualizes the collision target in the scene view.
-        /// </summary>
         private void OnDrawGizmos()
         {
 #if UNITY_EDITOR
@@ -322,9 +268,6 @@ namespace Robotics
 #endif
         }
 
-        /// <summary>
-        /// Unity OnDestroy callback - logs final collision statistics.
-        /// </summary>
         private void OnDestroy()
         {
             try

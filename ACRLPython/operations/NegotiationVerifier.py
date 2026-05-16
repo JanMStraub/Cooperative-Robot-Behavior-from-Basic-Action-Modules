@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""
-Negotiation Plan Verifier
-==========================
-
-Plan-level verification for negotiated multi-robot plans.
-Checks structural validity (signal/wait pairs, variable flow,
-parallel group ordering) and spatial safety before execution.
-"""
+"""Plan-level verification for negotiated multi-robot plans (structural + spatial safety)."""
 
 import logging
 from dataclasses import dataclass, field
@@ -19,22 +12,9 @@ from config.Robot import ROBOT_BASE_POSITIONS, MAX_ROBOT_REACH, MIN_ROBOT_SEPARA
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Data Structures
-# ============================================================================
-
-
 @dataclass
 class PlanVerificationResult:
-    """
-    Result of verifying a negotiated plan.
-
-    Attributes:
-        valid: True if plan passes all structural checks
-        errors: Blocking issues that prevent execution
-        warnings: Non-blocking concerns
-        safety_check: True if spatial safety checks passed
-    """
+    """Result of verifying a negotiated plan."""
 
     valid: bool = True
     errors: List[str] = field(default_factory=list)
@@ -42,34 +22,19 @@ class PlanVerificationResult:
     safety_check: bool = True
 
     def add_error(self, msg: str):
-        """Add an error and mark plan as invalid."""
+        """Add error and mark plan invalid."""
         self.errors.append(msg)
         self.valid = False
 
     def add_warning(self, msg: str):
-        """Add a non-blocking warning."""
+        """Add non-blocking warning."""
         self.warnings.append(msg)
 
 
-# ============================================================================
-# Negotiation Verifier
-# ============================================================================
-
-
 class NegotiationVerifier:
-    """
-    Verifies structural correctness and spatial safety of negotiated plans.
-
-    Checks:
-    - All operations exist in registry
-    - Signal/wait_for_signal pairs are matched
-    - Variable definitions precede variable usage
-    - Parallel groups are ordered correctly
-    - Spatial safety (reach, collision) for all robots
-    """
+    """Verifies structural correctness and spatial safety of negotiated plans."""
 
     def __init__(self):
-        """Initialize the verifier."""
         self._coordination_verifier = CoordinationVerifier()
 
     def verify_plan(
@@ -77,16 +42,6 @@ class NegotiationVerifier:
         commands: List[Dict[str, Any]],
         world_state=None,
     ) -> PlanVerificationResult:
-        """
-        Verify a negotiated plan before execution.
-
-        Args:
-            commands: List of command dicts with operation, params, etc.
-            world_state: Optional WorldState instance
-
-        Returns:
-            PlanVerificationResult with errors and warnings
-        """
         if world_state is None:
             world_state = get_world_state()
 
@@ -126,15 +81,6 @@ class NegotiationVerifier:
         return result
 
     def _verify_operations_exist(self, commands: List[Dict[str, Any]]) -> List[str]:
-        """
-        Verify all operations in the plan exist in the registry.
-
-        Args:
-            commands: Plan commands
-
-        Returns:
-            List of error messages for missing operations
-        """
         from core.Imports import get_global_registry
 
         errors = []
@@ -155,15 +101,6 @@ class NegotiationVerifier:
         return errors
 
     def _verify_signal_wait_pairs(self, commands: List[Dict[str, Any]]) -> List[str]:
-        """
-        Verify every wait_for_signal has a matching signal.
-
-        Args:
-            commands: Plan commands
-
-        Returns:
-            List of error messages for unmatched signals
-        """
         errors = []
         defined_signals = set()
         waited_signals = set()
@@ -182,12 +119,10 @@ class NegotiationVerifier:
                 if event:
                     waited_signals.add(event)
 
-        # Check all waited signals have a definition
         unmatched = waited_signals - defined_signals
         for event in unmatched:
             errors.append(f"wait_for_signal('{event}') has no matching signal")
 
-        # Warn about signals nobody waits for — may indicate a broken coordination plan
         unused = defined_signals - waited_signals
         for event in unused:
             logger.warning(
@@ -198,19 +133,9 @@ class NegotiationVerifier:
         return errors
 
     def _verify_variable_flow(self, commands: List[Dict[str, Any]]) -> List[str]:
-        """
-        Verify variables are defined before they are used.
-
-        Args:
-            commands: Plan commands
-
-        Returns:
-            List of error messages for undefined variable usage
-        """
         errors = []
         defined_vars = set()
 
-        # Process commands in execution order (by parallel_group, then index)
         sorted_commands = sorted(
             enumerate(commands),
             key=lambda x: (x[1].get("parallel_group", x[0]), x[0]),
@@ -222,13 +147,11 @@ class NegotiationVerifier:
         for idx, cmd in sorted_commands:
             group = cmd.get("parallel_group", idx)
 
-            # When we enter a new group, commit previous group's captures
             if group != current_group:
                 defined_vars.update(group_captures)
                 group_captures = set()
                 current_group = group
 
-            # Check variable usage in params
             params = cmd.get("params", {})
             for key, val in params.items():
                 if isinstance(val, str) and val.startswith("$"):
@@ -239,7 +162,6 @@ class NegotiationVerifier:
                             f"(in {cmd.get('operation', '?')}.{key})"
                         )
 
-            # Track captures
             if "capture_var" in cmd:
                 group_captures.add(cmd["capture_var"])
 
@@ -248,15 +170,6 @@ class NegotiationVerifier:
     def _verify_parallel_group_ordering(
         self, commands: List[Dict[str, Any]]
     ) -> List[str]:
-        """
-        Verify parallel group numbers are valid.
-
-        Args:
-            commands: Plan commands
-
-        Returns:
-            List of error messages for ordering issues
-        """
         errors = []
         groups_seen = set()
 
@@ -270,7 +183,6 @@ class NegotiationVerifier:
                 else:
                     groups_seen.add(group)
 
-        # Check for gaps (warn only)
         if groups_seen:
             min_g = min(groups_seen)
             max_g = max(groups_seen)
@@ -286,20 +198,9 @@ class NegotiationVerifier:
         commands: List[Dict[str, Any]],
         world_state,
     ) -> Tuple[List[str], List[str]]:
-        """
-        Verify spatial safety of the plan (reach, collision).
-
-        Args:
-            commands: Plan commands
-            world_state: WorldState instance
-
-        Returns:
-            (errors, warnings) tuple
-        """
         errors = []
         warnings = []
 
-        # Collect all move targets per parallel group to check for collisions
         from collections import defaultdict
 
         group_targets: Dict[int, List[Tuple[str, Tuple[float, float, float]]]] = (

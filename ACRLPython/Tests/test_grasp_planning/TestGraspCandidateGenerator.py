@@ -19,7 +19,6 @@ from grasp_planning.GraspConfig import GraspConfig
 
 
 class TestGraspCandidateGenerator:
-    """Test grasp candidate generation."""
 
     @pytest.fixture
     def config(self):
@@ -32,13 +31,11 @@ class TestGraspCandidateGenerator:
         return GraspCandidateGenerator(config, seed=42)
 
     def test_generator_initialization(self, config):
-        """Test generator initializes correctly."""
         generator = GraspCandidateGenerator(config, seed=42)
         assert generator.config == config
         assert generator.random is not None
 
     def test_generates_correct_number_of_candidates(self, generator):
-        """Test that correct number of candidates are generated."""
         object_position = (0.0, 0.0, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -53,7 +50,6 @@ class TestGraspCandidateGenerator:
         assert len(candidates) == expected_count
 
     def test_candidates_have_required_fields(self, generator):
-        """Test that all candidates have required fields."""
         object_position = (0.0, 0.0, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -93,7 +89,6 @@ class TestGraspCandidateGenerator:
             assert pre_grasp_dist > grasp_dist
 
     def test_reproducibility_with_seed(self, config):
-        """Test that same seed produces same candidates."""
         object_position = (0.0, 0.0, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -115,7 +110,6 @@ class TestGraspCandidateGenerator:
             assert np.allclose(c1.pre_grasp_position, c2.pre_grasp_position, atol=1e-6)
 
     def test_different_seeds_produce_different_candidates(self, config):
-        """Test that different seeds produce different candidates."""
         object_position = (0.0, 0.0, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -167,7 +161,6 @@ class TestGraspCandidateGenerator:
         assert large_avg_dist > small_avg_dist
 
     def test_antipodal_score_range(self, generator):
-        """Test that antipodal scores are in valid range."""
         object_position = (0.0, 0.0, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -181,7 +174,6 @@ class TestGraspCandidateGenerator:
             assert 0.0 <= candidate.antipodal_score <= 1.0
 
     def test_top_approach_candidates(self, config):
-        """Test that top approach candidates point downward."""
         # Enable only top approach
         config.enabled_approaches = [
             approach
@@ -206,7 +198,6 @@ class TestGraspCandidateGenerator:
             assert candidate.pre_grasp_position[1] > candidate.grasp_position[1]
 
     def test_approach_direction_normalized(self, generator):
-        """Test that approach directions are normalized."""
         object_position = (0.0, 0.0, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -222,7 +213,6 @@ class TestGraspCandidateGenerator:
                 assert np.isclose(magnitude, 1.0, atol=1e-5)
 
     def test_grasp_depth_variation(self, generator):
-        """Test that grasp depth varies across candidates."""
         object_position = (0.0, 0.0, 0.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
@@ -240,10 +230,8 @@ class TestGraspCandidateGenerator:
 
 
 class TestGraspConfigIntegration:
-    """Test generator behavior with different configurations."""
 
     def test_fast_config_generates_fewer_candidates(self):
-        """Test that fast config generates fewer candidates."""
         fast_config = GraspConfig.create_fast()
         default_config = GraspConfig.create_default()
 
@@ -252,7 +240,6 @@ class TestGraspConfigIntegration:
         )
 
     def test_precise_config_generates_more_candidates(self):
-        """Test that precise config generates more candidates."""
         precise_config = GraspConfig.create_precise()
         default_config = GraspConfig.create_default()
 
@@ -262,7 +249,6 @@ class TestGraspConfigIntegration:
         )
 
     def test_disabled_approach_not_generated(self):
-        """Test that disabled approaches are not generated."""
         config = GraspConfig.create_default()
 
         # Disable front and side approaches

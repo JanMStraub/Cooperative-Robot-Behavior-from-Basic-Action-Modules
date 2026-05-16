@@ -40,7 +40,9 @@ namespace Robotics
         private float VelocityThresholdPostPreGrasp =>
             _graspTimingConfig != null ? _graspTimingConfig.velocityThresholdPostPreGrasp : 0.01f;
         private float VelocityThresholdPreGripperClose =>
-            _graspTimingConfig != null ? _graspTimingConfig.velocityThresholdPreGripperClose : 0.005f;
+            _graspTimingConfig != null
+                ? _graspTimingConfig.velocityThresholdPreGripperClose
+                : 0.005f;
         private float GraspConfirmationWait =>
             _graspTimingConfig != null ? _graspTimingConfig.graspConfirmationWaitSeconds : 0.3f;
 
@@ -95,7 +97,10 @@ namespace Robotics
         /// </summary>
         /// <param name="hasReachedTarget">Getter returning current reach state</param>
         /// <param name="timeoutSeconds">Maximum seconds to wait</param>
-        public IEnumerator WaitForTargetWithTimeout(Func<bool> hasReachedTarget, float timeoutSeconds)
+        public IEnumerator WaitForTargetWithTimeout(
+            Func<bool> hasReachedTarget,
+            float timeoutSeconds
+        )
         {
             float startTime = Time.time;
             while (!hasReachedTarget())
@@ -123,10 +128,9 @@ namespace Robotics
         )
         {
             float delayStartTime = Time.time;
-            yield return new WaitUntil(
-                () =>
-                    Time.time - delayStartTime >= gripperCloseDelay
-                    && _getEndEffectorVelocityMagnitude() < 0.005f
+            yield return new WaitUntil(() =>
+                Time.time - delayStartTime >= gripperCloseDelay
+                && _getEndEffectorVelocityMagnitude() < 0.005f
             );
 
             if (attachObjectOnGrasp && targetObject != null)
@@ -136,8 +140,8 @@ namespace Robotics
             yield return new WaitWhile(() => _gripperController.IsMoving);
 
             float graspStartTime = Time.time;
-            yield return new WaitUntil(
-                () => Time.time - graspStartTime > 0.2f && !_gripperController.IsMoving
+            yield return new WaitUntil(() =>
+                Time.time - graspStartTime > 0.2f && !_gripperController.IsMoving
             );
 
             _fireOnTargetReached();
@@ -157,44 +161,63 @@ namespace Robotics
             Func<bool> hasReachedTarget
         )
         {
-            float graspTimeout = _ikConfig != null ? _ikConfig.graspTimeoutSeconds : GraspTimeoutFallback;
+            float graspTimeout =
+                _ikConfig != null ? _ikConfig.graspTimeoutSeconds : GraspTimeoutFallback;
 
             _gripperController?.SetGripperPosition(candidate.preGraspGripperWidth);
 
-            // 1. Pre-Grasp
             GameObject pre = _getCachedTempObject("_pre");
-            pre.transform.SetPositionAndRotation(candidate.preGraspPosition, candidate.preGraspRotation);
+            pre.transform.SetPositionAndRotation(
+                candidate.preGraspPosition,
+                candidate.preGraspRotation
+            );
 
             _setIsGraspingTarget(false);
-            _setTargetInternal(pre.transform, targetObject, new GraspOptions { closeGripperOnReach = false });
-            yield return _owner.StartCoroutine(WaitForTargetWithTimeout(hasReachedTarget, graspTimeout));
+            _setTargetInternal(
+                pre.transform,
+                targetObject,
+                new GraspOptions { closeGripperOnReach = false }
+            );
+            yield return _owner.StartCoroutine(
+                WaitForTargetWithTimeout(hasReachedTarget, graspTimeout)
+            );
 
             if (!hasReachedTarget())
                 yield break;
 
-            yield return new WaitUntil(() => _getEndEffectorVelocityMagnitude() < VelocityThresholdPostPreGrasp);
+            yield return new WaitUntil(() =>
+                _getEndEffectorVelocityMagnitude() < VelocityThresholdPostPreGrasp
+            );
 
-            // 2. Grasp
             GameObject main = _getCachedTempObject(RobotConstants.GRASP_TARGET_SUFFIX);
             main.transform.SetPositionAndRotation(candidate.graspPosition, candidate.graspRotation);
 
             _setIsGraspingTarget(true);
-            _setTargetInternal(main.transform, targetObject, new GraspOptions { closeGripperOnReach = false });
-            yield return _owner.StartCoroutine(WaitForTargetWithTimeout(hasReachedTarget, graspTimeout));
+            _setTargetInternal(
+                main.transform,
+                targetObject,
+                new GraspOptions { closeGripperOnReach = false }
+            );
+            yield return _owner.StartCoroutine(
+                WaitForTargetWithTimeout(hasReachedTarget, graspTimeout)
+            );
 
             if (!hasReachedTarget())
                 yield break;
 
             if (options.closeGripperOnReach && _gripperController != null)
             {
-                yield return new WaitUntil(() => _getEndEffectorVelocityMagnitude() < VelocityThresholdPreGripperClose);
+                yield return new WaitUntil(() =>
+                    _getEndEffectorVelocityMagnitude() < VelocityThresholdPreGripperClose
+                );
                 _gripperController.SetTargetObject(targetObject);
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
                 yield return new WaitWhile(() => _gripperController.IsMoving);
 
                 float graspStartTime = Time.time;
-                yield return new WaitUntil(
-                    () => Time.time - graspStartTime > GraspConfirmationWait && !_gripperController.IsMoving
+                yield return new WaitUntil(() =>
+                    Time.time - graspStartTime > GraspConfirmationWait
+                    && !_gripperController.IsMoving
                 );
             }
 
@@ -216,55 +239,83 @@ namespace Robotics
             Func<bool> hasReachedTarget
         )
         {
-            float graspTimeout = _ikConfig != null ? _ikConfig.graspTimeoutSeconds : GraspTimeoutFallback;
+            float graspTimeout =
+                _ikConfig != null ? _ikConfig.graspTimeoutSeconds : GraspTimeoutFallback;
 
             _gripperController?.SetGripperPosition(candidate.preGraspGripperWidth);
 
-            // 1. Pre
             GameObject pre = _getCachedTempObject("_pre");
-            pre.transform.SetPositionAndRotation(candidate.preGraspPosition, candidate.preGraspRotation);
+            pre.transform.SetPositionAndRotation(
+                candidate.preGraspPosition,
+                candidate.preGraspRotation
+            );
 
             _setIsGraspingTarget(false);
-            _setTargetInternal(pre.transform, targetObject, new GraspOptions { closeGripperOnReach = false });
-            yield return _owner.StartCoroutine(WaitForTargetWithTimeout(hasReachedTarget, graspTimeout));
+            _setTargetInternal(
+                pre.transform,
+                targetObject,
+                new GraspOptions { closeGripperOnReach = false }
+            );
+            yield return _owner.StartCoroutine(
+                WaitForTargetWithTimeout(hasReachedTarget, graspTimeout)
+            );
 
             if (!hasReachedTarget())
                 yield break;
-            yield return new WaitUntil(() => _getEndEffectorVelocityMagnitude() < VelocityThresholdPostPreGrasp);
+            yield return new WaitUntil(() =>
+                _getEndEffectorVelocityMagnitude() < VelocityThresholdPostPreGrasp
+            );
 
-            // 2. Grasp
             GameObject main = _getCachedTempObject(RobotConstants.GRASP_TARGET_SUFFIX);
             main.transform.SetPositionAndRotation(candidate.graspPosition, candidate.graspRotation);
 
             _setIsGraspingTarget(true);
-            _setTargetInternal(main.transform, targetObject, new GraspOptions { closeGripperOnReach = false });
-            yield return _owner.StartCoroutine(WaitForTargetWithTimeout(hasReachedTarget, graspTimeout));
+            _setTargetInternal(
+                main.transform,
+                targetObject,
+                new GraspOptions { closeGripperOnReach = false }
+            );
+            yield return _owner.StartCoroutine(
+                WaitForTargetWithTimeout(hasReachedTarget, graspTimeout)
+            );
 
             if (!hasReachedTarget())
                 yield break;
 
             if (options.closeGripperOnReach && _gripperController != null)
             {
-                yield return new WaitUntil(() => _getEndEffectorVelocityMagnitude() < VelocityThresholdPreGripperClose);
+                yield return new WaitUntil(() =>
+                    _getEndEffectorVelocityMagnitude() < VelocityThresholdPreGripperClose
+                );
                 _gripperController.SetTargetObject(targetObject);
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
                 yield return new WaitWhile(() => _gripperController.IsMoving);
 
                 float graspStartTime = Time.time;
-                yield return new WaitUntil(
-                    () => Time.time - graspStartTime > GraspConfirmationWait && !_gripperController.IsMoving
+                yield return new WaitUntil(() =>
+                    Time.time - graspStartTime > GraspConfirmationWait
+                    && !_gripperController.IsMoving
                 );
             }
 
-            // 3. Retreat
+            // Retreat
             if (options.graspConfig != null && options.graspConfig.enableRetreat)
             {
                 GameObject retreat = _getCachedTempObject("_retreat");
-                retreat.transform.SetPositionAndRotation(candidate.retreatPosition, candidate.retreatRotation);
+                retreat.transform.SetPositionAndRotation(
+                    candidate.retreatPosition,
+                    candidate.retreatRotation
+                );
 
                 _setIsGraspingTarget(false);
-                _setTargetInternal(retreat.transform, targetObject, new GraspOptions { closeGripperOnReach = false });
-                yield return _owner.StartCoroutine(WaitForTargetWithTimeout(hasReachedTarget, graspTimeout));
+                _setTargetInternal(
+                    retreat.transform,
+                    targetObject,
+                    new GraspOptions { closeGripperOnReach = false }
+                );
+                yield return _owner.StartCoroutine(
+                    WaitForTargetWithTimeout(hasReachedTarget, graspTimeout)
+                );
             }
 
             _setActiveCoroutine(null);
@@ -298,10 +349,17 @@ namespace Robotics
             handoffTarget.transform.rotation = targetObject.transform.rotation;
 
             _setIsGraspingTarget(true);
-            _setTargetInternal(handoffTarget.transform, targetObject, new GraspOptions { closeGripperOnReach = false });
+            _setTargetInternal(
+                handoffTarget.transform,
+                targetObject,
+                new GraspOptions { closeGripperOnReach = false }
+            );
 
-            float graspTimeout = _ikConfig != null ? _ikConfig.graspTimeoutSeconds : GraspTimeoutFallback;
-            yield return _owner.StartCoroutine(WaitForTargetWithTimeout(hasReachedTarget, graspTimeout));
+            float graspTimeout =
+                _ikConfig != null ? _ikConfig.graspTimeoutSeconds : GraspTimeoutFallback;
+            yield return _owner.StartCoroutine(
+                WaitForTargetWithTimeout(hasReachedTarget, graspTimeout)
+            );
 
             if (!hasReachedTarget())
             {
@@ -310,7 +368,9 @@ namespace Robotics
                 yield break;
             }
 
-            yield return new WaitUntil(() => _getEndEffectorVelocityMagnitude() < VelocityThresholdPreGripperClose);
+            yield return new WaitUntil(() =>
+                _getEndEffectorVelocityMagnitude() < VelocityThresholdPreGripperClose
+            );
 
             if (options.closeGripperOnReach && _gripperController != null)
             {
@@ -319,8 +379,9 @@ namespace Robotics
                 yield return new WaitWhile(() => _gripperController.IsMoving);
 
                 float graspStartTime = Time.time;
-                yield return new WaitUntil(
-                    () => Time.time - graspStartTime > GraspConfirmationWait && !_gripperController.IsMoving
+                yield return new WaitUntil(() =>
+                    Time.time - graspStartTime > GraspConfirmationWait
+                    && !_gripperController.IsMoving
                 );
             }
 
@@ -353,7 +414,9 @@ namespace Robotics
                     $"{_logPrefix} {_robotId} SimpleRobotController not assigned! Falling back to two-waypoint execution."
                 );
                 if (hasReachedTarget != null)
-                    yield return _owner.StartCoroutine(ExecuteTwoWaypointGrasp(candidate, targetObject, options, hasReachedTarget));
+                    yield return _owner.StartCoroutine(
+                        ExecuteTwoWaypointGrasp(candidate, targetObject, options, hasReachedTarget)
+                    );
                 yield break;
             }
 
@@ -365,7 +428,8 @@ namespace Robotics
 
             _simpleRobotController.SetTarget(candidate.graspPosition, candidate.graspRotation);
 
-            float timeout = _ikConfig != null ? _ikConfig.graspTimeoutSeconds : GraspTimeoutFallback;
+            float timeout =
+                _ikConfig != null ? _ikConfig.graspTimeoutSeconds : GraspTimeoutFallback;
             float startTime = Time.time;
 
             while (!_simpleRobotController.HasReachedTarget)
@@ -395,8 +459,9 @@ namespace Robotics
                 yield return new WaitWhile(() => _gripperController.IsMoving);
 
                 float graspStartTime = Time.time;
-                yield return new WaitUntil(
-                    () => Time.time - graspStartTime > GraspConfirmationWait && !_gripperController.IsMoving
+                yield return new WaitUntil(() =>
+                    Time.time - graspStartTime > GraspConfirmationWait
+                    && !_gripperController.IsMoving
                 );
 
                 Debug.Log(

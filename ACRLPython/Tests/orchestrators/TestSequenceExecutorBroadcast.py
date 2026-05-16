@@ -1,4 +1,3 @@
-"""Tests for task outcome broadcasting wired into SequenceExecutor."""
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -50,6 +49,7 @@ class TestSequenceExecutorBroadcastIntegration:
         executor, registry, _ = _make_executor(mock_ws)
 
         from operations.Base import OperationCategory
+
         op_def = MagicMock()
         op_def.name = "wait"
         op_def.category = OperationCategory.NAVIGATION
@@ -57,9 +57,16 @@ class TestSequenceExecutorBroadcastIntegration:
         registry.get_operation_by_name.return_value = op_def
         registry.execute_operation_by_name.return_value = _make_op_result(True)
 
-        with patch("orchestrators.SequenceExecutor.get_world_state", return_value=mock_ws):
+        with patch(
+            "orchestrators.SequenceExecutor.get_world_state", return_value=mock_ws
+        ):
             executor.execute_sequence(
-                [{"operation": "wait", "params": {"robot_id": "Robot1", "duration_ms": 1}}],
+                [
+                    {
+                        "operation": "wait",
+                        "params": {"robot_id": "Robot1", "duration_ms": 1},
+                    }
+                ],
                 sequence_id="test_seq_001",
             )
 
@@ -74,6 +81,7 @@ class TestSequenceExecutorBroadcastIntegration:
         executor, registry, _ = _make_executor(mock_ws)
 
         from operations.Base import OperationCategory
+
         op_def = MagicMock()
         op_def.name = "wait"
         op_def.category = OperationCategory.NAVIGATION
@@ -81,9 +89,16 @@ class TestSequenceExecutorBroadcastIntegration:
         registry.get_operation_by_name.return_value = op_def
         registry.execute_operation_by_name.return_value = _make_op_result(False)
 
-        with patch("orchestrators.SequenceExecutor.get_world_state", return_value=mock_ws):
+        with patch(
+            "orchestrators.SequenceExecutor.get_world_state", return_value=mock_ws
+        ):
             executor.execute_sequence(
-                [{"operation": "wait", "params": {"robot_id": "Robot2", "duration_ms": 1}}],
+                [
+                    {
+                        "operation": "wait",
+                        "params": {"robot_id": "Robot2", "duration_ms": 1},
+                    }
+                ],
                 sequence_id="test_seq_002",
             )
 
@@ -99,6 +114,7 @@ class TestSequenceExecutorBroadcastIntegration:
         executor, registry, _ = _make_executor(mock_ws)
 
         from operations.Base import OperationCategory
+
         op_def = MagicMock()
         op_def.name = "wait"
         op_def.category = OperationCategory.NAVIGATION
@@ -106,9 +122,16 @@ class TestSequenceExecutorBroadcastIntegration:
         registry.get_operation_by_name.return_value = op_def
         registry.execute_operation_by_name.return_value = _make_op_result(True)
 
-        with patch("orchestrators.SequenceExecutor.get_world_state", return_value=mock_ws):
+        with patch(
+            "orchestrators.SequenceExecutor.get_world_state", return_value=mock_ws
+        ):
             result = executor.execute_sequence(
-                [{"operation": "wait", "params": {"robot_id": "Robot1", "duration_ms": 1}}],
+                [
+                    {
+                        "operation": "wait",
+                        "params": {"robot_id": "Robot1", "duration_ms": 1},
+                    }
+                ],
             )
 
         assert result["success"] is True

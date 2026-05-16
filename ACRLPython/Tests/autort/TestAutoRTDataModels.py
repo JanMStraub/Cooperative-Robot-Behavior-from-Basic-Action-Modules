@@ -15,9 +15,7 @@ from autort.DataModels import (
     TaskVerdict,
 )
 
-# ============================================================================
 # GroundedObject Tests
-# ============================================================================
 
 
 def test_grounded_object_valid():
@@ -67,9 +65,7 @@ def test_grounded_object_forbids_extra_fields():
         )
 
 
-# ============================================================================
 # SceneDescription Tests
-# ============================================================================
 
 
 def test_scene_description_valid():
@@ -100,9 +96,7 @@ def test_scene_description_empty_defaults():
     assert len(scene.robot_states) == 0
 
 
-# ============================================================================
 # Operation Tests
-# ============================================================================
 
 
 def test_operation_valid():
@@ -123,9 +117,7 @@ def test_operation_empty_parameters():
     assert op.parameters == {}
 
 
-# ============================================================================
 # ProposedTask Tests
-# ============================================================================
 
 
 def test_proposed_task_valid():
@@ -276,9 +268,7 @@ def test_proposed_task_forbids_extra_fields():
         )
 
 
-# ============================================================================
 # TaskVerdict Tests
-# ============================================================================
 
 
 def test_task_verdict_approved():

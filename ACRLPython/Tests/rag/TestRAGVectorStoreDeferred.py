@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
-"""
-Tests for VectorStore deferred-flush and metadata-update features
-=================================================================
-
-Covers:
-- _flush_pending_vectors() consolidates staging list into self.vectors in one vstack
-- add_operation() does NOT eagerly update self.vectors
-- search() triggers flush before cosine similarity computation
-- get_operation() triggers flush before index lookup
-- save() triggers flush before pickling
-- clear() resets _pending_vectors alongside other state
-- update_operation_metadata() merges fields into existing metadata
-- update_operation_metadata() returns False for unknown operation_id
-- outcome tracking fields (execution_count etc.) survive a save/load round-trip
-"""
+"""Tests for VectorStore deferred-flush and metadata-update features"""
 
 import os
 import tempfile
@@ -23,9 +9,7 @@ import pytest
 
 from rag.vector_store import VectorStore
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _unit(n: int) -> np.ndarray:
@@ -46,9 +30,7 @@ def _store_with_ops(n: int, dim: int = 4) -> VectorStore:
     return store
 
 
-# ---------------------------------------------------------------------------
 # Deferred flush: internal staging behaviour
-# ---------------------------------------------------------------------------
 
 
 class TestDeferredFlush:
@@ -130,9 +112,7 @@ class TestDeferredFlush:
         assert store.vectors.shape == (1, 8)
 
 
-# ---------------------------------------------------------------------------
 # Flush triggered by public API
-# ---------------------------------------------------------------------------
 
 
 class TestFlushTriggeredByPublicAPI:
@@ -176,9 +156,7 @@ class TestFlushTriggeredByPublicAPI:
             os.unlink(tmp)
 
 
-# ---------------------------------------------------------------------------
 # update_operation_metadata
-# ---------------------------------------------------------------------------
 
 
 class TestUpdateOperationMetadata:

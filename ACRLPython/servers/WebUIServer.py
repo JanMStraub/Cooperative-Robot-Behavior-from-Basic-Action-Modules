@@ -98,7 +98,6 @@ def _get_sequence_handler():
     return _sequence_handler
 
 
-# Initialize FastAPI app — only when the dependency is available.
 # When fastapi is absent, `app` is a _NoOpApp stub whose attribute access
 # returns a no-op decorator so all @app.get / @app.websocket / app.mount calls
 # silently pass at import time; run_webui_server() raises a RuntimeError before
@@ -191,11 +190,15 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
 
     async def broadcast(self, message: str):
+        dead = []
         for connection in self.active_connections:
             try:
                 await connection.send_text(message)
             except Exception as e:
                 logger.error(f"Error broadcasting to client: {e}")
+                dead.append(connection)
+        for connection in dead:
+            self.disconnect(connection)
 
 
 manager = ConnectionManager()
@@ -324,16 +327,18 @@ async def api_get_benchmarks():
                     # but since files are small, we can just load to get metadata
                     with open(file_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
-                        results.append({
-                            "filename": file,
-                            "benchmark_id": data.get("benchmark_id"),
-                            "benchmark_name": data.get("benchmark_name"),
-                            "run_id": data.get("run_id"),
-                            "success": data.get("success"),
-                            "total_duration_ms": data.get("total_duration_ms"),
-                            "success_rate": data.get("success_rate"),
-                            "mtime": os.path.getmtime(file_path)
-                        })
+                        results.append(
+                            {
+                                "filename": file,
+                                "benchmark_id": data.get("benchmark_id"),
+                                "benchmark_name": data.get("benchmark_name"),
+                                "run_id": data.get("run_id"),
+                                "success": data.get("success"),
+                                "total_duration_ms": data.get("total_duration_ms"),
+                                "success_rate": data.get("success_rate"),
+                                "mtime": os.path.getmtime(file_path),
+                            }
+                        )
         # Sort by mtime descending
         results.sort(key=lambda x: x["mtime"], reverse=True)
         return {"success": True, "files": results}
@@ -372,9 +377,13 @@ async def api_get_benchmarks_aggregate():
                 "run_count": len(runs),
                 "pass_count": pass_count,
                 "mean_success_rate": statistics.mean(success_rates),
-                "std_success_rate": statistics.stdev(success_rates) if len(success_rates) > 1 else 0.0,
+                "std_success_rate": (
+                    statistics.stdev(success_rates) if len(success_rates) > 1 else 0.0
+                ),
                 "mean_duration_ms": statistics.mean(durations),
-                "std_duration_ms": statistics.stdev(durations) if len(durations) > 1 else 0.0,
+                "std_duration_ms": (
+                    statistics.stdev(durations) if len(durations) > 1 else 0.0
+                ),
             }
 
             # Ablation metrics — split by condition (enabled/disabled)
@@ -386,10 +395,18 @@ async def api_get_benchmarks_aggregate():
                     by_condition[ab.get("condition", "unknown")].append(ab)
                 entry["ablation"] = {
                     cond: {
-                        "mean_success_rate": statistics.mean(a.get("success_rate", 0.0) for a in abs_list),
-                        "mean_hallucinated_ops": statistics.mean(a.get("hallucinated_ops", 0) for a in abs_list),
-                        "mean_reflexion_recoveries": statistics.mean(a.get("reflexion_recoveries", 0) for a in abs_list),
-                        "mean_negotiation_rounds": statistics.mean(a.get("negotiation_rounds", 0) for a in abs_list),
+                        "mean_success_rate": statistics.mean(
+                            a.get("success_rate", 0.0) for a in abs_list
+                        ),
+                        "mean_hallucinated_ops": statistics.mean(
+                            a.get("hallucinated_ops", 0) for a in abs_list
+                        ),
+                        "mean_reflexion_recoveries": statistics.mean(
+                            a.get("reflexion_recoveries", 0) for a in abs_list
+                        ),
+                        "mean_negotiation_rounds": statistics.mean(
+                            a.get("negotiation_rounds", 0) for a in abs_list
+                        ),
                         "run_count": len(abs_list),
                     }
                     for cond, abs_list in by_condition.items()
@@ -397,7 +414,9 @@ async def api_get_benchmarks_aggregate():
 
             # Per-operation stats across all steps in all runs
             op_buckets = defaultdict(lambda: {"durations": [], "fails": 0})
-            robot_buckets: dict = defaultdict(lambda: {"total_duration_ms": 0.0, "step_count": 0})
+            robot_buckets: dict = defaultdict(
+                lambda: {"total_duration_ms": 0.0, "step_count": 0}
+            )
             for r in runs:
                 for s in r.get("steps", []):
                     op = s.get("operation", "unknown")
@@ -420,7 +439,9 @@ async def api_get_benchmarks_aggregate():
             entry["per_robot_stats"] = dict(robot_buckets)
 
             plan_lengths = [len(r.get("parsed_plan", [])) for r in runs]
-            entry["mean_plan_length"] = statistics.mean(plan_lengths) if plan_lengths else 0.0
+            entry["mean_plan_length"] = (
+                statistics.mean(plan_lengths) if plan_lengths else 0.0
+            )
 
             result[str(bid)] = entry
 
@@ -457,10 +478,10 @@ async def api_get_benchmark_detail(filename: str):
         # Prevent directory traversal
         clean_name = os.path.basename(filename)
         file_path = os.path.join(BENCHMARK_RESULTS_DIR, clean_name)
-        
+
         if not os.path.exists(file_path):
             return {"success": False, "error": "File not found"}
-            
+
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             return {"success": True, "data": data}
@@ -639,6 +660,7 @@ async def api_send_command(command_data: Dict[str, Any]):
         if cmd_type == "estop":
             from core.Imports import get_sequence_executor
             from servers.AutoRTIntegration import AutoRTHandler
+
             try:
                 get_sequence_executor().abort()
             except Exception:
@@ -647,7 +669,10 @@ async def api_send_command(command_data: Dict[str, Any]):
                 AutoRTHandler.get_instance().stop_loop()
             except Exception:
                 pass
-            return {"success": True, "message": "E-Stop: sequence aborted, AutoRT stopped"}
+            return {
+                "success": True,
+                "message": "E-Stop: sequence aborted, AutoRT stopped",
+            }
 
         # Determine if it's an AutoRT or Direct command
         if cmd_type == "autort":

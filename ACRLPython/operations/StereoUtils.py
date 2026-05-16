@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 """
-Stereo Camera Utilities
-=======================
-
 Shared helpers for extracting camera calibration and pose from the stereo
 metadata dict that Unity sends alongside each image pair.
 
@@ -65,21 +62,6 @@ def camera_config_from_metadata(
     expected by ``YOLODetector.detect_objects_stereo`` and
     ``estimate_object_world_position_from_disparity``, falling back to config
     defaults when values are absent (e.g. legacy clients).
-
-    Args:
-        metadata: Raw metadata dict from ``UnifiedImageStorage.get_latest_stereo_image``,
-                  or ``None`` if unavailable.
-
-    Returns:
-        ``StereoParams`` with ``camera_config``, ``camera_position``, ``camera_rotation``.
-
-    Args:
-        metadata: Raw metadata dict from ``UnifiedImageStorage.get_latest_stereo_image``,
-                  or ``None`` if unavailable.
-        baseline: Caller-supplied baseline override (used when metadata is absent).
-        fov: Caller-supplied FOV override (used when metadata is absent).
-        camera_position: Caller-supplied position override (used when metadata is absent).
-        camera_rotation: Caller-supplied rotation override (used when metadata is absent).
 
     Example:
         stereo_params = camera_config_from_metadata(stereo_metadata)

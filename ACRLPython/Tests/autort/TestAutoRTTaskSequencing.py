@@ -11,9 +11,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from pydantic import ValidationError
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 
 def make_scene(last_task_context=None):
@@ -66,9 +64,7 @@ def _build_generator():
     return TaskGenerator(cfg)
 
 
-# ---------------------------------------------------------------------------
 # Section 1: ExecutedTaskContext model
-# ---------------------------------------------------------------------------
 
 
 class TestExecutedTaskContext:
@@ -121,9 +117,7 @@ class TestExecutedTaskContext:
             )
 
 
-# ---------------------------------------------------------------------------
 # Section 2: SceneDescription backward compat
-# ---------------------------------------------------------------------------
 
 
 class TestSceneDescriptionBackwardCompat:
@@ -148,9 +142,7 @@ class TestSceneDescriptionBackwardCompat:
         assert restored.last_task_context.success is False
 
 
-# ---------------------------------------------------------------------------
 # Section 3: _build_previous_task_section — success paths
-# ---------------------------------------------------------------------------
 
 
 class TestBuildPreviousTaskSectionSuccess:
@@ -198,9 +190,7 @@ class TestBuildPreviousTaskSectionSuccess:
         assert "detect_object_stereo" in section  # generic follow-ups
 
 
-# ---------------------------------------------------------------------------
 # Section 4: _build_previous_task_section — failure paths
-# ---------------------------------------------------------------------------
 
 
 class TestBuildPreviousTaskSectionFailure:
@@ -251,9 +241,7 @@ class TestBuildPreviousTaskSectionFailure:
         assert "motor overheated" in section
 
 
-# ---------------------------------------------------------------------------
 # Section 5: _build_task_prompt integration
-# ---------------------------------------------------------------------------
 
 
 class TestBuildTaskPromptIntegration:
@@ -296,9 +284,7 @@ class TestBuildTaskPromptIntegration:
         assert "TASK:" in prompt
 
 
-# ---------------------------------------------------------------------------
 # Section 6: AutoRTOrchestrator state tracking
-# ---------------------------------------------------------------------------
 
 
 class TestAutoRTOrchestratorState:

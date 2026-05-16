@@ -1,37 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for WorldState.py
-=============================
-
-Tests world state management including singleton pattern, TTL-based caching,
-robot state tracking, object management, and workspace allocation.
-
-Coverage:
-- Singleton pattern enforcement
-- TTL-based caching with expiration
-- Robot state tracking and updates
-- Object position and state management
-- Workspace allocation and conflicts
-- Workspace deadlock detection (NEW)
-- Concurrent workspace allocation (NEW)
-- Command tracking and cleanup
-
-NOT Covered:
-- Real Unity integration (requires Unity running)
-- Persistence to disk/database
-- Network synchronization of world state
-
-Dependencies:
-- Mock world state (no external dependencies)
-- Threading for concurrency tests
-- pytest fixtures for cleanup
-
-Run tests:
-    pytest tests/TestWorldState.py -v
-
-Run with coverage:
-    pytest tests/TestWorldState.py --cov=operations.WorldState --cov-report=html
-"""
+"""Unit tests for WorldState.py"""
 
 from unittest.mock import patch
 import time
@@ -586,7 +554,6 @@ class TestCacheManagement:
         assert len(world_state._robot_cache) == 0
 
     def test_reset(self, cleanup_world_state):
-        """Test full state reset."""
         world_state = get_world_state()
 
         # Populate state

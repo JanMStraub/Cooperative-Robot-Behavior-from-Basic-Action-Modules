@@ -1,5 +1,5 @@
-using NUnit.Framework;
 using Core;
+using NUnit.Framework;
 
 namespace Tests.EditMode
 {
@@ -11,8 +11,6 @@ namespace Tests.EditMode
     /// </summary>
     public class ConstantsTests
     {
-        #region RobotConstants Tests
-
         [Test]
         public void RobotConstants_JacobianDimensions_IsCorrect()
         {
@@ -26,15 +24,13 @@ namespace Tests.EditMode
             Assert.AreEqual(0.01f, RobotConstants.MOVEMENT_THRESHOLD);
         }
 
-        #endregion
-
-        #region SceneConstants Tests
-
         [Test]
         public void SceneConstants_SizeThresholds_AreOrdered()
         {
-            Assert.Less(SceneConstants.SMALL_OBJECT_SIZE_THRESHOLD,
-                SceneConstants.GRASPABLE_OBJECT_SIZE_THRESHOLD);
+            Assert.Less(
+                SceneConstants.SMALL_OBJECT_SIZE_THRESHOLD,
+                SceneConstants.GRASPABLE_OBJECT_SIZE_THRESHOLD
+            );
         }
 
         [Test]
@@ -44,20 +40,12 @@ namespace Tests.EditMode
             Assert.Greater(SceneConstants.GRASPABLE_OBJECT_SIZE_THRESHOLD, 0f);
         }
 
-        #endregion
-
-        #region CameraConstants Tests
-
         [Test]
         public void CameraConstants_Thresholds_ArePositive()
         {
             Assert.Greater(CameraConstants.TARGET_DISTANCE_THRESHOLD, 0f);
             Assert.Greater(CameraConstants.POSITION_REACHED_THRESHOLD, 0f);
         }
-
-        #endregion
-
-        #region LoggingConstants Tests
 
         [Test]
         public void LoggingConstants_SampleRates_ArePositive()
@@ -70,13 +58,11 @@ namespace Tests.EditMode
         public void LoggingConstants_TrajectorySampleRate_IsFasterThanEnvironment()
         {
             // Trajectory should sample more frequently than environment snapshots
-            Assert.Less(LoggingConstants.DEFAULT_TRAJECTORY_SAMPLE_RATE,
-                LoggingConstants.DEFAULT_ENVIRONMENT_SAMPLE_RATE);
+            Assert.Less(
+                LoggingConstants.DEFAULT_TRAJECTORY_SAMPLE_RATE,
+                LoggingConstants.DEFAULT_ENVIRONMENT_SAMPLE_RATE
+            );
         }
-
-        #endregion
-
-        #region CollisionConstants Tests
 
         [Test]
         public void CollisionConstants_Cooldown_IsPositive()
@@ -89,10 +75,6 @@ namespace Tests.EditMode
         {
             Assert.Greater(CollisionConstants.DEFAULT_TARGET_REWARD, 0f);
         }
-
-        #endregion
-
-        #region CommunicationConstants Tests
 
         [Test]
         public void CommunicationConstants_Ports_AreValid()
@@ -111,7 +93,7 @@ namespace Tests.EditMode
             var ports = new[]
             {
                 CommunicationConstants.COMMAND_SERVER_PORT,
-                CommunicationConstants.SEQUENCE_SERVER_PORT
+                CommunicationConstants.SEQUENCE_SERVER_PORT,
             };
 
             // Check all ports are unique
@@ -131,7 +113,5 @@ namespace Tests.EditMode
         {
             Assert.Greater(CommunicationConstants.RECONNECT_INTERVAL, 0f);
         }
-
-        #endregion
     }
 }

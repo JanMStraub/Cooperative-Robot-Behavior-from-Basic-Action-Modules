@@ -309,9 +309,7 @@ class TestSequenceExecutorVerification:
         assert len(error_str) > 0
 
 
-# ============================================================================
 # End-to-End Integration Tests
-# ============================================================================
 
 
 class TestSequenceExecutorEndToEnd:
@@ -511,9 +509,7 @@ class TestSequenceExecutorEndToEnd:
         assert len(result["results"]) == 2
 
 
-# ============================================================================
 # Error Scenarios and Propagation
-# ============================================================================
 
 
 class TestSequenceExecutorErrorPropagation:
@@ -700,9 +696,7 @@ class TestSequenceExecutorErrorPropagation:
         assert result["success"] is False
 
 
-# ============================================================================
 # Complex Sequences
-# ============================================================================
 
 
 class TestComplexSequences:
@@ -943,9 +937,7 @@ class TestComplexSequences:
         assert len(result["results"]) == 7
 
 
-# ============================================================================
 # Variable Passing and Context
-# ============================================================================
 
 
 class TestVariablePassingIntegration:
@@ -1086,9 +1078,7 @@ class TestVariablePassingIntegration:
         assert result["success"] is True
 
 
-# ============================================================================
 # Performance and Stress Tests
-# ============================================================================
 
 
 class TestSequenceExecutorPerformance:
@@ -1174,9 +1164,7 @@ class TestSequenceExecutorPerformance:
         assert len(result["results"]) == 10
 
 
-# ============================================================================
 # Edge Cases Specific to Integration
-# ============================================================================
 
 
 class TestSequenceExecutorEdgeCases:

@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-AutoRT Orchestration Loop
-
-Main loop that composes existing operations for scene understanding
-and uses new modules for task generation, safety filtering, and selection.
-"""
+"""AutoRT main loop: scene capture → task generation → safety filter → select → execute."""
 
 import logging
 import time
@@ -29,15 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class AutoRTOrchestrator:
-    """
-    Main AutoRT loop. Composes existing operations for scene understanding
-    and uses new modules for task generation, safety filtering, and selection.
-
-    Scene capture uses existing operations:
-    - detect_object_stereo(selection="all") → 3D-grounded detections
-    - analyze_scene() → VLM scene reasoning (optional)
-    - WorldState.get_all_objects() → tracked object states
-    """
+    """AutoRT loop: detect_object_stereo → analyze_scene → generate → filter → select → execute."""
 
     def __init__(
         self,
@@ -47,16 +34,6 @@ class AutoRTOrchestrator:
         loop_delay_seconds: Optional[float] = None,
         strategy: str = "balanced",
     ):
-        """
-        Initialize AutoRT orchestrator.
-
-        Args:
-            robot_ids: Robot IDs to use (default from config)
-            human_in_loop: Require human approval (default from config)
-            autonomous: Override human_in_loop to False
-            loop_delay_seconds: Pause between loop iterations (default from config)
-            strategy: Task selection strategy ("balanced", "explore", "exploit", "random")
-        """
         self.robot_ids = robot_ids or config.DEFAULT_ROBOTS
         self.human_in_loop = (
             human_in_loop if human_in_loop is not None else config.HUMAN_IN_LOOP_DEFAULT
@@ -72,7 +49,6 @@ class AutoRTOrchestrator:
         self.constitution = RobotConstitution(config)
         self.task_selector = TaskSelector()
 
-        # Import once at construction time rather than on every _execute_task call
         from orchestrators.SequenceExecutor import SequenceExecutor
 
         self._executor = SequenceExecutor()
@@ -81,7 +57,6 @@ class AutoRTOrchestrator:
         self._last_task_context: Optional[ExecutedTaskContext] = None
 
     def start(self):
-        """Run continuous task generation loop"""
         self._running = True
         logger.info(
             f"AutoRT starting: robots={self.robot_ids}, "
@@ -106,12 +81,10 @@ class AutoRTOrchestrator:
                 time.sleep(self.loop_delay)
 
     def stop(self):
-        """Stop the AutoRT loop"""
         self._running = False
 
     def _run_one_iteration(self):
-        """Execute one full iteration of the AutoRT loop"""
-        # 1. Capture scene using existing operations
+        """Execute one full AutoRT iteration."""
         scene = self._capture_scene(last_task_context=self._last_task_context)
         if not scene.objects:
             logger.info("No objects detected, skipping iteration")
@@ -119,7 +92,6 @@ class AutoRTOrchestrator:
 
         logger.info(f"Scene: {len(scene.objects)} objects detected")
 
-        # 2. Generate task candidates
         candidates = self.task_generator.generate_tasks(
             scene,
             robot_ids=self.robot_ids,
@@ -135,7 +107,6 @@ class AutoRTOrchestrator:
 
         logger.info(f"Generated {len(candidates)} task candidates")
 
-        # 3. Filter through constitution
         approved = []
         for task in candidates:
             verdict = self.constitution.evaluate_task(task, scene)
@@ -156,22 +127,18 @@ class AutoRTOrchestrator:
 
         logger.info(f"{len(approved)} tasks approved")
 
-        # 4. Select best task
         selected = self.task_selector.select_task(approved, strategy=self.strategy)
         if selected is None:
             return
 
-        # 5. Human approval (ON by default)
         if self.human_in_loop:
             selected = self._request_approval(selected)
             if selected is None:
                 return
 
-        # 6. Execute via existing SequenceExecutor
         logger.info(f"Executing task: {selected.description}")
         result = self._execute_task(selected)
 
-        # 7. Update history for future selection
         self.task_selector.update_history(selected, result)
         logger.info(f"Task completed: success={result.get('success', False)}")
 
@@ -190,17 +157,9 @@ class AutoRTOrchestrator:
     def _capture_scene(
         self, last_task_context: Optional[ExecutedTaskContext] = None
     ) -> SceneDescription:
-        """
-        Capture scene state by composing existing operations.
-
-        Uses:
-        - detect_object_stereo(selection="all") for 3D object detection
-        - analyze_scene() for optional VLM reasoning
-        - WorldState for robot positions
-        """
+        """Compose detect_object_stereo + WorldState + optional analyze_scene into SceneDescription."""
         grounded_objects = []
 
-        # Step 1: Run stereo detection for all visible objects
         try:
             detection_result = self.registry.execute_operation_by_name(
                 "detect_object_stereo",
@@ -225,9 +184,8 @@ class AutoRTOrchestrator:
         except Exception as e:
             logger.warning(f"Stereo detection failed: {e}")
 
-        # Step 2: Supplement with WorldState tracked objects
         for obj_state in self.world_state.get_all_objects():
-            # Avoid duplicates (objects already detected by stereo)
+            # Avoid duplicates — skip objects already detected by stereo within 5cm
             already_detected = any(
                 np.linalg.norm(np.array(g.position) - np.array(obj_state.position))
                 < 0.05
@@ -244,7 +202,6 @@ class AutoRTOrchestrator:
                     )
                 )
 
-        # Step 3: Optional VLM scene reasoning
         scene_summary = ""
         if config.USE_VLM_REASONING:
             try:
@@ -263,7 +220,6 @@ class AutoRTOrchestrator:
             labels = [obj.color for obj in grounded_objects]
             scene_summary = f"Detected {len(grounded_objects)} objects: {labels}"
 
-        # Step 4: Gather robot states
         robot_states = {}
         for rid in self.robot_ids:
             state = self.world_state.get_robot_state(rid)
@@ -283,18 +239,10 @@ class AutoRTOrchestrator:
         )
 
     def _execute_task(self, task: ProposedTask) -> Dict[str, Any]:
-        """
-        Execute task via existing SequenceExecutor.
-
-        Converts ProposedTask operations to SequenceExecutor format.
-        Uses self._executor (created once in __init__) to avoid per-call import overhead.
-        """
+        """Execute via SequenceExecutor (created once in __init__ to avoid per-call import overhead)."""
         try:
-            # Convert operations to executor format
-            # SequenceExecutor expects: {"operation": "...", "params": {"robot_id": "...", ...}}
             commands = []
             for op in task.operations:
-                # Merge robot_id into parameters (params should include robot_id)
                 params = {"robot_id": op.robot_id, **op.parameters}
                 commands.append({"operation": op.type, "params": params})
 
@@ -314,7 +262,7 @@ class AutoRTOrchestrator:
             }
 
     def _request_approval(self, task: ProposedTask) -> Optional[ProposedTask]:
-        """Display task and wait for user approval via console"""
+        """Display task and request user approval via console."""
         print(f"\n{'=' * 60}")
         print(f"PROPOSED TASK: {task.description}")
         print(f"Robots: {task.required_robots}")

@@ -1,19 +1,10 @@
 #!/usr/bin/env python3
-"""
-Tests for SequenceExecutor Knowledge Graph Integration
-=======================================================
-
-Validates:
-- _check_spatial_feasibility(): move-op path blocking, grasp reachability guard
-- _get_handoff_context(): handoff keyword detection, candidate building
-"""
+"""Tests for SequenceExecutor Knowledge Graph Integration"""
 
 import unittest
 from unittest.mock import MagicMock, patch
 
-# ---------------------------------------------------------------------------
 # Helper: minimal op_def stub
-# ---------------------------------------------------------------------------
 
 
 def _op_def(name: str) -> MagicMock:
@@ -23,9 +14,7 @@ def _op_def(name: str) -> MagicMock:
     return od
 
 
-# ---------------------------------------------------------------------------
 # Helper: create SequenceExecutor without real dependencies
-# ---------------------------------------------------------------------------
 
 
 def _make_executor():
@@ -42,9 +31,7 @@ def _make_executor():
     return ex
 
 
-# ===========================================================================
 # _check_spatial_feasibility tests
-# ===========================================================================
 
 
 class TestCheckSpatialFeasibility(unittest.TestCase):
@@ -200,9 +187,7 @@ class TestCheckSpatialFeasibility(unittest.TestCase):
         self.assertIn("skipped", result.get("warning", "").lower())
 
 
-# ===========================================================================
 # _get_handoff_context tests
-# ===========================================================================
 
 
 class TestGetHandoffContext(unittest.TestCase):

@@ -1,13 +1,13 @@
 using System.Collections;
+using Configuration;
 using NUnit.Framework;
-using UnityEngine;
-using UnityEngine.TestTools;
+using PythonCommunication;
 using Robotics;
 using Robotics.Grasp;
 using Simulation;
-using Configuration;
 using Tests.EditMode;
-using PythonCommunication;
+using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace Tests.PlayMode
 {
@@ -31,13 +31,8 @@ namespace Tests.PlayMode
         [SetUp]
         public void SetUp()
         {
-            // Clean up any existing singletons
             TestHelpers.CleanupAllSingletons();
-
-            // Create test robot
             (_robotObject, _robotController) = TestHelpers.CreateTestRobot("ErrorTestRobot");
-
-            // Create simulation manager
             (_simulationManagerObject, _simulationManager) = TestHelpers.CreateSimulationManager();
         }
 
@@ -55,20 +50,18 @@ namespace Tests.PlayMode
         [Test]
         public void IKSolver_UnreachableTarget_ReturnsNull()
         {
-            // Setup minimal articulation chain
             TestHelpers.SetupMinimalArticulationChain(_robotController);
             LogAssert.Expect(LogType.Error, "Tag: EndEffector is not defined.");
 
-            // Attempt to reach impossibly far target (10 meters away)
             Vector3 unreachablePosition = new Vector3(10f, 10f, 10f);
             GameObject target = TestHelpers.CreateTestTarget(unreachablePosition);
 
             _robotController.SetTarget(target);
 
-            // IK solver should recognize unreachable target
-            // In a proper test, we'd verify IK solver returns null or fails gracefully
-            // For now, verify target was set
-            Assert.IsNotNull(_robotController.GetCurrentTarget(), "Target should be set even if unreachable");
+            Assert.IsNotNull(
+                _robotController.GetCurrentTarget(),
+                "Target should be set even if unreachable"
+            );
 
             TestHelpers.DestroyAll(target);
         }
@@ -76,21 +69,17 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator IKSolver_Singularity_HandledGracefully()
         {
-            // Setup minimal articulation chain
             TestHelpers.SetupMinimalArticulationChain(_robotController);
             LogAssert.Expect(LogType.Error, "Tag: EndEffector is not defined.");
 
-            // Position near singularity (fully extended arm)
-            Vector3 singularityPosition = new Vector3(0f, 0.2f, 0f); // Straight up
+            Vector3 singularityPosition = new Vector3(0f, 0.2f, 0f);
             GameObject target = TestHelpers.CreateTestTarget(singularityPosition);
 
             _robotController.SetTarget(target);
 
-            // Wait a few frames for IK to attempt without blocking for a full second
             yield return null;
             yield return null;
 
-            // Robot should not crash or enter error state
             Assert.IsNotNull(_robotController, "Robot controller should still be valid");
 
             TestHelpers.DestroyAll(target);
@@ -99,17 +88,14 @@ namespace Tests.PlayMode
         [Test]
         public void IKSolver_JointLimits_Respected()
         {
-            // Create robot config with restrictive joint limits
             var config = TestHelpers.CreateTestRobotConfig();
 
-            // Set first joint to very restrictive limits
             if (config.joints != null && config.joints.Length > 0)
             {
-                config.joints[0].upperLimit = 10f; // Only 10 degrees
+                config.joints[0].upperLimit = 10f;
                 config.joints[0].lowerLimit = -10f;
             }
 
-            // Verify limits are set
             Assert.AreEqual(10f, config.joints[0].upperLimit, "Upper limit should be set");
             Assert.AreEqual(-10f, config.joints[0].lowerLimit, "Lower limit should be set");
 
@@ -119,10 +105,8 @@ namespace Tests.PlayMode
         [Test]
         public void IKSolver_NullTarget_DoesNotCrash()
         {
-            // Attempt to set null target
             _robotController.SetTarget(null);
 
-            // Should not crash
             Assert.IsNull(_robotController.GetCurrentTarget(), "Current target should be null");
         }
 
@@ -133,16 +117,18 @@ namespace Tests.PlayMode
         [Test]
         public void GraspPipeline_NoValidCandidates_ReturnsNull()
         {
-            // Create grasp config that will fail to find candidates
             var graspConfig = ScriptableObject.CreateInstance<GraspConfig>();
             graspConfig.InitializeDefaultConfig();
 
-            // Set unrealistic constraints
-            graspConfig.maxReachDistance = 0.01f; // Only 1cm reach
-            graspConfig.ikValidationThreshold = 0.0001f; // 0.1mm precision
+            graspConfig.maxReachDistance = 0.01f;
+            graspConfig.ikValidationThreshold = 0.0001f;
 
-            // Verify config is set
-            Assert.AreEqual(0.01f, graspConfig.maxReachDistance, 0.001f, "Max reach should be restrictive");
+            Assert.AreEqual(
+                0.01f,
+                graspConfig.maxReachDistance,
+                0.001f,
+                "Max reach should be restrictive"
+            );
 
             Object.DestroyImmediate(graspConfig);
         }
@@ -150,20 +136,16 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator GraspPipeline_CollisionBlocking_FindsAlternative()
         {
-            // Create target cube
-            var targetCube = TestHelpers.CreateTestCube(new Vector3(0.3f, 0.1f, 0.2f), "TargetCube");
+            var targetCube = TestHelpers.CreateTestCube(
+                new Vector3(0.3f, 0.1f, 0.2f),
+                "TargetCube"
+            );
 
-            // Create blocking obstacle above target
             var obstacle = TestHelpers.CreateTestCube(new Vector3(0.3f, 0.2f, 0.2f), "Obstacle");
-            obstacle.layer = LayerMask.NameToLayer("Default"); // Ensure it's on collision layer
+            obstacle.layer = LayerMask.NameToLayer("Default");
 
-            yield return null; // Single frame is sufficient to confirm objects exist
+            yield return null;
 
-            // Grasp pipeline should either:
-            // 1. Find alternative approach (side/front instead of top)
-            // 2. Return null if no valid approaches exist
-
-            // Verify test objects exist
             Assert.IsNotNull(targetCube, "Target cube should exist");
             Assert.IsNotNull(obstacle, "Obstacle should exist");
 
@@ -173,14 +155,12 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator GraspPipeline_Timeout_ReturnsGracefully()
         {
-            // Create grasp config with very short timeout
             var graspConfig = ScriptableObject.CreateInstance<GraspConfig>();
             graspConfig.InitializeDefaultConfig();
-            graspConfig.maxPipelineTimeMs = 10; // Only 10ms timeout
+            graspConfig.maxPipelineTimeMs = 10;
 
             yield return null;
 
-            // Pipeline should timeout quickly and return
             Assert.AreEqual(10, graspConfig.maxPipelineTimeMs, "Timeout should be set to 10ms");
 
             Object.DestroyImmediate(graspConfig);
@@ -198,7 +178,7 @@ namespace Tests.PlayMode
                 maxWidth = 0.1f,
                 fingerPadWidth = 0.01f,
                 fingerPadDepth = 0.02f,
-                fingerLength = 0.04f
+                fingerLength = 0.04f,
             };
 
             // Config should still be valid (validation should fix it)
@@ -214,21 +194,22 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator Coordination_CollisionDetected_RobotBlocked()
         {
-            // Create two robots at same position (collision scenario)
             var robot1Object = new GameObject("Robot1");
             var robot1 = robot1Object.AddComponent<RobotController>();
             robot1.transform.position = Vector3.zero;
 
             var robot2Object = new GameObject("Robot2");
             var robot2 = robot2Object.AddComponent<RobotController>();
-            robot2.transform.position = Vector3.zero; // Same position - collision!
+            robot2.transform.position = Vector3.zero;
 
             yield return null;
 
-            // Coordination system should detect collision
             float distance = Vector3.Distance(robot1.transform.position, robot2.transform.position);
-            Assert.Less(distance, TestConstants.MIN_SAFE_SEPARATION,
-                "Robots should be within collision distance");
+            Assert.Less(
+                distance,
+                TestConstants.MIN_SAFE_SEPARATION,
+                "Robots should be within collision distance"
+            );
 
             TestHelpers.DestroyAll(robot1Object, robot2Object);
         }
@@ -260,14 +241,11 @@ namespace Tests.PlayMode
         [Test]
         public void Communication_PythonBackendUnavailable_GracefulDegradation()
         {
-            // Create SequenceClient (Python backend likely not running in unit tests)
             var clientObject = new GameObject("TestSequenceClient");
             var client = clientObject.AddComponent<SequenceClient>();
 
-            // Attempt to send command without backend
             bool sent = client.ExecuteSequence("test command");
 
-            // Should return false (not connected), but not crash
             if (!client.IsConnected)
             {
                 Assert.IsFalse(sent, "Should not send when disconnected");
@@ -282,8 +260,12 @@ namespace Tests.PlayMode
             var clientObject = new GameObject("TestSequenceClient");
             var client = clientObject.AddComponent<SequenceClient>();
 
-            // Send null command
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
+            LogAssert.Expect(
+                LogType.Error,
+                new System.Text.RegularExpressions.Regex(
+                    ".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"
+                )
+            );
             bool sent = client.ExecuteSequence(null);
 
             Assert.IsFalse(sent, "Should reject null command");
@@ -297,8 +279,12 @@ namespace Tests.PlayMode
             var clientObject = new GameObject("TestSequenceClient");
             var client = clientObject.AddComponent<SequenceClient>();
 
-            // Send empty command
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
+            LogAssert.Expect(
+                LogType.Error,
+                new System.Text.RegularExpressions.Regex(
+                    ".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"
+                )
+            );
             bool sent = client.ExecuteSequence("");
 
             Assert.IsFalse(sent, "Should reject empty command");
@@ -309,15 +295,11 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator Communication_RequestTimeout_HandledGracefully()
         {
-            // This test verifies timeout handling for Python requests
-            // In production, would set very short timeout and verify graceful handling
-
             var clientObject = new GameObject("TestSequenceClient");
             var client = clientObject.AddComponent<SequenceClient>();
 
             yield return null;
 
-            // Client should still be valid even if requests time out
             Assert.IsNotNull(client, "Client should remain valid after timeout");
 
             TestHelpers.DestroyAll(clientObject);
@@ -326,14 +308,9 @@ namespace Tests.PlayMode
         [Test]
         public void Communication_MalformedJSON_LoggedAndSkipped()
         {
-            // Test that malformed JSON in sequence result is handled gracefully
-            var malformedJson = "{\"success\": true, \"total_commands\":"; // Incomplete JSON
-
-            // In production, JsonUtility.FromJson would throw exception
-            // Error handling should log and skip malformed data
+            var malformedJson = "{\"success\": true, \"total_commands\":";
 
             Assert.IsNotNull(malformedJson, "Malformed JSON test string should exist");
-            // Actual parsing would be done in SequenceClient.OnDataReceived
         }
 
         #endregion
@@ -343,15 +320,11 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator SimulationManager_ErrorState_AllowsReset()
         {
-            // Force simulation into error state (if possible)
-            // Then verify it can recover via reset
-
             var simConfig = TestHelpers.CreateTestSimulationConfig();
             simConfig.resetOnError = true;
 
             yield return null;
 
-            // Verify reset on error is enabled
             Assert.IsTrue(simConfig.resetOnError, "Reset on error should be enabled");
 
             Object.DestroyImmediate(simConfig);
@@ -360,10 +333,8 @@ namespace Tests.PlayMode
         [Test]
         public void SimulationManager_NullConfig_UsesDefaults()
         {
-            // Create SimulationManager without config
             var (obj, manager) = TestHelpers.CreateSimulationManager();
 
-            // Should use default values instead of crashing
             Assert.IsNotNull(manager, "SimulationManager should be created");
 
             TestHelpers.DestroyAll(obj);
@@ -373,11 +344,6 @@ namespace Tests.PlayMode
         public void RobotManager_DuplicateRobotId_RejectsOrOverwrites()
         {
             var (obj, manager) = TestHelpers.CreateRobotManager();
-
-            // In production, attempting to register duplicate robot ID should either:
-            // 1. Reject the duplicate
-            // 2. Overwrite the existing robot
-            // Either way, should not crash
 
             Assert.IsNotNull(manager, "RobotManager should be created");
 
@@ -397,11 +363,17 @@ namespace Tests.PlayMode
             config.timeScale = -1f;
 
             // OnValidate should clamp to minimum
-            var onValidate = typeof(SimulationConfig).GetMethod("OnValidate",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var onValidate = typeof(SimulationConfig).GetMethod(
+                "OnValidate",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance
+            );
             onValidate?.Invoke(config, null);
 
-            Assert.GreaterOrEqual(config.timeScale, 0.1f, "Time scale should be clamped to minimum");
+            Assert.GreaterOrEqual(
+                config.timeScale,
+                0.1f,
+                "Time scale should be clamped to minimum"
+            );
 
             Object.DestroyImmediate(config);
         }
@@ -416,12 +388,17 @@ namespace Tests.PlayMode
             config.joints[0].upperLimit = 50f;
 
             // OnValidate should fix this
-            var onValidate = typeof(RobotConfig).GetMethod("OnValidate",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var onValidate = typeof(RobotConfig).GetMethod(
+                "OnValidate",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance
+            );
             onValidate?.Invoke(config, null);
 
-            Assert.Greater(config.joints[0].upperLimit, config.joints[0].lowerLimit,
-                "Upper limit should be fixed to be greater than lower limit");
+            Assert.Greater(
+                config.joints[0].upperLimit,
+                config.joints[0].lowerLimit,
+                "Upper limit should be fixed to be greater than lower limit"
+            );
 
             Object.DestroyImmediate(config);
         }
@@ -435,12 +412,17 @@ namespace Tests.PlayMode
             config.joints[0].stiffness = -1000f;
 
             // OnValidate should clamp to positive
-            var onValidate = typeof(RobotConfig).GetMethod("OnValidate",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var onValidate = typeof(RobotConfig).GetMethod(
+                "OnValidate",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance
+            );
             onValidate?.Invoke(config, null);
 
-            Assert.GreaterOrEqual(config.joints[0].stiffness, 0f,
-                "Stiffness should be clamped to non-negative");
+            Assert.GreaterOrEqual(
+                config.joints[0].stiffness,
+                0f,
+                "Stiffness should be clamped to non-negative"
+            );
 
             Object.DestroyImmediate(config);
         }
@@ -452,16 +434,13 @@ namespace Tests.PlayMode
         [Test]
         public void EdgeCase_ZeroGravity_ArticulationBodiesStable()
         {
-            // Create robot with ArticulationBody
             TestHelpers.SetupMinimalArticulationChain(_robotController);
             LogAssert.Expect(LogType.Error, "Tag: EndEffector is not defined.");
 
-            // Find ArticulationBody components
             var bodies = _robotController.GetComponentsInChildren<ArticulationBody>();
 
             foreach (var body in bodies)
             {
-                // Verify gravity is disabled (common for robot arms)
                 Assert.IsFalse(body.useGravity, "Gravity should be disabled for robot joints");
             }
         }
@@ -469,14 +448,12 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator EdgeCase_VerySmallObject_GraspPlanningHandles()
         {
-            // Create very small object (1mm cube)
             var tinyObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            tinyObject.transform.localScale = Vector3.one * 0.001f; // 1mm
+            tinyObject.transform.localScale = Vector3.one * 0.001f;
             tinyObject.transform.position = new Vector3(0.3f, 0.1f, 0.2f);
 
             yield return null;
 
-            // Grasp planning should handle tiny objects without crashing
             Assert.IsNotNull(tinyObject, "Tiny object should exist");
 
             TestHelpers.DestroyAll(tinyObject);
@@ -485,14 +462,12 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator EdgeCase_VeryLargeObject_GraspPlanningHandles()
         {
-            // Create very large object (1m cube)
             var largeObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            largeObject.transform.localScale = Vector3.one * 1.0f; // 1m
+            largeObject.transform.localScale = Vector3.one * 1.0f;
             largeObject.transform.position = new Vector3(0.3f, 0.5f, 0.2f);
 
             yield return null;
 
-            // Grasp planning should handle large objects (may reject as too large)
             Assert.IsNotNull(largeObject, "Large object should exist");
 
             TestHelpers.DestroyAll(largeObject);
@@ -503,7 +478,6 @@ namespace Tests.PlayMode
         {
             var config = TestHelpers.CreateTestRobotConfig();
 
-            // AR4 has 6 joints - verify this is handled correctly
             Assert.AreEqual(6, config.joints.Length, "AR4 should have 6 joints");
 
             Object.DestroyImmediate(config);

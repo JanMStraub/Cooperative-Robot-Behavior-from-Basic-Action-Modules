@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
-"""
-Movement Operations for Robot Control
-======================================
-
-This module implements movement-related operations for controlling the robot arm
-through Unity's RobotController via TCP communication.
-"""
+"""Movement operations for controlling the robot arm through Unity's RobotController via TCP."""
 
 import time
 import logging
 from typing import Optional
 
 # Lazy import to avoid circular dependency with servers module
-# from servers.CommandServer import get_command_broadcaster
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -29,7 +22,6 @@ from .Validators import (
 )
 from .ROSDispatcher import execute_with_ros_fallback
 
-# Configure logging
 from core.LoggingSetup import setup_logging
 
 setup_logging(__name__)
@@ -37,10 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 from ._imports import get_command_broadcaster as _get_command_broadcaster
-
-# ============================================================================
-# Implementation: Move to Coordinates
-# ============================================================================
 
 
 def move_to_coordinate(
@@ -57,62 +45,11 @@ def move_to_coordinate(
     """
     Move robot end effector to specified 3D coordinate.
 
-    This operation commands the robot arm to move its end effector (gripper tip)
-    to a specified 3D position in the robot's coordinate system. The robot will
-    use inverse kinematics to calculate the required joint angles and execute
-    a smooth trajectory to reach the target position.
+    Asynchronous — sends command to Unity and returns immediately. Unity executes
+    movement in background. Collision detection active during movement.
 
-    The movement respects velocity and acceleration limits for safe operation.
-    Collision detection is active during movement.
-
-    Args:
-        robot_id: ID of the robot to move (e.g., "AR4_Robot", "Robot1")
-        x: X coordinate in meters in ROS base_link frame (forward from robot base). Typical range: -0.5 to 0.5.
-        y: Y coordinate in meters in ROS base_link frame (left from robot base). Typical range: -0.5 to 0.5.
-        z: Z coordinate in meters in ROS base_link frame (up from robot base). Typical range: 0.0 to 0.6.
-        speed: Speed multiplier (0.1=slow, 1.0=normal, 2.0=fast), range: [0.1, 2.0]
-        approach_offset: Lift above target in meters along Unity Y (up-axis), range: [0.0, 0.1]
-        use_advanced_planning: Use full grasp planning pipeline (generates 15 candidates), default: True
-
-    Returns:
-        Dict with the following structure:
-        {
-            "success": bool,           # True if command was sent successfully
-            "result": dict or None,    # Result data if successful
-            "error": dict or None      # Error information if failed
-        }
-
-        Success result structure:
-        {
-            "robot_id": str,
-            "target_position": {"x": float, "y": float, "z": float},
-            "speed": float,
-            "approach_offset": float,
-            "status": "command_sent",
-            "timestamp": float
-        }
-
-        Error structure:
-        {
-            "code": str,                    # Error code (e.g., "INVALID_X_COORDINATE")
-            "message": str,                 # Human-readable error message
-            "recovery_suggestions": list    # List of suggested actions
-        }
-
-    Example:
-        >>> # Move Robot1 (base at x=-0.475) to an object at world position (-0.3, 0.1, 0.1)
-        >>> result = move_to_coordinate("Robot1", -0.3, 0.1, 0.1)
-        >>> if result["success"]:
-        ...     print(f"Command sent at {result['result']['timestamp']}")
-
-        >>> # Move Robot1 slowly to a position on its left side of the table
-        >>> result = move_to_coordinate("Robot1", -0.5, 0.0, 0.2, speed=0.2)
-
-        >>> # Move Robot2 (base at x=0.475) to an object at world position (0.3, 0.1, 0.0)
-        >>> result = move_to_coordinate("Robot2", 0.3, 0.1, 0.0, approach_offset=0.05)
-
-    Note:
-        This operation is asynchronous - it sends the command to Unity and returns immediately. Unity executes the movement in the background. For synchronous execution (waiting for completion), use move_to_coordinate_sync() instead.
+    Note: approach_offset lifts the target along Unity Y (up-axis); leave at 0.0
+    for pure navigation. Use pick_object_at_coordinate when grasping is needed.
     """
     try:
         if err := validate_robot_id(robot_id):
@@ -218,17 +155,7 @@ def move_to_coordinate(
         )
 
 
-# ============================================================================
-# BasicOperation Definition - For RAG System
-# ============================================================================
-
-
 def create_move_to_coordinate_operation() -> BasicOperation:
-    """
-    Create the BasicOperation definition for move_to_coordinate.
-
-    This provides rich metadata for RAG retrieval and LLM task planning.
-    """
     return BasicOperation(
         operation_id="motion_move_to_coord_001",
         name="move_to_coordinate",
@@ -346,7 +273,6 @@ def create_move_to_coordinate_operation() -> BasicOperation:
     )
 
 
-# Create the operation instance for export
 MOVE_TO_COORDINATE_OPERATION = create_move_to_coordinate_operation()
 
 
@@ -358,30 +284,7 @@ def adjust_end_effector_orientation(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """
-    Adjust the end effector orientation without changing position.
-
-    This operation modifies only the gripper orientation (roll, pitch, yaw)
-    while maintaining the current position.
-
-    Args:
-        robot_id: ID of the robot to control
-        roll: Roll angle in degrees (rotation around X axis), range: [-180, 180]
-        pitch: Pitch angle in degrees (rotation around Y axis), range: [-180, 180]
-        yaw: Yaw angle in degrees (rotation around Z axis), range: [-180, 180]
-        request_id: Optional request ID for tracking
-        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
-
-    Returns:
-        OperationResult with orientation adjustment confirmation
-
-    Example:
-        >>> # Rotate gripper 90 degrees for side grasp
-        >>> result = adjust_end_effector_orientation("Robot1", roll=90.0)
-
-        >>> # Adjust pitch for top-down grasp
-        >>> result = adjust_end_effector_orientation("Robot1", pitch=-90.0)
-    """
+    """Adjust end effector orientation (roll/pitch/yaw) without changing position."""
     try:
         if err := validate_robot_id(robot_id):
             return err
@@ -465,7 +368,6 @@ def adjust_end_effector_orientation(
 
 
 def create_adjust_end_effector_orientation_operation() -> BasicOperation:
-    """Create the BasicOperation definition for adjust_end_effector_orientation."""
     return BasicOperation(
         operation_id="motion_adjust_orientation_003",
         name="adjust_end_effector_orientation",
@@ -529,11 +431,6 @@ ADJUST_END_EFFECTOR_ORIENTATION_OPERATION = (
 )
 
 
-# ============================================================================
-# Implementation: Pick Object at Coordinate (Approach → Descent → Grasp)
-# ============================================================================
-
-
 def pick_object_at_coordinate(
     robot_id: str,
     x: float,
@@ -547,38 +444,10 @@ def pick_object_at_coordinate(
     """
     Pick an object at a known 3D coordinate using a hover → descent → grasp sequence.
 
-    This operation encodes the correct three-step pick pattern that prevents the
-    gripper from closing while still above the object:
-
-    1. Open gripper (ensure fingers clear the object during approach).
-    2. Move to hover position (target + approach_height above along Unity Y).
-    3. Descend straight down to contact position (approach_offset=0).
-    4. Close gripper.
-
-    Use this instead of manually chaining move_to_coordinate + control_gripper,
-    which causes the gripper to fire 10 cm above the cube.  For object-name-based
-    grasping use grasp_object instead (it runs the full GraspPlanningPipeline).
-
-    Args:
-        robot_id: ID of the robot to control (e.g., "Robot1", "AR4_Robot").
-        x: X coordinate of the object centre in metres.
-        y: Y coordinate of the object centre in metres (Unity Y = up).
-        z: Z coordinate of the object centre in metres.
-        approach_height: Distance above the object for the hover position in metres,
-            range: [0.02, 0.20].  Default 0.10 m (10 cm).
-        speed: Speed multiplier used for both moves, range: [0.1, 2.0].
-        request_id: Optional request ID for tracking.
-        use_ros: Whether to use ROS for motion planning (None = auto-detect).
-
-    Returns:
-        OperationResult indicating success or the first failure in the sequence.
-
-    Example:
-        >>> # Pick a cube sitting at world position (0.3, 0.05, 0.1)
-        >>> result = pick_object_at_coordinate("Robot1", 0.3, 0.05, 0.1)
-
-        >>> # Pick with a taller approach clearance
-        >>> result = pick_object_at_coordinate("Robot1", 0.3, 0.05, 0.1, approach_height=0.15)
+    Encodes the correct pick pattern: open gripper → hover (approach_height above) →
+    descend to contact → close gripper. Use this instead of manually chaining
+    move_to_coordinate + control_gripper (naive chain fires gripper while still
+    approach_height above the cube). For object-name-based picking use grasp_object.
     """
     try:
         if err := validate_robot_id(robot_id):
@@ -596,7 +465,7 @@ def pick_object_at_coordinate(
                 ["Use a value between 0.02 m (2 cm) and 0.20 m (20 cm)"],
             )
 
-        # Import here to avoid circular dependency — GripperOperations → Base only.
+        # GripperOperations → Base only (no circular dep).
         try:
             from operations.GripperOperations import control_gripper
         except ImportError:
@@ -681,7 +550,6 @@ def pick_object_at_coordinate(
 
 
 def create_pick_object_at_coordinate_operation() -> BasicOperation:
-    """Create the BasicOperation definition for pick_object_at_coordinate."""
     return BasicOperation(
         operation_id="motion_pick_at_coord_004",
         name="pick_object_at_coordinate",

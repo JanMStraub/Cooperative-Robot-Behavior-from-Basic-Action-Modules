@@ -6,9 +6,6 @@ using Utilities;
 
 namespace Robotics
 {
-    /// <summary>
-    /// Defines how the gripper should approach a target position.
-    /// </summary>
     public enum GripperApproach
     {
         /// <summary>Gripper pointing straight down (for picking from above)</summary>
@@ -127,9 +124,6 @@ namespace Robotics
         public float DistanceToTarget => _distanceToTarget;
         public bool HasTarget => _hasTarget;
 
-        /// <summary>
-        /// Unity Start callback - initializes the robot controller.
-        /// </summary>
         private void Start()
         {
             if (_ikConfig == null)
@@ -171,9 +165,6 @@ namespace Robotics
             DrawDebugVisualization();
         }
 
-        /// <summary>
-        /// Initialize the robot controller, IK solver, and joint caches.
-        /// </summary>
         private void InitializeRobot()
         {
             if (string.IsNullOrEmpty(robotId))
@@ -289,10 +280,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Update the cached joint info for Jacobian computation.
-        /// Transforms joint positions and axes to IK frame coordinates.
-        /// </summary>
         private void UpdateJointInfoCache()
         {
             Quaternion ikFrameInverseRot = Quaternion.Inverse(_ikFrame.rotation);
@@ -310,9 +297,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Update end effector and target state in IK frame coordinates.
-        /// </summary>
         private void UpdateEndEffectorState()
         {
             if (_ikFrame == null || endEffectorBase == null)
@@ -418,10 +402,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Get end effector velocity in IK frame coordinates.
-        /// Computes velocity from ArticulationBody joint velocities using forward kinematics.
-        /// </summary>
         private Vector3 GetEndEffectorVelocity()
         {
             if (robotJoints == null || robotJoints.Length == 0 || endEffectorBase == null)
@@ -446,11 +426,6 @@ namespace Robotics
             return Quaternion.Inverse(_ikFrame.rotation) * endEffectorWorldVelocity;
         }
 
-        /// <summary>
-        /// Apply computed joint deltas to the robot's ArticulationBody drives.
-        /// Uses adaptive speed based on distance to target.
-        /// </summary>
-        /// <param name="jointDeltas">Joint angle deltas in radians</param>
         private void ApplyMotorUpdates(Vector<double> jointDeltas)
         {
             float adaptiveGain = _maxStepSpeed;
@@ -480,7 +455,8 @@ namespace Robotics
 
                 ArticulationDrive drive = robotJoints[i].xDrive;
                 float rawTarget = drive.target + deltaAngleDegree;
-                bool isFullCircleJoint = Mathf.Approximately(drive.upperLimit, 180f)
+                bool isFullCircleJoint =
+                    Mathf.Approximately(drive.upperLimit, 180f)
                     && Mathf.Approximately(drive.lowerLimit, -180f);
                 if (isFullCircleJoint)
                 {
@@ -501,17 +477,11 @@ namespace Robotics
         /// Set a new target position for the robot to move to.
         /// Uses top-down approach orientation (gripper pointing down).
         /// </summary>
-        /// <param name="position">Target position in world coordinates</param>
         public void SetTarget(Vector3 position)
         {
             SetTarget(position, GripperApproach.TopDown);
         }
 
-        /// <summary>
-        /// Set a new target position with specified approach direction.
-        /// </summary>
-        /// <param name="position">Target position in world coordinates</param>
-        /// <param name="approach">How the gripper should approach the target</param>
         public void SetTarget(Vector3 position, GripperApproach approach)
         {
             if (ObjectFinder.Instance != null)
@@ -551,10 +521,6 @@ namespace Robotics
             );
         }
 
-        /// <summary>
-        /// Calculate gripper rotation for the specified approach direction.
-        /// Properly handles targets at any position around the robot.
-        /// </summary>
         private Quaternion CalculateApproachRotation(
             Vector3 targetPosition,
             GripperApproach approach
@@ -598,11 +564,6 @@ namespace Robotics
             return baseRotation * Quaternion.Euler(_gripperRotationOffset);
         }
 
-        /// <summary>
-        /// Set a new target position and rotation for the robot.
-        /// </summary>
-        /// <param name="position">Target position in world coordinates</param>
-        /// <param name="rotation">Target rotation in world coordinates</param>
         public void SetTarget(Vector3 position, Quaternion rotation)
         {
             _targetPosition = position;
@@ -616,10 +577,6 @@ namespace Robotics
             );
         }
 
-        /// <summary>
-        /// Set a new target from a GameObject's transform.
-        /// </summary>
-        /// <param name="target">Target GameObject</param>
         public void SetTarget(GameObject target)
         {
             if (target == null)
@@ -630,10 +587,6 @@ namespace Robotics
             SetTarget(target.transform.position, target.transform.rotation);
         }
 
-        /// <summary>
-        /// Set a new target from a Transform.
-        /// </summary>
-        /// <param name="target">Target Transform</param>
         public void SetTarget(Transform target)
         {
             if (target == null)
@@ -642,10 +595,6 @@ namespace Robotics
             SetTarget(target.position, target.rotation);
         }
 
-        /// <summary>
-        /// Update target reached state and fire events.
-        /// </summary>
-        /// <param name="reached">True if target has been reached</param>
         private void SetTargetReached(bool reached)
         {
             if (_hasReachedTarget != reached)
@@ -667,9 +616,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Close the gripper after a delay to allow the robot to settle.
-        /// </summary>
         private IEnumerator CloseGripperAfterDelay()
         {
             yield return new WaitForSeconds(_gripperCloseDelay);
@@ -688,17 +634,11 @@ namespace Robotics
             OnTargetReached?.Invoke();
         }
 
-        /// <summary>
-        /// Release the currently held object by opening the gripper.
-        /// </summary>
         public void ReleaseObject()
         {
             _gripperController?.ReleaseObject();
         }
 
-        /// <summary>
-        /// Check if the robot is currently holding an object.
-        /// </summary>
         public bool IsHoldingObject => _gripperController?.IsHoldingObject ?? false;
 
         /// <summary>
@@ -709,58 +649,37 @@ namespace Robotics
             _gripperController?.OpenGrippers();
         }
 
-        /// <summary>
-        /// Manually close the gripper.
-        /// </summary>
         public void CloseGripper()
         {
             _gripperController?.CloseGrippers();
         }
 
-        /// <summary>
-        /// Clear the current target and stop movement.
-        /// </summary>
         public void ClearTarget()
         {
             _hasTarget = false;
             _hasReachedTarget = true;
         }
 
-        /// <summary>
-        /// Get current end effector position in world coordinates.
-        /// </summary>
         public Vector3 GetCurrentEndEffectorPosition()
         {
             return endEffectorBase == null ? Vector3.zero : endEffectorBase.position;
         }
 
-        /// <summary>
-        /// Get current end effector rotation in world coordinates.
-        /// </summary>
         public Quaternion GetCurrentEndEffectorRotation()
         {
             return endEffectorBase == null ? Quaternion.identity : endEffectorBase.rotation;
         }
 
-        /// <summary>
-        /// Get the current target position.
-        /// </summary>
         public Vector3? GetCurrentTarget()
         {
             return _hasTarget ? _targetPosition : null;
         }
 
-        /// <summary>
-        /// Get the current target rotation.
-        /// </summary>
         public Quaternion? GetCurrentTargetRotation()
         {
             return _hasTarget ? _targetRotation : null;
         }
 
-        /// <summary>
-        /// Reset all joint targets to zero.
-        /// </summary>
         public void ResetJointTargets()
         {
             for (int i = 0; i < robotJoints.Length; i++)
@@ -774,17 +693,11 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Check if tolerance (convergence threshold) has been reached.
-        /// </summary>
         public bool IsToleranceReached()
         {
             return _distanceToTarget < _ikConfig.convergenceThreshold;
         }
 
-        /// <summary>
-        /// Draw debug visualization in the scene view.
-        /// </summary>
         private void DrawDebugVisualization()
         {
             if (!enableDebugVisualization || endEffectorBase == null)
@@ -794,9 +707,6 @@ namespace Robotics
             Debug.DrawRay(endEffectorBase.position, Vector3.right * 0.1f, Color.blue);
         }
 
-        /// <summary>
-        /// Draw gizmos for target visualization in editor.
-        /// </summary>
         private void OnDrawGizmos()
         {
             if (!enableDebugVisualization || !_hasTarget)

@@ -1,24 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for VGNClient
-=========================
-
-Tests the VGN pipeline helpers and VGNClient class without requiring a GPU,
-real model checkpoint, or live VLM server.  Heavy dependencies (torch, VGN
-source, LMStudio) are all mocked or patched.
-
-Coverage:
-- is_available() when model file missing
-- is_available() when torch unavailable
-- _parse_bbox_from_vlm_response: valid JSON
-- _parse_bbox_from_vlm_response: JSON embedded in prose
-- _parse_bbox_from_vlm_response: falls back on malformed JSON
-- _parse_bbox_from_vlm_response: clamps to image bounds
-- predict_grasps output keys (position, rotation, score, width, approach_direction)
-- predict_grasps returns None when too few points after masking
-- output rotation is a unit quaternion
-- segmentation mask uses "color" field not "label" (label bug fixed)
-"""
+"""Unit tests for VGNClient"""
 
 import sys
 import types
@@ -30,10 +11,7 @@ from unittest.mock import MagicMock, patch
 if TYPE_CHECKING:
     from operations.VGNClient import VGNClient
 
-
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_points(n: int = 200) -> np.ndarray:
@@ -59,9 +37,7 @@ def _yolo_bbox() -> tuple:
     return (100, 100, 200, 200)
 
 
-# ---------------------------------------------------------------------------
 # _parse_bbox_from_vlm_response
-# ---------------------------------------------------------------------------
 
 
 class TestParseBboxFromVlmResponse:
@@ -111,9 +87,7 @@ class TestParseBboxFromVlmResponse:
         assert y >= 0
 
 
-# ---------------------------------------------------------------------------
 # VGNClient.is_available()
-# ---------------------------------------------------------------------------
 
 
 class TestVGNClientIsAvailable:
@@ -163,9 +137,7 @@ class TestVGNClientIsAvailable:
         assert result is True
 
 
-# ---------------------------------------------------------------------------
 # VGNClient.predict_grasps() — output contract
-# ---------------------------------------------------------------------------
 
 
 def _make_mock_grasp(pos=(0.1, 0.2, 0.3), score=0.9, width=0.08):
@@ -426,9 +398,7 @@ class TestPredictGraspsOutputContract:
         assert len(result) <= top_k
 
 
-# ---------------------------------------------------------------------------
 # Segmentation mask bug fix test
-# ---------------------------------------------------------------------------
 
 
 class TestSegmentationMaskLabelBugFix:

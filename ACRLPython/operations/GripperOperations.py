@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
-"""
-Gripper Operations for Gripper Control
-==========================================
-
-This module implements open and close operations for the robot gripper
-through Unity's GripperController via TCP communication.
-"""
+"""Open/close operations for the robot gripper through Unity's GripperController via TCP."""
 
 import time
 import logging
 from typing import Any, Dict, Optional
 
-# Lazy import to avoid circular dependency with servers module
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -23,7 +16,6 @@ from .Base import (
 from .Validators import validate_robot_id
 from .ROSDispatcher import execute_with_ros_fallback
 
-# Configure logging
 from core.LoggingSetup import setup_logging
 
 setup_logging(__name__)
@@ -37,10 +29,6 @@ from ._imports import (
     PLACE_TCP_OFFSET,
 )
 
-# ============================================================================
-# Implementation: Control Gripper Operation
-# ============================================================================
-
 
 def control_gripper(
     robot_id: str,
@@ -49,61 +37,14 @@ def control_gripper(
     object_id: Optional[str] = None,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """
-    Open or close the robot gripper.
-
-    This operation commands the robot gripper to open or close completely.
-    The robot uses the GripperController component to execute this command.
-
-    Args:
-        robot_id: ID of the robot to control (e.g., "Robot1", "AR4_Robot")
-        open_gripper: Boolean value - True to open gripper, False to close it
-        request_id: Optional request ID for tracking
-        object_id: Optional object ID to attach when closing (enables handoff)
-
-    Returns:
-        Dict with the following structure:
-        {
-            "success": bool,           # True if command was sent successfully
-            "result": dict or None,    # Result data if successful
-            "error": dict or None      # Error information if failed
-        }
-
-        Success result structure:
-        {
-            "robot_id": str,
-            "open_gripper": bool,
-            "status": str,
-            "timestamp": float
-        }
-
-        Error structure:
-        {
-            "code": str,                    # Error code (e.g., "INVALID_PARAMETER")
-            "message": str,                 # Human-readable error message
-            "recovery_suggestions": list    # List of suggested actions
-        }
-
-    Example:
-        >>> # Open the gripper completely
-        >>> result = control_gripper("Robot1", True)
-        >>> if result["success"]:
-        ...     print(f"Operation completed: {result['result']}")
-
-        >>> # Close the gripper completely
-        >>> result = control_gripper("Robot1", False)
-        >>> if result["success"]:
-        ...     print(f"Operation completed: {result['result']}")
-
-        >>> # Close gripper and attach specific object (for handoff)
-        >>> result = control_gripper("Robot1", False, object_id="RedCube")
-    """
+    """Open or close the robot gripper. Pass object_id when closing for handoff attachment."""
     try:
         if err := validate_robot_id(robot_id):
             return err
 
-        # Validate open_gripper parameter
-        if not isinstance(open_gripper, bool):  # pyright: ignore[reportUnnecessaryIsInstance]
+        if not isinstance(
+            open_gripper, bool
+        ):  # pyright: ignore[reportUnnecessaryIsInstance]
             return OperationResult.error_result(
                 "INVALID_OPEN_GRIPPER_PARAMETER",
                 f"open_gripper must be a boolean, got: {type(open_gripper).__name__}",
@@ -198,24 +139,12 @@ def control_gripper(
         )
 
 
-# ============================================================================
-# BasicOperation Definition - For RAG System
-# ============================================================================
-
-
 def create_control_gripper_operation() -> BasicOperation:
-    """
-    Create the BasicOperation definition for control_gripper.
-
-    This provides rich metadata for RAG retrieval and LLM task planning.
-    """
     return BasicOperation(
-        # Identity
         operation_id="manipulation_control_gripper_001",
         name="control_gripper",
         category=OperationCategory.MANIPULATION,
         complexity=OperationComplexity.ATOMIC,
-        # Descriptions for RAG
         description="Controls the robot gripper to either open or close it completely.",
         long_description="""
             This operation commands the robot gripper to open or close completely.
@@ -259,7 +188,7 @@ def create_control_gripper_operation() -> BasicOperation:
             "robot_is_initialized(robot_id)",
         ],
         postconditions=[],
-        average_duration_ms=500,  # Time for gripper to fully open or close
+        average_duration_ms=500,
         success_rate=0.98,
         failure_modes=[
             "Robot ID not found in RobotManager",
@@ -291,13 +220,7 @@ def create_control_gripper_operation() -> BasicOperation:
     )
 
 
-# Create the operation instance for export
 CONTROL_GRIPPER_OPERATION = create_control_gripper_operation()
-
-
-# ============================================================================
-# Implementation: Release Object
-# ============================================================================
 
 
 def release_object(
@@ -306,34 +229,11 @@ def release_object(
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
-    Open gripper to release held object.
+    Open gripper at current position (ATOMIC — does NOT move the robot).
 
-    This is an ATOMIC operation - ONLY opens gripper at current position.
-    For positioning before release, chain with move_to_coordinate.
-
-    IMPORTANT: This operation does NOT move the robot. If you need to
-    move to a specific position before releasing, you must call
-    move_to_coordinate BEFORE calling this operation.
-
-    Args:
-        robot_id: ID of the robot to control
-        request_id: Optional request ID for tracking
-
-    Returns:
-        OperationResult with release confirmation or error details
-
-    Example:
-        >>> # Chain operations for positioned release:
-        >>> # Step 1: Move to drop-off position
-        >>> result = move_to_coordinate("Robot1", x=0.3, y=0.0, z=0.1)
-        >>> # Step 2: Release object
-        >>> result = release_object("Robot1")
-
-        >>> # Release at current position (no movement)
-        >>> result = release_object("Robot1")
+    For positioned release, chain: move_to_coordinate → release_object.
     """
     try:
-        # Validate robot_id
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
@@ -345,7 +245,7 @@ def release_object(
             from ros2.ROSBridge import ROSBridge
 
             bridge = ROSBridge.get_instance()
-            # Gripper: 1.0 = fully open (normalized value)
+            # 1.0 = fully open (normalized value)
             result = bridge.control_gripper(1.0, robot_id=robot_id)
             if result and result.get("success"):
                 logger.info(f"ROS release_object command sent for {robot_id}")
@@ -400,7 +300,6 @@ def release_object(
 
 
 def create_release_object_operation() -> BasicOperation:
-    """Create the BasicOperation definition for release_object."""
     return BasicOperation(
         operation_id="manipulation_release_object_002",
         name="release_object",
@@ -465,14 +364,7 @@ def create_release_object_operation() -> BasicOperation:
 RELEASE_OBJECT_OPERATION = create_release_object_operation()
 
 
-# ============================================================================
-# Implementation: Place Object
-# ============================================================================
-
-
-def _check_placement_reachability(
-    robot_id: str, x: float, y: float, z: float
-) -> str:
+def _check_placement_reachability(robot_id: str, x: float, y: float, z: float) -> str:
     """Non-blocking KG reachability check for the placement position.
 
     Returns a short note string included in the OperationResult payload.
@@ -527,7 +419,9 @@ def _resolve_placement_y(
     obj_dims = ws.get_object_dimensions(canonical_id)
 
     if obj_pos is None:
-        logger.warning(f"place_object: '{canonical_id}' has no position; fallback to explicit y")
+        logger.warning(
+            f"place_object: '{canonical_id}' has no position; fallback to explicit y"
+        )
         return fallback_y, "fallback_no_position"
     if obj_dims is None:
         logger.warning(
@@ -623,9 +517,7 @@ def place_object(
             effective_y = PLACE_MIN_Y
             resolution_note += "+y_clamped"
 
-        reachability_note = _check_placement_reachability(
-            robot_id, x, effective_y, z
-        )
+        reachability_note = _check_placement_reachability(robot_id, x, effective_y, z)
 
         def _ros_path():
             from ros2.ROSBridge import ROSBridge
@@ -877,11 +769,6 @@ PLACE_OBJECT_OPERATION = BasicOperation(
 )
 
 
-# ============================================================================
-# Implementation: Place Between Objects
-# ============================================================================
-
-
 def place_between_objects(
     robot_id: str,
     object_id_1: str,
@@ -893,33 +780,10 @@ def place_between_objects(
     request_id: int = 0,
 ) -> OperationResult:
     """
-    Place a held object at the midpoint between two world-state objects.
+    Place a held object at the XZ midpoint between two WorldState objects.
 
-    Looks up both objects in WorldState, computes the XZ midpoint, and
-    delegates to place_object.  The Y coordinate defaults to the caller-
-    supplied value (typically the surface height); pass on_top_of to let
-    the stacking logic compute it automatically from one of the reference
-    objects instead.
-
-    Args:
-        robot_id: ID of the robot performing the placement.
-        object_id_1: Name or ID of the first reference object.
-        object_id_2: Name or ID of the second reference object.
-        y: Placement surface Y in Unity world space (metres).  Used when
-           on_top_of is not provided or cannot be resolved.
-        on_top_of: Optional object name/ID whose top surface sets the Y.
-           Passed through to place_object's stacking logic.
-        placed_object_height: Height of the held object (metres).  Used
-           with on_top_of for flush stacking.
-        use_ros: Override ROS/TCP path selection.  None = config default.
-        request_id: Optional request ID for tracking.
-
-    Returns:
-        OperationResult with placement confirmation or error details.
-        Includes midpoint coordinates and resolution notes.
-
-    Example:
-        >>> result = place_between_objects("Robot1", "blue_cube", "red_cube")
+    Delegates to place_object; on_top_of and placed_object_height pass through
+    for flush stacking. Y defaults to caller-supplied value when on_top_of not used.
     """
     try:
         if not robot_id or not isinstance(robot_id, str):
@@ -983,9 +847,12 @@ def place_between_objects(
             request_id=request_id,
         )
 
-        # Augment the result with midpoint metadata while preserving success/error.
         if result.success and result.result is not None:
-            result.result["midpoint"] = {"x": mid_x, "y": result.result["placed_at"]["y"], "z": mid_z}
+            result.result["midpoint"] = {
+                "x": mid_x,
+                "y": result.result["placed_at"]["y"],
+                "z": mid_z,
+            }
             result.result["reference_objects"] = [id1, id2]
 
         return result
@@ -1004,9 +871,7 @@ PLACE_BETWEEN_OBJECTS_OPERATION = BasicOperation(
     name="place_between_objects",
     category=OperationCategory.MANIPULATION,
     complexity=OperationComplexity.INTERMEDIATE,
-    description=(
-        "Place a held object at the midpoint between two reference objects"
-    ),
+    description=("Place a held object at the midpoint between two reference objects"),
     long_description="""
         Resolves both reference objects from WorldState, computes the XZ midpoint,
         and executes a controlled place sequence (hover, descent, release, ascent).

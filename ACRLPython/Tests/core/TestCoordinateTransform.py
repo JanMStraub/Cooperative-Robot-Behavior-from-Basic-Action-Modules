@@ -164,10 +164,8 @@ def test_lateral_offset_axis_conversion():
     print("  ✅ Unity X → ROS -Y correct")
 
 
-# ---------------------------------------------------------------------------
 # Direct tests of world_to_robot_frame_np / robot_to_world_frame_np
 # These exercise the actual CoordinateTransforms module (not the mock).
-# ---------------------------------------------------------------------------
 
 
 def test_np_robot1_axis_conversion():

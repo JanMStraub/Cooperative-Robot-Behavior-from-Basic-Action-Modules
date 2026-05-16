@@ -33,13 +33,7 @@ class CommunicationError(ACRLError):
 
 
 class OperationError(ACRLError):
-    """
-    Operation execution failure.
-
-    Raised when a robot operation (move, grasp, gripper, etc.) fails
-    due to bad parameters, unreachable targets, or Unity reporting an
-    error result.
-    """
+    """Robot operation failure (bad parameters, unreachable target, Unity error result)."""
 
 
 class ROSError(ACRLError):
@@ -52,9 +46,4 @@ class ROSError(ACRLError):
 
 
 class ConfigurationError(ACRLError):
-    """
-    Configuration error.
-
-    Raised when a required configuration value is missing, has an invalid
-    type, or is out of its legal range.
-    """
+    """Missing, wrong-type, or out-of-range configuration value."""

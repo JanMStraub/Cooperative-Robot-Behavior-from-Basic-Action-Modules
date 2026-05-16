@@ -1,35 +1,5 @@
 #!/usr/bin/env python3
-"""
-Consolidated Request ID Correlation Tests
-==========================================
-
-Consolidates all request ID correlation tests from multiple test files
-into a single comprehensive test suite.
-
-This eliminates duplication and provides a single source of truth for
-Protocol V2 request ID correlation testing.
-
-Original tests consolidated from:
-- TestCommandServer.py::test_request_id_correlation
-- TestGraspIntegration.py::test_grasp_request_id_correlation
-- TestUnityIntegration.py::test_request_id_correlation
-- TestSequenceExecutorRequestId.py (entire file)
-
-Coverage:
-- Basic request ID correlation
-- Concurrent request handling
-- Request ID uniqueness
-- Response matching
-- Timeout handling with request IDs
-- Error correlation
-
-NOT Covered:
-- Real Unity integration (requires Unity)
-- Network-level Protocol V2 implementation
-
-Run tests:
-    pytest tests/test_request_id_consolidated.py -v
-"""
+"""Consolidated Request ID Correlation Tests"""
 
 import pytest
 import threading
@@ -40,7 +10,6 @@ class TestRequestIDBasics:
     """Basic request ID correlation tests."""
 
     def test_request_id_uniqueness(self):
-        """Test that generated request IDs are unique."""
         request_ids = set()
 
         # Generate 1000 request IDs
@@ -242,10 +211,8 @@ class TestRequestIDTimeouts:
 
 
 class TestRequestIDErrors:
-    """Test error handling with request IDs."""
 
     def test_duplicate_request_id_handling(self):
-        """Test handling of duplicate request IDs."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()
@@ -319,7 +286,6 @@ class TestRequestIDSequencing:
     """Test request ID sequencing and ordering."""
 
     def test_out_of_order_responses(self):
-        """Test handling responses arriving out of order."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()
@@ -347,7 +313,6 @@ class TestRequestIDSequencing:
             broadcaster.remove_completion_queue(rid)
 
     def test_rapid_request_response_cycle(self):
-        """Test rapid creation and completion of request IDs."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()
@@ -366,7 +331,6 @@ class TestRequestIDIntegration:
     """Integration tests for request ID correlation across components."""
 
     def test_end_to_end_request_flow(self):
-        """Test complete request flow from creation to completion."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()
@@ -409,7 +373,6 @@ class TestRequestIDIntegration:
         broadcaster.remove_completion_queue(request_id)
 
     def test_multiple_component_request_coordination(self):
-        """Test request ID coordination across multiple components."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()

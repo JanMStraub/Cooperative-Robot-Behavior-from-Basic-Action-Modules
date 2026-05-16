@@ -12,10 +12,8 @@ import os
 # Network Configuration
 # ============================================================================
 
-# Server host (usually localhost for security)
 DEFAULT_HOST = os.environ.get("ACRL_HOST", "127.0.0.1")
 
-# Port assignments (can be overridden via environment variables)
 STEREO_DETECTION_PORT = int(
     os.environ.get("STEREO_DETECTION_PORT", "5006")
 )  # Receives stereo image pairs
@@ -32,11 +30,6 @@ AUTORT_SERVER_PORT = int(
     os.environ.get("AUTORT_SERVER_PORT", "5010")
 )  # AutoRT task generation server
 
-
-# ============================================================================
-# Perception-Only Mode
-# ============================================================================
-
 # When True, WorldStateServer (port 5009) is NOT started even in sim mode.
 # WorldState is populated entirely by FK (from joint angles) and stereo perception.
 # Useful for testing real-robot code paths in the sim environment without Unity
@@ -47,36 +40,16 @@ PERCEPTION_ONLY_MODE = os.environ.get("PERCEPTION_ONLY_MODE", "false").lower() i
     "yes",
 )
 
-# ============================================================================
-# Connection Limits
-# ============================================================================
-
 MAX_CONNECTIONS_BACKLOG = int(os.environ.get("MAX_CONNECTIONS_BACKLOG", "5"))
 MAX_CLIENT_THREADS = int(os.environ.get("MAX_CLIENT_THREADS", "10"))
-
-# ============================================================================
-# Timeout Settings (seconds)
-# ============================================================================
 
 SOCKET_ACCEPT_TIMEOUT = float(os.environ.get("SOCKET_ACCEPT_TIMEOUT", "1.0"))
 SERVER_HEARTBEAT_INTERVAL = float(os.environ.get("SERVER_HEARTBEAT_INTERVAL", "30.0"))
 
-# ============================================================================
-# Protocol Limits
-# ============================================================================
-
 MAX_STRING_LENGTH = int(os.environ.get("MAX_STRING_LENGTH", "256"))
 MAX_IMAGE_SIZE = int(os.environ.get("MAX_IMAGE_SIZE", str(10 * 1024 * 1024)))  # 10MB
 
-# ============================================================================
-# Result Queue
-# ============================================================================
-
 MAX_RESULT_QUEUE_SIZE = int(os.environ.get("MAX_RESULT_QUEUE_SIZE", "100"))
-
-# ============================================================================
-# Monitoring Intervals (seconds)
-# ============================================================================
 
 LLM_REQUEST_TIMEOUT = float(os.environ.get("LLM_REQUEST_TIMEOUT", "90.0"))
 WORLDSTATE_CHECK_INTERVAL = float(os.environ.get("WORLDSTATE_CHECK_INTERVAL", "5.0"))
@@ -131,7 +104,6 @@ LLM_THINKING_ENABLED = os.environ.get("LLM_THINKING_ENABLED", "true").lower() ==
 # Download from: https://github.com/ethz-asl/vgn (Google Drive link in README)
 VGN_MODEL_PATH = os.environ.get("VGN_MODEL_PATH", "vgn/models/vgn_conv.pth")
 
-# Number of top-ranked grasp poses to return per call.
 VGN_TOP_K = int(os.environ.get("VGN_TOP_K", "20"))
 
 # Master toggle: set to "false" to skip VGN entirely and use geometric fallback.
@@ -147,16 +119,10 @@ VGN_USE_VLM_REFINEMENT = os.environ.get("VGN_USE_VLM_REFINEMENT", "false").lower
     "yes",
 )
 
-# ============================================================================
-# Shared LLM System Prompt
-# ============================================================================
-
 # A concise domain preamble injected into every LLM call as the system message.
 # Individual role-specific prompts (CommandParser, RobotLLMAgent, etc.) extend
 # this with their own instructions — they should NOT repeat this context.
-SYSTEM_PROMPT_BASE = (
-    "You are an AI robot controller for a dual-arm AR4 robotic system running inside a Unity simulation. The workspace is a table-top environment with two 6-DOF robot arms: Robot1 (left side, base at x=-0.475) and Robot2 (right side, base at x=+0.475). Workspace bounds: x between -0.6 and 0.6, y between 0.0, 0.6, z between -0.5 and 0.5. Operations are executed sequentially or in named parallel_groups. Robots communicate via signal/wait_for_signal events. You must ONLY use operations, object IDs, and coordinate values explicitly provided in the user message and never invent names, IDs, or positions. Output only valid JSON. Never include markdown fences, reasoning text, or [THINK] tags."
-)
+SYSTEM_PROMPT_BASE = "You are an AI robot controller for a dual-arm AR4 robotic system running inside a Unity simulation. The workspace is a table-top environment with two 6-DOF robot arms: Robot1 (left side, base at x=-0.475) and Robot2 (right side, base at x=+0.475). Workspace bounds: x between -0.6 and 0.6, y between 0.0, 0.6, z between -0.5 and 0.5. Operations are executed sequentially or in named parallel_groups. Robots communicate via signal/wait_for_signal events. You must ONLY use operations, object IDs, and coordinate values explicitly provided in the user message and never invent names, IDs, or positions. Output only valid JSON. Never include markdown fences, reasoning text, or [THINK] tags."
 
 # Popular vision models (for reference)
 VISION_MODELS = [

@@ -22,7 +22,9 @@ class BenchmarkConfig:
     use_knowledge_graph: bool = True
     use_vgn: bool = True
     use_ros_movement: bool = True
-    execution_mode: str = "offline"  # "offline" = dry-run+mocks, "live" = real SequenceServer
+    execution_mode: str = (
+        "offline"  # "offline" = dry-run+mocks, "live" = real SequenceServer
+    )
 
 
 @dataclasses.dataclass

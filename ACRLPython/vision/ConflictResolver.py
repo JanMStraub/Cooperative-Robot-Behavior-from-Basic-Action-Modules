@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-VisionConflictResolver - Multi-robot object claim conflict resolution.
-
-When multiple robots detect the same object and want to interact with it,
-this module decides which robot gets priority based on the configured strategy.
-
-Config (config/Vision.py):
-    OBJECT_CLAIM_TIMEOUT:       Seconds before a claim expires (default 10.0)
-    CONFLICT_RESOLUTION_STRATEGY: "closest_robot" or "first_come" (default "closest_robot")
-    CONFLICT_MIN_DISTANCE_DIFF: Min distance difference to break ties (default 0.05m)
-"""
+"""Multi-robot object claim conflict resolution."""
 
 import time
 from typing import Dict, Optional, Tuple
@@ -31,31 +21,13 @@ except ImportError:
 
 
 class VisionConflictResolver:
-    """
-    Resolves ownership conflicts when multiple robots claim the same detected object.
-
-    Strategies:
-        "closest_robot": The robot physically closest to the object wins.
-            If distance difference is below CONFLICT_MIN_DISTANCE_DIFF, the first
-            claimant wins to break the tie.
-        "first_come": The robot that claimed first (by timestamp) wins.
-
-    Claims expire after OBJECT_CLAIM_TIMEOUT seconds.
-    """
+    """Resolves ownership conflicts when multiple robots claim the same object."""
 
     def __init__(self):
-        """Initialize conflict resolver with empty claim registry."""
-        # Maps object_id -> {robot_id: claim_timestamp}
         self._claims: Dict[str, Dict[str, float]] = {}
 
     def claim_object(self, robot_id: str, object_id: str) -> None:
-        """
-        Register a claim for an object by a robot.
-
-        Args:
-            robot_id: Robot identifier (e.g., "Robot1")
-            object_id: Object identifier (e.g., "red_cube_0")
-        """
+        """Register claim for object by robot."""
         now = time.time()
         if object_id not in self._claims:
             self._claims[object_id] = {}
@@ -69,26 +41,11 @@ class VisionConflictResolver:
         robot_position: Optional[Tuple[float, float, float]] = None,
         object_position: Optional[Tuple[float, float, float]] = None,
     ) -> bool:
-        """
-        Determine if the given robot gets access to the claimed object.
-
-        Expired claims are pruned before resolution. If no conflict exists
-        (only one valid claimant), the robot always gets the object.
-
-        Args:
-            robot_id: Robot requesting access
-            object_id: Object being contested
-            robot_position: Robot's current position (x, y, z) in world space
-            object_position: Object's position (x, y, z) in world space
-
-        Returns:
-            True if this robot should proceed; False if another robot has priority.
-        """
+        """Determine if robot gets access to claimed object."""
         self._prune_expired_claims(object_id)
 
         claims = self._claims.get(object_id, {})
 
-        # If no competing claims, robot gets access
         if not claims or robot_id not in claims:
             return True
 
@@ -120,25 +77,18 @@ class VisionConflictResolver:
 
         my_dist = _dist(robot_position, object_position)
 
-        # Competitors' positions are not stored in claims, so use claim timestamp
-        # as a distance proxy: if we claimed first, we were likely closer at that moment.
-        # Grant access only if no competitor claimed meaningfully earlier.
         earliest_ts = min(claims[r] for r in claims)
         my_ts = claims[robot_id]
 
         if my_ts == earliest_ts:
-            # We claimed first; grant access
             logger.debug(
                 f"Conflict: {robot_id} wins (first claim, dist={my_dist:.3f}m) on {object_id}"
             )
             return True
 
-        # We claimed later — yield to the earlier claimant.
-        # Use resolve_conflict_with_positions() for accurate closest-robot resolution
-        # when all robot positions are available via WorldState.
         logger.debug(
             f"Conflict: {robot_id} yielding to earlier claimant on {object_id} "
-            f"(dist={my_dist:.3f}m; use resolve_conflict_with_positions for full closest-robot logic)"
+            f"(dist={my_dist:.3f}m; use resolve_conflict_with_positions for full logic)"
         )
         return False
 
@@ -149,21 +99,7 @@ class VisionConflictResolver:
         all_robot_positions: Dict[str, Tuple[float, float, float]],
         object_position: Tuple[float, float, float],
     ) -> bool:
-        """
-        Resolve conflict using positions of ALL active robots.
-
-        This is the preferred method when WorldState is available, as it provides
-        accurate closest-robot resolution.
-
-        Args:
-            robot_id: Robot requesting access
-            object_id: Object being contested
-            all_robot_positions: Dict mapping robot_id -> (x, y, z) world position
-            object_position: Object's position in world space
-
-        Returns:
-            True if this robot should proceed.
-        """
+        """Resolve conflict using positions of all active robots."""
         self._prune_expired_claims(object_id)
 
         claims = self._claims.get(object_id, {})
@@ -178,13 +114,12 @@ class VisionConflictResolver:
             earliest_ts = min(claims[r] for r in claims)
             return claims[robot_id] == earliest_ts
 
-        # Closest robot strategy
         def _dist(pos_a: Tuple, pos_b: Tuple) -> float:
             return sum((a - b) ** 2 for a, b in zip(pos_a, pos_b)) ** 0.5
 
         my_pos = all_robot_positions.get(robot_id)
         if my_pos is None:
-            return True  # Can't determine, grant access
+            return True
 
         my_dist = _dist(my_pos, object_position)
 
@@ -195,7 +130,6 @@ class VisionConflictResolver:
             comp_dist = _dist(comp_pos, object_position)
 
             if comp_dist < my_dist - CONFLICT_MIN_DISTANCE_DIFF:
-                # Competitor is meaningfully closer
                 logger.debug(
                     f"Conflict: {competitor} ({comp_dist:.3f}m) closer than "
                     f"{robot_id} ({my_dist:.3f}m) to {object_id}"
@@ -205,13 +139,7 @@ class VisionConflictResolver:
         return True
 
     def release_claim(self, robot_id: str, object_id: str) -> None:
-        """
-        Release a robot's claim on an object (e.g., after successful grasp or failure).
-
-        Args:
-            robot_id: Robot releasing the claim
-            object_id: Object being released
-        """
+        """Release robot's claim on object."""
         if object_id in self._claims and robot_id in self._claims[object_id]:
             del self._claims[object_id][robot_id]
             if not self._claims[object_id]:
@@ -219,12 +147,7 @@ class VisionConflictResolver:
             logger.debug(f"Claim released: {robot_id} -> {object_id}")
 
     def _prune_expired_claims(self, object_id: str) -> None:
-        """
-        Remove claims older than OBJECT_CLAIM_TIMEOUT seconds.
-
-        Args:
-            object_id: Object whose claims to prune
-        """
+        """Remove claims older than OBJECT_CLAIM_TIMEOUT seconds."""
         if object_id not in self._claims:
             return
 
@@ -242,14 +165,6 @@ class VisionConflictResolver:
             del self._claims[object_id]
 
     def get_active_claims(self, object_id: str) -> Dict[str, float]:
-        """
-        Get all active (non-expired) claims for an object.
-
-        Args:
-            object_id: Object to query
-
-        Returns:
-            Dict mapping robot_id -> claim timestamp
-        """
+        """Get all active (non-expired) claims for object."""
         self._prune_expired_claims(object_id)
         return dict(self._claims.get(object_id, {}))

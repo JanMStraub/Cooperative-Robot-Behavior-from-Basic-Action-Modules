@@ -81,25 +81,14 @@ namespace PythonCommunication.Core
             }
         }
 
-        /// <summary>
-        /// Get formatted connection info (host:port)
-        /// </summary>
         public string ConnectionInfo => $"{_serverHost}:{_serverPort}";
 
-        #region Unity Lifecycle
-
-        /// <summary>
-        /// Called when script instance is being loaded
-        /// </summary>
         protected virtual void Awake()
         {
             // Capture Unity main thread context for safe callback marshalling
             _mainThreadContext = SynchronizationContext.Current;
         }
 
-        /// <summary>
-        /// Called when component starts
-        /// </summary>
         protected virtual void Start()
         {
             if (_autoConnect)
@@ -108,9 +97,6 @@ namespace PythonCommunication.Core
             }
         }
 
-        /// <summary>
-        /// Called every frame - handles auto-reconnect
-        /// </summary>
         protected virtual void Update()
         {
             // Handle auto-reconnect
@@ -125,17 +111,11 @@ namespace PythonCommunication.Core
             }
         }
 
-        /// <summary>
-        /// Called when application quits
-        /// </summary>
         protected virtual void OnApplicationQuit()
         {
             Disconnect();
         }
 
-        /// <summary>
-        /// Called when component is destroyed
-        /// </summary>
         protected virtual void OnDestroy()
         {
             if (!_disposed)
@@ -144,10 +124,6 @@ namespace PythonCommunication.Core
                 Disconnect();
             }
         }
-
-        #endregion
-
-        #region Connection Management
 
         /// <summary>
         /// Establish connection to server (async, non-blocking)
@@ -173,9 +149,6 @@ namespace PythonCommunication.Core
             Task.Run(async () => await ConnectAsync(_connectCancellation.Token));
         }
 
-        /// <summary>
-        /// Async connection logic (runs on background thread)
-        /// </summary>
         private async Task ConnectAsync(CancellationToken cancellationToken)
         {
             TcpClient tempClient = null;
@@ -304,9 +277,6 @@ namespace PythonCommunication.Core
             }
         }
 
-        /// <summary>
-        /// Disconnect from server
-        /// </summary>
         public virtual void Disconnect()
         {
             _shouldRun = false;
@@ -372,10 +342,6 @@ namespace PythonCommunication.Core
             }
         }
 
-        #endregion
-
-        #region Lifecycle Hooks (Optional Override)
-
         /// <summary>
         /// Called when connection is successfully established.
         /// Override to start background threads, initialize state, etc.
@@ -392,7 +358,6 @@ namespace PythonCommunication.Core
         /// THREAD SAFETY: This is called on Unity's MAIN THREAD (via SynchronizationContext).
         /// You can safely access Unity API (GameObjects, UI, Transforms) from this method.
         /// </summary>
-        /// <param name="exception">The exception that occurred</param>
         protected virtual void OnConnectionFailed(Exception exception) { }
 
         /// <summary>
@@ -413,11 +378,6 @@ namespace PythonCommunication.Core
         /// </summary>
         protected virtual void OnDisconnected() { }
 
-        #endregion
-
-
-        #region Utility Methods
-
         /// <summary>
         /// Read exactly N bytes from the stream into buffer starting at offset.
         /// Throws IOException if connection is closed before reading all bytes.
@@ -428,11 +388,6 @@ namespace PythonCommunication.Core
         ///
         /// MUST be called from a background thread (e.g., BidirectionalClientBase.ReceiveLoop).
         /// </summary>
-        /// <param name="stream">Network stream to read from</param>
-        /// <param name="buffer">Buffer to read data into</param>
-        /// <param name="count">Number of bytes to read</param>
-        /// <param name="offset">Starting offset in buffer (default: 0)</param>
-        /// <exception cref="System.IO.IOException">Thrown if connection closes before reading count bytes</exception>
         protected void ReadExactly(NetworkStream stream, byte[] buffer, int count, int offset = 0)
         {
             int totalRead = 0;
@@ -445,8 +400,10 @@ namespace PythonCommunication.Core
                 }
                 catch (System.IO.IOException ex)
                     when (ex.InnerException is SocketException sockEx
-                        && (sockEx.SocketErrorCode == SocketError.TimedOut
-                            || sockEx.SocketErrorCode == SocketError.WouldBlock)
+                        && (
+                            sockEx.SocketErrorCode == SocketError.TimedOut
+                            || sockEx.SocketErrorCode == SocketError.WouldBlock
+                        )
                     )
                 {
                     // ReadTimeout expired — rethrow as SocketException so callers
@@ -529,7 +486,5 @@ namespace PythonCommunication.Core
                 return id;
             }
         }
-
-        #endregion
     }
 }

@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Tests for intermediate motion layer (Improvement 4).
-
-Covers:
-- _decompose_to_motions() returns list of strings from LLM
-- _decompose_to_motions() returns empty list on LLM failure
-- _parse_with_motion_layer() augments command with motion strings
-- _parse_with_motion_layer() falls back to standard parse when decomposition empty
-- parse() honours use_motion_layer=True flag
-- USE_MOTION_LAYER config var is readable
-"""
+"""Tests for intermediate motion layer (Improvement 4)"""
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
@@ -31,9 +21,7 @@ def _make_session_response(content, status=200):
     return resp
 
 
-# ============================================================================
 # _decompose_to_motions()
-# ============================================================================
 
 
 class TestDecomposeToMotions:
@@ -83,9 +71,7 @@ class TestDecomposeToMotions:
         assert result == []
 
 
-# ============================================================================
 # _parse_with_motion_layer()
-# ============================================================================
 
 
 class TestParseWithMotionLayer:
@@ -135,9 +121,7 @@ class TestParseWithMotionLayer:
         assert result["success"] is True
 
 
-# ============================================================================
 # parse() use_motion_layer flag
-# ============================================================================
 
 
 class TestParseMotionLayerFlag:
@@ -184,9 +168,7 @@ class TestParseMotionLayerFlag:
             parser._parse_with_llm.assert_called_once()
 
 
-# ============================================================================
 # Config
-# ============================================================================
 
 
 class TestMotionLayerConfig:
@@ -214,9 +196,7 @@ class TestMotionLayerConfig:
         assert srv.USE_MOTION_LAYER is True
 
 
-# ============================================================================
 # parse_with_hint() motion layer integration
-# ============================================================================
 
 
 class TestParseWithHintMotionLayer:

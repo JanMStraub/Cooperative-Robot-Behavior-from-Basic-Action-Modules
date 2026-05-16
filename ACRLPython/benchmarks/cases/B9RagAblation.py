@@ -5,12 +5,11 @@ from __future__ import annotations
 
 from typing import List
 
-def get_tasks() -> List[str]:
+
+def get_tasks(config=None) -> List[str]:
     """
     Return NL task strings reused from B1–B5 for parse-only RAG ablation.
 
-    Returns:
-        List of natural language task strings.
     """
 
     return [

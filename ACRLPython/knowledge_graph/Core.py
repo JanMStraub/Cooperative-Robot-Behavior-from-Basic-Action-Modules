@@ -1,22 +1,5 @@
 #!/usr/bin/env python3
-"""
-Knowledge Graph Core Implementation
-====================================
-
-Thin wrapper over NetworkX MultiDiGraph with thread-safe operations.
-Provides graph CRUD operations and persistence.
-
-Edge Types:
-- CAN_REACH: Robot -> Object (with distance, approach_direction)
-- NEAR: Object <-> Object, Robot <-> Object (with distance)
-- IN_REGION: Robot/Object -> Region
-- GRASPING: Robot -> Object (with grasp_time)
-- ADJACENT_TO: Region <-> Region (static)
-- ALLOCATED: Region -> Robot (with allocated_at, timeout)
-- EXECUTED: Robot -> Operation (with timestamp)
-- REQUIRES: Operation -> Operation (from OperationRelationship)
-- CONFLICTS_WITH: Operation <-> Operation (from OperationRelationship)
-"""
+"""Thread-safe wrapper over NetworkX MultiDiGraph with graph CRUD and persistence."""
 
 import threading
 from collections import defaultdict
@@ -29,28 +12,15 @@ except ImportError:
         "NetworkX is required for KnowledgeGraph. Install with: pip install networkx"
     )
 
-# Configure logging
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
 
 
 class KnowledgeGraph:
-    """
-    Thread-safe knowledge graph for spatial and temporal reasoning.
-
-    Uses NetworkX MultiDiGraph to support multiple edges between nodes.
-    All operations are protected by RLock for thread safety.
-    """
+    """Thread-safe knowledge graph using NetworkX MultiDiGraph with RLock protection."""
 
     def __init__(self):
-        """
-        Initialize empty knowledge graph.
-
-        Graph structure:
-        - Nodes: RobotNode, ObjectNode, RegionNode (stored as attributes dict)
-        - Edges: Typed edges with optional attributes (weight, timestamp, etc.)
-        """
         self._graph = nx.MultiDiGraph()
         self._lock = threading.RLock()
         # Secondary index: node_type -> set of node IDs for O(1) typed lookups.
@@ -58,17 +28,6 @@ class KnowledgeGraph:
         logger.info("KnowledgeGraph initialized (empty)")
 
     def add_node(self, node_id: str, **attrs):
-        """
-        Add or update a node in the graph.
-
-        Args:
-            node_id: Unique node identifier
-            **attrs: Node attributes (e.g., node_type, position, etc.)
-
-        Example:
-            >>> kg = KnowledgeGraph()
-            >>> kg.add_node("Robot1", node_type="robot", position=(-0.3, 0.2, 0.1))
-        """
         with self._lock:
             existing_type = None
             if node_id in self._graph:
@@ -86,15 +45,6 @@ class KnowledgeGraph:
             logger.debug(f"Added node: {node_id} ({attrs.get('node_type', 'unknown')})")
 
     def remove_node(self, node_id: str):
-        """
-        Remove a node and all its edges from the graph.
-
-        Args:
-            node_id: Node identifier to remove
-
-        Returns:
-            True if node was removed, False if it didn't exist
-        """
         with self._lock:
             if node_id in self._graph:
                 node_type = self._graph.nodes[node_id].get("node_type")
@@ -106,67 +56,21 @@ class KnowledgeGraph:
             return False
 
     def get_node(self, node_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get node attributes.
-
-        Args:
-            node_id: Node identifier
-
-        Returns:
-            Dictionary of node attributes, or None if node doesn't exist
-        """
         with self._lock:
             if node_id in self._graph:
                 return dict(self._graph.nodes[node_id])
             return None
 
     def has_node(self, node_id: str) -> bool:
-        """
-        Check if node exists in graph.
-
-        Args:
-            node_id: Node identifier
-
-        Returns:
-            True if node exists
-        """
         with self._lock:
             return node_id in self._graph
 
     def add_edge(self, source: str, target: str, edge_type: str, **attrs):
-        """
-        Add a typed edge between two nodes.
-
-        Supports multiple edges between same nodes (MultiDiGraph).
-
-        Args:
-            source: Source node ID
-            target: Target node ID
-            edge_type: Edge type (e.g., "CAN_REACH", "NEAR", "IN_REGION")
-            **attrs: Edge attributes (e.g., distance, weight, timestamp)
-
-        Example:
-            >>> kg.add_edge("Robot1", "RedCube", "CAN_REACH", distance=0.5)
-        """
         with self._lock:
             self._graph.add_edge(source, target, edge_type=edge_type, **attrs)
             logger.debug(f"Added edge: {source} --[{edge_type}]--> {target}")
 
     def remove_edge(self, source: str, target: str, edge_type: Optional[str] = None):
-        """
-        Remove edge(s) between two nodes.
-
-        If edge_type is specified, removes only edges of that type.
-        Otherwise, removes all edges between the nodes.
-
-        Args:
-            source: Source node ID
-            target: Target node ID
-            edge_type: Optional edge type filter
-
-        Returns:
-            Number of edges removed
-        """
         with self._lock:
             if not self._graph.has_edge(source, target):
                 return 0
@@ -192,17 +96,10 @@ class KnowledgeGraph:
 
     def remove_edges_by_type(self, nodes: List[str], edge_types: Set[str]) -> int:
         """
-        Batch-remove all edges of the given types incident to any of the given nodes.
+        Batch-remove all edges of the given types from the given nodes.
 
-        More efficient than calling remove_edge for every possible (src, dst) pair
-        because it collects existing edges first and removes them in one locked pass.
-
-        Args:
-            nodes: List of node IDs whose outgoing edges should be scanned.
-            edge_types: Set of edge type strings to remove (e.g. {"CAN_REACH", "NEAR"}).
-
-        Returns:
-            Number of edges removed.
+        More efficient than per-pair remove_edge: collects existing edges first,
+        removes in one locked pass.
         """
         with self._lock:
             edges_to_remove = [
@@ -220,31 +117,13 @@ class KnowledgeGraph:
             return len(edges_to_remove)
 
     def get_neighbors(self, node_id: str, edge_type: Optional[str] = None) -> List[str]:
-        """
-        Get neighbors of a node, optionally filtered by edge type.
-
-        Returns successor nodes (outgoing edges).
-
-        Args:
-            node_id: Node identifier
-            edge_type: Optional edge type filter (e.g., "CAN_REACH")
-
-        Returns:
-            List of neighbor node IDs
-
-        Example:
-            >>> kg.get_neighbors("Robot1", edge_type="CAN_REACH")
-            ['RedCube', 'BlueCube']
-        """
         with self._lock:
             if node_id not in self._graph:
                 return []
 
             if edge_type is None:
-                # Return all successors
                 return list(self._graph.successors(node_id))
 
-            # Filter by edge type
             neighbors = []
             for target in self._graph.successors(node_id):
                 # Check all edges to this target
@@ -258,16 +137,6 @@ class KnowledgeGraph:
     def get_predecessors(
         self, node_id: str, edge_type: Optional[str] = None
     ) -> List[str]:
-        """
-        Get predecessors of a node (incoming edges), optionally filtered by edge type.
-
-        Args:
-            node_id: Node identifier
-            edge_type: Optional edge type filter
-
-        Returns:
-            List of predecessor node IDs
-        """
         with self._lock:
             if node_id not in self._graph:
                 return []
@@ -275,7 +144,6 @@ class KnowledgeGraph:
             if edge_type is None:
                 return list(self._graph.predecessors(node_id))
 
-            # Filter by edge type
             predecessors = []
             for source in self._graph.predecessors(node_id):
                 for _, edge_data in self._graph[source][node_id].items():
@@ -286,15 +154,6 @@ class KnowledgeGraph:
             return predecessors
 
     def get_all_nodes(self, node_type: Optional[str] = None) -> List[str]:
-        """
-        Get all node IDs, optionally filtered by node_type.
-
-        Args:
-            node_type: Optional node type filter (e.g., "robot", "object", "region")
-
-        Returns:
-            List of node IDs
-        """
         with self._lock:
             if node_type is None:
                 return list(self._graph.nodes())
@@ -320,18 +179,7 @@ class KnowledgeGraph:
             logger.info("KnowledgeGraph cleared")
 
     def save_graphml(self, path: str):
-        """
-        Save graph to GraphML format for offline analysis.
-
-        Converts tuple attributes to strings for GraphML compatibility.
-
-        Args:
-            path: File path to save (e.g., "knowledge_graph.graphml")
-
-        Example:
-            >>> kg.save_graphml("session_graph.graphml")
-            # Can be opened in Gephi, Cytoscape, or other graph tools
-        """
+        """Save graph to GraphML. Converts non-primitive attrs for compatibility."""
         # Copy inside lock, then write outside lock to avoid holding the lock
         # during slow file I/O.
         with self._lock:
@@ -363,12 +211,6 @@ class KnowledgeGraph:
         logger.info(f"Saved graph to {path} ({node_count} nodes, {edge_count} edges)")
 
     def load_graphml(self, path: str):
-        """
-        Load graph from GraphML format.
-
-        Args:
-            path: File path to load
-        """
         with self._lock:
             try:
                 self._graph = nx.read_graphml(path, node_type=str)
@@ -385,31 +227,29 @@ class KnowledgeGraph:
                 f"Loaded graph from {path} ({self._graph.number_of_nodes()} nodes, {self._graph.number_of_edges()} edges)"
             )
 
-    def save_png(self, path: str, title: str = "Knowledge Graph",
-                 dpi: Optional[int] = None,
-                 figsize: Optional[tuple] = None) -> None:
+    def save_png(
+        self,
+        path: str,
+        title: str = "Knowledge Graph",
+        dpi: Optional[int] = None,
+        figsize: Optional[tuple] = None,
+    ) -> None:
         """
-        Render the graph to a PNG using matplotlib.
+        Render graph to PNG via matplotlib.
 
-        DPI and figsize default to config.KnowledgeGraph.KG_VIZ_DPI /
-        KG_VIZ_FIGSIZE when not supplied.
-
-        Node colour encodes type: robot=steelblue, object=coral, region=mediumseagreen,
-        other=lightgrey. Edge labels show edge_type. Nodes are labelled with their ID.
-
-        Args:
-            path: Output file path (e.g. "kg.png").
-            title: Figure title.
-            dpi: PNG resolution; falls back to KG_VIZ_DPI config value.
-            figsize: (width, height) in inches; falls back to KG_VIZ_FIGSIZE config value.
+        Node color: robot=steelblue, object=coral, region=mediumseagreen.
+        DPI/figsize fall back to KG_VIZ_DPI/KG_VIZ_FIGSIZE config values.
         """
         try:
             import matplotlib
+
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
             import matplotlib.patches as mpatches
         except ImportError:
-            raise ImportError("matplotlib is required for save_png. pip install matplotlib")
+            raise ImportError(
+                "matplotlib is required for save_png. pip install matplotlib"
+            )
 
         import config.KnowledgeGraph as _viz_cfg
 
@@ -454,20 +294,27 @@ class KnowledgeGraph:
             for n in graph_copy.nodes()
         ]
 
-        nx.draw_networkx_nodes(graph_copy, pos, node_color=node_colors,
-                               node_size=1200, ax=ax, alpha=0.9)
-        nx.draw_networkx_labels(graph_copy, pos, font_size=14,
-                                font_weight="bold", ax=ax)
+        nx.draw_networkx_nodes(
+            graph_copy, pos, node_color=node_colors, node_size=1200, ax=ax, alpha=0.9
+        )
+        nx.draw_networkx_labels(
+            graph_copy, pos, font_size=14, font_weight="bold", ax=ax
+        )
 
         seen_types: set = set()
         for u, v, data in graph_copy.edges(data=True):
             etype = data.get("edge_type", "")
             color = _EDGE_COLORS.get(etype, "#bdc3c7")
             nx.draw_networkx_edges(
-                graph_copy, pos, edgelist=[(u, v)],
-                edge_color=color, arrows=True,
-                arrowsize=15, width=1.5,
-                connectionstyle="arc3,rad=0.1", ax=ax,
+                graph_copy,
+                pos,
+                edgelist=[(u, v)],
+                edge_color=color,
+                arrows=True,
+                arrowsize=15,
+                width=1.5,
+                connectionstyle="arc3,rad=0.1",
+                ax=ax,
             )
             seen_types.add(etype)
 
@@ -477,11 +324,14 @@ class KnowledgeGraph:
         ]
         for ntype, color in _NODE_COLORS.items():
             handles.append(mpatches.Patch(color=color, label=f"[{ntype}]"))
-        ax.legend(handles=handles, loc="lower left", fontsize=12,
-                  framealpha=0.8, ncol=2)
+        ax.legend(
+            handles=handles, loc="lower left", fontsize=12, framealpha=0.8, ncol=2
+        )
 
-        stats = (f"{graph_copy.number_of_nodes()} nodes  "
-                 f"{graph_copy.number_of_edges()} edges")
+        stats = (
+            f"{graph_copy.number_of_nodes()} nodes  "
+            f"{graph_copy.number_of_edges()} edges"
+        )
         fig.text(0.5, 0.01, stats, ha="center", fontsize=12, color="grey")
 
         plt.tight_layout()
@@ -491,26 +341,26 @@ class KnowledgeGraph:
 
     def auto_save_png_if_enabled(self, label: str = "") -> None:
         """
-        Save timestamped PNG and GraphML snapshots if KG_VIZ_AUTO_SAVE is enabled.
+        Save timestamped PNG + GraphML if KG_VIZ_AUTO_SAVE enabled.
 
-        Writes both formats so kg_inspect can reload the graphml for accurate
-        re-rendering and stats, and the PNG can be viewed immediately.
-
-        Args:
-            label: Optional suffix appended to the filename (e.g. "world_state").
+        Both formats written so kg_inspect can reload graphml for accurate re-rendering.
         """
         import config.KnowledgeGraph as _viz_cfg
+
         if not _viz_cfg.KG_VIZ_AUTO_SAVE:
             return
         import os
         import time
+
         out_dir = _viz_cfg.KG_VIZ_OUTPUT_DIR
         os.makedirs(out_dir, exist_ok=True)
         ts = int(time.time() * 1000)
         suffix = f"_{label}" if label else ""
         base = os.path.join(out_dir, f"kg_{ts}{suffix}")
         try:
-            self.save_png(f"{base}.png", title=f"Knowledge Graph snapshot {label or ts}")
+            self.save_png(
+                f"{base}.png", title=f"Knowledge Graph snapshot {label or ts}"
+            )
         except Exception as exc:
             logger.warning(f"auto_save_png failed: {exc}")
         try:
@@ -519,12 +369,6 @@ class KnowledgeGraph:
             logger.warning(f"auto_save_graphml failed: {exc}")
 
     def get_stats(self) -> Dict[str, Any]:
-        """
-        Get graph statistics.
-
-        Returns:
-            Dictionary with node counts, edge counts, and node type breakdown
-        """
         with self._lock:
             # Build type counts from the O(1) index
             node_type_counts = {

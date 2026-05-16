@@ -1,5 +1,5 @@
-using NUnit.Framework;
 using System;
+using NUnit.Framework;
 using PythonCommunication.Core;
 
 namespace Tests.EditMode
@@ -10,8 +10,6 @@ namespace Tests.EditMode
     /// </summary>
     public class UnityProtocolTests
     {
-        #region Constants Tests
-
         [Test]
         public void Protocol_HasCorrectVersion()
         {
@@ -33,10 +31,6 @@ namespace Tests.EditMode
             Assert.AreEqual(10 * 1024 * 1024, UnityProtocol.MAX_IMAGE_SIZE);
         }
 
-        #endregion
-
-        #region MessageType Tests
-
         [Test]
         public void MessageType_HasExpectedValues()
         {
@@ -49,10 +43,6 @@ namespace Tests.EditMode
             Assert.AreEqual(0x07, (byte)MessageType.STEREO_IMAGE);
         }
 
-        #endregion
-
-        #region Image Message Tests
-
         [Test]
         public void EncodeImageMessage_CreatesValidMessage()
         {
@@ -61,7 +51,12 @@ namespace Tests.EditMode
             byte[] imageBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47 }; // PNG header
             uint requestId = 12345;
 
-            byte[] message = UnityProtocol.EncodeImageMessage(cameraId, prompt, imageBytes, requestId);
+            byte[] message = UnityProtocol.EncodeImageMessage(
+                cameraId,
+                prompt,
+                imageBytes,
+                requestId
+            );
 
             Assert.IsNotNull(message);
             Assert.Greater(message.Length, UnityProtocol.HEADER_SIZE);
@@ -75,9 +70,19 @@ namespace Tests.EditMode
             byte[] imageBytes = new byte[] { 1, 2, 3, 4, 5 };
             uint requestId = 42;
 
-            byte[] encoded = UnityProtocol.EncodeImageMessage(cameraId, prompt, imageBytes, requestId);
-            UnityProtocol.DecodeImageMessage(encoded, out uint decodedRequestId, out string decodedCameraId,
-                out string decodedPrompt, out byte[] decodedImage);
+            byte[] encoded = UnityProtocol.EncodeImageMessage(
+                cameraId,
+                prompt,
+                imageBytes,
+                requestId
+            );
+            UnityProtocol.DecodeImageMessage(
+                encoded,
+                out uint decodedRequestId,
+                out string decodedCameraId,
+                out string decodedPrompt,
+                out byte[] decodedImage
+            );
 
             Assert.AreEqual(requestId, decodedRequestId);
             Assert.AreEqual(cameraId, decodedCameraId);
@@ -103,28 +108,32 @@ namespace Tests.EditMode
         public void EncodeImageMessage_ThrowsOnEmptyCameraId()
         {
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeImageMessage("", "prompt", new byte[] { 1 }));
+                UnityProtocol.EncodeImageMessage("", "prompt", new byte[] { 1 })
+            );
         }
 
         [Test]
         public void EncodeImageMessage_ThrowsOnNullCameraId()
         {
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeImageMessage(null, "prompt", new byte[] { 1 }));
+                UnityProtocol.EncodeImageMessage(null, "prompt", new byte[] { 1 })
+            );
         }
 
         [Test]
         public void EncodeImageMessage_ThrowsOnEmptyImage()
         {
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeImageMessage("Cam1", "prompt", new byte[0]));
+                UnityProtocol.EncodeImageMessage("Cam1", "prompt", new byte[0])
+            );
         }
 
         [Test]
         public void EncodeImageMessage_ThrowsOnNullImage()
         {
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeImageMessage("Cam1", "prompt", null));
+                UnityProtocol.EncodeImageMessage("Cam1", "prompt", null)
+            );
         }
 
         [Test]
@@ -132,19 +141,22 @@ namespace Tests.EditMode
         {
             byte[] oversized = new byte[UnityProtocol.MAX_IMAGE_SIZE + 1];
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeImageMessage("Cam1", "prompt", oversized));
+                UnityProtocol.EncodeImageMessage("Cam1", "prompt", oversized)
+            );
         }
-
-        #endregion
-
-        #region Stereo Image Message Tests
 
         [Test]
         public void EncodeStereoImageMessage_CreatesValidMessage()
         {
             byte[] message = UnityProtocol.EncodeStereoImageMessage(
-                "StereoPair1", "LeftCam", "RightCam", "prompt",
-                new byte[] { 1, 2, 3 }, new byte[] { 4, 5, 6 }, 100);
+                "StereoPair1",
+                "LeftCam",
+                "RightCam",
+                "prompt",
+                new byte[] { 1, 2, 3 },
+                new byte[] { 4, 5, 6 },
+                100
+            );
 
             Assert.IsNotNull(message);
             Assert.Greater(message.Length, UnityProtocol.HEADER_SIZE);
@@ -154,19 +166,31 @@ namespace Tests.EditMode
         public void EncodeStereoImageMessage_ThrowsOnEmptyPairId()
         {
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeStereoImageMessage("", "L", "R", "", new byte[] { 1 }, new byte[] { 1 }));
+                UnityProtocol.EncodeStereoImageMessage(
+                    "",
+                    "L",
+                    "R",
+                    "",
+                    new byte[] { 1 },
+                    new byte[] { 1 }
+                )
+            );
         }
 
         [Test]
         public void EncodeStereoImageMessage_ThrowsOnEmptyLeftImage()
         {
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeStereoImageMessage("P", "L", "R", "", new byte[0], new byte[] { 1 }));
+                UnityProtocol.EncodeStereoImageMessage(
+                    "P",
+                    "L",
+                    "R",
+                    "",
+                    new byte[0],
+                    new byte[] { 1 }
+                )
+            );
         }
-
-        #endregion
-
-        #region Result Message Tests
 
         [Test]
         public void EncodeDecodeResultMessage_RoundTrip()
@@ -184,8 +208,7 @@ namespace Tests.EditMode
         [Test]
         public void EncodeResultMessage_ThrowsOnEmptyJson()
         {
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeResultMessage(""));
+            Assert.Throws<ArgumentException>(() => UnityProtocol.EncodeResultMessage(""));
         }
 
         [Test]
@@ -193,7 +216,8 @@ namespace Tests.EditMode
         {
             byte[] shortData = new byte[5];
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.DecodeResultMessage(shortData, out _));
+                UnityProtocol.DecodeResultMessage(shortData, out _)
+            );
         }
 
         [Test]
@@ -201,12 +225,9 @@ namespace Tests.EditMode
         {
             byte[] encoded = UnityProtocol.EncodeRagResponse("{}", 0);
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.DecodeResultMessage(encoded, out _));
+                UnityProtocol.DecodeResultMessage(encoded, out _)
+            );
         }
-
-        #endregion
-
-        #region RAG Query Tests
 
         [Test]
         public void EncodeDecodeRagQuery_RoundTrip()
@@ -217,8 +238,13 @@ namespace Tests.EditMode
             uint requestId = 123;
 
             byte[] encoded = UnityProtocol.EncodeRagQuery(query, topK, filters, requestId);
-            UnityProtocol.DecodeRagQuery(encoded, out uint decodedRequestId, out string decodedQuery,
-                out int decodedTopK, out string decodedFilters);
+            UnityProtocol.DecodeRagQuery(
+                encoded,
+                out uint decodedRequestId,
+                out string decodedQuery,
+                out int decodedTopK,
+                out string decodedFilters
+            );
 
             Assert.AreEqual(requestId, decodedRequestId);
             Assert.AreEqual(query, decodedQuery);
@@ -237,22 +263,15 @@ namespace Tests.EditMode
         [Test]
         public void EncodeRagQuery_ThrowsOnEmptyQuery()
         {
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeRagQuery(""));
+            Assert.Throws<ArgumentException>(() => UnityProtocol.EncodeRagQuery(""));
         }
 
         [Test]
         public void EncodeRagQuery_ThrowsOnInvalidTopK()
         {
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeRagQuery("query", 0));
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeRagQuery("query", 101));
+            Assert.Throws<ArgumentException>(() => UnityProtocol.EncodeRagQuery("query", 0));
+            Assert.Throws<ArgumentException>(() => UnityProtocol.EncodeRagQuery("query", 101));
         }
-
-        #endregion
-
-        #region RAG Response Tests
 
         [Test]
         public void EncodeDecodeRagResponse_RoundTrip()
@@ -270,13 +289,8 @@ namespace Tests.EditMode
         [Test]
         public void EncodeRagResponse_ThrowsOnEmptyJson()
         {
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeRagResponse(""));
+            Assert.Throws<ArgumentException>(() => UnityProtocol.EncodeRagResponse(""));
         }
-
-        #endregion
-
-        #region Status Query Tests
 
         [Test]
         public void EncodeDecodeStatusQuery_RoundTrip()
@@ -286,8 +300,12 @@ namespace Tests.EditMode
             uint requestId = 789;
 
             byte[] encoded = UnityProtocol.EncodeStatusQuery(robotId, detailed, requestId);
-            UnityProtocol.DecodeStatusQuery(encoded, out uint decodedRequestId,
-                out string decodedRobotId, out bool decodedDetailed);
+            UnityProtocol.DecodeStatusQuery(
+                encoded,
+                out uint decodedRequestId,
+                out string decodedRobotId,
+                out bool decodedDetailed
+            );
 
             Assert.AreEqual(requestId, decodedRequestId);
             Assert.AreEqual(robotId, decodedRobotId);
@@ -297,13 +315,8 @@ namespace Tests.EditMode
         [Test]
         public void EncodeStatusQuery_ThrowsOnEmptyRobotId()
         {
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeStatusQuery(""));
+            Assert.Throws<ArgumentException>(() => UnityProtocol.EncodeStatusQuery(""));
         }
-
-        #endregion
-
-        #region Status Response Tests
 
         [Test]
         public void EncodeDecodeStatusResponse_RoundTrip()
@@ -321,13 +334,8 @@ namespace Tests.EditMode
         [Test]
         public void EncodeStatusResponse_ThrowsOnEmptyJson()
         {
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeStatusResponse("", 0));
+            Assert.Throws<ArgumentException>(() => UnityProtocol.EncodeStatusResponse("", 0));
         }
-
-        #endregion
-
-        #region Validation Helper Tests
 
         // Removed: IsValidStringLength test - no string length limit for LLM responses
 
@@ -338,7 +346,9 @@ namespace Tests.EditMode
             Assert.IsTrue(UnityProtocol.IsValidImageSize(new byte[UnityProtocol.MAX_IMAGE_SIZE]));
             Assert.IsFalse(UnityProtocol.IsValidImageSize(null));
             Assert.IsFalse(UnityProtocol.IsValidImageSize(new byte[0]));
-            Assert.IsFalse(UnityProtocol.IsValidImageSize(new byte[UnityProtocol.MAX_IMAGE_SIZE + 1]));
+            Assert.IsFalse(
+                UnityProtocol.IsValidImageSize(new byte[UnityProtocol.MAX_IMAGE_SIZE + 1])
+            );
         }
 
         [Test]
@@ -362,26 +372,21 @@ namespace Tests.EditMode
         [Test]
         public void PeekMessageType_ThrowsOnShortData()
         {
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.PeekMessageType(new byte[0]));
+            Assert.Throws<ArgumentException>(() => UnityProtocol.PeekMessageType(new byte[0]));
         }
 
         [Test]
         public void PeekRequestId_ThrowsOnShortData()
         {
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.PeekRequestId(new byte[3]));
+            Assert.Throws<ArgumentException>(() => UnityProtocol.PeekRequestId(new byte[3]));
         }
-
-        #endregion
-
-        #region Header Tests
 
         [Test]
         public void DecodeHeader_ThrowsOnInsufficientData()
         {
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.DecodeHeader(new byte[3], 0, out _, out _));
+                UnityProtocol.DecodeHeader(new byte[3], 0, out _, out _)
+            );
         }
 
         [Test]
@@ -391,7 +396,12 @@ namespace Tests.EditMode
             data[2] = (byte)MessageType.RESULT;
             BitConverter.GetBytes((uint)999).CopyTo(data, 3);
 
-            int newOffset = UnityProtocol.DecodeHeader(data, 2, out MessageType type, out uint requestId);
+            int newOffset = UnityProtocol.DecodeHeader(
+                data,
+                2,
+                out MessageType type,
+                out uint requestId
+            );
 
             Assert.AreEqual(MessageType.RESULT, type);
             Assert.AreEqual(999u, requestId);
@@ -403,7 +413,8 @@ namespace Tests.EditMode
         {
             // DecodeHeader must explicitly reject null input.
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.DecodeHeader(null, 0, out _, out _));
+                UnityProtocol.DecodeHeader(null, 0, out _, out _)
+            );
         }
 
         [Test]
@@ -435,12 +446,12 @@ namespace Tests.EditMode
             // This test would catch any encode/decode endianness mismatch.
             byte[] message = UnityProtocol.EncodeResultMessage("{}", requestId: 999);
             UnityProtocol.DecodeHeader(message, 0, out _, out uint decodedId);
-            Assert.AreEqual(999u, decodedId, "Round-trip encode/decode should preserve requestId=999");
+            Assert.AreEqual(
+                999u,
+                decodedId,
+                "Round-trip encode/decode should preserve requestId=999"
+            );
         }
-
-        #endregion
-
-        #region Null and Partial Buffer Safety Tests
 
         [Test]
         public void DecodeImageMessage_EmptyArray_ThrowsArgumentException()
@@ -448,7 +459,8 @@ namespace Tests.EditMode
             // An empty byte array has no header, so DecodeHeader should throw before
             // any field parsing begins.
             Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.DecodeImageMessage(new byte[0], out _, out _, out _, out _));
+                UnityProtocol.DecodeImageMessage(new byte[0], out _, out _, out _, out _)
+            );
         }
 
         [Test]
@@ -461,21 +473,17 @@ namespace Tests.EditMode
             // request_id bytes left as 0
 
             // BitConverter.ToInt32 at offset 5 would read out of bounds — expect any exception subclass
-            Assert.That(() =>
-                UnityProtocol.DecodeImageMessage(headerOnly, out _, out _, out _, out _),
-                Throws.InstanceOf<Exception>());
+            Assert.That(
+                () => UnityProtocol.DecodeImageMessage(headerOnly, out _, out _, out _, out _),
+                Throws.InstanceOf<Exception>()
+            );
         }
 
         [Test]
         public void DecodeResultMessage_NullData_ThrowsArgumentException()
         {
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.DecodeResultMessage(null, out _));
+            Assert.Throws<ArgumentException>(() => UnityProtocol.DecodeResultMessage(null, out _));
         }
-
-        #endregion
-
-        #region UTF-8 Encoding Tests
 
         [Test]
         public void ImageMessage_HandlesUnicodeCorrectly()
@@ -485,13 +493,16 @@ namespace Tests.EditMode
             byte[] image = new byte[] { 1, 2, 3 };
 
             byte[] encoded = UnityProtocol.EncodeImageMessage(cameraId, prompt, image);
-            UnityProtocol.DecodeImageMessage(encoded, out _, out string decodedCamera,
-                out string decodedPrompt, out _);
+            UnityProtocol.DecodeImageMessage(
+                encoded,
+                out _,
+                out string decodedCamera,
+                out string decodedPrompt,
+                out _
+            );
 
             Assert.AreEqual(cameraId, decodedCamera);
             Assert.AreEqual(prompt, decodedPrompt);
         }
-
-        #endregion
     }
 }

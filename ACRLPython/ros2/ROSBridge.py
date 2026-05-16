@@ -81,23 +81,13 @@ class ROSBridge:
         return self._connected
 
     def connect(self, timeout=5.0):
-        """
-        Connect to the ROS motion server.
-
-        Args:
-            timeout: Connection timeout in seconds.
-
-        Returns:
-            True if connected successfully.
-        """
+        """Connect to the ROS motion server; returns True if successful."""
         try:
             self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._socket.settimeout(timeout)
             self._socket.connect((self._host, self._port))
             self._connected = True
             logger.debug(f"Connected to ROS bridge at {self._host}:{self._port}")
-
-            # Verify connection with ping
             result = self._send_command({"command": "ping"})
             if result and result.get("success"):
                 return True
@@ -122,31 +112,13 @@ class ROSBridge:
         logger.info("Disconnected from ROS bridge")
 
     def validate_grasp_candidates(self, candidates, robot_id="Robot1", timeout=10.0):
-        """
-        Validate grasp candidates using MoveIt's IK service.
-
-        Tests each candidate's grasp pose for IK reachability.
-
-        Args:
-            candidates: List of candidate dicts with 'position' and 'rotation' keys
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2")
-            timeout: Command timeout in seconds (default 10s for batch processing)
-
-        Returns:
-            Dict with success status and validation results:
-            {
-                "success": True,
-                "results": [(is_valid, quality_score), ...],
-                "candidates_validated": N
-            }
-        """
+        """Validate grasp candidates via MoveIt IK service; returns success dict with per-candidate results."""
         cmd = {
             "command": "validate_grasp_candidates",
             "robot_id": robot_id,
             "candidates": candidates,
         }
 
-        # Adjust timeout based on number of candidates
         adjusted_timeout = max(
             timeout, self._timeout_base + len(candidates) * self._timeout_per_candidate
         )
@@ -154,23 +126,13 @@ class ROSBridge:
         return self._send_command(cmd, timeout=adjusted_timeout)
 
     def _send_command(self, command, timeout=30.0):
-        """
-        Send a command to the ROS motion server and wait for response.
-
-        Args:
-            command: Dict command to send.
-            timeout: Response timeout in seconds.
-
-        Returns:
-            Response dict or None on error.
-        """
+        """Send a JSON command to the ROS motion server and return the response dict."""
         if not self._connected or not self._socket:
             logger.error("Not connected to ROS bridge")
             return None
 
         with self._lock:
             try:
-                # Send command
                 msg = json.dumps(command) + "\n"
                 self._socket.sendall(msg.encode("utf-8"))
 
@@ -358,19 +320,7 @@ class ROSBridge:
     def plan_to_pose(
         self, position, orientation=None, planning_time=5.0, robot_id="Robot1"
     ):
-        """
-        Plan (but don't execute) a trajectory to target pose for a specific robot.
-
-        Args:
-            position: Dict with x, y, z coordinates.
-            orientation: Dict with x, y, z, w quaternion. If None, MoveIt plans
-                         to the position with any feasible orientation.
-            planning_time: Max planning time in seconds.
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
-
-        Returns:
-            Dict with success status and trajectory info.
-        """
+        """Plan (but don't execute) a trajectory to target pose."""
         cmd = {
             "command": "plan_to_pose",
             "robot_id": robot_id,
@@ -396,15 +346,7 @@ class ROSBridge:
         return self._send_command({"command": "get_ee_pose", "robot_id": robot_id})
 
     def get_current_pose(self, robot_id="Robot1"):
-        """
-        Get current end-effector pose for a specific robot.
-
-        Args:
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
-
-        Returns:
-            Dict with joint positions and names.
-        """
+        """Get current joint positions and names for a specific robot."""
         return self._send_command(
             {
                 "command": "get_current_pose",
@@ -413,16 +355,7 @@ class ROSBridge:
         )
 
     def control_gripper(self, position, robot_id="Robot1"):
-        """
-        Send gripper command via ROS for a specific robot.
-
-        Args:
-            position: Gripper position (0=closed, 0.014=open).
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
-
-        Returns:
-            Dict with success status.
-        """
+        """Send gripper command via ROS (position: 0=closed, 0.014=open)."""
         return self._send_command(
             {
                 "command": "control_gripper",
@@ -432,20 +365,7 @@ class ROSBridge:
         )
 
     def plan_multi_waypoint(self, waypoints, robot_id="Robot1", planning_time=10.0):
-        """
-        Plan and execute a multi-waypoint trajectory.
-
-        Sends each waypoint as a sequential plan_and_execute to the ROS motion
-        server. The server handles trajectory concatenation.
-
-        Args:
-            waypoints: List of position dicts with x, y, z keys.
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
-            planning_time: Max planning time per waypoint in seconds.
-
-        Returns:
-            Dict with success status and details.
-        """
+        """Plan and execute a multi-waypoint trajectory."""
         cmd = {
             "command": "plan_multi_waypoint",
             "robot_id": robot_id,
@@ -457,18 +377,7 @@ class ROSBridge:
     def plan_orientation_change(
         self, orientation, robot_id="Robot1", planning_time=5.0
     ):
-        """
-        Plan and execute an orientation change while maintaining position.
-
-        Args:
-            orientation: Dict with roll, pitch, yaw in degrees (converted to
-                         quaternion by the ROS motion server).
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
-            planning_time: Max planning time in seconds.
-
-        Returns:
-            Dict with success status and details.
-        """
+        """Plan and execute an orientation change while maintaining position."""
         cmd = {
             "command": "plan_orientation_change",
             "robot_id": robot_id,
@@ -480,21 +389,7 @@ class ROSBridge:
     def plan_grasp(
         self, object_id, robot_id="Robot1", approach="auto", planning_time=10.0
     ):
-        """
-        Plan and execute a grasp on an object via MoveIt.
-
-        The ROS motion server queries the object pose from the planning scene
-        and plans a grasp approach, grasp, and retreat sequence.
-
-        Args:
-            object_id: ID of the object to grasp.
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
-            approach: Approach direction ("auto", "top", "front", "side").
-            planning_time: Max planning time in seconds.
-
-        Returns:
-            Dict with success status and details.
-        """
+        """Plan and execute a grasp on an object via MoveIt."""
         cmd = {
             "command": "plan_grasp",
             "robot_id": robot_id,
@@ -507,18 +402,7 @@ class ROSBridge:
     def plan_return_to_start(
         self, robot_id="Robot1", planning_time=5.0, target_joint_angles=None
     ):
-        """
-        Plan and execute a return to the robot's start/home configuration.
-
-        Args:
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
-            planning_time: Max planning time in seconds.
-            target_joint_angles: List of 6 joint angles in radians (ROS convention).
-                If None, the motion client falls back to all-zeros (URDF home pose).
-
-        Returns:
-            Dict with success status and details.
-        """
+        """Plan and execute a return to the robot's home configuration."""
         cmd = {
             "command": "plan_return_to_start",
             "robot_id": robot_id,
@@ -529,11 +413,6 @@ class ROSBridge:
         return self._send_command(cmd, timeout=self._execution_timeout)
 
     def ping(self):
-        """
-        Check if the ROS bridge is responsive.
-
-        Returns:
-            True if bridge responds.
-        """
+        """Check if the ROS bridge is responsive."""
         result = self._send_command({"command": "ping"}, timeout=5.0)
         return result is not None and result.get("success", False)

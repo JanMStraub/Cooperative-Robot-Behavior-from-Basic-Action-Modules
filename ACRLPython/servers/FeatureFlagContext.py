@@ -1,35 +1,19 @@
-"""
-FeatureFlagContext — applies BenchmarkFeatureFlags to the server process for one sequence.
+"""Apply BenchmarkFeatureFlags to server process; restores on exit."""
 
-Patches module-level config variables and the CommandParser singleton's RAG state.
-Restores originals on exit (even on exception). Thread-safe via per-context saves
-(no shared mutable state between concurrent requests).
-"""
 from __future__ import annotations
 
 import logging
 from contextlib import contextmanager
 from typing import Any, Dict, Generator
 
-from benchmarks.feature_flags import BenchmarkFeatureFlags
+from benchmarks.FeatureFlags import BenchmarkFeatureFlags
 
 logger = logging.getLogger(__name__)
 
 
 @contextmanager
 def FeatureFlagContext(flags: BenchmarkFeatureFlags) -> Generator[None, None, None]:
-    """
-    Context manager: apply feature flag overrides, yield, then restore originals.
-
-    Patches config modules and singleton state in the current process.
-    All patches are reversed in the finally block, even if an exception occurs.
-
-    Args:
-        flags: BenchmarkFeatureFlags with None values left as server defaults.
-
-    Yields:
-        Nothing — all effects are side-effects on config modules.
-    """
+    """Apply feature flag overrides; restored in finally block."""
     restores: Dict[str, Any] = {}
     try:
         _apply(flags, restores)
@@ -39,7 +23,6 @@ def FeatureFlagContext(flags: BenchmarkFeatureFlags) -> Generator[None, None, No
 
 
 def _apply(flags: BenchmarkFeatureFlags, restores: Dict[str, Any]) -> None:
-    """Patch config modules according to flags; record originals in restores."""
     import config.Servers as srv
     import config.ROS as ros
     import config.Negotiation as neg
@@ -67,19 +50,15 @@ def _apply(flags: BenchmarkFeatureFlags, restores: Dict[str, Any]) -> None:
     if flags.use_negotiation is not None:
         restores["neg.NEGOTIATION_ENABLED"] = neg.NEGOTIATION_ENABLED
         neg.NEGOTIATION_ENABLED = flags.use_negotiation
-        logger.debug(f"[FeatureFlagContext] NEGOTIATION_ENABLED -> {flags.use_negotiation}")
+        logger.debug(
+            f"[FeatureFlagContext] NEGOTIATION_ENABLED -> {flags.use_negotiation}"
+        )
 
     if flags.use_rag is not None:
         _apply_rag(flags.use_rag, restores)
 
 
 def _apply_rag(use_rag: bool, restores: Dict[str, Any]) -> None:
-    """
-    Toggle RAG on the CommandParser singleton.
-
-    The singleton stores the RAGSystem instance in self.rag (None = disabled).
-    We save and replace it rather than reconstructing the parser.
-    """
     try:
         from core.Imports import get_command_parser
         from orchestrators.CommandParser import _PromptBuilder
@@ -95,6 +74,7 @@ def _apply_rag(use_rag: bool, restores: Dict[str, Any]) -> None:
             if parser.rag is None:
                 try:
                     from rag.RAGSystem import RAGSystem
+
                     rag = RAGSystem()
                     rag.index_operations(rebuild=False)
                     parser.rag = rag
@@ -114,7 +94,6 @@ def _apply_rag(use_rag: bool, restores: Dict[str, Any]) -> None:
 
 
 def _restore(restores: Dict[str, Any]) -> None:
-    """Restore all saved originals."""
     try:
         import config.Servers as srv
         import config.ROS as ros
@@ -137,6 +116,7 @@ def _restore(restores: Dict[str, Any]) -> None:
         if "parser.rag" in restores or "parser.prompt_builder" in restores:
             try:
                 from core.Imports import get_command_parser
+
                 parser = get_command_parser()
                 if parser is not None:
                     if "parser.rag" in restores:

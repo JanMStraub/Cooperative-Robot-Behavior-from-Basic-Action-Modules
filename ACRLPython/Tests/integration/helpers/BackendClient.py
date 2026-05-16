@@ -29,22 +29,11 @@ import socket
 import struct
 from typing import Any, Dict
 
-# ---------------------------------------------------------------------------
 # Port availability helpers
-# ---------------------------------------------------------------------------
 
 
 def port_open(port: int, timeout: float = 2.0) -> bool:
-    """
-    Return True if a TCP server is accepting connections on *port*.
-
-    Args:
-        port: TCP port number to probe.
-        timeout: Socket connect timeout in seconds.
-
-    Returns:
-        True if the port is open and accepting connections, False otherwise.
-    """
+    """Return True if a TCP server is accepting connections on *port*."""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -62,17 +51,13 @@ def reset_simulation(timeout: float = 20.0) -> Dict[str, Any]:
     Resets all robots to start positions, releases grasped objects, and
     restores all dynamic scene objects to their initial positions.
 
-    Args:
-        timeout: Seconds to wait for the reset to complete.
-
-    Returns:
-        Decoded JSON response dict with a "success" key.
     """
     import random
 
     with BackendClient(timeout=timeout) as client:
         return client.send_command(
-            command="EXEC:" + json.dumps([{"operation": "reset_simulation", "params": {}}]),
+            command="EXEC:"
+            + json.dumps([{"operation": "reset_simulation", "params": {}}]),
             robot_id="system",
             request_id=random.randint(1, 0xFFFFFFFF),
         )
@@ -87,15 +72,11 @@ def backend_available() -> bool:
     only active once Unity has registered with the backend.  Port 5008 is
     the SequenceServer that tests actually send commands to.
 
-    Returns:
-        True if both ports are reachable, False otherwise.
     """
     return port_open(5007) and port_open(5008)
 
 
-# ---------------------------------------------------------------------------
 # Protocol V2 client
-# ---------------------------------------------------------------------------
 
 
 class BackendClient:
@@ -122,24 +103,12 @@ class BackendClient:
     PORT: int = 5008
 
     def __init__(self, timeout: float = 30.0) -> None:
-        """
-        Connect to the SequenceServer.
-
-        Args:
-            timeout: Socket timeout in seconds.  Choose based on the slowest
-                     operation category you are testing:
-                     - Status / sync / gripper : 15 s
-                     - Navigation              : 30 s
-                     - Grasp (full pipeline)   : 60 s
-                     - Multi-robot / collab    : 120 s
-        """
+        """Connect to the SequenceServer."""
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.settimeout(timeout)
         self._sock.connect(("localhost", self.PORT))
 
-    # ------------------------------------------------------------------
     # Context-manager support
-    # ------------------------------------------------------------------
 
     def __enter__(self) -> "BackendClient":
         """Support usage as a context manager."""
@@ -156,9 +125,7 @@ class BackendClient:
         except Exception:
             pass
 
-    # ------------------------------------------------------------------
     # Public API
-    # ------------------------------------------------------------------
 
     def send_command(
         self,
@@ -168,44 +135,14 @@ class BackendClient:
         auto_execute: bool = True,
         request_id: int = 1,
     ) -> Dict[str, Any]:
-        """
-        Send a command to the backend SequenceServer and return the JSON response.
-
-        Args:
-            command: Command string forwarded to CommandParser.  Use explicit
-                     structured phrasing (e.g. "check robot status for Robot1")
-                     rather than vague natural language to avoid triggering
-                     dynamic operation generation (RAG score < 0.4).
-            robot_id: Target robot identifier (e.g. "Robot1", "Robot2").
-            camera_id: Camera identifier for vision operations.
-                       Use "TableStereoCamera" for stereo / field ops.
-            auto_execute: When True the backend executes the parsed ops
-                          immediately; when False it only parses them.
-            request_id: Correlation ID for Protocol V2 request/response
-                        matching.  Must be unique per open connection.
-
-        Returns:
-            Decoded JSON response dict.  Always contains a "success" key
-            (bool).  On failure also contains an "error" key with "code"
-            and "message" sub-keys.
-        """
+        """Send a command to the backend SequenceServer and return the JSON response."""
         self._send(command, robot_id, camera_id, auto_execute, request_id)
         return self._recv(request_id)
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
 
     def _encode_str(self, s: str) -> bytes:
-        """
-        Encode *s* as [len:4 LE][utf-8 bytes].
-
-        Args:
-            s: String to encode.
-
-        Returns:
-            Bytes representing the length-prefixed string.
-        """
+        """Encode *s* as [len:4 LE][utf-8 bytes]."""
         encoded = s.encode("utf-8")
         return struct.pack("<I", len(encoded)) + encoded
 
@@ -217,16 +154,7 @@ class BackendClient:
         auto_execute: bool,
         request_id: int,
     ) -> None:
-        """
-        Build and transmit a SEQUENCE_QUERY message.
-
-        Args:
-            command: Command string.
-            robot_id: Robot identifier.
-            camera_id: Camera identifier.
-            auto_execute: Execution flag.
-            request_id: Protocol V2 correlation ID.
-        """
+        """Build and transmit a SEQUENCE_QUERY message."""
         header = struct.pack("B", self.SEQUENCE_QUERY)  # type byte
         header += struct.pack("<I", request_id)  # request_id (4 bytes LE)
         body = (
@@ -239,18 +167,7 @@ class BackendClient:
         self._sock.sendall(header + body)
 
     def _recv_exact(self, n: int) -> bytes:
-        """
-        Read exactly *n* bytes from the socket.
-
-        Args:
-            n: Number of bytes to read.
-
-        Returns:
-            Exactly *n* bytes of data.
-
-        Raises:
-            ConnectionError: If the remote side closes the connection early.
-        """
+        """Read exactly *n* bytes from the socket."""
         data = b""
         while len(data) < n:
             chunk = self._sock.recv(n - len(data))
@@ -260,22 +177,7 @@ class BackendClient:
         return data
 
     def _recv(self, expected_request_id: int) -> Dict[str, Any]:
-        """
-        Read a RESULT response frame and decode the JSON payload.
-
-        Args:
-            expected_request_id: The request_id we are waiting for.
-                                 Currently used only for validation logging;
-                                 the SequenceServer is single-request-per-
-                                 connection so no multiplexing is needed.
-
-        Returns:
-            Decoded JSON response dict.
-
-        Raises:
-            ValueError: If the response message type byte is not 0x02 (RESULT).
-            ConnectionError: If the connection drops mid-read.
-        """
+        """Read a RESULT response frame and decode the JSON payload."""
         # Header: [type:1][request_id:4]
         header = self._recv_exact(5)
         msg_type = header[0]

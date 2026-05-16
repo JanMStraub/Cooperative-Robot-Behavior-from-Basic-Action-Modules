@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-send_command.py — Send commands directly to Unity without going through the LLM.
+SendCommand.py — Send commands directly to Unity without going through the LLM.
 
 Connects to the SequenceServer (port 5008) and sends pre-parsed operations using
 the "EXEC:<json>" prefix, which bypasses CommandParser/LLM entirely and feeds the
@@ -8,13 +8,13 @@ command list straight into SequenceExecutor → Unity. Response and completion
 tracking work exactly as they do for normal Unity-initiated commands.
 
 Usage:
-    python tools/send_command.py move   --robot Robot1 --x 0.3 --y 0.2 --z 0.1
-    python tools/send_command.py grasp  --robot Robot1 --object red_cube
-    python tools/send_command.py gripper --robot Robot1 --open
-    python tools/send_command.py gripper --robot Robot1 --close
-    python tools/send_command.py release --robot Robot1
-    python tools/send_command.py home   --robot Robot1
-    python tools/send_command.py raw    --ops '[{"operation":"grasp_object","params":{"robot_id":"Robot1","object_id":"red_cube"}}]'
+    python tools/SendCommand.py move   --robot Robot1 --x 0.3 --y 0.2 --z 0.1
+    python tools/SendCommand.py grasp  --robot Robot1 --object red_cube
+    python tools/SendCommand.py gripper --robot Robot1 --open
+    python tools/SendCommand.py gripper --robot Robot1 --close
+    python tools/SendCommand.py release --robot Robot1
+    python tools/SendCommand.py home   --robot Robot1
+    python tools/SendCommand.py raw    --ops '[{"operation":"grasp_object","params":{"robot_id":"Robot1","object_id":"red_cube"}}]'
 
 Options:
     --host HOST     SequenceServer host (default: 127.0.0.1)
@@ -137,7 +137,6 @@ def send(
 
 
 def ops_move(args) -> list:
-    """Build a move_to_coordinate operation."""
     return [
         {
             "operation": "move_to_coordinate",
@@ -154,7 +153,6 @@ def ops_move(args) -> list:
 
 
 def ops_grasp(args) -> list:
-    """Build a grasp_object operation."""
     return [
         {
             "operation": "grasp_object",
@@ -172,7 +170,6 @@ def ops_grasp(args) -> list:
 
 
 def ops_gripper(args) -> list:
-    """Build a control_gripper operation."""
     return [
         {
             "operation": "control_gripper",
@@ -185,12 +182,10 @@ def ops_gripper(args) -> list:
 
 
 def ops_release(args) -> list:
-    """Build a release_object operation."""
     return [{"operation": "release_object", "params": {"robot_id": args.robot}}]
 
 
 def ops_home(args) -> list:
-    """Build a return_to_start operation."""
     return [
         {
             "operation": "return_to_start",
@@ -214,7 +209,6 @@ def ops_raw(args) -> list:
 
 
 def add_common(p: argparse.ArgumentParser):
-    """Attach shared arguments to a sub-command parser."""
     p.add_argument(
         "--robot", default=DEFAULT_ROBOT, help=f"Robot ID (default: {DEFAULT_ROBOT})"
     )
@@ -244,7 +238,6 @@ def add_common(p: argparse.ArgumentParser):
 
 
 def main():
-    """Parse CLI and dispatch."""
     parser = argparse.ArgumentParser(
         description="Send operations directly to Unity via SequenceServer — no LLM.",
         formatter_class=argparse.RawDescriptionHelpFormatter,

@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for GraspFrameTransform.py
-
-Tests the RH camera-frame → LH Unity world-frame transformation for
-VGN grasp poses.  All tests are pure math — no Unity or
-network access required.
-
-Key invariants verified:
-- Identity camera pose: position and rotation round-trip correctly
-- X-axis negation (handedness flip) is applied to position
-- Rotations are composed correctly (cam_rot ⊗ grasp_rot)
-- Malformed grasps are silently skipped
-- Approach direction is derived correctly from quaternion when not provided
-"""
+"""Unit tests for GraspFrameTransform.py"""
 
 import math
 import pytest
@@ -25,9 +12,7 @@ from operations.GraspFrameTransform import (
     _normalise_quat,
 )
 
-# ============================================================================
 # Internal quaternion math tests
-# ============================================================================
 
 
 class TestQuaternionMath:
@@ -63,13 +48,10 @@ class TestQuaternionMath:
         np.testing.assert_allclose(result, np.array([0.0, 0.0, 0.0, 1.0]))
 
 
-# ============================================================================
 # Frame transform tests
-# ============================================================================
 
 
 class TestTransformGraspnetPosesToUnity:
-    """Tests for the public transform API."""
 
     def test_identity_camera_identity_grasp_maps_correctly(self):
         """With identity camera pose, a grasp at (1,2,3) maps to (-1,2,3) in Unity."""
