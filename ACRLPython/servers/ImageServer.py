@@ -150,6 +150,11 @@ class StereoImageServer(TCPServerBase):
         except Exception as e:
             logger.error(f"Error handling stereo client {address}: {e}")
 
+    def _handle_message(self, client: socket.socket, _address: tuple) -> None:
+        """Not called. StereoImageServer overrides handle_client_connection directly
+        for one-way streaming; the timeout-based template loop does not apply."""
+        ...
+
 
 class ImageServer:
     """Image server managing stereo image reception (port 5006)."""
@@ -198,7 +203,7 @@ if __name__ == "__main__":
 
     server = ImageServer(args.stereo_port, args.host)
 
-    def signal_handler(sig, frame):
+    def signal_handler(_sig, _frame):
         logger.info("Shutting down...")
         server.stop()
 

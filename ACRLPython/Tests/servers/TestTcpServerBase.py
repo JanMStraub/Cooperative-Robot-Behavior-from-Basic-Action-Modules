@@ -53,12 +53,12 @@ class MockTCPServer(TCPServerBase):
         self.handled_clients = []
         self.handle_client_called = False
 
-    def handle_client_connection(self, client, address):
+    def _handle_message(self, client, address):
         """Mock implementation that tracks calls"""
         self.handle_client_called = True
         self.handled_clients.append(address)
-        # Simulate some work
-        time.sleep(0.01)
+        # Simulate some work; stop after one call to prevent looping
+        self._running = False
 
 
 class TestTCPServerBaseInitialization:
@@ -372,9 +372,9 @@ class TestTCPServerBaseErrorHandling:
     ):
         """Test that exceptions in client handler are caught"""
 
-        # Create a server that raises in handle_client_connection
+        # Create a server that raises in _handle_message
         class FailingServer(TCPServerBase):
-            def handle_client_connection(self, client, address):
+            def _handle_message(self, client, address):
                 raise Exception("Test exception")
 
         server = FailingServer(server_config)

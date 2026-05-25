@@ -235,7 +235,9 @@ class VGNClient:
                         f"Y=[{float(pts_unity[:,1].min()):.2f},{float(pts_unity[:,1].max()):.2f}] "
                         f"Z=[{float(pts_unity[:,2].min()):.2f},{float(pts_unity[:,2].max()):.2f}]"
                     )
-                    if pts_filtered.shape[0] > 0:  # if filter removes everything, send unfiltered
+                    if (
+                        pts_filtered.shape[0] > 0
+                    ):  # if filter removes everything, send unfiltered
                         pts_unity = pts_filtered
 
                     if pts_unity.shape[0] > 20000:  # subsample for dashboard bandwidth
@@ -372,7 +374,9 @@ class VGNClient:
                 _w = _cam_q_inv[3]
                 _t = 2.0 * np.cross(_qvec, _delta)
                 _delta_cam = _delta + _w * _t + np.cross(_qvec, _t)
-                if _delta_cam[2] > 0.05:  # Z-forward in Unity LH cam frame → positive = in front
+                if (
+                    _delta_cam[2] > 0.05
+                ):  # Z-forward in Unity LH cam frame → positive = in front
                     depth_hint = float(_delta_cam[2])
                     logger.debug(
                         f"[VGN] Depth hint from WorldState geometry: {depth_hint:.3f} m"
@@ -751,14 +755,16 @@ class VGNClient:
                         float(quat[3]),
                     ]
 
-                results.append({
-                    "position": pos_out,
-                    "rotation": quat_out,
-                    "score": float(score),
-                    "width": float(grasp.width) / _vgn_scale,
-                    "approach_direction": approach_out,
-                    "_world_frame": _in_world_frame,
-                })
+                results.append(
+                    {
+                        "position": pos_out,
+                        "rotation": quat_out,
+                        "score": float(score),
+                        "width": float(grasp.width) / _vgn_scale,
+                        "approach_direction": approach_out,
+                        "_world_frame": _in_world_frame,
+                    }
+                )
             except Exception as exc:
                 logger.debug(f"[VGN] Skipping malformed grasp: {exc}")
                 continue

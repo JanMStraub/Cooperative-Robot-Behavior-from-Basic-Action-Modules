@@ -260,7 +260,9 @@ def detect_all_fields(
 
         stereo_params = camera_config_from_metadata(stereo_metadata)
 
-        field_classes = [f"field_{chr(ord('a') + i)}" for i in range(9)]  # field_a–field_i
+        field_classes = [
+            f"field_{chr(ord('a') + i)}" for i in range(9)
+        ]  # field_a–field_i
 
         try:
             from config.Vision import YOLO_MODEL_PATH
@@ -286,6 +288,10 @@ def detect_all_fields(
                     "timestamp": time.time(),
                 }
             )
+
+        from core.Imports import get_world_state
+
+        world_state = get_world_state()
 
         fields = []
         for detection in detections.detections:
@@ -318,6 +324,27 @@ def detect_all_fields(
                         "confidence": detection.confidence,
                     }
                 )
+
+                # Mirror detect_field: persist result to WorldState so downstream
+                # operations can look up this field without re-detecting.
+                try:
+                    ws_key = f"field_{field_letter.lower()}"
+                    pos_tuple = (center_dict["x"], center_dict["y"], center_dict["z"])
+                    world_state.update_object_position(
+                        object_id=ws_key,
+                        position=pos_tuple,
+                        color=ws_key,
+                        object_type="field",
+                        confidence=detection.confidence,
+                    )
+                    logger.info(
+                        f"WorldState updated (detect_all_fields): key='{ws_key}' at {pos_tuple}"
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        f"WorldState write failed for field_{field_letter.lower()}: {exc}",
+                        exc_info=True,
+                    )
 
         logger.info(f"Detected {len(fields)} fields in image")
 

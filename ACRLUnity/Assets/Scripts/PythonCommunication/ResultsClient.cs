@@ -56,37 +56,8 @@ namespace PythonCommunication
         /// </summary>
         protected override GenericResult ReceiveResponse()
         {
-            // Check if data is available before blocking read (prevents idle timeout disconnects)
-            if (!_stream.DataAvailable)
-            {
-                System.Threading.Thread.Sleep(10); // Brief sleep to avoid tight loop
-                return null; // No data available, try again later
-            }
-
-            byte[] header = new byte[UnityProtocol.HEADER_SIZE];
-            ReadExactly(_stream, header, UnityProtocol.HEADER_SIZE);
-
-            UnityProtocol.DecodeHeader(header, 0, out MessageType type, out uint requestId);
-
-            if (type != MessageType.RESULT)
-            {
-                Debug.LogError($"{LogPrefix} Expected RESULT, got {type}");
-                throw new System.IO.IOException($"Protocol violation: Expected RESULT, got {type}");
-            }
-
-            byte[] lenBytes = new byte[4];
-            ReadExactly(_stream, lenBytes, 4);
-            int length = BitConverter.ToInt32(lenBytes, 0);
-
-            if (length <= 0 || length > UnityProtocol.MAX_IMAGE_SIZE)
-            {
-                throw new System.IO.IOException($"Invalid JSON length: {length}");
-            }
-
-            byte[] body = new byte[length];
-            ReadExactly(_stream, body, length);
-            string json = Encoding.UTF8.GetString(body);
-
+            string json = ReadJsonMessage(MessageType.RESULT, UnityProtocol.MAX_IMAGE_SIZE, out uint requestId);
+            if (json == null) return null;
             return new GenericResult { rawJson = json, request_id = requestId };
         }
 

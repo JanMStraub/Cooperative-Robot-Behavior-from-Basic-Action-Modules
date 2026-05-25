@@ -78,10 +78,7 @@ class SequenceQueryHandler(SingletonBase):
         check_completion: bool = True,  # Enabled - Unity sends completion signals
     ) -> bool:
         try:
-            try:
-                from ..core.Imports import get_command_parser, get_sequence_executor
-            except ImportError:
-                from core.Imports import get_command_parser, get_sequence_executor
+            from core.Imports import get_command_parser, get_sequence_executor
 
             self._parser = get_command_parser(lm_studio_url=lm_studio_url, model=model)
             self._executor = get_sequence_executor(
@@ -104,7 +101,7 @@ class SequenceQueryHandler(SingletonBase):
         robot_id: str = "Robot1",
         camera_id: str = DEFAULT_CAMERA_ID,
         auto_execute: bool = True,
-        timeout: float = 30.0,
+        timeout: float = 60.0,
         flags_json: str = "",
     ) -> Dict[str, Any]:
         """
@@ -124,7 +121,7 @@ class SequenceQueryHandler(SingletonBase):
             robot_id: Default robot ID
             camera_id: Camera ID for perception operations (depth detection)
             auto_execute: Whether to automatically execute parsed operations
-            timeout: Timeout per command in seconds (default 180s matches executor default)
+            timeout: Timeout per command in seconds (default 60 s; increase for slow hardware or complex grasp sequences)
             flags_json: JSON string from BenchmarkFeatureFlags.to_json(); "" = no overrides.
 
         Returns:
@@ -145,7 +142,7 @@ class SequenceQueryHandler(SingletonBase):
         robot_id: str = "Robot1",
         camera_id: str = DEFAULT_CAMERA_ID,
         auto_execute: bool = True,
-        timeout: float = 30.0,
+        timeout: float = 60.0,
     ) -> Dict[str, Any]:
         if not self._parser or not self._executor:
             return {"success": False, "error": "SequenceQueryHandler not initialized"}
@@ -273,9 +270,7 @@ class SequenceServer(TCPServerBase):
             config = ServerConfig(host=DEFAULT_HOST, port=SEQUENCE_SERVER_PORT)
         super().__init__(config)
 
-    def handle_client_connection(self, client: socket.socket, address: tuple):
-        logger.info(f"Sequence client connected from {address}")
-
+    def _pre_connection_setup(self, client: socket.socket, _address: tuple) -> None:
         # Enable TCP keepalives so the OS sends probes during long-running sequence
         # executions (grasp can take 60+ seconds). Without this, Unity's receive
         # thread sees no data for >5s and raises a WouldBlock/socket error, causing
@@ -294,141 +289,104 @@ class SequenceServer(TCPServerBase):
         except OSError:
             pass  # Not available on all platforms (e.g. macOS uses different names)
 
-        # Set read timeout only for waiting on the next incoming command header.
-        # This allows the recv loop to check _running periodically.
-        client.settimeout(5.0)
+    def _handle_message(self, client: socket.socket, _address: tuple) -> None:
+        # Protocol V2: Read header (type:1 + request_id:4)
+        # Note: Uses little-endian per UnityProtocol.py specification
+        header_bytes = self._recv_exact(client, 5)
+        if not header_bytes:
+            raise ConnectionResetError("Connection closed by client")
 
-        while self._running:
-            try:
-                # Protocol V2: Read header (type:1 + request_id:4)
-                # Note: Uses little-endian per UnityProtocol.py specification
-                header_bytes = self._recv_exact(client, 5)
-                if not header_bytes:
-                    break
+        msg_type = header_bytes[0]
+        request_id = struct.unpack("<I", header_bytes[1:5])[0]
 
-                msg_type = header_bytes[0]
-                request_id = struct.unpack("<I", header_bytes[1:5])[0]
+        # Route to appropriate handler based on message type
+        if msg_type == MessageType.AUTORT_COMMAND:
+            # Handle AutoRT command - pass header bytes for complete message reading
+            self._handle_autort_command(client, header_bytes)
+            return
+        elif msg_type != MessageType.SEQUENCE_QUERY:
+            self._logger.error(
+                f"Invalid message type: {msg_type} (expected {MessageType.SEQUENCE_QUERY} or {MessageType.AUTORT_COMMAND})"
+            )
+            self._send_error(client, request_id, f"Invalid message type: {msg_type}")
+            return
 
-                # Route to appropriate handler based on message type
-                if msg_type == MessageType.AUTORT_COMMAND:
-                    # Handle AutoRT command - pass header bytes for complete message reading
-                    self._handle_autort_command(client, header_bytes)
-                    continue
-                elif msg_type != MessageType.SEQUENCE_QUERY:
-                    logger.error(
-                        f"Invalid message type: {msg_type} (expected {MessageType.SEQUENCE_QUERY} or {MessageType.AUTORT_COMMAND})"
-                    )
-                    self._send_error(
-                        client, request_id, f"Invalid message type: {msg_type}"
-                    )
-                    continue
+        # Read command length (4 bytes, little-endian)
+        cmd_len_bytes = self._recv_exact(client, 4)
+        if not cmd_len_bytes:
+            raise ConnectionResetError("Connection closed reading command length")
+        cmd_len = struct.unpack("<I", cmd_len_bytes)[0]
 
-                # Read command length (4 bytes, little-endian)
-                cmd_len_bytes = self._recv_exact(client, 4)
-                if not cmd_len_bytes:
-                    break
-                cmd_len = struct.unpack("<I", cmd_len_bytes)[0]
+        if cmd_len > MAX_STRING_LENGTH * 10:  # Allow longer commands
+            self._logger.error(f"Command too long: {cmd_len}")
+            self._send_error(client, request_id, "Command too long")
+            return
 
-                if cmd_len > MAX_STRING_LENGTH * 10:  # Allow longer commands
-                    logger.error(f"Command too long: {cmd_len}")
-                    self._send_error(client, request_id, "Command too long")
-                    continue
+        # Read command text
+        command_bytes = self._recv_exact(client, cmd_len)
+        if not command_bytes:
+            raise ConnectionResetError("Connection closed reading command text")
+        command_text = command_bytes.decode("utf-8")
 
-                # Read command text
-                command_bytes = self._recv_exact(client, cmd_len)
-                if not command_bytes:
-                    break
-                command_text = command_bytes.decode("utf-8")
+        # Read robot_id length (4 bytes, little-endian)
+        robot_id_len_bytes = self._recv_exact(client, 4)
+        if not robot_id_len_bytes:
+            raise ConnectionResetError("Connection closed reading robot_id length")
+        robot_id_len = struct.unpack("<I", robot_id_len_bytes)[0]
 
-                # Read robot_id length (4 bytes, little-endian)
-                robot_id_len_bytes = self._recv_exact(client, 4)
-                if not robot_id_len_bytes:
-                    break
-                robot_id_len = struct.unpack("<I", robot_id_len_bytes)[0]
+        # Read robot_id
+        robot_id = "Robot1"
+        if robot_id_len > 0:
+            robot_id_bytes = self._recv_exact(client, robot_id_len)
+            if robot_id_bytes:
+                robot_id = robot_id_bytes.decode("utf-8")
 
-                # Read robot_id
-                robot_id = "Robot1"
-                if robot_id_len > 0:
-                    robot_id_bytes = self._recv_exact(client, robot_id_len)
-                    if robot_id_bytes:
-                        robot_id = robot_id_bytes.decode("utf-8")
+        # Read camera_id length (4 bytes, little-endian)
+        camera_id_len_bytes = self._recv_exact(client, 4)
+        if not camera_id_len_bytes:
+            raise ConnectionResetError("Connection closed reading camera_id length")
+        camera_id_len = struct.unpack("<I", camera_id_len_bytes)[0]
 
-                # Read camera_id length (4 bytes, little-endian)
-                camera_id_len_bytes = self._recv_exact(client, 4)
-                if not camera_id_len_bytes:
-                    break
-                camera_id_len = struct.unpack("<I", camera_id_len_bytes)[0]
+        # Read camera_id; fall back to configured default when Unity sends length=0
+        camera_id = DEFAULT_CAMERA_ID
+        if camera_id_len > 0:
+            camera_id_bytes = self._recv_exact(client, camera_id_len)
+            if camera_id_bytes:
+                camera_id = camera_id_bytes.decode("utf-8")
 
-                # Read camera_id; fall back to configured default when Unity sends length=0
-                camera_id = DEFAULT_CAMERA_ID
-                if camera_id_len > 0:
-                    camera_id_bytes = self._recv_exact(client, camera_id_len)
-                    if camera_id_bytes:
-                        camera_id = camera_id_bytes.decode("utf-8")
+        # Read auto_execute flag (1 byte)
+        auto_execute_bytes = self._recv_exact(client, 1)
+        if not auto_execute_bytes:
+            raise ConnectionResetError("Connection closed reading auto_execute flag")
+        auto_execute = auto_execute_bytes[0] == 1
 
-                # Read auto_execute flag (1 byte)
-                auto_execute_bytes = self._recv_exact(client, 1)
-                if not auto_execute_bytes:
-                    break
-                auto_execute = auto_execute_bytes[0] == 1
+        # Read optional feature-flag overrides (benchmark runner only).
+        # flags_len=0 or missing (Unity / legacy clients) → no overrides.
+        flags_json = ""
+        flags_len_bytes = self._recv_exact(client, 4)
+        if flags_len_bytes:
+            flags_len = struct.unpack("<I", flags_len_bytes)[0]
+            if flags_len > 0:
+                flag_bytes = self._recv_exact(client, flags_len)
+                if flag_bytes:
+                    flags_json = flag_bytes.decode("utf-8")
 
-                # Read optional feature-flag overrides (benchmark runner only).
-                # flags_len=0 or missing (Unity / legacy clients) → no overrides.
-                flags_json = ""
-                flags_len_bytes = self._recv_exact(client, 4)
-                if flags_len_bytes:
-                    flags_len = struct.unpack("<I", flags_len_bytes)[0]
-                    if flags_len > 0:
-                        flag_bytes = self._recv_exact(client, flags_len)
-                        if flag_bytes:
-                            flags_json = flag_bytes.decode("utf-8")
+        self._logger.info(
+            f"Received sequence query (id={request_id}): {command_text} (camera={camera_id}, auto_execute={auto_execute})"
+        )
 
-                logger.info(
-                    f"Received sequence query (id={request_id}): {command_text} (camera={camera_id}, auto_execute={auto_execute})"
-                )
+        # Execute the sequence
+        handler = SequenceQueryHandler()
+        result = handler.execute_sequence(
+            command_text,
+            robot_id,
+            camera_id,
+            auto_execute,
+            flags_json=flags_json,
+        )
 
-                # Execute the sequence
-                handler = SequenceQueryHandler()
-                result = handler.execute_sequence(
-                    command_text,
-                    robot_id,
-                    camera_id,
-                    auto_execute,
-                    flags_json=flags_json,
-                )
-
-                # Send response
-                self._send_response(client, request_id, result)
-
-            except socket.timeout:
-                # Expected for persistent connections
-                continue
-            except Exception as e:
-                is_fatal, desc = self._is_connection_error_fatal(e)
-                if is_fatal:
-                    logger.info(f"Client {address} disconnected: {desc}")
-                    break
-                else:
-                    logger.warning(f"Non-fatal error with {address}: {desc}")
-
-        logger.info(f"Sequence client disconnected from {address}")
-
-    def _recv_exact(self, client: socket.socket, num_bytes: int) -> Optional[bytes]:
-        """Read exactly num_bytes, preserving partial reads across timeouts to avoid stream desync."""
-        data = b""
-        while len(data) < num_bytes:
-            try:
-                chunk = client.recv(num_bytes - len(data))
-                if not chunk:
-                    return None
-                data += chunk
-            except socket.timeout:
-                # Timeout during partial read — check for shutdown, then retry.
-                # Do NOT discard data: partial bytes must be preserved.
-                if not self.is_running():
-                    return None
-                continue
-        return data
+        # Send response
+        self._send_response(client, request_id, result)
 
     def _handle_autort_command(self, client: socket.socket, header_bytes: bytes):
         # Extract request_id from the already-read header so it is always

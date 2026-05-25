@@ -35,6 +35,10 @@ class WorldStateServer(TCPServerBase):
     Thread-safe access to state data.
     """
 
+    # WorldStateServer overrides handle_client_connection directly (one-way streaming;
+    # no socket timeout used). Set to 0 to make it clear the base template is not active.
+    _client_timeout: float = 0
+
     def __init__(self, config: Optional[ServerConfig] = None):
         if config is None:
             config = ServerConfig(host=DEFAULT_HOST, port=WORLD_STATE_PORT)
@@ -121,6 +125,11 @@ class WorldStateServer(TCPServerBase):
             logger.error(f"Error handling client {address}: {e}")
         finally:
             logger.info(f"Client {address} disconnected")
+
+    def _handle_message(self, client: socket.socket, _address: tuple) -> None:
+        """Not called. WorldStateServer overrides handle_client_connection directly
+        for one-way streaming; the timeout-based template loop does not apply."""
+        ...
 
     def register_update_callback(self, callback) -> None:
         """Register a callback(state_update: Dict) invoked on each state update."""

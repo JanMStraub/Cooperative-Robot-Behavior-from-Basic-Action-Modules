@@ -356,69 +356,19 @@ namespace PythonCommunication
         {
             try
             {
-                // Check if data is available before trying to read (prevents non-blocking socket errors)
-                if (!_stream.DataAvailable)
-                {
-                    System.Threading.Thread.Sleep(10); // Brief sleep to avoid tight loop
-                    return null; // No data available, return null and try again later
-                }
-
-                // Read header (5 bytes: type + request_id)
-                byte[] headerBuffer = new byte[UnityProtocol.HEADER_SIZE];
-                ReadExactly(_stream, headerBuffer, UnityProtocol.HEADER_SIZE);
-
-                // Decode header
-                UnityProtocol.DecodeHeader(
-                    headerBuffer,
-                    0,
-                    out MessageType type,
-                    out uint requestId
-                );
-
-                if (type != MessageType.AUTORT_RESPONSE)
-                {
-                    Debug.LogError(
-                        $"{LogPrefix} Unexpected message type: {type} (expected AUTORT_RESPONSE)"
-                    );
-                    throw new System.IO.IOException(
-                        $"Protocol violation: Expected AUTORT_RESPONSE, got {type}"
-                    );
-                }
-
-                // Read JSON length (4 bytes)
-                byte[] lenBuffer = new byte[4];
-                ReadExactly(_stream, lenBuffer, 4);
-                int jsonLen = BitConverter.ToInt32(lenBuffer, 0);
-
-                if (jsonLen <= 0 || jsonLen > CommunicationConstants.MAX_JSON_LENGTH)
-                {
-                    throw new System.IO.IOException($"Invalid JSON length: {jsonLen}");
-                }
-
-                // Read JSON data
-                byte[] jsonBytes = new byte[jsonLen];
-                ReadExactly(_stream, jsonBytes, jsonLen);
-                string json = Encoding.UTF8.GetString(jsonBytes);
-
-                // Parse JSON to AutoRTResponse
-                if (
-                    JsonParser.TryParseWithLogging<AutoRTResponse>(
-                        json,
-                        out AutoRTResponse response,
-                        LogPrefix
-                    )
-                )
+                string json = ReadJsonMessage(MessageType.AUTORT_RESPONSE, CommunicationConstants.MAX_JSON_LENGTH, out uint requestId);
+                if (json == null) return null;
+                if (JsonParser.TryParseWithLogging<AutoRTResponse>(json, out AutoRTResponse response, LogPrefix))
                 {
                     response.request_id = requestId;
                     return response;
                 }
-
                 return null;
             }
-            catch (Exception e)
+            catch (System.Exception ex)
             {
-                Debug.LogError($"{LogPrefix} Error receiving response: {e.Message}");
-                return null;
+                Debug.LogError($"{LogPrefix} Error receiving response: {ex.Message}");
+                throw;
             }
         }
 

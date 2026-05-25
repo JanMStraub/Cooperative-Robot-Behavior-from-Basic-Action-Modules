@@ -11,7 +11,6 @@ try:
     from config.Robot import (
         WORKSPACE_REGIONS,
         ROBOT_STATUS_CACHE_TTL,
-        WORKSPACE_ALLOCATION_TIMEOUT,
         CONFIDENCE_DECAY_PER_FRAME,
         STALE_CONFIDENCE_THRESHOLD,
         OBJECT_TTL_SECONDS,
@@ -22,7 +21,6 @@ except ImportError:
     from ..config.Robot import (
         WORKSPACE_REGIONS,
         ROBOT_STATUS_CACHE_TTL,
-        WORKSPACE_ALLOCATION_TIMEOUT,
         CONFIDENCE_DECAY_PER_FRAME,
         STALE_CONFIDENCE_THRESHOLD,
         OBJECT_TTL_SECONDS,
@@ -93,13 +91,10 @@ class ObjectState:
     source: str = "unity"  # "vision" or "unity"; tracks which system last set position
 
 
-@dataclass
-class WorkspaceAllocation:
-    robot_id: str
-    region: str
-    allocated_at: float = field(default_factory=time.time)
-    urgency: int = 1  # 1 (low) to 5 (high); higher urgency can preempt lower
-    estimated_duration: float = 30.0  # seconds this robot expects to need the region
+try:
+    from .WorkspaceAllocator import WorkspaceAllocation, WorkspaceAllocator  # type: ignore[import]
+except ImportError:
+    from operations.WorkspaceAllocator import WorkspaceAllocation, WorkspaceAllocator  # type: ignore[no-redef]
 
 
 class WorldState(SingletonBase):
@@ -131,10 +126,7 @@ class WorldState(SingletonBase):
         # lookups. Invalidated whenever _objects changes.
         self._normalized_object_keys: Optional[Dict[str, str]] = None
 
-        self._workspace_allocations: Dict[str, Optional[WorkspaceAllocation]] = {
-            region: None for region in WORKSPACE_REGIONS.keys()
-        }
-        self._workspace_timeout = WORKSPACE_ALLOCATION_TIMEOUT
+        self._workspace_allocator = WorkspaceAllocator()
 
         self._task_outcomes: List[Dict[str, Any]] = []
         self._pending_commands: Dict[int, Dict[str, Any]] = {}
@@ -1036,91 +1028,22 @@ class WorldState(SingletonBase):
         urgency: int = 1,
         estimated_duration: float = 30.0,
     ) -> bool:
-        """
-        Allocate a workspace region to a robot with timeout tracking.
-
-        High-urgency requests (urgency > current holder's urgency) can preempt
-        low-urgency holders with >10s remaining.
-        """
-        with self._lock:
-            if region not in self._workspace_allocations:
-                logger.warning(f"Unknown workspace region: {region}")
-                return False
-
-            self._cleanup_stale_allocations()
-
-            current = self._workspace_allocations[region]
-            if current is None:
-                self._workspace_allocations[region] = WorkspaceAllocation(
-                    robot_id=robot_id,
-                    region=region,
-                    urgency=urgency,
-                    estimated_duration=estimated_duration,
-                )
-                logger.info(f"Allocated {region} to {robot_id}")
-                return True
-
-            if current.robot_id == robot_id:
-                current.urgency = urgency
-                current.estimated_duration = estimated_duration
-                current.allocated_at = time.time()
-                return True
-
-            # Preemption: strictly higher urgency AND holder has >10s remaining
-            elapsed = time.time() - current.allocated_at
-            remaining = max(0.0, current.estimated_duration - elapsed)
-            if urgency > current.urgency and remaining > 10.0:
-                logger.info(
-                    f"Preempting {region} from {current.robot_id} (urgency {current.urgency}, "
-                    f"{remaining:.1f}s remaining) for {robot_id} (urgency {urgency})"
-                )
-                self._workspace_allocations[region] = WorkspaceAllocation(
-                    robot_id=robot_id,
-                    region=region,
-                    urgency=urgency,
-                    estimated_duration=estimated_duration,
-                )
-                return True
-
-            logger.warning(
-                f"Region {region} allocated to {current.robot_id}, preemption denied"
-            )
-            return False
+        """Allocate a workspace region to a robot. Delegates to WorkspaceAllocator."""
+        return self._workspace_allocator.allocate(
+            region, robot_id, urgency, estimated_duration
+        )
 
     def release_workspace(self, region: str, robot_id: str) -> bool:
         """Release a workspace region allocation."""
-        with self._lock:
-            if region not in self._workspace_allocations:
-                logger.warning(f"Unknown workspace region: {region}")
-                return False
-
-            current_allocation = self._workspace_allocations[region]
-            if current_allocation is None:
-                logger.warning(f"Region {region} is not allocated")
-                return False
-
-            if current_allocation.robot_id != robot_id:
-                logger.warning(f"Region {region} not allocated to {robot_id}")
-                return False
-
-            self._workspace_allocations[region] = None
-            logger.info(f"Released {region} from {robot_id}")
-            return True
+        return self._workspace_allocator.release(region, robot_id)
 
     def get_workspace_owner(self, region: str) -> Optional[str]:
         """Get the robot that owns a workspace region."""
-        with self._lock:
-            self._cleanup_stale_allocations()
-            allocation = self._workspace_allocations.get(region)
-            return allocation.robot_id if allocation else None
+        return self._workspace_allocator.get_owner(region)
 
     def get_free_workspace_regions(self) -> list:
         """Return list of region names currently unallocated."""
-        with self._lock:
-            self._cleanup_stale_allocations()
-            return [
-                r for r, alloc in self._workspace_allocations.items() if alloc is None
-            ]
+        return self._workspace_allocator.get_free_regions()
 
     def get_robot_intents(self) -> Dict[str, str]:
         """Return {robot_id: object_id} for all robots with active movement intent."""
@@ -1170,26 +1093,35 @@ class WorldState(SingletonBase):
             outcomes = [o for o in outcomes if o["robot_id"] == robot_id]
         return outcomes[-last_n:]
 
+    # ------------------------------------------------------------------
+    # Backward-compatibility shims: tests and external code may read/write
+    # _workspace_allocations and _workspace_timeout directly on WorldState.
+    # These properties proxy through to the WorkspaceAllocator.
+    # ------------------------------------------------------------------
+
+    @property
+    def _workspace_allocations(self) -> Dict[str, Optional["WorkspaceAllocation"]]:
+        return self._workspace_allocator._allocations
+
+    @_workspace_allocations.setter
+    def _workspace_allocations(self, value):
+        self._workspace_allocator._allocations = value
+
+    @property
+    def _workspace_timeout(self) -> float:
+        return self._workspace_allocator._timeout
+
+    @_workspace_timeout.setter
+    def _workspace_timeout(self, value: float):
+        self._workspace_allocator._timeout = value
+
     def _cleanup_stale_allocations(self):
-        """Release workspace allocations that have exceeded timeout."""
-        now = time.time()
-        stale_regions = []
-        for region, allocation in self._workspace_allocations.items():
-            if allocation is not None:
-                age = now - allocation.allocated_at
-                if age > self._workspace_timeout:
-                    stale_regions.append(region)
-                    logger.warning(
-                        f"Auto-releasing stale allocation: {region} from {allocation.robot_id} (age: {age:.1f}s)"
-                    )
-        for region in stale_regions:
-            self._workspace_allocations[region] = None
+        """No longer used directly; kept for safety. Delegates to WorkspaceAllocator."""
+        self._workspace_allocator._cleanup_stale()
 
     def set_workspace_timeout(self, timeout: float):
         """Set workspace allocation timeout in seconds."""
-        with self._lock:
-            self._workspace_timeout = max(1.0, timeout)
-            logger.info(f"Set workspace timeout to {self._workspace_timeout}s")
+        self._workspace_allocator.set_timeout(timeout)
 
     def register_command(self, request_id: int, command: Dict[str, Any]):
         """Register an in-flight command for tracking."""
@@ -1249,11 +1181,7 @@ class WorldState(SingletonBase):
             self._objects.clear()
             self._normalized_object_keys = None
 
-            # Reinitialize workspace allocations
-            self._workspace_allocations = {
-                region: None for region in WORKSPACE_REGIONS.keys()
-            }
-            self._workspace_timeout = WORKSPACE_ALLOCATION_TIMEOUT  # Reset to default
+            self._workspace_allocator.reset()
             self._pending_commands.clear()
             logger.info("Reset world state")
 

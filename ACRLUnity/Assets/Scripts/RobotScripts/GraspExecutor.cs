@@ -87,6 +87,32 @@ namespace Robotics
             }
         }
 
+        /// <summary>
+        /// Waits for the robot to reach the target (with timeout), then waits for end-effector
+        /// velocity to drop below the given threshold. Invokes onTimeout if the timeout expires
+        /// before the target is reached.
+        /// </summary>
+        private IEnumerator WaitForGraspPhase(
+            Func<bool> hasReachedTarget,
+            float timeoutSeconds,
+            float velocityThreshold,
+            System.Action onTimeout = null)
+        {
+            yield return _owner.StartCoroutine(
+                WaitForTargetWithTimeout(hasReachedTarget, timeoutSeconds)
+            );
+
+            if (!hasReachedTarget())
+            {
+                onTimeout?.Invoke();
+                yield break;
+            }
+
+            yield return new WaitUntil(() =>
+                _getEndEffectorVelocityMagnitude() < velocityThreshold
+            );
+        }
+
         public IEnumerator CloseGripperAfterDelay(
             GameObject targetObject,
             float gripperCloseDelay,
@@ -139,14 +165,7 @@ namespace Robotics
                 new GraspOptions { closeGripperOnReach = false }
             );
             yield return _owner.StartCoroutine(
-                WaitForTargetWithTimeout(hasReachedTarget, graspTimeout)
-            );
-
-            if (!hasReachedTarget())
-                yield break;
-
-            yield return new WaitUntil(() =>
-                _getEndEffectorVelocityMagnitude() < VelocityThresholdPostPreGrasp
+                WaitForGraspPhase(hasReachedTarget, graspTimeout, VelocityThresholdPostPreGrasp)
             );
 
             GameObject main = _getCachedTempObject(RobotConstants.GRASP_TARGET_SUFFIX);
@@ -211,13 +230,7 @@ namespace Robotics
                 new GraspOptions { closeGripperOnReach = false }
             );
             yield return _owner.StartCoroutine(
-                WaitForTargetWithTimeout(hasReachedTarget, graspTimeout)
-            );
-
-            if (!hasReachedTarget())
-                yield break;
-            yield return new WaitUntil(() =>
-                _getEndEffectorVelocityMagnitude() < VelocityThresholdPostPreGrasp
+                WaitForGraspPhase(hasReachedTarget, graspTimeout, VelocityThresholdPostPreGrasp)
             );
 
             GameObject main = _getCachedTempObject(RobotConstants.GRASP_TARGET_SUFFIX);
@@ -306,18 +319,15 @@ namespace Robotics
             float graspTimeout =
                 _ikConfig != null ? _ikConfig.graspTimeoutSeconds : GraspTimeoutFallback;
             yield return _owner.StartCoroutine(
-                WaitForTargetWithTimeout(hasReachedTarget, graspTimeout)
-            );
-
-            if (!hasReachedTarget())
-            {
-                Debug.LogWarning($"{_logPrefix} {_robotId} failed to reach handoff position");
-                _setActiveCoroutine(null);
-                yield break;
-            }
-
-            yield return new WaitUntil(() =>
-                _getEndEffectorVelocityMagnitude() < VelocityThresholdPreGripperClose
+                WaitForGraspPhase(
+                    hasReachedTarget,
+                    graspTimeout,
+                    VelocityThresholdPreGripperClose,
+                    onTimeout: () => {
+                        Debug.LogWarning($"{_logPrefix} {_robotId} failed to reach handoff position");
+                        _setActiveCoroutine(null);
+                    }
+                )
             );
 
             if (options.closeGripperOnReach && _gripperController != null)

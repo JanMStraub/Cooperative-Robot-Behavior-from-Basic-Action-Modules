@@ -393,6 +393,61 @@ namespace PythonCommunication
         }
 
         /// <summary>
+        /// Registers a one-shot OnTargetReached listener that fires SendCommandCompletion on success.
+        /// Replaces any prior listener stored under <paramref name="listenerKey"/> in
+        /// <paramref name="manager"/> to prevent zombie delegates. Supports both
+        /// RobotController and SimpleRobotController; pass null for whichever is absent.
+        /// </summary>
+        /// <returns>The registered action so the caller can deregister early (e.g. on timeout).</returns>
+        private System.Action RegisterTargetReachedCompletion(
+            CommandListenerManager manager,
+            string listenerKey,
+            string commandKey,
+            string commandName,
+            string robotId,
+            uint requestId,
+            RobotController controller,
+            SimpleRobotController simpleController
+        )
+        {
+            // Remove any pre-existing listener for this key
+            if (manager.Contains(listenerKey))
+            {
+                System.Action oldListener = manager.Remove(listenerKey);
+                if (controller != null)
+                    controller.OnTargetReached -= oldListener;
+                else if (simpleController != null)
+                    simpleController.OnTargetReached -= oldListener;
+            }
+
+            System.Action onComplete = null;
+            onComplete = () =>
+            {
+                if (controller != null)
+                    controller.OnTargetReached -= onComplete;
+                else if (simpleController != null)
+                    simpleController.OnTargetReached -= onComplete;
+
+                manager.Remove(listenerKey);
+
+                if (_activeCommands.ContainsKey(commandKey))
+                {
+                    _activeCommands.Remove(commandKey);
+                    SendCommandCompletion(robotId, commandName, true, requestId);
+                }
+            };
+
+            manager.Register(listenerKey, onComplete);
+
+            if (controller != null)
+                controller.OnTargetReached += onComplete;
+            else if (simpleController != null)
+                simpleController.OnTargetReached += onComplete;
+
+            return onComplete;
+        }
+
+        /// <summary>
         /// Validate and retrieve robot instance with controller.
         /// Handles error logging and failed command counting.
         /// Supports both RobotController and SimpleRobotController.
@@ -547,51 +602,17 @@ namespace PythonCommunication
                 string commandKey = $"move_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // FIX #2: CLEANUP - Remove old listener for this robot if one exists
                 string robotListenerKey = $"move_{command.robot_id}";
-                if (_activeMoveListeners.Contains(robotListenerKey))
-                {
-                    System.Action oldListener = _activeMoveListeners.Remove(robotListenerKey);
-                    if (controller != null)
-                        controller.OnTargetReached -= oldListener;
-                    else if (robotInstance.simpleController != null)
-                        robotInstance.simpleController.OnTargetReached -= oldListener;
-
-                    _activeMoveListeners.Remove(robotListenerKey);
-                }
-
-                System.Action onComplete = null;
-                onComplete = () =>
-                {
-                    if (controller != null)
-                        controller.OnTargetReached -= onComplete;
-                    else if (robotInstance.simpleController != null)
-                        robotInstance.simpleController.OnTargetReached -= onComplete;
-
-                    _activeMoveListeners.Remove(robotListenerKey);
-
-                    if (_activeCommands.ContainsKey(commandKey))
-                    {
-                        _activeCommands.Remove(commandKey);
-                        SendCommandCompletion(
-                            command.robot_id,
-                            "move_to_coordinate",
-                            true,
-                            command.request_id
-                        );
-                    }
-                };
-
-                _activeMoveListeners.Register(robotListenerKey, onComplete);
-
-                if (controller != null)
-                {
-                    controller.OnTargetReached += onComplete;
-                }
-                else if (robotInstance.simpleController != null)
-                {
-                    robotInstance.simpleController.OnTargetReached += onComplete;
-                }
+                RegisterTargetReachedCompletion(
+                    _activeMoveListeners,
+                    robotListenerKey,
+                    commandKey,
+                    "move_to_coordinate",
+                    command.robot_id,
+                    command.request_id,
+                    controller,
+                    robotInstance.simpleController
+                );
 
                 if (controller != null)
                 {
@@ -1237,52 +1258,12 @@ namespace PythonCommunication
             else if (simpleController != null)
                 simpleController.SetTarget(hoverPos);
 
-            float timer = 0f;
-            if (usingSimple)
-            {
-                while (!simpleController.HasReachedTarget)
-                {
-                    timer += 0.1f;
-                    if (timer > segmentTimeout)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching hover position."
-                        );
-                        SendCommandCompletion(
-                            robotId,
-                            "pick_object_at_coordinate",
-                            false,
-                            requestId
-                        );
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
-            else
-            {
-                while (
-                    controller != null
-                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
-                )
-                {
-                    timer += 0.1f;
-                    if (timer > segmentTimeout)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching hover position."
-                        );
-                        SendCommandCompletion(
-                            robotId,
-                            "pick_object_at_coordinate",
-                            false,
-                            requestId
-                        );
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
+            var timedOut = new bool[1];
+            yield return StartCoroutine(WaitForMovement(
+                controller, simpleController, usingSimple, segmentTimeout,
+                $"{_logPrefix} pick_object_at_coordinate: Timeout reaching hover position.",
+                robotId, "pick_object_at_coordinate", requestId, timedOut));
+            if (timedOut[0]) yield break;
 
             // Step 3: Descend straight to contact position.
             if (controller != null)
@@ -1290,52 +1271,12 @@ namespace PythonCommunication
             else if (simpleController != null)
                 simpleController.SetTarget(contactPos);
 
-            timer = 0f;
-            if (usingSimple)
-            {
-                while (!simpleController.HasReachedTarget)
-                {
-                    timer += 0.1f;
-                    if (timer > segmentTimeout)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching contact position."
-                        );
-                        SendCommandCompletion(
-                            robotId,
-                            "pick_object_at_coordinate",
-                            false,
-                            requestId
-                        );
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
-            else
-            {
-                while (
-                    controller != null
-                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
-                )
-                {
-                    timer += 0.1f;
-                    if (timer > segmentTimeout)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching contact position."
-                        );
-                        SendCommandCompletion(
-                            robotId,
-                            "pick_object_at_coordinate",
-                            false,
-                            requestId
-                        );
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
+            timedOut[0] = false;
+            yield return StartCoroutine(WaitForMovement(
+                controller, simpleController, usingSimple, segmentTimeout,
+                $"{_logPrefix} pick_object_at_coordinate: Timeout reaching contact position.",
+                robotId, "pick_object_at_coordinate", requestId, timedOut));
+            if (timedOut[0]) yield break;
 
             // Step 4: Close gripper to grasp the object.
             gripperController.CloseGrippers();
@@ -1471,42 +1412,12 @@ namespace PythonCommunication
             else if (simpleController != null)
                 simpleController.SetTarget(hoverPos);
 
-            float timer = 0f;
-            if (usingSimple)
-            {
-                while (!simpleController.HasReachedTarget)
-                {
-                    timer += 0.1f;
-                    if (timer > segmentTimeout)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} place_object: Timeout reaching hover position."
-                        );
-                        SendCommandCompletion(robotId, "place_object", false, requestId);
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
-            else
-            {
-                while (
-                    controller != null
-                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
-                )
-                {
-                    timer += 0.1f;
-                    if (timer > segmentTimeout)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} place_object: Timeout reaching hover position."
-                        );
-                        SendCommandCompletion(robotId, "place_object", false, requestId);
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
+            var timedOut = new bool[1];
+            yield return StartCoroutine(WaitForMovement(
+                controller, simpleController, usingSimple, segmentTimeout,
+                $"{_logPrefix} place_object: Timeout reaching hover position.",
+                robotId, "place_object", requestId, timedOut));
+            if (timedOut[0]) yield break;
 
             // Step 2: Descend to place height, maintaining top-down orientation.
             if (controller != null)
@@ -1514,42 +1425,12 @@ namespace PythonCommunication
             else if (simpleController != null)
                 simpleController.SetTarget(placePos);
 
-            timer = 0f;
-            if (usingSimple)
-            {
-                while (!simpleController.HasReachedTarget)
-                {
-                    timer += 0.1f;
-                    if (timer > segmentTimeout)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} place_object: Timeout reaching place position."
-                        );
-                        SendCommandCompletion(robotId, "place_object", false, requestId);
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
-            else
-            {
-                while (
-                    controller != null
-                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
-                )
-                {
-                    timer += 0.1f;
-                    if (timer > segmentTimeout)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} place_object: Timeout reaching place position."
-                        );
-                        SendCommandCompletion(robotId, "place_object", false, requestId);
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
+            timedOut[0] = false;
+            yield return StartCoroutine(WaitForMovement(
+                controller, simpleController, usingSimple, segmentTimeout,
+                $"{_logPrefix} place_object: Timeout reaching place position.",
+                robotId, "place_object", requestId, timedOut));
+            if (timedOut[0]) yield break;
 
             // Step 3: Open gripper to release the object onto the surface.
             gripperController.OpenGrippers();
@@ -1561,7 +1442,7 @@ namespace PythonCommunication
             else if (simpleController != null)
                 simpleController.SetTarget(hoverPos);
 
-            timer = 0f;
+            float timer = 0f;
             if (usingSimple)
             {
                 while (!simpleController.HasReachedTarget)
@@ -1837,50 +1718,24 @@ namespace PythonCommunication
                 string commandKey = $"adjust_orientation_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // FIX #2: CLEANUP - Remove old orientation listener for this robot if one exists
                 string listenerKey = $"orientation_{command.robot_id}";
-                if (_activeOrientationListeners.Contains(listenerKey))
-                {
-                    System.Action oldListener = _activeOrientationListeners.Remove(listenerKey);
-                    if (controller != null)
-                        controller.OnTargetReached -= oldListener;
-                    else if (robotInstance.simpleController != null)
-                        robotInstance.simpleController.OnTargetReached -= oldListener;
-                    _activeOrientationListeners.Remove(listenerKey);
-                }
-
-                System.Action onComplete = null;
-                onComplete = () =>
-                {
-                    if (controller != null)
-                        controller.OnTargetReached -= onComplete;
-                    else if (robotInstance.simpleController != null)
-                        robotInstance.simpleController.OnTargetReached -= onComplete;
-
-                    _activeOrientationListeners.Remove(listenerKey); // FIX #2
-
-                    if (_activeCommands.ContainsKey(commandKey))
-                    {
-                        _activeCommands.Remove(commandKey);
-                        SendCommandCompletion(
-                            command.robot_id,
-                            "adjust_end_effector_orientation",
-                            true,
-                            command.request_id
-                        );
-                    }
-                };
-
-                _activeOrientationListeners.Register(listenerKey, onComplete);
+                RegisterTargetReachedCompletion(
+                    _activeOrientationListeners,
+                    listenerKey,
+                    commandKey,
+                    "adjust_end_effector_orientation",
+                    command.robot_id,
+                    command.request_id,
+                    controller,
+                    robotInstance.simpleController
+                );
 
                 if (controller != null)
                 {
-                    controller.OnTargetReached += onComplete;
                     controller.SetTarget(currentPosition, targetRotation);
                 }
                 else if (robotInstance.simpleController != null)
                 {
-                    robotInstance.simpleController.OnTargetReached += onComplete;
                     robotInstance.simpleController.SetTarget(currentPosition, targetRotation);
                 }
 
@@ -1955,51 +1810,25 @@ namespace PythonCommunication
                 string commandKey = $"align_object_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // FIX #2: CLEANUP - Remove old alignment listener for this robot if one exists
                 string listenerKey = $"align_{command.robot_id}";
-                if (_activeOrientationListeners.Contains(listenerKey))
-                {
-                    System.Action oldListener = _activeOrientationListeners.Remove(listenerKey);
-                    if (controller != null)
-                        controller.OnTargetReached -= oldListener;
-                    else if (robotInstance.simpleController != null)
-                        robotInstance.simpleController.OnTargetReached -= oldListener;
-                    _activeOrientationListeners.Remove(listenerKey);
-                }
-
-                System.Action onComplete = null;
-                onComplete = () =>
-                {
-                    if (controller != null)
-                        controller.OnTargetReached -= onComplete;
-                    else if (robotInstance.simpleController != null)
-                        robotInstance.simpleController.OnTargetReached -= onComplete;
-
-                    _activeOrientationListeners.Remove(listenerKey); // FIX #2
-
-                    if (_activeCommands.ContainsKey(commandKey))
-                    {
-                        _activeCommands.Remove(commandKey);
-                        SendCommandCompletion(
-                            command.robot_id,
-                            "align_object",
-                            true,
-                            command.request_id
-                        );
-                    }
-                };
-
-                _activeOrientationListeners.Register(listenerKey, onComplete); // FIX #2: Track it
+                RegisterTargetReachedCompletion(
+                    _activeOrientationListeners,
+                    listenerKey,
+                    commandKey,
+                    "align_object",
+                    command.robot_id,
+                    command.request_id,
+                    controller,
+                    robotInstance.simpleController
+                );
 
                 // Execute alignment
                 if (controller != null)
                 {
-                    controller.OnTargetReached += onComplete;
                     controller.SetTarget(currentPosition, targetRotation);
                 }
                 else if (robotInstance.simpleController != null)
                 {
-                    robotInstance.simpleController.OnTargetReached += onComplete;
                     robotInstance.simpleController.SetTarget(currentPosition, targetRotation);
                 }
 
@@ -2262,7 +2091,6 @@ namespace PythonCommunication
         )
         {
             float timeout = 10.0f; // Safety timeout
-            float timer = 0f;
             bool usingSimpleController = (controller == null && simpleController != null);
 
             // Step 1: Move to pen
@@ -2276,37 +2104,12 @@ namespace PythonCommunication
             }
 
             // FIX: Wait for arrival at pen with TIMEOUT
-            if (usingSimpleController)
-            {
-                while (!simpleController.HasReachedTarget)
-                {
-                    timer += 0.1f;
-                    if (timer > timeout)
-                    {
-                        Debug.LogWarning($"{_logPrefix} DrawWithPen timed out reaching pen.");
-                        SendCommandCompletion(robotId, "draw_with_pen", false, requestId);
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
-            else
-            {
-                while (
-                    controller != null
-                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
-                )
-                {
-                    timer += 0.1f;
-                    if (timer > timeout)
-                    {
-                        Debug.LogWarning($"{_logPrefix} DrawWithPen timed out reaching pen.");
-                        SendCommandCompletion(robotId, "draw_with_pen", false, requestId);
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
+            var timedOut = new bool[1];
+            yield return StartCoroutine(WaitForMovement(
+                controller, simpleController, usingSimpleController, timeout,
+                $"{_logPrefix} DrawWithPen timed out reaching pen.",
+                robotId, "draw_with_pen", requestId, timedOut));
+            if (timedOut[0]) yield break;
 
             // Step 2: Close gripper (pick up pen)
             // Get gripper controller
@@ -2339,38 +2142,12 @@ namespace PythonCommunication
             }
 
             // FIX: Wait for arrival at paper with TIMEOUT
-            timer = 0f; // Reset timer for paper segment
-            if (usingSimpleController)
-            {
-                while (!simpleController.HasReachedTarget)
-                {
-                    timer += 0.1f;
-                    if (timer > timeout)
-                    {
-                        Debug.LogWarning($"{_logPrefix} DrawWithPen timed out moving to paper.");
-                        SendCommandCompletion(robotId, "draw_with_pen", false, requestId);
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
-            else
-            {
-                while (
-                    controller != null
-                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
-                )
-                {
-                    timer += 0.1f;
-                    if (timer > timeout)
-                    {
-                        Debug.LogWarning($"{_logPrefix} DrawWithPen timed out moving to paper.");
-                        SendCommandCompletion(robotId, "draw_with_pen", false, requestId);
-                        yield break;
-                    }
-                    yield return new WaitForSeconds(0.1f);
-                }
-            }
+            timedOut[0] = false;
+            yield return StartCoroutine(WaitForMovement(
+                controller, simpleController, usingSimpleController, timeout,
+                $"{_logPrefix} DrawWithPen timed out moving to paper.",
+                robotId, "draw_with_pen", requestId, timedOut));
+            if (timedOut[0]) yield break;
 
             // Step 4: Draw shape (placeholder - actual drawing would require LineRenderer or similar)
             Debug.Log($"Drawing {shape} at paper position");
@@ -3699,6 +3476,55 @@ namespace PythonCommunication
             _successfulCommands = 0;
             _failedCommands = 0;
             Debug.Log($"{_logPrefix} Statistics reset");
+        }
+
+        /// <summary>
+        /// Polls until the robot reaches its current target or times out.
+        /// Sets timedOut[0] = true and sends a failure completion if timeout occurs.
+        /// Non-fatal waits (where timeout should not abort the coroutine) must stay inline.
+        /// </summary>
+        private IEnumerator WaitForMovement(
+            RobotController controller,
+            SimpleRobotController simpleController,
+            bool usingSimple,
+            float timeout,
+            string logMessage,
+            string robotId,
+            string commandName,
+            uint requestId,
+            bool[] timedOut)
+        {
+            float timer = 0f;
+            if (usingSimple)
+            {
+                while (simpleController != null && !simpleController.HasReachedTarget)
+                {
+                    timer += 0.1f;
+                    if (timer > timeout)
+                    {
+                        Debug.LogWarning(logMessage);
+                        SendCommandCompletion(robotId, commandName, false, requestId);
+                        timedOut[0] = true;
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                {
+                    timer += 0.1f;
+                    if (timer > timeout)
+                    {
+                        Debug.LogWarning(logMessage);
+                        SendCommandCompletion(robotId, commandName, false, requestId);
+                        timedOut[0] = true;
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
         }
     }
 }

@@ -483,9 +483,12 @@ namespace Robotics
             Rigidbody rb = obj.GetComponent<Rigidbody>();
             if (rb != null)
             {
-                // Set velocities BEFORE making kinematic (can't set velocity on kinematic bodies)
-                rb.linearVelocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
+                // Zero velocity only while still dynamic; kinematic bodies reject velocity assignment.
+                if (!rb.isKinematic)
+                {
+                    rb.linearVelocity = Vector3.zero;
+                    rb.angularVelocity = Vector3.zero;
+                }
                 rb.isKinematic = true;
                 rb.useGravity = false; // Disable gravity while held
             }

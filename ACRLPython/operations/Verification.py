@@ -29,7 +29,13 @@ class VerificationResult:
     checked_predicates: List[str] = field(default_factory=list)
     execution_allowed: bool = True
 
-    def add_violation(self, predicate: str, reason: str, severity: str = "error", suggestions: Optional[List[str]] = None):
+    def add_violation(
+        self,
+        predicate: str,
+        reason: str,
+        severity: str = "error",
+        suggestions: Optional[List[str]] = None,
+    ):
         violation = PredicateViolation(
             predicate=predicate,
             reason=reason,

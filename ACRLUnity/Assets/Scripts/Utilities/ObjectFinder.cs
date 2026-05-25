@@ -363,10 +363,13 @@ namespace Utilities
 
         private bool IsGroundObject(GameObject obj)
         {
-            return obj.CompareTag("Ground")
-                || obj.CompareTag("Floor")
-                || obj.CompareTag("Terrain")
-                || obj.CompareTag("Environment");
+            return CompareSafeTag(obj, "Ground");
+        }
+
+        private static bool CompareSafeTag(GameObject obj, string tag)
+        {
+            try { return obj.CompareTag(tag); }
+            catch (UnityException) { return false; }
         }
 
         /// <summary>

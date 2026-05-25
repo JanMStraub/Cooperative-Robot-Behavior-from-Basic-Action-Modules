@@ -13,7 +13,7 @@ class TestGraspObjectOperation:
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
         with (
-            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("operations.grasp._dispatcher._get_command_broadcaster") as mock,
             patch("config.ROS.ROS_ENABLED", False),
         ):
             broadcaster = MagicMock()
@@ -148,7 +148,7 @@ class TestGraspObjectOperation:
         mock_broadcaster.return_value = None
 
         with patch(
-            "operations.GraspOperations._get_command_broadcaster", return_value=None
+            "operations.grasp._dispatcher._get_command_broadcaster", return_value=None
         ):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
@@ -167,7 +167,7 @@ class TestGraspObjectOperation:
 
     def test_grasp_object_no_response(self, mock_broadcaster):
         with patch(
-            "operations.GraspOperations._get_command_broadcaster", return_value=None
+            "operations.grasp._dispatcher._get_command_broadcaster", return_value=None
         ):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
@@ -317,7 +317,7 @@ class TestGraspObjectIntegration:
 
     def test_grasp_object_with_all_parameters(self, mock_world_state):
         with (
-            patch("operations.GraspOperations._get_command_broadcaster") as mock_bc,
+            patch("operations.grasp._dispatcher._get_command_broadcaster") as mock_bc,
             patch("config.ROS.ROS_ENABLED", False),
         ):
             broadcaster = MagicMock()
@@ -360,7 +360,7 @@ class TestGraspTrajectoryValidation:
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
         with (
-            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("operations.grasp._dispatcher._get_command_broadcaster") as mock,
             patch("config.ROS.ROS_ENABLED", False),
         ):
             broadcaster = MagicMock()
@@ -445,7 +445,7 @@ class TestGraspForceEstimation:
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
         with (
-            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("operations.grasp._dispatcher._get_command_broadcaster") as mock,
             patch("config.ROS.ROS_ENABLED", False),
         ):
             broadcaster = MagicMock()
@@ -478,7 +478,7 @@ class TestGraspFailureRecovery:
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
         with (
-            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("operations.grasp._dispatcher._get_command_broadcaster") as mock,
             patch("config.ROS.ROS_ENABLED", False),
         ):
             broadcaster = MagicMock()

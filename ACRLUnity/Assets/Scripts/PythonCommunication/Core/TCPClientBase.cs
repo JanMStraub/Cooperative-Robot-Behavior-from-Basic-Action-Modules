@@ -1,5 +1,6 @@
 using System;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Core;
@@ -421,6 +422,49 @@ namespace PythonCommunication.Core
                 }
                 totalRead += read;
             }
+        }
+
+        /// <summary>
+        /// Reads one length-prefixed JSON message from <see cref="_stream"/>.
+        /// Returns <c>null</c> if no data is available (caller should retry).
+        /// Throws <see cref="System.IO.IOException"/> on protocol violations or size violations.
+        /// </summary>
+        /// <param name="expectedType">The MessageType this client expects to receive.</param>
+        /// <param name="maxJsonLength">Maximum allowed JSON body size in bytes.</param>
+        /// <param name="requestId">Set to the request ID decoded from the header.</param>
+        /// <returns>UTF-8 decoded JSON body, or <c>null</c> if no data was available.</returns>
+        protected string ReadJsonMessage(MessageType expectedType, int maxJsonLength, out uint requestId)
+        {
+            requestId = 0;
+
+            if (!_stream.DataAvailable)
+            {
+                System.Threading.Thread.Sleep(10);
+                return null;
+            }
+
+            byte[] header = new byte[UnityProtocol.HEADER_SIZE];
+            ReadExactly(_stream, header, UnityProtocol.HEADER_SIZE);
+            UnityProtocol.DecodeHeader(header, 0, out MessageType type, out requestId);
+
+            if (type != expectedType)
+            {
+                Debug.LogError($"[TCPClientBase] Expected {expectedType}, got {type}");
+                throw new System.IO.IOException($"Protocol violation: Expected {expectedType}, got {type}");
+            }
+
+            byte[] lenBytes = new byte[4];
+            ReadExactly(_stream, lenBytes, 4);
+            int length = BitConverter.ToInt32(lenBytes, 0);
+
+            if (length <= 0 || length > maxJsonLength)
+            {
+                throw new System.IO.IOException($"Invalid JSON length: {length}");
+            }
+
+            byte[] body = new byte[length];
+            ReadExactly(_stream, body, length);
+            return Encoding.UTF8.GetString(body);
         }
 
         /// <summary>

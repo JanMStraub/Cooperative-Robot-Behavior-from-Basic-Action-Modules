@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Tests for core.LLMUtils.extract_json"""
 
-import pytest
-
 from core.LLMUtils import extract_json
 
 
@@ -70,6 +68,54 @@ class TestExtractJsonBareRegex:
         result = extract_json(content)
         assert result is not None
         assert result["violates"] is False
+
+
+class TestExtractJsonBareJsonl:
+    """Stage 3b: bare multi-object JSONL (no markdown fences)."""
+
+    def test_bare_multi_object_jsonl_returns_commands_list(self):
+        """Stage 3b: bare comma-separated JSON objects are wrapped into {commands: [...]}"""
+        bare = (
+            '{"operation": "move_to_coordinate", "params": {"x": 0.1}},\n'
+            '{"operation": "detect_other_robot", "params": {}}'
+        )
+        result = extract_json(bare)
+        assert result is not None
+        assert "commands" in result
+        assert len(result["commands"]) == 2
+        assert result["commands"][0]["operation"] == "move_to_coordinate"
+        assert result["commands"][1]["operation"] == "detect_other_robot"
+
+    def test_single_object_not_wrapped(self):
+        """Single-object response must NOT be wrapped in commands list."""
+        single = '{"operation": "wait", "params": {"duration": 1}}'
+        result = extract_json(single)
+        assert result is not None
+        assert "operation" in result
+        assert result["operation"] == "wait"
+
+    def test_bare_three_objects_wrapped(self):
+        """Stage 3b handles 3 objects, not just 2."""
+        bare = (
+            '{"operation": "move_to_coordinate", "params": {"x": 0.1}},\n'
+            '{"operation": "detect_other_robot", "params": {}},\n'
+            '{"operation": "wait", "params": {"duration": 1}}'
+        )
+        result = extract_json(bare)
+        assert result is not None
+        assert "commands" in result
+        assert len(result["commands"]) == 3
+
+    def test_bare_multi_object_with_trailing_commas(self):
+        """Stage 3b strips trailing commas from all objects including the last."""
+        bare = (
+            '{"operation": "move_to_coordinate", "params": {"x": 0.1}},\n'
+            '{"operation": "detect_other_robot", "params": {}},\n'
+        )
+        result = extract_json(bare)
+        assert result is not None
+        assert "commands" in result
+        assert len(result["commands"]) == 2
 
 
 class TestExtractJsonFailures:

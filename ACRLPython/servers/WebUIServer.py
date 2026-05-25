@@ -54,12 +54,10 @@ except ImportError:
 # Try to import core and orchestrator modules
 try:
     from config.Servers import DEFAULT_HOST
-    from servers.CommandServer import get_command_broadcaster
-    from operations.WorldState import get_world_state
 except ImportError:
     from ..config.Servers import DEFAULT_HOST
-    from ..servers.CommandServer import get_command_broadcaster
-    from ..operations.WorldState import get_world_state
+
+from core.Imports import get_command_broadcaster, get_world_state
 
 logger = logging.getLogger(__name__)
 

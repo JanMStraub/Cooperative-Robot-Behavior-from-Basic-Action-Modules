@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
 """Dedicated TCP server for AutoRT Unity integration (AUTORT_SERVER_PORT)."""
 
-import logging
 import socket
 import struct
 from typing import Any, Dict, Optional
 
 try:
-    from core.LoggingSetup import setup_logging
-
-    setup_logging(__name__)
+    from core.LoggingSetup import get_logger
 except ImportError:
-    from ..core.LoggingSetup import setup_logging
+    from ..core.LoggingSetup import get_logger
 
-    setup_logging(__name__)
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 try:
     from core.TCPServerBase import TCPServerBase, ServerConfig
@@ -42,44 +37,24 @@ class AutoRTServer(TCPServerBase):
             config = ServerConfig(host=DEFAULT_HOST, port=AUTORT_SERVER_PORT)
         super().__init__(config)
 
-    def handle_client_connection(self, client: socket.socket, address: tuple):
-        logger.info(f"AutoRT client connected from {address}")
-        client.settimeout(5.0)
+    def _handle_message(self, client: socket.socket, _address: tuple) -> None:
+        header_bytes = self._recv_exact(client, 5)
+        if not header_bytes:
+            raise ConnectionResetError("Connection closed by client")
 
-        while self._running:
-            try:
-                header_bytes = self._recv_exact(client, 5)
-                if not header_bytes:
-                    break
+        msg_type = header_bytes[0]
+        request_id = struct.unpack("<I", header_bytes[1:5])[0]
 
-                msg_type = header_bytes[0]
-                request_id = struct.unpack("<I", header_bytes[1:5])[0]
+        # Validate message type
+        if msg_type != MessageType.AUTORT_COMMAND:
+            logger.error(
+                f"Invalid message type: {msg_type} (expected {MessageType.AUTORT_COMMAND})"
+            )
+            self._send_error(client, request_id, f"Invalid message type: {msg_type}")
+            return
 
-                # Validate message type
-                if msg_type != MessageType.AUTORT_COMMAND:
-                    logger.error(
-                        f"Invalid message type: {msg_type} (expected {MessageType.AUTORT_COMMAND})"
-                    )
-                    self._send_error(
-                        client, request_id, f"Invalid message type: {msg_type}"
-                    )
-                    continue
-
-                # Handle AutoRT command
-                self._handle_autort_command(client, header_bytes, request_id)
-
-            except socket.timeout:
-                # Expected for persistent connections
-                continue
-            except Exception as e:
-                is_fatal, desc = self._is_connection_error_fatal(e)
-                if is_fatal:
-                    logger.info(f"Client {address} disconnected: {desc}")
-                    break
-                else:
-                    logger.warning(f"Non-fatal error with {address}: {desc}")
-
-        logger.info(f"AutoRT client disconnected from {address}")
+        # Handle AutoRT command
+        self._handle_autort_command(client, header_bytes, request_id)
 
     def _handle_autort_command(
         self, client: socket.socket, header_bytes: bytes, request_id: int
@@ -168,25 +143,6 @@ class AutoRTServer(TCPServerBase):
             "error": error_msg,
         }
         self._send_autort_response(client, request_id, error_result)
-
-    def _recv_exact(self, client: socket.socket, num_bytes: int) -> Optional[bytes]:
-        """Raises socket.timeout on read timeout — caller handles for persistent connections."""
-        data = b""
-        while len(data) < num_bytes:
-            try:
-                chunk = client.recv(num_bytes - len(data))
-                if not chunk:
-                    # Connection closed by peer (recv returned empty bytes)
-                    logger.debug(
-                        f"Connection closed by peer (_recv_exact got empty chunk)"
-                    )
-                    return None
-                data += chunk
-            except socket.timeout:
-                # Socket timeout - for persistent connections, this should propagate
-                # so the caller can decide whether to continue waiting or close
-                raise
-        return data
 
 
 # Standalone server entry point

@@ -134,9 +134,7 @@ namespace Robotics
                 robotId = gameObject.name;
 
             if (_ikConfig == null)
-                _ikConfig = Resources.Load<IKConfig>("Configuration/DefaultIKConfig");
-            if (_ikConfig == null)
-                _ikConfig = ScriptableObject.CreateInstance<IKConfig>();
+                _ikConfig = LoadOrCreate<IKConfig>("Configuration/DefaultIKConfig");
 
             if (robotJoints != null && robotJoints.Length > 0)
             {
@@ -268,6 +266,16 @@ namespace Robotics
                 fireOnTargetReached: () => OnTargetReached?.Invoke(),
                 setActiveCoroutine: c => _activeGraspCoroutine = c
             );
+        }
+
+        /// <summary>
+        /// Loads a ScriptableObject from Resources, creating a default instance if not found.
+        /// </summary>
+        private static T LoadOrCreate<T>(string resourcePath)
+            where T : ScriptableObject
+        {
+            var asset = Resources.Load<T>(resourcePath);
+            return asset != null ? asset : ScriptableObject.CreateInstance<T>();
         }
 
         private GameObject GetCachedTempObject(ref GameObject cacheField, string suffix)

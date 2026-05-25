@@ -34,9 +34,6 @@ namespace PythonCommunication
         private SequenceResult _lastResult;
         private List<string> _recentCommands = new List<string>();
 
-        // Pre-allocated 4-byte buffer for reading response length prefix — avoids per-receive allocation
-        private readonly byte[] _lenBuffer = new byte[4];
-
         protected override string LogPrefix => "[SEQUENCE_CLIENT]";
 
         /// <summary>
@@ -192,48 +189,13 @@ namespace PythonCommunication
         /// </summary>
         protected override SequenceResult ReceiveResponse()
         {
-            // Check if data is available before blocking read (prevents idle timeout disconnects)
-            if (!_stream.DataAvailable)
-            {
-                System.Threading.Thread.Sleep(10); // Brief sleep to avoid tight loop
-                return null; // No data available, try again later
-            }
-
-            byte[] headerBuffer = new byte[UnityProtocol.HEADER_SIZE];
-            ReadExactly(_stream, headerBuffer, UnityProtocol.HEADER_SIZE);
-
-            UnityProtocol.DecodeHeader(headerBuffer, 0, out MessageType type, out uint requestId);
-
-            if (type != MessageType.RESULT)
-            {
-                Debug.LogError($"{LogPrefix} Unexpected message type: {type} (expected RESULT)");
-                throw new System.IO.IOException($"Protocol violation: Expected RESULT, got {type}");
-            }
-
-            ReadExactly(_stream, _lenBuffer, 4);
-            int jsonLen = BitConverter.ToInt32(_lenBuffer, 0);
-
-            if (jsonLen <= 0 || jsonLen > CommunicationConstants.MAX_JSON_LENGTH)
-            {
-                throw new System.IO.IOException($"Invalid JSON length: {jsonLen}");
-            }
-
-            byte[] jsonBytes = new byte[jsonLen];
-            ReadExactly(_stream, jsonBytes, jsonLen);
-            string json = Encoding.UTF8.GetString(jsonBytes);
-
-            if (
-                JsonParser.TryParseWithLogging<SequenceResult>(
-                    json,
-                    out SequenceResult result,
-                    LogPrefix
-                )
-            )
+            string json = ReadJsonMessage(MessageType.RESULT, CommunicationConstants.MAX_JSON_LENGTH, out uint requestId);
+            if (json == null) return null;
+            if (JsonParser.TryParseWithLogging<SequenceResult>(json, out SequenceResult result, LogPrefix))
             {
                 result.request_id = requestId;
                 return result;
             }
-
             return null;
         }
 

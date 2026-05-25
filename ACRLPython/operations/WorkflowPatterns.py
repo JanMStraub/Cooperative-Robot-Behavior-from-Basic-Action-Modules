@@ -99,7 +99,6 @@ class WorkflowPattern:
         return doc
 
 
-
 DETECT_AND_APPROACH_PATTERN = WorkflowPattern(
     pattern_id="workflow_detect_approach_001",
     name="detect_and_approach",
@@ -515,6 +514,7 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
     ],
 )
 
+
 class WorkflowPatternRegistry:
     def __init__(self):
         self.patterns: Dict[str, WorkflowPattern] = {}
@@ -545,7 +545,9 @@ class WorkflowPatternRegistry:
     def get_all_patterns(self) -> List[WorkflowPattern]:
         return list(self.patterns.values())
 
-    def get_patterns_by_category(self, category: WorkflowCategory) -> List[WorkflowPattern]:
+    def get_patterns_by_category(
+        self, category: WorkflowCategory
+    ) -> List[WorkflowPattern]:
         return [p for p in self.patterns.values() if p.category == category]
 
     def search_patterns(self, query: str) -> List[WorkflowPattern]:

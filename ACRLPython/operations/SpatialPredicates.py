@@ -148,14 +148,18 @@ def robot_is_initialized(robot_id: str, world_state=None) -> Tuple[bool, str]:
             try:
                 status = world_state.get_robot_status(robot_id)
                 if status is None:
-                    logger.debug(f"Robot '{robot_id}' status unavailable, using basic check")
+                    logger.debug(
+                        f"Robot '{robot_id}' status unavailable, using basic check"
+                    )
                 elif "is_initialized" in status:
                     if not status.get("is_initialized"):
                         return False, f"Robot '{robot_id}' is not initialized"
                     return True, ""
                 else:
                     # query_sent but no Unity response yet — basic check fallback
-                    logger.debug(f"Robot '{robot_id}' status pending, using basic check")
+                    logger.debug(
+                        f"Robot '{robot_id}' status pending, using basic check"
+                    )
             except Exception as e:
                 logger.warning(f"Could not query robot status: {e}")
                 # Fall through to basic check

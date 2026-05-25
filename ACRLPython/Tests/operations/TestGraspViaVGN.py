@@ -117,7 +117,7 @@ class _VGNPatch:
         # Mock YOLODetector used inline in GraspOperations (optional, non-fatal if not provided)
         if self.detect_result is not None:
             det_patch = patch(
-                "operations.GraspOperations.YOLODetector",
+                "operations.grasp._vgn.YOLODetector",
                 return_value=MagicMock(
                     detect_objects=MagicMock(return_value=self.detect_result)
                 ),
@@ -145,13 +145,13 @@ class _VGNPatch:
         self.mock_broadcaster.send_command.return_value = self.send_command_return
 
         bc_patch = patch(
-            "operations.GraspOperations._get_command_broadcaster",
+            "operations.grasp._vgn._get_command_broadcaster",
             return_value=self.mock_broadcaster if self.broadcaster_available else None,
         )
         self._patches.append(bc_patch.start())
         # _grasp_via_vgn calls _get_command_broadcaster from its own module namespace
         bc_vgn_patch = patch(
-            "operations.GraspOperations._get_command_broadcaster",
+            "operations.grasp._vgn._get_command_broadcaster",
             return_value=self.mock_broadcaster if self.broadcaster_available else None,
         )
         self._patches.append(bc_vgn_patch.start())
@@ -437,9 +437,9 @@ class TestGraspObjectVGNRouting:
         with patch("config.Servers.VGN_ENABLED", True), patch(
             "config.ROS.ROS_ENABLED", False
         ), patch(
-            "operations.GraspOperations._grasp_via_vgn", return_value=vgn_result
+            "operations.grasp._dispatcher._grasp_via_vgn", return_value=vgn_result
         ) as mock_vgn, patch(
-            "operations.GraspOperations._get_command_broadcaster"
+            "operations.grasp._vgn._get_command_broadcaster"
         ):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
         mock_vgn.assert_called_once()
@@ -453,8 +453,10 @@ class TestGraspObjectVGNRouting:
         broadcaster.send_command.return_value = True
         with patch("config.Servers.VGN_ENABLED", True), patch(
             "config.ROS.ROS_ENABLED", False
-        ), patch("operations.GraspOperations._grasp_via_vgn", return_value=None), patch(
-            "operations.GraspOperations._get_command_broadcaster",
+        ), patch(
+            "operations.grasp._dispatcher._grasp_via_vgn", return_value=None
+        ), patch(
+            "operations.grasp._dispatcher._get_command_broadcaster",
             return_value=broadcaster,
         ):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
@@ -471,8 +473,8 @@ class TestGraspObjectVGNRouting:
         broadcaster.send_command.return_value = True
         with patch("config.Servers.VGN_ENABLED", False), patch(
             "config.ROS.ROS_ENABLED", False
-        ), patch("operations.GraspOperations._grasp_via_vgn") as mock_vgn, patch(
-            "operations.GraspOperations._get_command_broadcaster",
+        ), patch("operations.grasp._dispatcher._grasp_via_vgn") as mock_vgn, patch(
+            "operations.grasp._vgn._get_command_broadcaster",
             return_value=broadcaster,
         ):
             grasp_object(robot_id="Robot1", object_id="Cube_01")
@@ -564,7 +566,7 @@ class _VGNROSPatch:
 
         # Follow-target + gripper helper mock
         follow_patch = patch(
-            "operations.GraspOperations._execute_grasp_with_follow_target",
+            "operations.grasp._vgn._execute_grasp_with_follow_target",
             return_value=self.gripper_success,
         )
         self._patches.append(follow_patch.start())
@@ -714,7 +716,7 @@ class TestGraspViaVGNWithROSHappyPath:
         """_execute_grasp_with_follow_target is called after Cartesian descent."""
         with _VGNROSPatch() as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
-            import operations.GraspOperations as go_module
+            import operations.grasp._vgn as go_module
 
             with patch.object(
                 go_module, "_execute_grasp_with_follow_target", return_value=True
@@ -894,7 +896,7 @@ class TestGraspObjectRoutingWithBothEnabled:
         ) as mock_ros_cls, patch(
             "core.Imports.get_world_state", return_value=world_state
         ), patch(
-            "operations.GraspOperations._grasp_via_vgn_with_ros",
+            "operations.grasp._dispatcher._grasp_via_vgn_with_ros",
             return_value=vgn_ros_result,
         ) as mock_vgn_ros:
             mock_ros_cls.get_instance.return_value = bridge_mock
@@ -920,9 +922,9 @@ class TestGraspObjectRoutingWithBothEnabled:
         ) as mock_ros_cls, patch(
             "core.Imports.get_world_state", return_value=world_state
         ), patch(
-            "operations.GraspOperations._grasp_via_vgn_with_ros", return_value=None
+            "operations.grasp._dispatcher._grasp_via_vgn_with_ros", return_value=None
         ), patch(
-            "operations.GraspOperations._grasp_via_ros_position_only",
+            "operations.grasp._dispatcher._grasp_via_ros_position_only",
             return_value=(
                 OperationResult.success_result({"status": "ros_executed"}),
                 False,
@@ -949,9 +951,9 @@ class TestGraspObjectRoutingWithBothEnabled:
         with patch("config.ROS.ROS_ENABLED", False), patch(
             "config.Servers.VGN_ENABLED", True
         ), patch(
-            "operations.GraspOperations._grasp_via_vgn", return_value=vgn_result
+            "operations.grasp._dispatcher._grasp_via_vgn", return_value=vgn_result
         ) as mock_vgn, patch(
-            "operations.GraspOperations._grasp_via_vgn_with_ros"
+            "operations.grasp._dispatcher._grasp_via_vgn_with_ros"
         ) as mock_vgn_ros:
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 

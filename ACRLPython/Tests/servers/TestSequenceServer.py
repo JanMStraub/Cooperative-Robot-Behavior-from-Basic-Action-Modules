@@ -8,12 +8,17 @@ Tests the CommandParser, SequenceExecutor, and SequenceServer components.
 import pytest
 import sys
 import os
+import inspect
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add parent directory to path for imports
+test_dir = os.path.dirname(os.path.abspath(__file__))
+servers_dir = os.path.dirname(test_dir)  # tests/
+acrlpython_dir = os.path.dirname(servers_dir)  # ACRLPython/
+sys.path.insert(0, acrlpython_dir)
 
 from orchestrators.CommandParser import CommandParser, get_command_parser
 from orchestrators.SequenceExecutor import SequenceExecutor
+from servers.SequenceServer import SequenceQueryHandler
 
 
 class TestCommandParser:
@@ -190,6 +195,24 @@ class TestCommandParserSingleton:
         parser1 = get_command_parser()
         parser2 = get_command_parser()
         assert parser1 is parser2
+
+
+class TestSequenceQueryHandlerTimeouts:
+    """Tests for SequenceQueryHandler timeout defaults"""
+
+    def test_execute_sequence_default_timeout_is_60(self):
+        """Test that execute_sequence default timeout is 60.0 seconds"""
+        sig = inspect.signature(SequenceQueryHandler.execute_sequence)
+        assert (
+            sig.parameters["timeout"].default == 60.0
+        ), f"Expected 60.0, got {sig.parameters['timeout'].default}"
+
+    def test_execute_sequence_inner_default_timeout_is_60(self):
+        """Test that _execute_sequence_inner default timeout is 60.0 seconds"""
+        sig = inspect.signature(SequenceQueryHandler._execute_sequence_inner)
+        assert (
+            sig.parameters["timeout"].default == 60.0
+        ), f"Expected 60.0, got {sig.parameters['timeout'].default}"
 
 
 if __name__ == "__main__":

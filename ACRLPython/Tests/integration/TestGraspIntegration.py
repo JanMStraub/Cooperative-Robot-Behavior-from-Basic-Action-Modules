@@ -54,7 +54,7 @@ class TestGraspEndToEnd:
         """Mock Unity connection for integration tests."""
         # Disable ROS to ensure tests use mocked Unity connection
         with patch("config.ROS.ROS_ENABLED", False), patch(
-            "operations.GraspOperations._get_command_broadcaster"
+            "operations.grasp._dispatcher._get_command_broadcaster"
         ) as mock:
             broadcaster = MagicMock()
             broadcaster.send_command_and_wait = MagicMock()
@@ -308,7 +308,7 @@ class TestGraspPerformance:
         overhead without any network I/O.
         """
         with patch("config.ROS.ROS_ENABLED", False), patch(
-            "operations.GraspOperations._get_command_broadcaster"
+            "operations.grasp._dispatcher._get_command_broadcaster"
         ) as mock, patch(
             "operations.VGNClient.VGNClient.is_available", return_value=False
         ), patch(

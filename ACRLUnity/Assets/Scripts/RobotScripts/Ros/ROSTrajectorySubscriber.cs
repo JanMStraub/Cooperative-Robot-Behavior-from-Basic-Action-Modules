@@ -60,18 +60,30 @@ namespace Robotics
 
         [Header("Settle Detection")]
         [Tooltip(
-            "Max joint velocity (deg/s) considered 'settled'. Feedback fires only after all joints drop below this."
+            "Max joint velocity (deg/s) considered 'settled'. Feedback fires only after all joints drop below this. "
+                + "2 deg/s is too tight — joint_2/3 oscillate at 2-4 deg/s even when on-target (PD ringing). "
+                + "5 deg/s is recommended: arm is effectively settled, avoids burning the full velocity timeout."
         )]
         [SerializeField]
-        private float _settleVelocityThresholdDegPerSec = 2.0f;
+        private float _settleVelocityThresholdDegPerSec = 5.0f;
 
         [Tooltip(
             "Base time (seconds) to wait for joints to settle before firing 'completed' feedback anyway. "
-                + "Actual timeout = this value / _speedScaling so slower trajectories get proportionally more settle time. "
-                + "5s recommended: joints 2/3 need ~3-4s to damp below 5 deg/s after a trajectory end."
+                + "Actual timeout = this value / _speedScaling so slower trajectories get proportionally more settle time."
         )]
         [SerializeField]
         private float _settleTimeoutSeconds = 5.0f;
+
+        [Tooltip(
+            "Seconds to wait for position convergence (within _nearTargetDeg) after velocity settles. "
+                + "Runs after the velocity-settle phase. Reduce if settle times are too long."
+        )]
+        [SerializeField]
+        private float _nearTargetTimeoutSeconds = 5.0f;
+
+        [Tooltip("Position error (degrees) below which a joint is considered 'near target'.")]
+        [SerializeField]
+        private float _nearTargetDeg = 2.0f;
 
         [Header("References")]
         [SerializeField]
@@ -744,10 +756,8 @@ namespace Robotics
             // Use the same near-target logic but always run it — even on velocity-settle success.
             bool nearTargetReached = false;
             {
-                const float NEAR_TARGET_DEG = 2f;
-                const float NEAR_TARGET_TIMEOUT = 10f;
                 float nearTargetStart = Time.time;
-                while (Time.time - nearTargetStart < NEAR_TARGET_TIMEOUT)
+                while (Time.time - nearTargetStart < _nearTargetTimeoutSeconds)
                 {
                     bool allNear = true;
                     for (int j = 0; j < _jointIndexMap.Length; j++)
@@ -762,7 +772,7 @@ namespace Robotics
                                 ? Mathf.Abs(_joints[idx].jointVelocity[0]) * Mathf.Rad2Deg
                                 : 0f;
                         float err = Mathf.Abs(physDeg - _joints[idx].xDrive.target);
-                        if (err > NEAR_TARGET_DEG || velDeg > _settleVelocityThresholdDegPerSec)
+                        if (err > _nearTargetDeg || velDeg > _settleVelocityThresholdDegPerSec)
                         {
                             allNear = false;
                             break;
@@ -790,7 +800,7 @@ namespace Robotics
                             : 0f;
                     float err = physDeg - _joints[idx].xDrive.target;
                     if (
-                        Mathf.Abs(err) > NEAR_TARGET_DEG
+                        Mathf.Abs(err) > _nearTargetDeg
                         || Mathf.Abs(velDeg) > _settleVelocityThresholdDegPerSec
                     )
                         Debug.LogWarning(

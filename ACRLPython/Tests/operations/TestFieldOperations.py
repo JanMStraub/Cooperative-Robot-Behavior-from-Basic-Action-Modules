@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Unit tests for FieldOperations"""
 
+from contextlib import ExitStack
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -240,7 +241,7 @@ class TestDetectField:
 
 
 class TestDetectAllFields:
-    def _run(self, detections=None, stereo="ok"):
+    def _run(self, detections=None, stereo="ok", world_state=None):
         image_storage = MagicMock()
         if stereo == "ok":
             image_storage.get_latest_stereo_image.return_value = _stereo_data()
@@ -253,7 +254,10 @@ class TestDetectAllFields:
         detector_inst = MagicMock()
         detector_inst.detect_objects_stereo.return_value = det_result
 
-        with (
+        if world_state is None:
+            world_state = MagicMock()
+
+        patches = [
             patch(
                 "operations.FieldOperations.get_unified_image_storage",
                 return_value=image_storage,
@@ -264,13 +268,18 @@ class TestDetectAllFields:
             ),
             patch("vision.YOLODetector.YOLODetector", return_value=detector_inst),
             patch("config.Vision.YOLO_MODEL_PATH", "/fake/model.onnx"),
-        ):
+            patch("core.Imports.get_world_state", return_value=world_state),
+        ]
+
+        with ExitStack() as stack:
+            for patcher in patches:
+                stack.enter_context(patcher)
             result = detect_all_fields("Robot1")
 
-        return result, detector_inst
+        return result, detector_inst, world_state
 
     def test_empty_detections_success(self):
-        result, _ = self._run(detections=[])
+        result, _, _ = self._run(detections=[])
         assert result.success is True
         assert result.result is not None
         assert result.result["fields"] == []
@@ -282,7 +291,7 @@ class TestDetectAllFields:
             _make_detection("field_d", world_position=(0.2, 0.0, 0.2)),
             _make_detection("field_g", world_position=(0.3, 0.0, 0.3)),
         ]
-        result, _ = self._run(detections=dets)
+        result, _, _ = self._run(detections=dets)
         assert result.success is True
         assert result.result is not None
         assert result.result["count"] == 3
@@ -294,13 +303,13 @@ class TestDetectAllFields:
             _make_detection("blue_cube", world_position=(0.1, 0, 0.1)),
             _make_detection("field_b", world_position=(0.2, 0, 0.2)),
         ]
-        result, _ = self._run(detections=dets)
+        result, _, _ = self._run(detections=dets)
         assert result.result is not None
         assert result.result["count"] == 1
         assert result.result["fields"][0]["label"] == "B"
 
     def test_field_classes_filter_passed(self):
-        _, detector = self._run(detections=[])
+        _, detector, _ = self._run(detections=[])
         call_kwargs = detector.detect_objects_stereo.call_args.kwargs
         filter_classes = call_kwargs["filter_classes"]
         assert len(filter_classes) == 9
@@ -308,13 +317,13 @@ class TestDetectAllFields:
         assert "field_i" in filter_classes
 
     def test_no_stereo_images(self):
-        result, _ = self._run(stereo=None)  # type: ignore[arg-type]
+        result, _, _ = self._run(stereo=None)  # type: ignore[arg-type]
         assert result.success is False
         assert result.error is not None
         assert result.error["code"] == "NO_STEREO_IMAGES"
 
     def test_incomplete_stereo_pair(self):
-        result, _ = self._run(stereo=(None, None, None, None, {}))  # type: ignore[arg-type]
+        result, _, _ = self._run(stereo=(None, None, None, None, {}))  # type: ignore[arg-type]
         assert result.success is False
         assert result.error is not None
         assert result.error["code"] == "INCOMPLETE_STEREO_PAIR"
@@ -328,7 +337,7 @@ class TestDetectAllFields:
 
     def test_center_dict_in_result(self):
         det = _make_detection("field_c", world_position=(1.0, 2.0, 3.0))
-        result, _ = self._run(detections=[det])
+        result, _, _ = self._run(detections=[det])
         assert result.result is not None
         field = result.result["fields"][0]
         assert field["center"]["x"] == pytest.approx(1.0)
@@ -336,7 +345,27 @@ class TestDetectAllFields:
 
     def test_world_position_as_dict(self):
         det = _make_detection("field_f", world_position={"x": 0.5, "y": 0.0, "z": 0.7})
-        result, _ = self._run(detections=[det])
+        result, _, _ = self._run(detections=[det])
         assert result.success is True
         assert result.result is not None
         assert result.result["fields"][0]["center"]["x"] == pytest.approx(0.5)
+
+    def test_detect_all_fields_writes_worldstate(self):
+        """detect_all_fields must persist each field to WorldState."""
+        dets = [
+            _make_detection("field_a", world_position=(0.1, 0.0, 0.2)),
+            _make_detection("field_e", world_position=(0.3, 0.0, 0.4)),
+        ]
+        result, _, world_state = self._run(detections=dets)
+        assert result.success is True
+        # Verify WorldState update_object_position was called for each field
+        assert world_state.update_object_position.call_count == 2
+        calls = world_state.update_object_position.call_args_list
+        # First call should be for field_a
+        first_call_kwargs = calls[0].kwargs
+        assert first_call_kwargs["object_id"] == "field_a"
+        assert first_call_kwargs["object_type"] == "field"
+        # Second call should be for field_e
+        second_call_kwargs = calls[1].kwargs
+        assert second_call_kwargs["object_id"] == "field_e"
+        assert second_call_kwargs["object_type"] == "field"

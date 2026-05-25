@@ -120,6 +120,10 @@ class UnityProtocol:
     TYPE_SIZE = 1  # Message type byte
     HEADER_SIZE = TYPE_SIZE + INT_SIZE  # type + request_id
 
+    # ===========================================================================
+    # HEADER PROTOCOL — Message framing and header encode/decode
+    # ===========================================================================
+
     @staticmethod
     def _recv_exactly(sock, num_bytes: int) -> bytes:
         """
@@ -178,6 +182,10 @@ class UnityProtocol:
         offset += UnityProtocol.INT_SIZE
 
         return message_type, request_id, offset
+
+    # ===========================================================================
+    # IMAGE FAMILY — 0x01 (single camera), 0x07 (stereo)
+    # ===========================================================================
 
     @staticmethod
     def encode_image_message(
@@ -260,6 +268,10 @@ class UnityProtocol:
         except Exception as e:
             raise ValueError(f"Failed to decode image message: {e}")
 
+    # ===========================================================================
+    # RESULT FAMILY — 0x02
+    # ===========================================================================
+
     @staticmethod
     def encode_result_message(result_dict: dict, request_id: int = 0) -> bytes:
         """
@@ -323,6 +335,10 @@ class UnityProtocol:
         except Exception as e:
             raise ValueError(f"Failed to decode result message: {e}")
 
+    # ===========================================================================
+    # INTERNAL PARSING HELPERS — _read_string, _read_bytes
+    # ===========================================================================
+
     @staticmethod
     def _read_string(data: bytes, offset: int) -> Tuple[str, int]:
         """Read a length-prefixed UTF-8 string; returns (string, new_offset)."""
@@ -375,6 +391,10 @@ class UnityProtocol:
         offset += bytes_length
 
         return byte_data, offset
+
+    # ===========================================================================
+    # RAG FAMILY — 0x03 (query), 0x04 (response)
+    # ===========================================================================
 
     @staticmethod
     def encode_rag_query(
@@ -526,6 +546,10 @@ class UnityProtocol:
         except Exception as e:
             raise ValueError(f"Failed to decode RAG response: {e}")
 
+    # ===========================================================================
+    # STATUS FAMILY — 0x05 (query), 0x06 (response)
+    # ===========================================================================
+
     @staticmethod
     def encode_status_query(
         robot_id: str, detailed: bool = False, request_id: int = 0
@@ -665,6 +689,10 @@ class UnityProtocol:
 
         except Exception as e:
             raise ValueError(f"Failed to decode status response: {e}")
+
+    # ===========================================================================
+    # AUTORT FAMILY — 0x09 (command), 0x0A (response)
+    # ===========================================================================
 
     @staticmethod
     def encode_autort_command(
