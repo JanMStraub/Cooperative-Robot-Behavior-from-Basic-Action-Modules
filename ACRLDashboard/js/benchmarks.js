@@ -21,9 +21,12 @@ const WARN_COLOR = PALETTE.orange;
 // ── State ─────────────────────────────────────────────────────────────────────
 let stepChartInstance = null;
 let analysisChartInstances = {};
+let compareStepChartInstance = null;
 let aggregateData = null;   // cached from /api/benchmarks/aggregate
 let thesisMode = false;
 let currentTab = 'details';
+let compareSet = new Set();       // filenames selected for comparison
+let compareDataCache = {};        // { filename: runData }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -80,6 +83,7 @@ function switchTab(tab) {
     if (thesisBtn) thesisBtn.style.display = tab === 'analysis' ? '' : 'none';
 
     if (tab === 'analysis') loadAnalysis();
+    if (tab === 'compare') loadCompareView();
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -178,6 +182,36 @@ function destroyChart(id) {
     }
 }
 
+// ── Compare Selection ─────────────────────────────────────────────────────────
+function toggleCompareItem(filename, checked) {
+    if (checked) {
+        compareSet.add(filename);
+    } else {
+        compareSet.delete(filename);
+        delete compareDataCache[filename];
+    }
+    updateCompareTab();
+    // Sync visual state on all history items
+    document.querySelectorAll('.compare-checkbox').forEach(cb => {
+        const fn = cb.dataset.filename;
+        cb.checked = compareSet.has(fn);
+        const item = cb.closest('.history-item');
+        if (item) item.classList.toggle('history-item--in-compare', compareSet.has(fn));
+    });
+}
+
+function updateCompareTab() {
+    const btn = document.getElementById('btn-compare-tab');
+    if (!btn) return;
+    if (compareSet.size >= 2) {
+        btn.style.display = '';
+        btn.innerHTML = `<i class="fa-solid fa-code-compare"></i> Compare (${compareSet.size})`;
+    } else {
+        btn.style.display = 'none';
+        if (currentTab === 'compare') switchTab('details');
+    }
+}
+
 // ── Run History ───────────────────────────────────────────────────────────────
 async function fetchBenchmarkList() {
     const listContainer = document.getElementById('history-list');
@@ -219,21 +253,36 @@ async function fetchBenchmarkList() {
             item.className = 'history-item';
             item.dataset.filename = file.filename;
 
+            const isChecked = compareSet.has(file.filename);
             item.innerHTML = `
-                <div class="history-item-top">
-                    <span class="history-item-badge">B${file.benchmark_id}</span>
-                    <span class="history-item-name">${file.benchmark_name || 'Benchmark'}</span>
-                    <span class="history-item-status ${statusClass}">${statusText}</span>
-                </div>
-                <div class="history-item-meta">
-                    <span>${opsText}${opsText ? ' · ' : ''}${duration} · ${ago}</span>
-                </div>
-                <div class="history-item-progress">
-                    <div class="history-item-progress-fill ${fillClass}" style="width: ${fillPct}%"></div>
+                <div style="display:flex;align-items:flex-start;gap:0">
+                    <input type="checkbox" class="compare-checkbox" data-filename="${file.filename}" ${isChecked ? 'checked' : ''} title="Add to compare">
+                    <div style="flex:1;min-width:0">
+                        <div class="history-item-top">
+                            <span class="history-item-badge">B${file.benchmark_id}</span>
+                            <span class="history-item-name">${file.benchmark_name || 'Benchmark'}</span>
+                            <span class="history-item-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="history-item-meta">
+                            <span>${opsText}${opsText ? ' · ' : ''}${duration} · ${ago}</span>
+                        </div>
+                        <div class="history-item-progress">
+                            <div class="history-item-progress-fill ${fillClass}" style="width: ${fillPct}%"></div>
+                        </div>
+                    </div>
                 </div>
             `;
 
-            item.addEventListener('click', () => {
+            // Checkbox: toggle compare set without navigating
+            const checkbox = item.querySelector('.compare-checkbox');
+            checkbox.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleCompareItem(file.filename, checkbox.checked);
+            });
+
+            // Item body click: load details (single-select)
+            item.addEventListener('click', (e) => {
+                if (e.target === checkbox) return;
                 document.querySelectorAll('.history-item').forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
                 loadBenchmarkDetails(file.filename);
@@ -1197,6 +1246,344 @@ function renderCoverageMatrix(sortedEntries) {
 
     html += '</tbody></table></div>';
     container.innerHTML = html;
+}
+
+// ── Compare View ──────────────────────────────────────────────────────────────
+async function loadCompareView() {
+    const loading = document.getElementById('compare-loading');
+    const content = document.getElementById('compare-content');
+    loading.style.display = 'flex';
+    content.style.display = 'none';
+
+    const filenames = [...compareSet];
+    const runsData = [];
+
+    try {
+        await Promise.all(filenames.map(async (fn) => {
+            if (!compareDataCache[fn]) {
+                const resp = await fetch(`/api/benchmarks/${fn}`);
+                const result = await resp.json();
+                if (!result.success) throw new Error(result.error);
+                compareDataCache[fn] = result.data;
+            }
+            runsData.push({ filename: fn, data: compareDataCache[fn] });
+        }));
+
+        // Sort by run timestamp (run_id is YYYYMMDDTHHmmss_xxx)
+        runsData.sort((a, b) => a.data.run_id.localeCompare(b.data.run_id));
+
+        loading.style.display = 'none';
+        content.style.display = 'flex';
+        renderCompareView(runsData);
+    } catch (e) {
+        loading.innerHTML = `
+            <i class="fa-solid fa-triangle-exclamation" style="color:#e74c3c"></i>
+            <span>Failed to load: ${e.message}</span>`;
+    }
+}
+
+function renderCompareView(runsData) {
+    renderCompareHeader(runsData);
+    renderCompareKPIMatrix(runsData);
+    renderCompareFlagsDiff(runsData);
+    renderCompareStepChart(runsData);
+    renderCompareOpStats(runsData);
+}
+
+function renderCompareHeader(runsData) {
+    const el = document.getElementById('compare-header');
+    const bids = [...new Set(runsData.map(r => r.data.benchmark_id))];
+    const names = [...new Set(runsData.map(r => r.data.benchmark_name || `B${r.data.benchmark_id}`))];
+    const mixed = bids.length > 1;
+
+    let html = '';
+    if (mixed) {
+        html += `<span class="compare-header-badge">MIXED</span>`;
+        html += `<span class="compare-header-title">${names.join(' + ')}</span>`;
+        html += `<span class="compare-mixed-warning"><i class="fa-solid fa-triangle-exclamation"></i> Mixed benchmark IDs — results may not be directly comparable</span>`;
+    } else {
+        html += `<span class="compare-header-badge">B${bids[0]}</span>`;
+        html += `<span class="compare-header-title">${names[0]}</span>`;
+    }
+    html += `<span class="compare-header-count">${runsData.length} runs selected</span>`;
+    el.innerHTML = html;
+}
+
+function renderCompareKPIMatrix(runsData) {
+    const el = document.getElementById('compare-kpi-matrix');
+
+    const metrics = [
+        { key: 'success_rate',       label: 'Success Rate',        fmt: v => (v * 100).toFixed(1) + '%',  higher: true  },
+        { key: 'total_duration_ms',  label: 'Total Duration',       fmt: v => (v / 1000).toFixed(2) + 's', higher: false },
+        { key: 'ops_ratio',          label: 'Ops (succ/total)',     fmt: (v, r) => `${r.data.ops_succeeded}/${r.data.ops_executed}`, higher: true, val: r => r.data.ops_succeeded / Math.max(r.data.ops_executed, 1) },
+        { key: 'avg_step_duration_ms', label: 'Avg Step Time',     fmt: v => v.toFixed(0) + 'ms',         higher: false },
+        { key: 'hallucinated_ops',   label: 'Hallucinated Ops',     fmt: v => v,                           higher: false },
+        { key: 'reflexion_recoveries', label: 'Reflexion Recoveries', fmt: v => v,                        higher: false },
+        { key: 'retry_count',        label: 'Total Retries',        fmt: v => v,                           higher: false },
+    ];
+
+    // Run column headers: short run_id (last 6 chars) + relative timestamp
+    const colHeaders = runsData.map(r => {
+        const rid = r.data.run_id || r.filename;
+        const short = rid.slice(-6);
+        // run_id format: YYYYMMDDTHHmmss_xxxxxx
+        let timeStr = '';
+        const m = rid.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
+        if (m) timeStr = `${m[4]}:${m[5]}`;
+        return { short, timeStr };
+    });
+
+    let html = `<table class="compare-kpi-table"><thead><tr>
+        <th>Metric</th>`;
+    colHeaders.forEach((h, i) => {
+        html += `<th>Run ${i + 1}<span class="compare-run-header">${h.timeStr || h.short}</span></th>`;
+    });
+    html += `</tr></thead><tbody>`;
+
+    metrics.forEach(metric => {
+        // Extract raw numeric values per run for best/worst detection
+        const vals = runsData.map(r => {
+            if (metric.val) return metric.val(r);
+            return r.data[metric.key] ?? null;
+        });
+
+        const numericVals = vals.filter(v => v !== null && !isNaN(v));
+        const allSame = numericVals.length > 1 && numericVals.every(v => v === numericVals[0]);
+        const best = allSame ? null : (metric.higher ? Math.max(...numericVals) : Math.min(...numericVals));
+        const worst = allSame ? null : (metric.higher ? Math.min(...numericVals) : Math.max(...numericVals));
+
+        html += `<tr><td class="compare-kpi-label">${metric.label}</td>`;
+        runsData.forEach((r, i) => {
+            const raw = vals[i];
+            if (raw === null) { html += `<td>—</td>`; return; }
+            const display = typeof metric.fmt === 'function'
+                ? (metric.fmt.length > 1 ? metric.fmt(raw, r) : metric.fmt(raw))
+                : raw;
+            let cls = '';
+            if (!allSame && numericVals.length > 1) {
+                if (raw === best && raw !== worst) cls = 'compare-kpi-best';
+                else if (raw === worst && raw !== best) cls = 'compare-kpi-worst';
+            }
+            html += `<td${cls ? ` class="${cls}"` : ''}>${display}</td>`;
+        });
+        html += `</tr>`;
+    });
+
+    html += `</tbody></table>`;
+    el.innerHTML = html;
+}
+
+function renderCompareFlagsDiff(runsData) {
+    const el = document.getElementById('compare-flags-diff');
+
+    const flagMeta = {
+        use_rag: 'RAG',
+        use_vgn: 'VGN',
+        use_knowledge_graph: 'Knowledge Graph',
+        use_ros_movement: 'ROS/MoveIt',
+        reflexion_enabled: 'Reflexion',
+        dry_run: 'Dry Run',
+        use_negotiation: 'Negotiation',
+    };
+
+    // Find flags that differ across runs
+    const diffRows = [];
+    const allFlagKeys = Object.keys(flagMeta);
+    allFlagKeys.forEach(k => {
+        const vals = runsData.map(r => r.data.feature_flags?.[k] ?? null);
+        const uniqueVals = [...new Set(vals.filter(v => v !== null))];
+        if (uniqueVals.length > 1) {
+            diffRows.push({ key: k, label: flagMeta[k], vals });
+        }
+    });
+
+    // execution_mode diff
+    const execModes = runsData.map(r => r.data.execution_mode || null);
+    const uniqueModes = [...new Set(execModes.filter(v => v !== null))];
+    if (uniqueModes.length > 1) {
+        diffRows.push({ key: 'execution_mode', label: 'Execution Mode', vals: execModes, isMode: true });
+    }
+
+    let html = `<div class="compare-flags-header"><i class="fa-solid fa-sliders"></i> Configuration Differences</div>`;
+    html += `<div class="compare-flags-body">`;
+
+    if (diffRows.length === 0) {
+        html += `<span class="compare-no-diff"><i class="fa-solid fa-check" style="color:var(--success);margin-right:0.4rem"></i>All runs share identical configuration</span>`;
+    } else {
+        diffRows.forEach(row => {
+            html += `<div class="compare-flags-row">
+                <span class="compare-flags-label">${row.label}</span>`;
+            row.vals.forEach(v => {
+                if (v === null) {
+                    html += `<span class="flag-pill" style="opacity:0.4">—</span>`;
+                } else if (row.isMode) {
+                    html += `<span class="run-mode-badge run-mode-badge--${v}">${String(v).toUpperCase()}</span>`;
+                } else {
+                    const on = !!v;
+                    html += `<span class="flag-pill flag-pill--${on ? 'on' : 'off'}">${on ? 'ON' : 'OFF'}</span>`;
+                }
+            });
+            html += `</div>`;
+        });
+    }
+
+    html += `</div>`;
+    el.innerHTML = html;
+}
+
+function renderCompareStepChart(runsData) {
+    if (compareStepChartInstance) {
+        compareStepChartInstance.destroy();
+        compareStepChartInstance = null;
+    }
+
+    // Build union of op names in order of first appearance across all runs
+    const opOrder = [];
+    const opSeen = new Set();
+    runsData.forEach(r => {
+        (r.data.steps || []).forEach(s => {
+            if (!opSeen.has(s.operation)) {
+                opSeen.add(s.operation);
+                opOrder.push(s.operation);
+            }
+        });
+    });
+
+    if (opOrder.length === 0) return;
+
+    const runColors = [PALETTE.blue, PALETTE.orange, PALETTE.teal, PALETTE.vermillion, PALETTE.purple];
+
+    const datasets = runsData.map((r, i) => {
+        // Sum durations per operation name (a run may have multiple steps of the same op)
+        const opDurations = {};
+        (r.data.steps || []).forEach(s => {
+            opDurations[s.operation] = (opDurations[s.operation] || 0) + s.duration_ms;
+        });
+
+        const color = runColors[i % runColors.length];
+        const rid = r.data.run_id || r.filename;
+        const m = rid.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
+        const label = m ? `Run ${i + 1} (${m[4]}:${m[5]})` : `Run ${i + 1}`;
+
+        return {
+            label,
+            data: opOrder.map(op => opDurations[op] ?? null),
+            backgroundColor: color + 'cc',
+            borderColor: color,
+            borderWidth: 1.5,
+            borderRadius: 2,
+        };
+    });
+
+    const ctx = document.getElementById('compareStepChart').getContext('2d');
+    const tt = tooltipDefaults();
+
+    compareStepChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: opOrder, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        color: chartTextColor(),
+                        font: { family: "'IBM Plex Mono', monospace", size: 10 },
+                        boxWidth: 12,
+                    }
+                },
+                tooltip: {
+                    ...tt, padding: 10, cornerRadius: 2,
+                    titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
+                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
+                    callbacks: {
+                        label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y != null ? ctx.parsed.y.toFixed(0) + 'ms' : '—'}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    border: { color: chartBorderColor() },
+                    ticks: {
+                        color: chartTextColor(),
+                        font: { family: "'IBM Plex Mono', monospace", size: 9 },
+                        maxRotation: 35,
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: chartGridColor() },
+                    border: { color: chartBorderColor() },
+                    ticks: {
+                        color: chartTextColor(),
+                        font: { family: "'IBM Plex Mono', monospace", size: 10 },
+                        callback: v => v >= 1000 ? (v / 1000).toFixed(1) + 's' : v + 'ms',
+                    },
+                    title: {
+                        display: true,
+                        text: 'DURATION (ms, summed per op)',
+                        color: chartTextColor(),
+                        font: { family: "'IBM Plex Mono', monospace", size: 10 },
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderCompareOpStats(runsData) {
+    const el = document.getElementById('compare-op-stats');
+
+    // Union of all ops across all runs
+    const allOps = [...new Set(runsData.flatMap(r => Object.keys(r.data.per_op_stats || {})))].sort();
+    if (allOps.length === 0) { el.style.display = 'none'; return; }
+    el.style.display = '';
+
+    // Per-run max avg_duration_ms per op for heat coloring
+    const globalMax = {};
+    allOps.forEach(op => {
+        globalMax[op] = Math.max(...runsData.map(r => r.data.per_op_stats?.[op]?.avg_duration_ms ?? 0));
+    });
+
+    const isDark = isDarkMode();
+    const runColors = [PALETTE.blue, PALETTE.orange, PALETTE.teal, PALETTE.vermillion, PALETTE.purple];
+
+    let html = `<div class="compare-op-stats-header"><i class="fa-solid fa-chart-simple"></i> Per-Operation Timing</div>`;
+    html += `<div class="table-wrapper"><table class="compare-op-stats-table"><thead><tr><th>Operation</th>`;
+
+    runsData.forEach((r, i) => {
+        const rid = r.data.run_id || r.filename;
+        const m = rid.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
+        const label = m ? `Run ${i + 1} (${m[4]}:${m[5]})` : `Run ${i + 1}`;
+        const color = runColors[i % runColors.length];
+        html += `<th style="color:${color}">${label}</th>`;
+    });
+    html += `</tr></thead><tbody>`;
+
+    allOps.forEach(op => {
+        html += `<tr><td class="step-op">${op}</td>`;
+        runsData.forEach(r => {
+            const stat = r.data.per_op_stats?.[op];
+            if (!stat) { html += `<td class="heatmap-cell heatmap-cell--empty">—</td>`; return; }
+            const ms = stat.avg_duration_ms;
+            const t = globalMax[op] > 0 ? ms / globalMax[op] : 0;
+            const alpha = 0.1 + t * 0.75;
+            const bg = isDark ? `rgba(230,159,0,${alpha})` : `rgba(180,100,0,${alpha})`;
+            const textColor = t > 0.55 ? '#fff' : (isDark ? '#e6edf3' : '#333');
+            const label = ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms.toFixed(0)}ms`;
+            const failSub = stat.fail_count > 0
+                ? `<span class="compare-fail-sub">${stat.fail_count}✕</span>`
+                : '';
+            html += `<td style="background:${bg};color:${textColor}">${label}${failSub}</td>`;
+        });
+        html += `</tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+    el.innerHTML = html;
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────

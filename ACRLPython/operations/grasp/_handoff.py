@@ -134,8 +134,8 @@ def receive_handoff(
         logger.info(
             f"receive_handoff: object_dimensions={object_dimensions}, obj_height={obj_height:.4f}m"
         )
-        # Grip above center (40% height, min 4cm) so receiver clears source robot's fingers.
-        ap_y = object_position[1] + max(obj_height * 0.4, 0.04)
+        # Grip below center (40% height, min 4cm) so receiver clears source robot's fingers.
+        ap_y = object_position[1] - max(obj_height * 0.4, 0.04)
         ap_z = object_position[2]
         logger.info(
             f"receive_handoff: approach_position=({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"

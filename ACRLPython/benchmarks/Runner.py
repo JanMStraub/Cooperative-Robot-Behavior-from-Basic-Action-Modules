@@ -413,8 +413,8 @@ class BenchmarkRunner:
         all_steps: List[StepResult] = []
         total_ms = 0.0
 
-        for _, task in sub_tasks:
-            raw = self._send(task, cfg.robot_id, cfg)
+        for robot_id, _, task in sub_tasks:
+            raw = self._send(task, robot_id, cfg)
             total_ms += float(raw.get("total_duration_ms", 0.0))
 
             step_offset = len(all_steps)

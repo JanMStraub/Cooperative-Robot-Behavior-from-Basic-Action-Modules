@@ -377,13 +377,20 @@ class SequenceServer(TCPServerBase):
 
         # Execute the sequence
         handler = SequenceQueryHandler()
-        result = handler.execute_sequence(
-            command_text,
-            robot_id,
-            camera_id,
-            auto_execute,
-            flags_json=flags_json,
-        )
+        try:
+            result = handler.execute_sequence(
+                command_text,
+                robot_id,
+                camera_id,
+                auto_execute,
+                flags_json=flags_json,
+            )
+        except Exception as exc:
+            self._logger.exception(
+                f"Unhandled exception in execute_sequence (id={request_id}): {exc}"
+            )
+            self._send_error(client, request_id, f"Internal server error: {exc}")
+            return
 
         # Send response
         self._send_response(client, request_id, result)

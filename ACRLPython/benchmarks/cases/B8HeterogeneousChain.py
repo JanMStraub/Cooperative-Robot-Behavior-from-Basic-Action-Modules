@@ -24,7 +24,7 @@ _ROBOT_CHAINS: dict[str, List[Tuple[str, str]]] = {
 _ROBOT_ORDER = ["Robot1", "Robot2"]
 
 
-def get_sub_tasks(cfg: BenchmarkConfig, task_count: int) -> List[Tuple[str, str]]:
+def get_sub_tasks(cfg: BenchmarkConfig, task_count: int) -> List[Tuple[str, str, str]]:
     """
     Return an alternating dual-robot narrative chain where each step assumes the prior succeeded.
 
@@ -32,13 +32,13 @@ def get_sub_tasks(cfg: BenchmarkConfig, task_count: int) -> List[Tuple[str, str]
     Robot1 targets field B; Robot2 targets field H.
     Cycles indefinitely up to task_count entries.
 
-
+    Returns list of (robot_id, task_name, task_text) tuples.
     """
-    result: List[Tuple[str, str]] = []
+    result: List[Tuple[str, str, str]] = []
     chain_len = len(next(iter(_ROBOT_CHAINS.values())))
     for i in range(task_count):
         robot = _ROBOT_ORDER[(i // chain_len) % len(_ROBOT_ORDER)]
         step = i % chain_len
         name, prompt = _ROBOT_CHAINS[robot][step]
-        result.append((f"{robot}_{name}_{i}", f"{robot}: {prompt}"))
+        result.append((robot, f"{robot}_{name}_{i}", f"{robot}: {prompt}"))
     return result

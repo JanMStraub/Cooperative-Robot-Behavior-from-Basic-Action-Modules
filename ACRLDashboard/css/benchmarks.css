@@ -753,3 +753,250 @@ body.light-theme .coverage-cell--present { background: rgba(0,130,90,0.15); }
 body.thesis-mode .heatmap-table th { color: #333; }
 body.thesis-mode .heatmap-bm-label { color: #222; }
 body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color: #005a3c; }
+
+/* ── Compare Mode ─────────────────────────────────────────────────────────── */
+
+/* Checkbox on history items */
+.compare-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    margin-right: 0.5rem;
+    margin-top: 1px;
+    transition: background 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+    position: relative;
+}
+.compare-checkbox:checked {
+    background: #56B4E9;
+    border-color: #56B4E9;
+}
+.compare-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 1px;
+    width: 5px;
+    height: 8px;
+    border: 1.5px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
+}
+.compare-checkbox:hover:not(:checked) {
+    border-color: #56B4E9;
+}
+
+/* History item in compare set */
+.history-item--in-compare {
+    border-left: 2px solid #56B4E9 !important;
+}
+
+/* Compare header */
+.compare-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+}
+.compare-header-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--primary-dim);
+    color: var(--primary);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+}
+.compare-header-title {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+}
+.compare-header-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+.compare-mixed-warning {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: #E69F00;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+/* KPI matrix table */
+.compare-kpi-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+}
+.compare-kpi-table th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.compare-kpi-table th:not(:first-child) {
+    text-align: center;
+}
+.compare-kpi-table td {
+    padding: 0.45rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+}
+.compare-kpi-table td:not(:first-child) {
+    text-align: center;
+}
+.compare-kpi-table tr:last-child td {
+    border-bottom: none;
+}
+.compare-kpi-label {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+}
+.compare-kpi-best {
+    color: #009E73;
+    font-weight: 700;
+}
+.compare-kpi-worst {
+    color: #D55E00;
+}
+.compare-run-header {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    font-weight: 400;
+    display: block;
+    margin-top: 2px;
+}
+
+/* Flags diff panel */
+.compare-flags-header {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    padding: 0.65rem 1rem 0.4rem;
+    border-bottom: 1px solid var(--border);
+}
+.compare-flags-body {
+    padding: 0.5rem 1rem 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.compare-flags-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.compare-flags-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    min-width: 160px;
+    letter-spacing: 0.03em;
+}
+.compare-no-diff {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    opacity: 0.6;
+    padding: 0.5rem 1rem;
+}
+
+/* Compare step chart container */
+#compare-step-chart {
+    padding: 1rem;
+}
+#compare-step-chart .compare-chart-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin-bottom: 0.75rem;
+}
+#compare-step-chart canvas {
+    height: 240px;
+}
+
+/* Compare op stats table */
+.compare-op-stats-header {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    padding: 0.65rem 1rem 0.4rem;
+    border-bottom: 1px solid var(--border);
+}
+.compare-op-stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+}
+.compare-op-stats-table th {
+    padding: 0.4rem 0.65rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+.compare-op-stats-table th:not(:first-child) { text-align: center; }
+.compare-op-stats-table td {
+    padding: 0.35rem 0.65rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text);
+}
+.compare-op-stats-table td:not(:first-child) { text-align: center; }
+.compare-op-stats-table tr:last-child td { border-bottom: none; }
+.compare-fail-sub {
+    font-size: 0.6rem;
+    color: var(--danger);
+    margin-left: 2px;
+    vertical-align: super;
+}
+
+/* Light theme overrides for compare */
+body.light-theme .compare-kpi-table th { color: #666; }
+body.light-theme .compare-kpi-table td { color: #222; }
+body.light-theme .compare-op-stats-table th { color: #666; }
+body.light-theme .compare-op-stats-table td { color: #222; border-bottom-color: rgba(0,0,0,0.06); }
+body.light-theme .compare-flags-label { color: #555; }
+body.light-theme .compare-run-header { color: #666; }
+
+/* Thesis mode overrides for compare */
+body.thesis-mode .compare-kpi-table th { color: #555; }
+body.thesis-mode .compare-kpi-table td { color: #111; }
+body.thesis-mode .compare-op-stats-table th { color: #555; }
+body.thesis-mode .compare-op-stats-table td { color: #111; }
