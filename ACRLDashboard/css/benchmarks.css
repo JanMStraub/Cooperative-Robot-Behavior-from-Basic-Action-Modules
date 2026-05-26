@@ -763,7 +763,7 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
     width: 14px;
     height: 14px;
     min-width: 14px;
-    border: 1.5px solid var(--border);
+    border: 1.5px solid var(--glass-border);
     border-radius: 3px;
     background: transparent;
     cursor: pointer;
@@ -820,7 +820,7 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--text);
+    color: var(--text-main);
     flex: 1;
 }
 .compare-header-count {
@@ -847,7 +847,7 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
 .compare-kpi-table th {
     text-align: left;
     padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--glass-border);
     color: var(--text-dim);
     font-size: 0.7rem;
     font-weight: 600;
@@ -860,8 +860,8 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
 }
 .compare-kpi-table td {
     padding: 0.45rem 0.75rem;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
+    border-bottom: 1px solid var(--glass-border);
+    color: var(--text-main);
 }
 .compare-kpi-table td:not(:first-child) {
     text-align: center;
@@ -899,7 +899,7 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
     letter-spacing: 0.06em;
     color: var(--text-dim);
     padding: 0.65rem 1rem 0.4rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--glass-border);
 }
 .compare-flags-body {
     padding: 0.5rem 1rem 0.65rem;
@@ -932,17 +932,26 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
 #compare-step-chart {
     padding: 1rem;
 }
-#compare-step-chart .compare-chart-title {
+.compare-chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+.compare-chart-title {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.72rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-dim);
-    margin-bottom: 0.75rem;
+}
+.compare-chart-body {
+    height: 240px;
+    position: relative;
 }
 #compare-step-chart canvas {
-    height: 240px;
+    height: 100%;
 }
 
 /* Compare op stats table */
@@ -954,7 +963,7 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
     letter-spacing: 0.06em;
     color: var(--text-dim);
     padding: 0.65rem 1rem 0.4rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--glass-border);
 }
 .compare-op-stats-table {
     width: 100%;
@@ -964,7 +973,7 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
 }
 .compare-op-stats-table th {
     padding: 0.4rem 0.65rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--glass-border);
     color: var(--text-dim);
     font-size: 0.68rem;
     font-weight: 600;
@@ -976,7 +985,7 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
 .compare-op-stats-table td {
     padding: 0.35rem 0.65rem;
     border-bottom: 1px solid rgba(255,255,255,0.04);
-    color: var(--text);
+    color: var(--text-main);
 }
 .compare-op-stats-table td:not(:first-child) { text-align: center; }
 .compare-op-stats-table tr:last-child td { border-bottom: none; }

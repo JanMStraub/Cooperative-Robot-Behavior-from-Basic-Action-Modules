@@ -279,10 +279,26 @@
               <div id="compare-kpi-matrix" class="glass-box" style="overflow-x:auto"></div>
               <div id="compare-flags-diff" class="glass-box"></div>
               <div id="compare-step-chart" class="glass-box">
-                <div class="compare-chart-title"><i class="fa-solid fa-chart-column"></i> Step Duration by Operation</div>
-                <canvas id="compareStepChart"></canvas>
+                <div class="compare-chart-header">
+                  <span class="compare-chart-title"><i class="fa-solid fa-chart-column"></i> Step Duration by Operation</span>
+                  <button class="btn-icon-small" onclick="exportCompareChartPng()" title="Export PNG">
+                    <i class="fa-solid fa-image"></i>
+                  </button>
+                </div>
+                <div class="compare-chart-body">
+                  <canvas id="compareStepChart"></canvas>
+                </div>
               </div>
               <div id="compare-op-stats" class="glass-box" style="overflow-x:auto"></div>
+              <div class="analysis-export-row glass-box">
+                <span class="export-row-label">EXPORT</span>
+                <button class="btn-action" onclick="exportCompareChartPng()">
+                  <i class="fa-solid fa-image"></i> Chart as PNG
+                </button>
+                <button class="btn-action" onclick="downloadCompareJson()">
+                  <i class="fa-solid fa-file-code"></i> Compare Data JSON
+                </button>
+              </div>
             </div>
           </div>
 

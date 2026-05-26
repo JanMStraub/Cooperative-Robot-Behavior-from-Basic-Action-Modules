@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B12: Knowledge Graph Ablation — spatial context enrichment vs none."""
+"""B13: Knowledge Graph Ablation — spatial context enrichment vs none."""
 
 from __future__ import annotations
 
@@ -31,10 +31,10 @@ def get_tasks(config=None) -> List[str]:
     """
 
     return [
-        f"Robot2: Detect the nearest object and move to it.",
-        f"Robot1: Grasp the red cube and hand it to the other robot.",
-        f"Robot1: Find the reachable object closest to you and lift it.",
-        f"Robot1: Pass the red cube to Robot2.",
+        "Robot2: Detect the nearest object and move to it.",
+        "Robot1: Grasp the red cube and hand it to the other robot.",
+        "Robot1: Find the reachable object closest to you and lift it.",
+        "Robot1: Pass the red cube to Robot2.",
     ]
 
 

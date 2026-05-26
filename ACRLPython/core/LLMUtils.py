@@ -16,6 +16,19 @@ from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+# Matches 3-element Python tuple coordinate syntax: (x, y, z)
+# LLMs sometimes emit these instead of JSON arrays when generating coordinate params.
+_TUPLE_RE = re.compile(
+    r"\((-?[\d.]+(?:e[+-]?\d+)?)"
+    r",\s*(-?[\d.]+(?:e[+-]?\d+)?)"
+    r",\s*(-?[\d.]+(?:e[+-]?\d+)?)\)"
+)
+
+
+def _sanitize_tuples(s: str) -> str:
+    """Replace Python tuple coordinate syntax ``(x, y, z)`` with JSON arrays ``[x, y, z]``."""
+    return _TUPLE_RE.sub(r"[\1, \2, \3]", s)
+
 
 def extract_json(content: str) -> Optional[Dict]:
     """
@@ -39,6 +52,8 @@ def extract_json(content: str) -> Optional[Dict]:
     Returns:
         Parsed dict, or None if the response could not be decoded.
     """
+    # Pre-process: replace Python tuple coordinate syntax before any JSON parse.
+    content = _sanitize_tuples(content)
     try:
         return json.loads(content)
     except json.JSONDecodeError as e:

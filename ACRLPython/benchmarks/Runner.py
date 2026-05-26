@@ -41,12 +41,13 @@ _BENCHMARK_NAMES: Dict[int, str] = {
     6: "Robot Handoff",
     7: "Dual-Robot Reorient",
     8: "Heterogeneous Chain",
-    9: "RAG Ablation",
-    10: "Reflexion Ablation",
-    11: "Negotiation Ablation",
-    12: "Knowledge Graph Ablation",
-    13: "VGN Ablation",
-    14: "ROS vs Unity Movement",
+    9: "Impossible Task",
+    10: "RAG Ablation",
+    11: "Reflexion Ablation",
+    12: "Negotiation Ablation",
+    13: "Knowledge Graph Ablation",
+    14: "VGN Ablation",
+    15: "ROS vs Unity Movement",
 }
 
 _CASE_MODULES: Dict[int, str] = {
@@ -58,12 +59,13 @@ _CASE_MODULES: Dict[int, str] = {
     6: "benchmarks.cases.B6RobotHandoff",
     7: "benchmarks.cases.B7DualRobotReorient",
     8: "benchmarks.cases.B8HeterogeneousChain",
-    9: "benchmarks.cases.B9RagAblation",
-    10: "benchmarks.cases.B10ReflexionAblation",
-    11: "benchmarks.cases.B11NegotiationAblation",
-    12: "benchmarks.cases.B12KgAblation",
-    13: "benchmarks.cases.B13VGNAblation",
-    14: "benchmarks.cases.B14RosAblation",
+    9: "benchmarks.cases.B9Impossible",
+    10: "benchmarks.cases.B10RagAblation",
+    11: "benchmarks.cases.B11ReflexionAblation",
+    12: "benchmarks.cases.B12NegotiationAblation",
+    13: "benchmarks.cases.B13KgAblation",
+    14: "benchmarks.cases.B14VGNAblation",
+    15: "benchmarks.cases.B15RosAblation",
 }
 
 
@@ -87,16 +89,18 @@ class BenchmarkRunner:
             module = importlib.import_module(_CASE_MODULES[benchmark_id])
 
             if benchmark_id == 9:
-                return self._run_b9_rag(cfg, module)
+                return self._run_b9_impossible(cfg, module)
             if benchmark_id == 10:
-                return self._run_b10_reflexion(cfg, module)
+                return self._run_b9_rag(cfg, module)
             if benchmark_id == 11:
-                return self._run_b11_negotiation(cfg, module)
+                return self._run_b10_reflexion(cfg, module)
             if benchmark_id == 12:
-                return self._run_b12_kg(cfg, module)
+                return self._run_b11_negotiation(cfg, module)
             if benchmark_id == 13:
-                return self._run_b13_vgn(cfg, module)
+                return self._run_b12_kg(cfg, module)
             if benchmark_id == 14:
+                return self._run_b13_vgn(cfg, module)
+            if benchmark_id == 15:
                 return self._run_b14_ros(cfg, module)
 
             if benchmark_id == 8:
@@ -465,10 +469,46 @@ class BenchmarkRunner:
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
+    def _run_b9_impossible(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+        """
+        Run B9 Impossible Task: verify the parser gracefully rejects an unexecutable task.
+
+        Success = parser returns no valid operations (parse failure or zero commands).
+        No Unity connection required — parse-only.
+
+
+        """
+        from orchestrators.CommandParser import CommandParser
+
+        task = module.get_task()
+        parser = CommandParser(use_rag=cfg.use_rag)
+        parse_result = parser.parse(task, robot_id=cfg.robot_id)
+
+        commands = parse_result.get("commands", [])
+        gracefully_rejected = not parse_result.get("success", True) or len(commands) == 0
+
+        return BenchmarkResult(
+            benchmark_id=9,
+            benchmark_name=_BENCHMARK_NAMES[9],
+            run_id=make_run_id(),
+            config_snapshot=dataclasses.asdict(cfg),
+            success=gracefully_rejected,
+            total_duration_ms=0.0,
+            steps=[],
+            ops_executed=len(commands),
+            ops_succeeded=0,
+            success_rate=1.0 if gracefully_rejected else 0.0,
+            avg_step_duration_ms=0.0,
+            feature_flags=self._extract_feature_flags(cfg),
+            execution_mode=getattr(cfg, "execution_mode", "offline"),
+        )
+
     def _run_b9_rag(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Run B9 RAG ablation: parse same tasks with and without RAG, compare hallucinations.
+        Run B10 RAG ablation: parse all tasks under both conditions in one pass.
 
+        Returns AblationMetrics for enabled and disabled conditions so a single
+        invocation produces a self-contained paired comparison.
         No Unity connection required — parse-only.
 
 
@@ -479,51 +519,55 @@ class BenchmarkRunner:
 
         registry = get_global_registry()
         tasks = module.get_tasks(cfg)
-        parser = CommandParser(use_rag=cfg.use_rag)
+        condition_results: Dict[str, AblationMetrics] = {}
 
-        hallucinated = 0
-        succeeded = 0
-        total_ops = 0
+        for use_rag in (True, False):
+            parser = CommandParser(use_rag=use_rag)
+            hallucinated = 0
+            succeeded = 0
+            total_ops = 0
 
-        for task in tasks:
-            parse_result = parser.parse(task, robot_id=cfg.robot_id)
-            if not parse_result["success"]:
-                continue
-            for cmd in parse_result.get("commands", []):
-                op_name = cmd.get("operation", "")
-                total_ops += 1
-                if registry.get_operation_by_name(op_name) is None:
-                    hallucinated += 1
-                else:
-                    succeeded += 1
+            for task in tasks:
+                parse_result = parser.parse(task, robot_id=cfg.robot_id)
+                if not parse_result["success"]:
+                    continue
+                for cmd in parse_result.get("commands", []):
+                    op_name = cmd.get("operation", "")
+                    total_ops += 1
+                    if registry.get_operation_by_name(op_name) is None:
+                        hallucinated += 1
+                    else:
+                        succeeded += 1
 
-        success_rate = (succeeded / total_ops) if total_ops else 0.0
-        condition = "enabled" if cfg.use_rag else "disabled"
+            condition = "enabled" if use_rag else "disabled"
+            condition_results[condition] = AblationMetrics(
+                condition=condition,
+                hallucinated_ops=hallucinated,
+                reflexion_recoveries=0,
+                negotiation_rounds=0,
+                success_rate=(succeeded / total_ops) if total_ops else 0.0,
+                ops_executed=total_ops,
+                ops_succeeded=succeeded,
+            )
 
-        ablation = AblationMetrics(
-            condition=condition,
-            hallucinated_ops=hallucinated,
-            reflexion_recoveries=0,
-            negotiation_rounds=0,
-            success_rate=success_rate,
-            ops_executed=total_ops,
-            ops_succeeded=succeeded,
-        )
+        ablation_on = condition_results["enabled"]
+        ablation_off = condition_results["disabled"]
 
         return BenchmarkResult(
-            benchmark_id=9,
-            benchmark_name=_BENCHMARK_NAMES[9],
+            benchmark_id=10,
+            benchmark_name=_BENCHMARK_NAMES[10],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            success=(hallucinated == 0),
+            success=(ablation_on.hallucinated_ops == 0 and ablation_off.ops_executed > 0),
             total_duration_ms=0.0,
             steps=[],
-            ops_executed=total_ops,
-            ops_succeeded=succeeded,
-            success_rate=success_rate,
+            ops_executed=ablation_on.ops_executed,
+            ops_succeeded=ablation_on.ops_succeeded,
+            success_rate=ablation_on.success_rate,
             avg_step_duration_ms=0.0,
-            hallucinated_ops=hallucinated,
-            ablation=ablation,
+            hallucinated_ops=ablation_on.hallucinated_ops,
+            ablation=ablation_on,
+            ablation_baseline=ablation_off,
             feature_flags=self._extract_feature_flags(cfg),
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
@@ -574,8 +618,8 @@ class BenchmarkRunner:
             ops_succeeded=ops_succeeded,
         )
         return BenchmarkResult(
-            benchmark_id=10,
-            benchmark_name=_BENCHMARK_NAMES[10],
+            benchmark_id=11,
+            benchmark_name=_BENCHMARK_NAMES[11],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=success_rate > 0.5,
@@ -608,75 +652,82 @@ class BenchmarkRunner:
 
         from orchestrators.CommandParser import CommandParser
         from .Result import AblationMetrics
+        import orchestrators.SequenceExecutor as _seq_mod
 
         tasks = module.get_tasks(cfg)
-        all_steps: List[StepResult] = []
-        total_ms = 0.0
-        total_recoveries = 0
-        completed_tasks = 0
+        condition_results: Dict[str, AblationMetrics] = {}
+        condition_steps: Dict[str, List[StepResult]] = {}
 
-        mock_original = MockRegistry.install_mock("first_fail_nav")
-        try:
-            parser = CommandParser(use_rag=cfg.use_rag)
-            for task in tasks:
-                MockRegistry.reset_counts()
-                parse_result = parser.parse(task, robot_id=cfg.robot_id)
-                if not parse_result["success"]:
-                    continue
+        for reflexion_on in (True, False):
+            all_steps: List[StepResult] = []
+            total_ms = 0.0
+            total_recoveries = 0
+            completed_tasks = 0
 
-                ops = parse_result["commands"]
-                for op in ops:
-                    op["_original_text"] = task
+            prev_reflexion = _seq_mod.REFLEXION_ENABLED
+            _seq_mod.REFLEXION_ENABLED = reflexion_on
+            mock_original = MockRegistry.install_mock("first_fail_nav")
+            try:
+                parser = CommandParser(use_rag=cfg.use_rag)
+                for task in tasks:
+                    MockRegistry.reset_counts()
+                    parse_result = parser.parse(task, robot_id=cfg.robot_id)
+                    if not parse_result["success"]:
+                        continue
+                    ops = parse_result["commands"]
+                    for op in ops:
+                        op["_original_text"] = task
+                    cfg_local = dataclasses.replace(cfg, dry_run=True)
+                    raw = self._run_local(ops, cfg_local)
+                    total_ms += float(raw.get("total_duration_ms", 0.0))
+                    total_recoveries += raw.get("reflexion_recoveries", 0)
+                    task_steps = self._parse_steps(raw.get("results") or [], ops)
+                    step_offset = len(all_steps)
+                    for s in task_steps:
+                        s.index += step_offset
+                    all_steps.extend(task_steps)
+                    if raw.get("success"):
+                        completed_tasks += 1
+            finally:
+                MockRegistry.restore_mock(mock_original)
+                _seq_mod.REFLEXION_ENABLED = prev_reflexion
 
-                cfg_local = dataclasses.replace(cfg, dry_run=True)
-                raw = self._run_local(ops, cfg_local)
-                total_ms += float(raw.get("total_duration_ms", 0.0))
-                total_recoveries += raw.get("reflexion_recoveries", 0)
+            ops_executed = len(all_steps)
+            ops_succeeded = sum(1 for s in all_steps if s.success)
+            success_rate = (completed_tasks / len(tasks)) if tasks else 0.0
+            condition = "enabled" if reflexion_on else "disabled"
+            condition_results[condition] = AblationMetrics(
+                condition=condition,
+                hallucinated_ops=0,
+                reflexion_recoveries=total_recoveries,
+                negotiation_rounds=0,
+                success_rate=success_rate,
+                ops_executed=ops_executed,
+                ops_succeeded=ops_succeeded,
+            )
+            condition_steps[condition] = all_steps
 
-                task_steps = self._parse_steps(raw.get("results") or [], ops)
-                step_offset = len(all_steps)
-                for s in task_steps:
-                    s.index += step_offset
-                all_steps.extend(task_steps)
-
-                if raw.get("success"):
-                    completed_tasks += 1
-        finally:
-            MockRegistry.restore_mock(mock_original)
-
-        ops_executed = len(all_steps)
-        ops_succeeded = sum(1 for s in all_steps if s.success)
-        success_rate = (completed_tasks / len(tasks)) if tasks else 0.0
-        condition = "enabled" if cfg.reflexion_enabled else "disabled"
-
-        ablation = AblationMetrics(
-            condition=condition,
-            hallucinated_ops=0,
-            reflexion_recoveries=total_recoveries,
-            negotiation_rounds=0,
-            success_rate=success_rate,
-            ops_executed=ops_executed,
-            ops_succeeded=ops_succeeded,
-        )
+        ablation_on = condition_results["enabled"]
+        ablation_off = condition_results["disabled"]
+        steps_on = condition_steps["enabled"]
 
         return BenchmarkResult(
-            benchmark_id=10,
-            benchmark_name=_BENCHMARK_NAMES[10],
+            benchmark_id=11,
+            benchmark_name=_BENCHMARK_NAMES[11],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            # Offline ablation success = data was collected. Task failures in the
-            # disabled condition are expected — reflexion_recoveries tells the story.
             success=True,
-            total_duration_ms=total_ms,
-            steps=all_steps,
-            ops_executed=ops_executed,
-            ops_succeeded=ops_succeeded,
-            success_rate=success_rate,
-            avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
-            reflexion_recoveries=total_recoveries,
-            ablation=ablation,
+            total_duration_ms=0.0,
+            steps=steps_on,
+            ops_executed=ablation_on.ops_executed,
+            ops_succeeded=ablation_on.ops_succeeded,
+            success_rate=ablation_on.success_rate,
+            avg_step_duration_ms=0.0,
+            reflexion_recoveries=ablation_on.reflexion_recoveries,
+            ablation=ablation_on,
+            ablation_baseline=ablation_off,
             feature_flags=self._extract_feature_flags(cfg),
-            per_op_stats=self._compute_per_op_stats(all_steps),
+            per_op_stats=self._compute_per_op_stats(steps_on),
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
@@ -734,8 +785,8 @@ class BenchmarkRunner:
             ops_succeeded=ops_succeeded,
         )
         return BenchmarkResult(
-            benchmark_id=11,
-            benchmark_name=_BENCHMARK_NAMES[11],
+            benchmark_id=12,
+            benchmark_name=_BENCHMARK_NAMES[12],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=success_rate > 0.5,
@@ -765,84 +816,80 @@ class BenchmarkRunner:
             return self._run_b11_negotiation_live(cfg, module)
 
         import config.Negotiation as _neg_cfg
+        from orchestrators.CommandParser import CommandParser
         from .Result import AblationMetrics
 
         tasks = module.get_tasks(cfg)
-        all_steps: List[StepResult] = []
-        total_ms = 0.0
-        completed_tasks = 0
-        total_negotiation_rounds = 0
+        robot_id = getattr(cfg, "robot_id_a", cfg.robot_id)
+        condition_results: Dict[str, AblationMetrics] = {}
 
-        prev_neg = _neg_cfg.NEGOTIATION_ENABLED
-        _neg_cfg.NEGOTIATION_ENABLED = getattr(cfg, "use_negotiation", True)
+        for negotiation_on in (True, False):
+            all_steps: List[StepResult] = []
+            total_ms = 0.0
+            completed_tasks = 0
+            total_negotiation_rounds = 0
 
-        mock_original = MockRegistry.install_mock("always_succeed")
-        try:
-            from orchestrators.CommandParser import CommandParser
+            prev_neg = _neg_cfg.NEGOTIATION_ENABLED
+            _neg_cfg.NEGOTIATION_ENABLED = negotiation_on
+            mock_original = MockRegistry.install_mock("always_succeed")
+            try:
+                parser = CommandParser(use_rag=cfg.use_rag)
+                for task in tasks:
+                    parse_result = parser.parse(task, robot_id=robot_id)
+                    if not parse_result["success"]:
+                        continue
+                    ops = parse_result["commands"]
+                    total_negotiation_rounds += sum(
+                        1 for op in ops if op.get("operation") == "signal"
+                    )
+                    cfg_local = dataclasses.replace(cfg, dry_run=True)
+                    raw = self._run_local(ops, cfg_local)
+                    total_ms += float(raw.get("total_duration_ms", 0.0))
+                    task_steps = self._parse_steps(raw.get("results") or [], ops)
+                    step_offset = len(all_steps)
+                    for s in task_steps:
+                        s.index += step_offset
+                    all_steps.extend(task_steps)
+                    if raw.get("success"):
+                        completed_tasks += 1
+            finally:
+                MockRegistry.restore_mock(mock_original)
+                _neg_cfg.NEGOTIATION_ENABLED = prev_neg
 
-            parser = CommandParser(use_rag=cfg.use_rag)
-            robot_id = getattr(cfg, "robot_id_a", cfg.robot_id)
+            ops_executed = len(all_steps)
+            ops_succeeded = sum(1 for s in all_steps if s.success)
+            success_rate = (completed_tasks / len(tasks)) if tasks else 0.0
+            condition = "enabled" if negotiation_on else "disabled"
+            condition_results[condition] = AblationMetrics(
+                condition=condition,
+                hallucinated_ops=0,
+                reflexion_recoveries=0,
+                negotiation_rounds=total_negotiation_rounds,
+                success_rate=success_rate,
+                ops_executed=ops_executed,
+                ops_succeeded=ops_succeeded,
+            )
 
-            for task in tasks:
-                parse_result = parser.parse(task, robot_id=robot_id)
-                if not parse_result["success"]:
-                    continue
-
-                ops = parse_result["commands"]
-                # Count signal ops as a proxy for negotiation coordination points:
-                # a negotiated plan includes explicit signal/wait_for_signal pairs that
-                # a non-negotiated plan omits.
-                total_negotiation_rounds += sum(
-                    1 for op in ops if op.get("operation") == "signal"
-                )
-
-                cfg_local = dataclasses.replace(cfg, dry_run=True)
-                raw = self._run_local(ops, cfg_local)
-                total_ms += float(raw.get("total_duration_ms", 0.0))
-
-                task_steps = self._parse_steps(raw.get("results") or [], ops)
-                step_offset = len(all_steps)
-                for s in task_steps:
-                    s.index += step_offset
-                all_steps.extend(task_steps)
-
-                if raw.get("success"):
-                    completed_tasks += 1
-        finally:
-            MockRegistry.restore_mock(mock_original)
-            _neg_cfg.NEGOTIATION_ENABLED = prev_neg
-
-        ops_executed = len(all_steps)
-        ops_succeeded = sum(1 for s in all_steps if s.success)
-        success_rate = (completed_tasks / len(tasks)) if tasks else 0.0
-        condition = "enabled" if getattr(cfg, "use_negotiation", True) else "disabled"
-
-        ablation = AblationMetrics(
-            condition=condition,
-            hallucinated_ops=0,
-            reflexion_recoveries=0,
-            negotiation_rounds=total_negotiation_rounds,
-            success_rate=success_rate,
-            ops_executed=ops_executed,
-            ops_succeeded=ops_succeeded,
-        )
+        ablation_on = condition_results["enabled"]
+        ablation_off = condition_results["disabled"]
 
         return BenchmarkResult(
-            benchmark_id=11,
-            benchmark_name=_BENCHMARK_NAMES[11],
+            benchmark_id=12,
+            benchmark_name=_BENCHMARK_NAMES[12],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            success=(completed_tasks == len(tasks)),
-            total_duration_ms=total_ms,
-            steps=all_steps,
-            ops_executed=ops_executed,
-            ops_succeeded=ops_succeeded,
-            success_rate=success_rate,
-            avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
-            negotiation_rounds=total_negotiation_rounds,
-            ablation=ablation,
+            success=True,
+            total_duration_ms=0.0,
+            steps=[],
+            ops_executed=ablation_on.ops_executed,
+            ops_succeeded=ablation_on.ops_succeeded,
+            success_rate=ablation_on.success_rate,
+            avg_step_duration_ms=0.0,
+            negotiation_rounds=ablation_on.negotiation_rounds,
+            ablation=ablation_on,
+            ablation_baseline=ablation_off,
             feature_flags=self._extract_feature_flags(cfg),
-            per_op_stats=self._compute_per_op_stats(all_steps),
+            per_op_stats={},
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
@@ -896,8 +943,8 @@ class BenchmarkRunner:
                 ops_succeeded=ops_succeeded,
             )
             return BenchmarkResult(
-                benchmark_id=13,
-                benchmark_name=_BENCHMARK_NAMES[13],
+                benchmark_id=14,
+                benchmark_name=_BENCHMARK_NAMES[14],
                 run_id=make_run_id(),
                 config_snapshot=dataclasses.asdict(cfg),
                 success=success_rate > 0.5,
@@ -913,61 +960,73 @@ class BenchmarkRunner:
                 execution_mode="live",
             )
 
-        # Offline: parse + dry-run with always_succeed mock
-        prev_vgn = _srv_cfg.VGN_ENABLED
-        _srv_cfg.VGN_ENABLED = cfg.use_vgn
-        mock_original = MockRegistry.install_mock("always_succeed")
-        all_steps: List[StepResult] = []
-        total_ms = 0.0
-        completed_tasks = 0
-        try:
-            parser = CommandParser(use_rag=cfg.use_rag)
-            for task in tasks:
-                parse_result = parser.parse(task, robot_id=cfg.robot_id)
-                if not parse_result["success"]:
-                    continue
-                ops = parse_result["commands"]
-                cfg_local = dataclasses.replace(cfg, dry_run=True)
-                raw = self._run_local(ops, cfg_local)
-                total_ms += float(raw.get("total_duration_ms", 0.0))
-                task_steps = self._parse_steps(raw.get("results") or [], ops)
-                step_offset = len(all_steps)
-                for s in task_steps:
-                    s.index += step_offset
-                all_steps.extend(task_steps)
-                if raw.get("success"):
-                    completed_tasks += 1
-        finally:
-            MockRegistry.restore_mock(mock_original)
-            _srv_cfg.VGN_ENABLED = prev_vgn
+        # Offline: parse + dry-run under both conditions in one pass
+        condition_results: Dict[str, AblationMetrics] = {}
+        last_steps: List[StepResult] = []
 
-        ops_executed = len(all_steps)
-        ops_succeeded = sum(1 for s in all_steps if s.success)
-        success_rate = (completed_tasks / len(tasks)) if tasks else 0.0
-        ablation = AblationMetrics(
-            condition="enabled" if cfg.use_vgn else "disabled",
-            hallucinated_ops=0,
-            reflexion_recoveries=0,
-            negotiation_rounds=0,
-            success_rate=success_rate,
-            ops_executed=ops_executed,
-            ops_succeeded=ops_succeeded,
-        )
+        for vgn_on in (True, False):
+            prev_vgn = _srv_cfg.VGN_ENABLED
+            _srv_cfg.VGN_ENABLED = vgn_on
+            mock_original = MockRegistry.install_mock("always_succeed")
+            all_steps: List[StepResult] = []
+            total_ms = 0.0
+            completed_tasks = 0
+            try:
+                parser = CommandParser(use_rag=cfg.use_rag)
+                for task in tasks:
+                    parse_result = parser.parse(task, robot_id=cfg.robot_id)
+                    if not parse_result["success"]:
+                        continue
+                    ops = parse_result["commands"]
+                    cfg_local = dataclasses.replace(cfg, dry_run=True)
+                    raw = self._run_local(ops, cfg_local)
+                    total_ms += float(raw.get("total_duration_ms", 0.0))
+                    task_steps = self._parse_steps(raw.get("results") or [], ops)
+                    step_offset = len(all_steps)
+                    for s in task_steps:
+                        s.index += step_offset
+                    all_steps.extend(task_steps)
+                    if raw.get("success"):
+                        completed_tasks += 1
+            finally:
+                MockRegistry.restore_mock(mock_original)
+                _srv_cfg.VGN_ENABLED = prev_vgn
+
+            ops_executed = len(all_steps)
+            ops_succeeded = sum(1 for s in all_steps if s.success)
+            success_rate = (completed_tasks / len(tasks)) if tasks else 0.0
+            condition = "enabled" if vgn_on else "disabled"
+            condition_results[condition] = AblationMetrics(
+                condition=condition,
+                hallucinated_ops=0,
+                reflexion_recoveries=0,
+                negotiation_rounds=0,
+                success_rate=success_rate,
+                ops_executed=ops_executed,
+                ops_succeeded=ops_succeeded,
+            )
+            if vgn_on:
+                last_steps = all_steps
+
+        ablation_on = condition_results["enabled"]
+        ablation_off = condition_results["disabled"]
+
         return BenchmarkResult(
-            benchmark_id=13,
-            benchmark_name=_BENCHMARK_NAMES[13],
+            benchmark_id=14,
+            benchmark_name=_BENCHMARK_NAMES[14],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            success=(completed_tasks == len(tasks)),
-            total_duration_ms=total_ms,
-            steps=all_steps,
-            ops_executed=ops_executed,
-            ops_succeeded=ops_succeeded,
-            success_rate=success_rate,
-            avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
-            ablation=ablation,
+            success=True,
+            total_duration_ms=0.0,
+            steps=last_steps,
+            ops_executed=ablation_on.ops_executed,
+            ops_succeeded=ablation_on.ops_succeeded,
+            success_rate=ablation_on.success_rate,
+            avg_step_duration_ms=0.0,
+            ablation=ablation_on,
+            ablation_baseline=ablation_off,
             feature_flags=self._extract_feature_flags(cfg),
-            per_op_stats=self._compute_per_op_stats(all_steps),
+            per_op_stats=self._compute_per_op_stats(last_steps),
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
@@ -1020,8 +1079,8 @@ class BenchmarkRunner:
                 ops_succeeded=ops_succeeded,
             )
             return BenchmarkResult(
-                benchmark_id=14,
-                benchmark_name=_BENCHMARK_NAMES[14],
+                benchmark_id=15,
+                benchmark_name=_BENCHMARK_NAMES[15],
                 run_id=make_run_id(),
                 config_snapshot=dataclasses.asdict(cfg),
                 success=success_rate > 0.5,
@@ -1037,74 +1096,85 @@ class BenchmarkRunner:
                 execution_mode="live",
             )
 
-        # Offline: parse + dry-run with always_succeed mock
-        prev_enabled = _ros_cfg.ROS_ENABLED
-        prev_mode = _ros_cfg.DEFAULT_CONTROL_MODE
-        _ros_cfg.ROS_ENABLED = cfg.use_ros_movement
-        _ros_cfg.DEFAULT_CONTROL_MODE = "ros" if cfg.use_ros_movement else "unity"
-        mock_original = MockRegistry.install_mock("always_succeed")
-        all_steps: List[StepResult] = []
-        total_ms = 0.0
-        completed_tasks = 0
-        try:
-            parser = CommandParser(use_rag=cfg.use_rag)
-            for task in tasks:
-                parse_result = parser.parse(task, robot_id=cfg.robot_id)
-                if not parse_result["success"]:
-                    continue
-                ops = parse_result["commands"]
-                cfg_local = dataclasses.replace(cfg, dry_run=True)
-                raw = self._run_local(ops, cfg_local)
-                total_ms += float(raw.get("total_duration_ms", 0.0))
-                task_steps = self._parse_steps(raw.get("results") or [], ops)
-                step_offset = len(all_steps)
-                for s in task_steps:
-                    s.index += step_offset
-                all_steps.extend(task_steps)
-                if raw.get("success"):
-                    completed_tasks += 1
-        finally:
-            MockRegistry.restore_mock(mock_original)
-            _ros_cfg.ROS_ENABLED = prev_enabled
-            _ros_cfg.DEFAULT_CONTROL_MODE = prev_mode
+        # Offline: parse + dry-run under both conditions in one pass
+        condition_results: Dict[str, AblationMetrics] = {}
+        last_steps: List[StepResult] = []
 
-        ops_executed = len(all_steps)
-        ops_succeeded = sum(1 for s in all_steps if s.success)
-        success_rate = (completed_tasks / len(tasks)) if tasks else 0.0
-        ablation = AblationMetrics(
-            condition="ros" if cfg.use_ros_movement else "unity",
-            hallucinated_ops=0,
-            reflexion_recoveries=0,
-            negotiation_rounds=0,
-            success_rate=success_rate,
-            ops_executed=ops_executed,
-            ops_succeeded=ops_succeeded,
-        )
+        for ros_on in (True, False):
+            prev_enabled = _ros_cfg.ROS_ENABLED
+            prev_mode = _ros_cfg.DEFAULT_CONTROL_MODE
+            _ros_cfg.ROS_ENABLED = ros_on
+            _ros_cfg.DEFAULT_CONTROL_MODE = "ros" if ros_on else "unity"
+            mock_original = MockRegistry.install_mock("always_succeed")
+            all_steps: List[StepResult] = []
+            total_ms = 0.0
+            completed_tasks = 0
+            try:
+                parser = CommandParser(use_rag=cfg.use_rag)
+                for task in tasks:
+                    parse_result = parser.parse(task, robot_id=cfg.robot_id)
+                    if not parse_result["success"]:
+                        continue
+                    ops = parse_result["commands"]
+                    cfg_local = dataclasses.replace(cfg, dry_run=True)
+                    raw = self._run_local(ops, cfg_local)
+                    total_ms += float(raw.get("total_duration_ms", 0.0))
+                    task_steps = self._parse_steps(raw.get("results") or [], ops)
+                    step_offset = len(all_steps)
+                    for s in task_steps:
+                        s.index += step_offset
+                    all_steps.extend(task_steps)
+                    if raw.get("success"):
+                        completed_tasks += 1
+            finally:
+                MockRegistry.restore_mock(mock_original)
+                _ros_cfg.ROS_ENABLED = prev_enabled
+                _ros_cfg.DEFAULT_CONTROL_MODE = prev_mode
+
+            ops_executed = len(all_steps)
+            ops_succeeded = sum(1 for s in all_steps if s.success)
+            success_rate = (completed_tasks / len(tasks)) if tasks else 0.0
+            condition = "ros" if ros_on else "unity"
+            condition_results[condition] = AblationMetrics(
+                condition=condition,
+                hallucinated_ops=0,
+                reflexion_recoveries=0,
+                negotiation_rounds=0,
+                success_rate=success_rate,
+                ops_executed=ops_executed,
+                ops_succeeded=ops_succeeded,
+            )
+            if ros_on:
+                last_steps = all_steps
+
+        ablation_on = condition_results["ros"]
+        ablation_off = condition_results["unity"]
+
         return BenchmarkResult(
-            benchmark_id=14,
-            benchmark_name=_BENCHMARK_NAMES[14],
+            benchmark_id=15,
+            benchmark_name=_BENCHMARK_NAMES[15],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            success=(completed_tasks == len(tasks)),
-            total_duration_ms=total_ms,
-            steps=all_steps,
-            ops_executed=ops_executed,
-            ops_succeeded=ops_succeeded,
-            success_rate=success_rate,
-            avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
-            ablation=ablation,
+            success=True,
+            total_duration_ms=0.0,
+            steps=last_steps,
+            ops_executed=ablation_on.ops_executed,
+            ops_succeeded=ablation_on.ops_succeeded,
+            success_rate=ablation_on.success_rate,
+            avg_step_duration_ms=0.0,
+            ablation=ablation_on,
+            ablation_baseline=ablation_off,
             feature_flags=self._extract_feature_flags(cfg),
-            per_op_stats=self._compute_per_op_stats(all_steps),
+            per_op_stats=self._compute_per_op_stats(last_steps),
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
     def _run_b12_kg(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Run B12 KG ablation: parse spatial tasks with KG populated vs disabled.
+        Run B13 KG ablation: parse spatial tasks under both conditions in one pass.
 
-        Populates KG with synthetic state (two objects + one nearby robot), then
-        measures whether parsed ops reference the correct KG object IDs.
-
+        Populates synthetic KG for the enabled condition; skips it for disabled.
+        Measures whether parsed ops reference correct KG object IDs.
         No Unity required — parse-only.
 
 
@@ -1116,78 +1186,77 @@ class BenchmarkRunner:
 
         registry = get_global_registry()
         tasks = module.get_tasks(cfg)
+        condition_results: Dict[str, AblationMetrics] = {}
 
-        prev_kg = _kg_cfg.KNOWLEDGE_GRAPH_ENABLED
-        _kg_cfg.KNOWLEDGE_GRAPH_ENABLED = cfg.use_knowledge_graph
+        for kg_on in (True, False):
+            prev_kg = _kg_cfg.KNOWLEDGE_GRAPH_ENABLED
+            _kg_cfg.KNOWLEDGE_GRAPH_ENABLED = kg_on
+            try:
+                if kg_on:
+                    module.populate_synthetic_kg(cfg.robot_id)
 
-        try:
-            if cfg.use_knowledge_graph:
-                module.populate_synthetic_kg(cfg.robot_id)
+                parser = CommandParser(use_rag=cfg.use_rag)
+                hallucinated = 0
+                wrong_object = 0
+                succeeded = 0
+                total_ops = 0
 
-            parser = CommandParser(use_rag=cfg.use_rag)
-            hallucinated = 0
-            wrong_object = 0
-            succeeded = 0
-            total_ops = 0
+                for task in tasks:
+                    parse_result = parser.parse(task, robot_id=cfg.robot_id)
+                    if not parse_result["success"]:
+                        continue
+                    for cmd in parse_result.get("commands", []):
+                        op_name: str = cmd.get("operation") or ""
+                        total_ops += 1
+                        if registry.get_operation_by_name(op_name) is None:
+                            hallucinated += 1
+                        else:
+                            succeeded += 1
+                            if kg_on:
+                                params_str = str(cmd.get("params", {})).lower()
+                                uses_variable_ref = "$" in params_str
+                                has_kg_ref = uses_variable_ref or any(
+                                    obj.lower() in params_str for obj in module.KG_OBJECTS
+                                )
+                                if not has_kg_ref and "object" in op_name:
+                                    wrong_object += 1
+            finally:
+                if kg_on:
+                    module.clear_synthetic_kg()
+                _kg_cfg.KNOWLEDGE_GRAPH_ENABLED = prev_kg
 
-            for task in tasks:
-                parse_result = parser.parse(task, robot_id=cfg.robot_id)
-                if not parse_result["success"]:
-                    continue
-                for cmd in parse_result.get("commands", []):
-                    op_name: str = cmd.get("operation") or ""
-                    total_ops += 1
-                    if registry.get_operation_by_name(op_name) is None:
-                        hallucinated += 1
-                    else:
-                        succeeded += 1
-                        if cfg.use_knowledge_graph:
-                            params_str = str(cmd.get("params", {})).lower()
-                            # Variable references ($target.color etc.) are correct
-                            # variable-passing — not a failure to use KG object IDs.
-                            uses_variable_ref = "$" in params_str
-                            has_kg_ref = uses_variable_ref or any(
-                                obj.lower() in params_str for obj in module.KG_OBJECTS
-                            )
-                            if not has_kg_ref and "object" in op_name:
-                                wrong_object += 1
+            total_bad = hallucinated + wrong_object
+            ablation_succeeded = total_ops - total_bad
+            rate = (ablation_succeeded / total_ops) if total_ops else 0.0
+            condition = "enabled" if kg_on else "disabled"
+            condition_results[condition] = AblationMetrics(
+                condition=condition,
+                hallucinated_ops=total_bad,
+                reflexion_recoveries=0,
+                negotiation_rounds=0,
+                success_rate=rate,
+                ops_executed=total_ops,
+                ops_succeeded=ablation_succeeded,
+            )
 
-        finally:
-            if cfg.use_knowledge_graph:
-                module.clear_synthetic_kg()
-            _kg_cfg.KNOWLEDGE_GRAPH_ENABLED = prev_kg
-
-        total_bad = hallucinated + wrong_object
-        ablation_succeeded = total_ops - total_bad
-        ablation_success_rate = (ablation_succeeded / total_ops) if total_ops else 0.0
-        condition = "enabled" if cfg.use_knowledge_graph else "disabled"
-
-        ablation = AblationMetrics(
-            condition=condition,
-            hallucinated_ops=total_bad,
-            reflexion_recoveries=0,
-            negotiation_rounds=0,
-            success_rate=ablation_success_rate,
-            ops_executed=total_ops,
-            ops_succeeded=ablation_succeeded,
-        )
+        ablation_on = condition_results["enabled"]
+        ablation_off = condition_results["disabled"]
 
         return BenchmarkResult(
-            benchmark_id=12,
-            benchmark_name=_BENCHMARK_NAMES[12],
+            benchmark_id=13,
+            benchmark_name=_BENCHMARK_NAMES[13],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            # Threshold-based: LLM is stochastic; require ≥50% clean ops rather
-            # than zero tolerance, which would cause flaky results across runs.
-            success=ablation_success_rate >= 0.5,
+            success=(ablation_on.success_rate >= 0.5 and ablation_off.ops_executed > 0),
             total_duration_ms=0.0,
             steps=[],
-            ops_executed=total_ops,
-            ops_succeeded=ablation_succeeded,
-            success_rate=ablation_success_rate,
+            ops_executed=ablation_on.ops_executed,
+            ops_succeeded=ablation_on.ops_succeeded,
+            success_rate=ablation_on.success_rate,
             avg_step_duration_ms=0.0,
-            hallucinated_ops=total_bad,
-            ablation=ablation,
+            hallucinated_ops=ablation_on.hallucinated_ops,
+            ablation=ablation_on,
+            ablation_baseline=ablation_off,
             feature_flags=self._extract_feature_flags(cfg),
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )

@@ -19,42 +19,6 @@ setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
 
-def _compute_handoff_approach_vector(
-    object_position: tuple,
-    object_dimensions: tuple,
-    receiving_robot_position: tuple,
-) -> list:
-    import math
-
-    ox = object_position[0]
-    oz = object_position[2]
-    ow = object_dimensions[0]
-    od = object_dimensions[2]
-    rx = receiving_robot_position[0]
-    rz = receiving_robot_position[2]
-
-    # Use horizontal plane only; Y is vertical — ignoring avoids bias toward tall thin objects.
-    dx = rx - ox
-    dz = rz - oz
-
-    # Dominant horizontal axis (x-extent vs z-extent).
-    if ow >= od:
-        # Wider along X: approach from end away from receiving robot.
-        sign = -1.0 if dx >= 0 else 1.0
-        approach = [sign, 0.0, 0.0]
-    else:
-        # Longer along Z: the handoff axis is Z.
-        sign = -1.0 if dz >= 0 else 1.0
-        approach = [0.0, 0.0, sign]
-
-    # Normalise (already unit length for axis-aligned vectors, but be safe).
-    mag = sum(v * v for v in approach) ** 0.5
-    if mag < 1e-6:
-        logger.warning("Handoff approach vector degenerate, falling back to top-down")
-        return [0.0, 1.0, 0.0]
-
-    return [v / mag for v in approach]
-
 
 def receive_handoff(
     robot_id: str,
@@ -129,7 +93,9 @@ def receive_handoff(
         lx = object_dimensions[0]
         approach_sign = 1.0 if receiver_pos[0] > object_position[0] else -1.0
         near_face_x = object_position[0] + approach_sign * lx * 0.5
-        ap_x = near_face_x  # TCP stops at near face; fingers extend and wrap
+        # Move 2 cm past the near face so the gripper actually contacts the object.
+        # Previously stopping exactly at the face left a gap and the grasp missed.
+        ap_x = near_face_x - approach_sign * 0.02
         obj_height = object_dimensions[1] if len(object_dimensions) > 1 else 0.02
         logger.info(
             f"receive_handoff: object_dimensions={object_dimensions}, obj_height={obj_height:.4f}m"
@@ -140,6 +106,25 @@ def receive_handoff(
         logger.info(
             f"receive_handoff: approach_position=({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
         )
+
+        # Validate reachability before wasting time on MoveIt planning calls.
+        try:
+            from ..SpatialPredicates import target_within_reach
+
+            reachable, reach_reason = target_within_reach(robot_id, ap_x, ap_y, ap_z)
+            if not reachable:
+                return OperationResult.error_result(
+                    "APPROACH_UNREACHABLE",
+                    f"receive_handoff: approach position ({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f}) "
+                    f"is outside {robot_id}'s reach — {reach_reason}. "
+                    "Source robot should present object closer to the shared workspace.",
+                    [
+                        "Ensure source robot moves object to shared zone before signalling",
+                        "Check handoff position is within receiving robot's workspace",
+                    ],
+                )
+        except Exception as _e:
+            logger.warning(f"receive_handoff: reach pre-check failed ({_e}), continuing")
 
         # Robot2 base is 180° → yaw=0 local = toward -X (handoff). Mirrors Robot1's lock.
         static_yaw_deg = 0.0
@@ -181,7 +166,9 @@ def receive_handoff(
 
             bridge = ROSBridge.get_instance()
 
-            # Step A: pre-waypoint 0.10m back, no orientation constraint.
+            # Step A: pre-waypoint 0.10m back with orientation constraint.
+            # Locking orientation here seeds OMPL with the correct joint config so
+            # the subsequent Cartesian slide-in stays on the approach axis.
             pre_x = ap_x + approach_sign * 0.10
             logger.info(
                 f"receive_handoff: pre-waypoint=({pre_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
@@ -213,6 +200,26 @@ def receive_handoff(
             approach_error = (approach_result or {}).get(
                 "error", "No response from ROS bridge"
             )
+
+            # Fallback: Cartesian move can fail (0% complete) when MoveIt cannot
+            # find a straight-line path to the approach position. Retry with
+            # free-space planning which lets OMPL route around the constraint.
+            if not approach_success:
+                logger.warning(
+                    f"receive_handoff: Cartesian approach failed ({approach_error})"
+                    " — retrying with free-space planning"
+                )
+                approach_result = bridge.plan_and_execute(
+                    position={"x": ap_x, "y": ap_y, "z": ap_z},
+                    orientation=handoff_orientation,
+                    robot_id=robot_id,
+                    max_velocity_scaling=0.3,
+                    max_acceleration_scaling=0.25,
+                )
+                approach_success = approach_result and approach_result.get("success")
+                approach_error = (approach_result or {}).get(
+                    "error", "No response from ROS bridge"
+                )
         else:
             _move = move_to_coordinate(
                 robot_id=robot_id,

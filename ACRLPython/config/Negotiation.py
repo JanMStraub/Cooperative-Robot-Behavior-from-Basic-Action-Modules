@@ -21,7 +21,7 @@ MAX_NEGOTIATION_ROUNDS = int(os.environ.get("MAX_NEGOTIATION_ROUNDS", "3"))
 NEGOTIATION_TIMEOUT = float(os.environ.get("NEGOTIATION_TIMEOUT", "120.0"))  # seconds
 
 AGENT_LLM_TIMEOUT = float(
-    os.environ.get("AGENT_LLM_TIMEOUT", "30.0")
+    os.environ.get("AGENT_LLM_TIMEOUT", "60.0")
 )  # seconds per LLM call (proposal phase is the heaviest; 60s gives headroom)
 NEGOTIATION_TEMPERATURE = float(os.environ.get("NEGOTIATION_TEMPERATURE", "0.3"))
 

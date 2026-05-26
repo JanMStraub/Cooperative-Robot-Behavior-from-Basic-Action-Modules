@@ -228,16 +228,35 @@ class SequenceExecutor:
                 # Auto-inject parameters from previous operations based on ParameterFlow definitions
                 params = self._auto_inject_parameters(operation, params)
 
-                # Warn about unresolved $ references before resolution
-                for _k, _v in params.items():
-                    if isinstance(_v, str) and _v.startswith("$"):
-                        _var_name = _v.lstrip("$").split(".")[0]
-                        if _var_name not in self._variables:
-                            logger.warning(
-                                "Pre-exec: param '%s' references $%s which is not yet captured",
-                                _k,
-                                _var_name,
-                            )
+                # Fail early if any param references a variable that hasn't been
+                # captured yet. VariableResolver returns the raw "$var.field" string
+                # on a miss, which causes type crashes inside operations expecting float.
+                _unresolved = [
+                    f"{_k}={_v}"
+                    for _k, _v in params.items()
+                    if isinstance(_v, str)
+                    and _v.startswith("$")
+                    and _v.lstrip("$").split(".")[0] not in self._variables
+                ]
+                if _unresolved:
+                    _unres_str = ", ".join(_unresolved)
+                    logger.error(
+                        "Command %d/%d (%s): unresolved variable(s): %s — aborting",
+                        i + 1, len(commands), operation, _unres_str,
+                    )
+                    _cmd_err = f"Unresolved variable(s): {_unres_str}"
+                    results.append({
+                        "index": i,
+                        "operation": operation,
+                        "success": False,
+                        "result": None,
+                        "error": _cmd_err,
+                        "error_code": "UNRESOLVED_VARIABLE",
+                        "duration_ms": 0,
+                    })
+                    self._notify_progress(i, len(commands), operation, "failed")
+                    logger.error(f"Command {i + 1} failed: {_cmd_err}")
+                    break
 
                 # Resolve variable references in params (manual $ references)
                 params = self._resolve_variables(params)

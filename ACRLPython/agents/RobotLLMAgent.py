@@ -163,9 +163,20 @@ JSON: {{"can_contribute":bool,"capabilities":[],"constraints":[],"suggested_role
             ops_section = ""
 
         workspace_side = self._get_workspace_label()
+        other_robot_ids = [a.robot_id for a in other_analyses]
+        all_robot_ids = [self.robot_id] + other_robot_ids
+        robots_str = " and ".join(all_robot_ids)
         system_prompt = (
             SYSTEM_PROMPT_BASE
-            + f" You are {self.robot_id}, the {workspace_side} robot arm, proposing a multi-robot coordination plan. Assign operations to robots based on workspace proximity. Every signal must have a matching wait_for_signal."
+            + f" You are {self.robot_id}, the {workspace_side} robot arm, proposing a COMPLETE multi-robot coordination plan for {robots_str}. Assign operations to robots based on workspace proximity. Every signal must have a matching wait_for_signal."
+        )
+        # Build a concrete 2-command example showing both robot IDs
+        _example_cmds = [
+            f'{{"parallel_group":1,"operation":"","params":{{"robot_id":"{rid}"}}}}'
+            for rid in all_robot_ids
+        ]
+        _example_json = (
+            f'{{"reasoning":"","commands":[{",".join(_example_cmds)}],"estimated_duration_s":0.0}}'
         )
         user_prompt = f"""Round {round_number}: propose a coordinated plan.
 
@@ -175,9 +186,13 @@ Other robots:{analyses_summary}
 
 Task: "{task}"
 
-Rules: each command needs operation+params(robot_id), optional parallel_group/capture_var. Every signal needs matching wait_for_signal. Every participating robot must have >= 1 command.
+CRITICAL RULES:
+- You MUST include at least one command for EVERY robot: {", ".join(all_robot_ids)}.
+- A plan that only covers {self.robot_id} will be REJECTED.
+- Each command needs operation+params(robot_id), optional parallel_group/capture_var.
+- Every signal needs a matching wait_for_signal.
 
-JSON: {{"reasoning":"","commands":[{{"parallel_group":1,"operation":"","params":{{"robot_id":""}}}}],"estimated_duration_s":0.0}}"""
+JSON (show commands for ALL robots): {_example_json}"""
 
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:

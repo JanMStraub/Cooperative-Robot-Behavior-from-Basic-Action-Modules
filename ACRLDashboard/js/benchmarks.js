@@ -1588,7 +1588,9 @@ function renderCompareOpStats(runsData) {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 function exportChartPng(chartKey, filename) {
-    const instance = analysisChartInstances[chartKey];
+    // Normalise key: strip leading 'chart' prefix so both 'chartA' and 'A' work
+    const key = chartKey.replace(/^chart/i, '');
+    const instance = analysisChartInstances[key];
     if (!instance) { alert('Chart not rendered yet.'); return; }
 
     const canvas = instance.canvas;
@@ -1641,3 +1643,27 @@ async function downloadAggregateJson() {
     const blob = new Blob([JSON.stringify(aggregateData, null, 2)], { type: 'application/json' });
     triggerDownload(URL.createObjectURL(blob), 'benchmark-aggregate.json');
 }
+
+function exportCompareChartPng() {
+    if (!compareStepChartInstance) { alert('Chart not rendered yet.'); return; }
+    const canvas = compareStepChartInstance.canvas;
+    canvas.toBlob(blob => {
+        triggerDownload(URL.createObjectURL(blob), 'compare-step-duration.png');
+    }, 'image/png');
+}
+
+function downloadCompareJson() {
+    if (Object.keys(compareDataCache).length === 0) { alert('No compare data loaded.'); return; }
+    const runs = [...compareSet].map(fn => ({ filename: fn, data: compareDataCache[fn] })).filter(r => r.data);
+    if (runs.length === 0) { alert('No compare data loaded.'); return; }
+    const blob = new Blob([JSON.stringify(runs, null, 2)], { type: 'application/json' });
+    const names = runs.map(r => `B${r.data.benchmark_id}`).join('-');
+    triggerDownload(URL.createObjectURL(blob), `compare-${names}.json`);
+}
+
+// ── Global exports (required: file loaded as ES module, onclick= can't reach module scope) ──
+window.exportChartPng         = exportChartPng;
+window.exportAllCharts        = exportAllCharts;
+window.downloadAggregateJson  = downloadAggregateJson;
+window.exportCompareChartPng  = exportCompareChartPng;
+window.downloadCompareJson    = downloadCompareJson;

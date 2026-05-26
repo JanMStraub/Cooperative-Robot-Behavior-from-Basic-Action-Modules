@@ -20,8 +20,8 @@ from .Config import BenchmarkConfig, DualRobotConfig
 from .Reporter import print_summary, write_json
 from .Runner import BenchmarkRunner
 
-_DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 11}
-_PARSE_ONLY_BENCHMARKS = {9, 12}  # no server required
+_DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 12}
+_PARSE_ONLY_BENCHMARKS = {9, 10, 13}  # no server required
 _REQUIRED_PORTS = (5007, 5008)
 
 
@@ -104,15 +104,15 @@ def main() -> None:
     group.add_argument(
         "--benchmark",
         type=int,
-        choices=range(1, 15),
+        choices=range(1, 16),
         metavar="N",
-        help="Run a single benchmark (1–14); 9–14 are ablation benchmarks",
+        help="Run a single benchmark (1–15); 10–15 are ablation benchmarks",
     )
-    group.add_argument("--all", action="store_true", help="Run all benchmarks (1–14)")
+    group.add_argument("--all", action="store_true", help="Run all benchmarks (1–15)")
     group.add_argument(
         "--ablation",
         action="store_true",
-        help="Run ablation benchmarks only (9–14, no server required for 9 and 12)",
+        help="Run ablation benchmarks only (10–15, no server required for 10 and 13)",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Use mock operations (no hardware)"
@@ -168,15 +168,15 @@ def main() -> None:
 
     runner = BenchmarkRunner()
     if args.all:
-        benchmark_ids = list(range(1, 15))
+        benchmark_ids = list(range(1, 16))
     elif args.ablation:
-        benchmark_ids = list(range(9, 15))
+        benchmark_ids = list(range(10, 16))
     else:
         benchmark_ids = [args.benchmark]
 
     needs_server = any(
         (bid not in _PARSE_ONLY_BENCHMARKS and not args.dry_run)
-        or (bid in {10, 11} and getattr(args, "live", False))
+        or (bid in {11, 12} and getattr(args, "live", False))
         for bid in benchmark_ids
     )
     if needs_server:

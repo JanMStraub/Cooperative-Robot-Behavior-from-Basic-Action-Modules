@@ -182,11 +182,16 @@ class GraphQueryEngine:
             return robot_node.get("position")
 
     def _collect_obstacle_candidates(self, robot_id: str) -> set:
-        """Return object IDs that are potential path obstacles, excluding grasped objects."""
+        """Return object IDs that are potential path obstacles, excluding grasped objects.
+
+        Only objects with a NEAR edge to the robot are checked. Previously, all
+        graph objects were included which caused false positives: objects on the
+        table that MoveIt's collision avoidance would route around were flagged as
+        blocking valid paths, aborting sequences prematurely.
+        """
         near_objects = set(self._graph.get_neighbors(robot_id, edge_type="NEAR"))
-        all_objects = set(self._graph.get_all_nodes(node_type="object"))
         grasped = set(self._graph.get_neighbors(robot_id, edge_type="GRASPING"))
-        return (near_objects | all_objects) - grasped - {robot_id}
+        return near_objects - grasped - {robot_id}
 
     def _obstacle_blocks_path(
         self,

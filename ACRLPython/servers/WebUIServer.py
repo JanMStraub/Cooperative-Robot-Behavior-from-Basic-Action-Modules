@@ -334,6 +334,8 @@ async def api_get_benchmarks():
                                 "success": data.get("success"),
                                 "total_duration_ms": data.get("total_duration_ms"),
                                 "success_rate": data.get("success_rate"),
+                                "ops_executed": data.get("ops_executed"),
+                                "ops_succeeded": data.get("ops_succeeded"),
                                 "mtime": os.path.getmtime(file_path),
                             }
                         )

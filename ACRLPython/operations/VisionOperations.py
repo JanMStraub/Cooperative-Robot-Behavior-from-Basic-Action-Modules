@@ -369,6 +369,20 @@ def detect_object_stereo(
                 camera_position=camera_position,
             )
 
+            # Retry once (0.4 s delay) if nothing was found — streaming frames
+            # can briefly miss a held/elevated object between captures.
+            if not detection_result or not detection_result.detections:
+                logger.info("No detections on first attempt, retrying after 0.4s")
+                time.sleep(0.4)
+                detection_result = CubeDetector().detect_objects_stereo(
+                    imgL,
+                    imgR,
+                    camera_config,
+                    camera_id=camera_id,
+                    camera_rotation=camera_rotation,
+                    camera_position=camera_position,
+                )
+
         if detection_result is None:
             return OperationResult.error_result(
                 "DETECTION_ERROR",

@@ -70,6 +70,7 @@ class BenchmarkResult:
     reflexion_recoveries: int = 0
     negotiation_rounds: int = 0
     ablation: Optional[AblationMetrics] = None
+    ablation_baseline: Optional[AblationMetrics] = None   # disabled-condition metrics
     feature_flags: dict = dataclasses.field(default_factory=dict)
     parsed_plan: List[str] = dataclasses.field(default_factory=list)
     per_op_stats: dict = dataclasses.field(default_factory=dict)
