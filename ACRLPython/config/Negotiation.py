@@ -25,13 +25,22 @@ AGENT_LLM_TIMEOUT = float(
 )  # seconds per LLM call (proposal phase is the heaviest; 60s gives headroom)
 NEGOTIATION_TEMPERATURE = float(os.environ.get("NEGOTIATION_TEMPERATURE", "0.3"))
 
+# If any of these appear in the task text, negotiation is suppressed even when
+# multiple robots are referenced.  These signal that robots act independently
+# and do not need to negotiate a shared plan.
+INDEPENDENCE_KEYWORDS = [
+    "independently",
+    "separate tasks",
+    "no coordination",
+    "without coordinating",
+]
+
 COLLABORATION_KEYWORDS = [
     "both",
     "together",
     "cooperate",
     "collaborate",
     "coordinate",
-    "simultaneously",
     "handoff",
     "hand off",
     "pass to",

@@ -658,20 +658,29 @@ async def api_send_command(command_data: Dict[str, Any]):
         cmd_type = command_data.get("type", "direct")
 
         if cmd_type == "estop":
-            from core.Imports import get_sequence_executor
+            from servers.SequenceServer import SequenceQueryHandler
             from servers.AutoRTIntegration import AutoRTHandler
 
+            # Abort the live executor owned by SequenceQueryHandler, not a new instance
             try:
-                get_sequence_executor().abort()
-            except Exception:
-                pass
+                handler = SequenceQueryHandler()
+                if handler._executor is not None:
+                    handler._executor.abort()
+            except Exception as e:
+                logger.warning(f"E-Stop: executor abort failed: {e}")
             try:
                 AutoRTHandler.get_instance().stop_loop()
             except Exception:
                 pass
+            # Tell Unity to immediately stop all active movements
+            try:
+                broadcaster = get_command_broadcaster()
+                broadcaster.send_command({"command_type": "halt_all", "robot_id": "system"})
+            except Exception as e:
+                logger.warning(f"E-Stop: halt_all send failed: {e}")
             return {
                 "success": True,
-                "message": "E-Stop: sequence aborted, AutoRT stopped",
+                "message": "E-Stop: sequence aborted, AutoRT stopped, movements halted",
             }
 
         # Determine if it's an AutoRT or Direct command
@@ -704,6 +713,28 @@ async def api_send_command(command_data: Dict[str, Any]):
 
     except Exception as e:
         logger.error(f"API Command Error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/reset")
+async def api_reset_simulation():
+    """Trigger a simulation reset directly, bypassing the LLM pipeline."""
+    def _do_reset():
+        broadcaster = get_command_broadcaster()
+        return broadcaster.send_command_and_wait(
+            {"command_type": "reset_simulation", "robot_id": "system"},
+            timeout=15.0,
+        )
+
+    try:
+        completion = await asyncio.get_running_loop().run_in_executor(None, _do_reset)
+        if completion is None:
+            return {"success": False, "error": "Unity did not respond (timeout or not connected)"}
+        if not completion.get("success", False):
+            return {"success": False, "error": "Reset command failed in Unity"}
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"API Reset Error: {e}")
         return {"success": False, "error": str(e)}
 
 

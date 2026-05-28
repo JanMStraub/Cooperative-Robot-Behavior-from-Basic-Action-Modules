@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 from ._imports import (
     get_command_broadcaster as _get_command_broadcaster,
+    get_world_state as _get_world_state,
     PLACE_HOVER_OFFSET,
     PLACE_MIN_Y,
     PLACE_TCP_OFFSET,
@@ -476,7 +477,8 @@ def place_object(
 
             bridge = ROSBridge.get_instance()
 
-            hover_pos = {"x": x, "y": effective_y + PLACE_HOVER_OFFSET, "z": z}
+            hover_y = effective_y + PLACE_HOVER_OFFSET
+            hover_pos = {"x": x, "y": hover_y, "z": z}
             place_pos = {"x": x, "y": effective_y + PLACE_TCP_OFFSET, "z": z}
 
             # Top-down orientation: ~179° around ROS X axis (ee_link Z points down).
@@ -485,10 +487,30 @@ def place_object(
             # and avoids the ±360° flip that occurs at the w=0 singularity.
             top_down_orientation = {"x": 0.9999, "y": 0.0, "z": 0.0, "w": 0.0087}
 
-            # Step 0: Orient gripper to top-down at current position before moving.
-            # plan_and_execute with an orientation constraint can fail to find a plan
-            # if the robot starts far from the desired orientation (e.g. after a yawed
-            # grasp). Pre-orienting makes subsequent constrained moves much more reliable.
+            # Step 1: Lift straight up to hover height at current XZ, keeping current
+            # orientation. Clears the held object from surrounding obstacles before any
+            # reorientation — matches the Unity TCP path behaviour.
+            logger.info(f"place_object: lifting to safe height for {robot_id}")
+            current_pos = _get_world_state().get_robot_position(robot_id)
+            if current_pos is not None:
+                cx, _cy, cz = current_pos
+                lift_result = bridge.plan_and_execute(
+                    position={"x": cx, "y": hover_y, "z": cz},
+                    robot_id=robot_id,
+                )
+                if not lift_result or not lift_result.get("success"):
+                    logger.warning(
+                        f"place_object: lift failed for {robot_id}, continuing anyway"
+                    )
+                time.sleep(0.1)
+            else:
+                logger.warning(
+                    f"place_object: no current position for {robot_id}, skipping lift"
+                )
+
+            # Step 2: Orient gripper to top-down at the lifted position.
+            # Doing this after lifting avoids orientation-constrained planning failures
+            # that occur when starting far from top-down (e.g. after a yawed grasp).
             logger.info(f"place_object: orienting to top-down for {robot_id}")
             orient_result = bridge.plan_orientation_change(
                 {"roll": 180, "pitch": 0, "yaw": 0},
@@ -496,12 +518,12 @@ def place_object(
             )
             if not orient_result or not orient_result.get("success"):
                 logger.warning(
-                    f"place_object: pre-orient failed for {robot_id}, continuing anyway"
+                    f"place_object: orient failed for {robot_id}, continuing anyway"
                 )
 
             time.sleep(0.1)
 
-            # Step 1: Move to hover above target with top-down gripper orientation.
+            # Step 3: Move to hover above target with top-down gripper orientation.
             logger.info(f"place_object: moving to hover above target for {robot_id}")
             hover_result = bridge.plan_and_execute(
                 position=hover_pos,
@@ -523,7 +545,7 @@ def place_object(
             # MoveIt samples the start state for the descent plan.
             time.sleep(0.1)
 
-            # Step 2: Descend to place height using free-space planning.
+            # Step 4: Descend to place height using free-space planning.
             # plan_cartesian_descent is NOT used here: MoveIt's collision model does
             # not include the held object, so a straight-line path through the
             # object's swept volume frequently fails at 0% completion.
@@ -545,14 +567,14 @@ def place_object(
                     f"place_object: descent failed ({err}), releasing at current height"
                 )
 
-            # Step 3: Open gripper and wait for Unity to detach the object before
+            # Step 5: Open gripper and wait for Unity to detach the object before
             # the ascent trajectory is published. The gripper command is a fire-and-forget
             # ROS topic publish; 0.5s is well above the ~50ms ROS topic round-trip.
             logger.info(f"place_object: releasing object for {robot_id}")
             bridge.control_gripper(1.0, robot_id=robot_id)
             time.sleep(0.5)
 
-            # Step 4: Ascend back to hover height to clear the placed object.
+            # Step 6: Ascend back to hover height to clear the placed object.
             logger.info(f"place_object: ascending after place for {robot_id}")
             bridge.plan_and_execute(
                 position=hover_pos,

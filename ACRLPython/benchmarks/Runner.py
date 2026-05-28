@@ -48,6 +48,7 @@ _BENCHMARK_NAMES: Dict[int, str] = {
     13: "Knowledge Graph Ablation",
     14: "VGN Ablation",
     15: "ROS vs Unity Movement",
+    16: "Parallel Independent Tasks",
 }
 
 _CASE_MODULES: Dict[int, str] = {
@@ -66,6 +67,7 @@ _CASE_MODULES: Dict[int, str] = {
     13: "benchmarks.cases.B13KgAblation",
     14: "benchmarks.cases.B14VGNAblation",
     15: "benchmarks.cases.B15RosAblation",
+    16: "benchmarks.cases.B16ParallelIndependent",
 }
 
 
@@ -102,6 +104,9 @@ class BenchmarkRunner:
                 return self._run_b13_vgn(cfg, module)
             if benchmark_id == 15:
                 return self._run_b14_ros(cfg, module)
+
+            if benchmark_id == 16:
+                return self._run_b16_parallel(cfg, module)
 
             if benchmark_id == 8:
                 return self._run_b8_chain(cfg, module)
@@ -402,6 +407,59 @@ class BenchmarkRunner:
                 )
             )
         return steps
+
+    def _run_b16_parallel(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+        """
+        Run B16 Parallel Independent Tasks.
+
+        Sends a single NL prompt covering both robots doing independent work.
+        The LLM is expected to assign Robot1 ops and Robot2 ops to the same
+        parallel_group so both chains execute concurrently.
+
+        Success = execution success AND parallelism_ratio >= 0.5.
+        parallelism_ratio = ops_in_shared_groups / total_ops, where a "shared"
+        group contains ops from more than one robot_id.
+        """
+        task = module.get_task()
+        robot_id = getattr(cfg, "robot_id_a", cfg.robot_id)
+        raw = self._send(task, robot_id, cfg)
+        result = self._build_result(16, cfg, raw)
+
+        parallelism_ratio, ops_in_parallel = self._compute_parallelism_ratio(result.steps)
+        parallelism_success = parallelism_ratio >= 0.5
+
+        return dataclasses.replace(
+            result,
+            success=result.success and parallelism_success,
+            per_op_stats={
+                **result.per_op_stats,
+                "_parallelism_ratio": parallelism_ratio,
+                "_ops_in_parallel": ops_in_parallel,
+                "_parallelism_success": parallelism_success,
+            },
+        )
+
+    def _compute_parallelism_ratio(self, steps: List[StepResult]) -> tuple[float, int]:
+        """
+        Return (parallelism_ratio, ops_in_shared_groups).
+
+        A parallel group is "shared" if ops from more than one robot_id appear in it.
+        parallelism_ratio = ops_in_shared_groups / len(steps).
+        Returns (0.0, 0) when no steps have parallel_group_id set (sequential scheduling).
+        """
+        from collections import defaultdict
+
+        if not steps:
+            return 0.0, 0
+
+        group_robots: Dict[int, set] = defaultdict(set)
+        for s in steps:
+            if s.parallel_group_id is not None:
+                group_robots[s.parallel_group_id].add(s.robot_id or "unknown")
+
+        shared = {gid for gid, robots in group_robots.items() if len(robots) > 1}
+        ops_in_shared = sum(1 for s in steps if s.parallel_group_id in shared)
+        return round(ops_in_shared / len(steps), 4), ops_in_shared
 
     def _run_b8_chain(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """

@@ -13,7 +13,6 @@ namespace Robotics.Grasp
     {
         private readonly GraspConfig _config;
 
-        private readonly string _logPrefix = "[GRASP_SCORER]";
 
         public GraspScorer(GraspConfig config)
         {
@@ -115,7 +114,7 @@ namespace Robotics.Grasp
             if (UnityEngine.Random.value < 0.01f)
             {
                 UnityEngine.Debug.Log(
-                    $"{_logPrefix} Approach {candidate.approachType} has preference weight {weight:F2}"
+                    $"[GRASP_SCORER] Approach {candidate.approachType} has preference weight {weight:F2}"
                 );
             }
 #endif

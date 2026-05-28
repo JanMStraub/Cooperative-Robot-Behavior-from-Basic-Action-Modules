@@ -88,6 +88,13 @@ class NegotiationHub(SingletonBase):
 
         text_lower = command_text.lower()
 
+        # Independence keywords suppress negotiation even when multiple robots
+        # are referenced — signals that robots act separately, no shared plan needed.
+        for keyword in neg_cfg.INDEPENDENCE_KEYWORDS:
+            if keyword in text_lower:
+                logger.info(f"Negotiation suppressed by independence keyword: '{keyword}'")
+                return False
+
         # Check collaboration keywords
         for keyword in neg_cfg.COLLABORATION_KEYWORDS:
             if keyword in text_lower:

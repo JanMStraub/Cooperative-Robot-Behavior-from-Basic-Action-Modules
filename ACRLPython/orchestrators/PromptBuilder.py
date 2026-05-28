@@ -50,11 +50,21 @@ class PromptBuilder:
             f"\n        === REFLECTION ===\n        {hint}\n" if hint else ""
         )
 
+        # Suppress the default-robot hint for multi-robot tasks — the task text
+        # names both robots explicitly, so a default would bias the LLM to one robot.
+        import re as _re
+        _named_robots = {rid for rid in ["Robot1", "Robot2"] if _re.search(r"\b" + rid + r"\b", command_text)}
+        _robot_id_line = (
+            f'Default robot_id: "{robot_id}"'
+            if len(_named_robots) <= 1
+            else f'Robots in task: {", ".join(sorted(_named_robots))} — assign robot_id per-op as named in the task'
+        )
+
         return f"""
         Available Operations: {available_ops}
 
         Command to parse: "{command_text}"
-        Default robot_id: "{robot_id}"
+        {_robot_id_line}
 
         === ROBOT WORKSPACE BOUNDARIES ===
 
@@ -128,6 +138,12 @@ class PromptBuilder:
 
         Multi-variable arithmetic in params is also supported when you need a custom midpoint:
         {{"operation": "place_object", "params": {{"robot_id": "Robot1", "x": "($blue_obj.x + $red_obj.x) / 2", "y": "($blue_obj.y + $red_obj.y) / 2", "z": "($blue_obj.z + $red_obj.z) / 2"}}}}
+
+        === INDEPENDENT PARALLEL RULE ===
+
+        When two robots have fully independent tasks (no shared objects, no handoff, no sync point), assign MATCHING parallel_group numbers so both chains execute simultaneously.
+        Step N for Robot1 and step N for Robot2 belong in the same group — do NOT assign monotonically increasing groups across both robots.
+        Use distinct capture_var names per robot (e.g. "r1_target" / "r2_target") to avoid collisions.
 
         === SINGLE-ROBOT RULES ===
 

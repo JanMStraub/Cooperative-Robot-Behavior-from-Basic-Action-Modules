@@ -20,7 +20,7 @@ from .Config import BenchmarkConfig, DualRobotConfig
 from .Reporter import print_summary, write_json
 from .Runner import BenchmarkRunner
 
-_DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 12}
+_DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 12, 16}
 _PARSE_ONLY_BENCHMARKS = {9, 10, 13}  # no server required
 _REQUIRED_PORTS = (5007, 5008)
 
@@ -104,11 +104,11 @@ def main() -> None:
     group.add_argument(
         "--benchmark",
         type=int,
-        choices=range(1, 16),
+        choices=range(1, 17),
         metavar="N",
-        help="Run a single benchmark (1–15); 10–15 are ablation benchmarks",
+        help="Run a single benchmark (1–16); 10–15 are ablation benchmarks, 16 is parallel",
     )
-    group.add_argument("--all", action="store_true", help="Run all benchmarks (1–15)")
+    group.add_argument("--all", action="store_true", help="Run all benchmarks (1–16)")
     group.add_argument(
         "--ablation",
         action="store_true",
@@ -168,7 +168,7 @@ def main() -> None:
 
     runner = BenchmarkRunner()
     if args.all:
-        benchmark_ids = list(range(1, 16))
+        benchmark_ids = list(range(1, 17))
     elif args.ablation:
         benchmark_ids = list(range(10, 16))
     else:

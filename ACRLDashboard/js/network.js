@@ -156,6 +156,20 @@ export class NetworkManager {
         }).catch(err => this.ui.logToConsole(`Jog API failed: ${err}`, 'error'));
     }
 
+    triggerReset() {
+        this.ui.logToConsole('Resetting simulation...', 'info');
+        fetch('/api/reset', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    this.ui.logToConsole('Simulation reset complete.', 'success');
+                } else {
+                    this.ui.logToConsole(`Reset failed: ${data.error}`, 'error');
+                }
+            })
+            .catch(err => this.ui.logToConsole(`Reset API failed: ${err}`, 'error'));
+    }
+
     triggerEStop() {
         this.ui.logToConsole('E-STOP TRIGGERED! Sending HALT to all modules...', 'error');
         fetch('/api/command', {

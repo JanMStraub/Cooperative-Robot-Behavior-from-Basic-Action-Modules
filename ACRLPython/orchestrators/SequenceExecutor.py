@@ -989,6 +989,11 @@ class SequenceExecutor:
         """Abort the current sequence execution."""
         self._abort_flag = True
         logger.warning(f"Abort requested for sequence {self._current_sequence_id}")
+        try:
+            from core.Imports import get_command_broadcaster
+            get_command_broadcaster().abort_all_pending()
+        except Exception:
+            pass
 
     def add_progress_callback(self, callback: Callable):
         self._progress_callbacks.append(callback)

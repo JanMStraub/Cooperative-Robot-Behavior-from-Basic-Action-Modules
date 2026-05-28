@@ -298,6 +298,40 @@ WAIT_OPERATION = BasicOperation(
 )
 
 
+def _reset_python_state() -> None:
+    """Clear all Python-side runtime state after a simulation reset."""
+    try:
+        from operations.WorldState import WorldState
+        WorldState().reset()
+    except Exception:
+        pass
+
+    try:
+        EventBus().reset()
+    except Exception:
+        pass
+
+    try:
+        from operations.SharedVisionState import SharedVisionState
+        SharedVisionState().clear()
+    except Exception:
+        pass
+
+    try:
+        from core.Imports import get_sequence_executor
+        executor = get_sequence_executor()
+        executor.abort()
+        executor._variables.clear()
+    except Exception:
+        pass
+
+    try:
+        from knowledge_graph._singleton import get_knowledge_graph
+        get_knowledge_graph().clear()
+    except Exception:
+        pass
+
+
 def _execute_reset_simulation(**_kwargs) -> OperationResult:
     command = {
         "command_type": "reset_simulation",
@@ -321,6 +355,7 @@ def _execute_reset_simulation(**_kwargs) -> OperationResult:
             ["Check Unity console for SimulationManager errors"],
         )
 
+    _reset_python_state()
     return OperationResult.success_result({"reset": True})
 
 

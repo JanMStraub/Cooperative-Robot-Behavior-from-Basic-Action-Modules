@@ -157,6 +157,13 @@ class CommandBroadcaster:
         except Empty:
             return None
 
+    def abort_all_pending(self):
+        """Unblock all threads waiting in send_command_and_wait by injecting an abort sentinel."""
+        with self._queue_lock:
+            for queue in self._completion_queues.values():
+                queue.put({"success": False, "aborted": True})
+        logger.debug(f"Aborted {len(self._completion_queues)} pending completion queue(s)")
+
     def get_queued_results(self) -> List[Dict]:
         """Get and clear all queued results."""
         with self._queue_lock:

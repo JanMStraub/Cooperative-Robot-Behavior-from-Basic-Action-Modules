@@ -385,6 +385,10 @@ namespace PythonCommunication
                     ExecuteResetSimulation(command);
                     break;
 
+                case "halt_all":
+                    ExecuteHaltAll(command);
+                    break;
+
                 default:
                     Debug.LogWarning($"{_logPrefix} Unknown command type: {command.command_type}");
                     _failedCommands++;
@@ -1353,11 +1357,20 @@ namespace PythonCommunication
                         : Quaternion.identity;
                 Quaternion topDownOrientation = baseRotation * Quaternion.Euler(0f, 0f, 0f);
 
+                // Lift position: straight up from current end-effector XZ to hover height.
+                // This ensures the robot lifts the held object clear before reorienting.
+                Vector3 currentEEPos =
+                    controller != null && controller.endEffectorBase != null
+                        ? controller.endEffectorBase.position
+                        : hoverPos;
+                Vector3 liftPos = new Vector3(currentEEPos.x, hoverPos.y, currentEEPos.z);
+
                 StartCoroutine(
                     PlaceObjectCoroutine(
                         controller,
                         robotInstance.simpleController,
                         gripperController,
+                        liftPos,
                         hoverPos,
                         placePos,
                         topDownOrientation,
@@ -1389,13 +1402,14 @@ namespace PythonCommunication
 
         /// <summary>
         /// Coroutine for place_object.
-        /// Steps: move to hover → descend to place height → open gripper → ascend to hover.
+        /// Steps: lift (current XZ) → orient top-down → hover (target XZ) → descend → release → ascend.
         /// Each movement segment has a 15-second timeout.
         /// </summary>
         private IEnumerator PlaceObjectCoroutine(
             RobotController controller,
             SimpleRobotController simpleController,
             GripperController gripperController,
+            Vector3 liftPos,
             Vector3 hoverPos,
             Vector3 placePos,
             Quaternion topDownOrientation,
@@ -1406,20 +1420,44 @@ namespace PythonCommunication
             const float segmentTimeout = 15.0f;
             bool usingSimple = (controller == null && simpleController != null);
 
-            // Step 1: Move to hover position above target with top-down gripper orientation.
+            // Step 1: Lift straight up to hover height at current XZ, keeping current orientation.
+            // This clears the held object from any nearby obstacles before reorienting.
+            if (controller != null)
+                controller.SetTarget(liftPos);
+            else if (simpleController != null)
+                simpleController.SetTarget(liftPos);
+
+            var timedOut = new bool[1];
+            yield return StartCoroutine(WaitForMovement(
+                controller, simpleController, usingSimple, segmentTimeout,
+                $"{_logPrefix} place_object: Timeout lifting to safe height.",
+                robotId, "place_object", requestId, timedOut));
+            if (timedOut[0]) yield break;
+
+            // Step 2: Rotate to top-down orientation at the lifted position.
+            if (controller != null)
+                controller.SetTarget(liftPos, topDownOrientation);
+
+            timedOut[0] = false;
+            yield return StartCoroutine(WaitForMovement(
+                controller, simpleController, usingSimple, segmentTimeout,
+                $"{_logPrefix} place_object: Timeout orienting to top-down.",
+                robotId, "place_object", requestId, timedOut));
+            if (timedOut[0]) yield break;
+
+            // Step 3: Move to hover position above target, maintaining top-down orientation.
             if (controller != null)
                 controller.SetTarget(hoverPos, topDownOrientation);
             else if (simpleController != null)
                 simpleController.SetTarget(hoverPos);
 
-            var timedOut = new bool[1];
+            timedOut[0] = false;
             yield return StartCoroutine(WaitForMovement(
                 controller, simpleController, usingSimple, segmentTimeout,
                 $"{_logPrefix} place_object: Timeout reaching hover position.",
                 robotId, "place_object", requestId, timedOut));
             if (timedOut[0]) yield break;
 
-            // Step 2: Descend to place height, maintaining top-down orientation.
             if (controller != null)
                 controller.SetTarget(placePos, topDownOrientation);
             else if (simpleController != null)
@@ -1432,11 +1470,11 @@ namespace PythonCommunication
                 robotId, "place_object", requestId, timedOut));
             if (timedOut[0]) yield break;
 
-            // Step 3: Open gripper to release the object onto the surface.
+            // Step 5: Open gripper to release the object onto the surface.
             gripperController.OpenGrippers();
             yield return new WaitForSeconds(0.5f);
 
-            // Step 4: Ascend back to hover height, maintaining top-down orientation.
+            // Step 6: Ascend back to hover height, maintaining top-down orientation.
             if (controller != null)
                 controller.SetTarget(hoverPos, topDownOrientation);
             else if (simpleController != null)
@@ -3415,6 +3453,36 @@ namespace PythonCommunication
         public (int successful, int failed) GetCommandStats()
         {
             return (_successfulCommands, _failedCommands);
+        }
+
+        /// <summary>
+        /// Execute halt_all command — immediately stops all active robot movements by clearing
+        /// targets and stopping all running command coroutines. Does not reset positions.
+        /// </summary>
+        private void ExecuteHaltAll(RobotCommand command)
+        {
+            string robotId = command.robot_id ?? "system";
+            uint requestId = command.request_id;
+            try
+            {
+                StopAllCoroutines();
+
+                if (_robotManager != null)
+                {
+                    foreach (var kvp in _robotManager.RobotInstances)
+                    {
+                        kvp.Value.controller?.ClearTarget();
+                    }
+                }
+
+                Debug.Log($"{_logPrefix} halt_all: all movements stopped");
+                SendCommandCompletion(robotId, "halt_all", true, requestId);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"{_logPrefix} halt_all error: {ex.Message}");
+                SendCommandCompletion(robotId, "halt_all", false, requestId);
+            }
         }
 
         /// <summary>

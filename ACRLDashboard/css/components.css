@@ -94,6 +94,17 @@
     background: rgba(255, 255, 255, 0.04);
 }
 
+.btn-reset {
+    background: transparent;
+    color: var(--accent);
+    font-weight: 600;
+    border-color: var(--accent);
+    letter-spacing: 0.03em;
+}
+.btn-reset:hover {
+    background: rgba(var(--accent-rgb, 99, 179, 237), 0.12);
+}
+
 .btn-estop {
     background: var(--danger);
     color: #fff;

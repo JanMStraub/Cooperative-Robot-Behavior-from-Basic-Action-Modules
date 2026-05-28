@@ -44,6 +44,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.promptInput.value = '';
     });
 
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        network.triggerReset();
+    });
+
     document.getElementById('btn-estop').addEventListener('click', () => {
         network.triggerEStop();
     });
