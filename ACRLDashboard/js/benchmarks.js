@@ -1587,6 +1587,51 @@ function renderCompareOpStats(runsData) {
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────
+function exportHeatmapCsv() {
+    if (!aggregateData) { alert('No data loaded.'); return; }
+    const sorted = Object.values(aggregateData).sort((a, b) => a.benchmark_id - b.benchmark_id);
+    const entries = sorted.filter(d => d.op_stats && Object.keys(d.op_stats).length > 0);
+    if (!entries.length) { alert('No operation timing data available.'); return; }
+
+    const allOps = [...new Set(entries.flatMap(d => Object.keys(d.op_stats)))].sort();
+
+    const rows = [];
+    rows.push(['Benchmark', ...allOps]);
+    entries.forEach(d => {
+        const row = [`B${d.benchmark_id}: ${d.benchmark_name}`];
+        allOps.forEach(op => {
+            const stat = d.op_stats[op];
+            row.push(stat ? stat.mean_duration_ms.toFixed(2) : '');
+        });
+        rows.push(row);
+    });
+
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    triggerDownload(URL.createObjectURL(blob), 'operation-timing.csv');
+}
+
+function exportCoverageMatrixCsv() {
+    if (!aggregateData) { alert('No data loaded.'); return; }
+    const sorted = Object.values(aggregateData).sort((a, b) => a.benchmark_id - b.benchmark_id);
+    const entries = sorted.filter(d => d.op_stats && Object.keys(d.op_stats).length > 0);
+    if (!entries.length) { alert('No coverage data available.'); return; }
+
+    const allOps = [...new Set(entries.flatMap(d => Object.keys(d.op_stats)))].sort();
+
+    const rows = [];
+    rows.push(['Operation', ...entries.map(d => `B${d.benchmark_id}`)]);
+    allOps.forEach(op => {
+        const row = [op, ...entries.map(d => d.op_stats[op] ? '1' : '0')];
+        rows.push(row);
+    });
+
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    triggerDownload(URL.createObjectURL(blob), 'operation-coverage.csv');
+}
+
+
 function exportChartPng(chartKey, filename) {
     // Normalise key: strip leading 'chart' prefix so both 'chartA' and 'A' work
     const key = chartKey.replace(/^chart/i, '');
@@ -1667,3 +1712,5 @@ window.exportAllCharts        = exportAllCharts;
 window.downloadAggregateJson  = downloadAggregateJson;
 window.exportCompareChartPng  = exportCompareChartPng;
 window.downloadCompareJson    = downloadCompareJson;
+window.exportHeatmapCsv       = exportHeatmapCsv;
+window.exportCoverageMatrixCsv = exportCoverageMatrixCsv;

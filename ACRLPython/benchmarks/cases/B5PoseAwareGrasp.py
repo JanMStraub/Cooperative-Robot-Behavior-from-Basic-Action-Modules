@@ -9,4 +9,4 @@ def get_task() -> str:
     Return natural language task description for B5.
 
     """
-    return "Robot1: Grasp yellow cube."
+    return "Robot1: Grasp the yellow cube."

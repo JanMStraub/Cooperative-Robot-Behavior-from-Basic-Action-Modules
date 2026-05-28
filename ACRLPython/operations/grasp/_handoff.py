@@ -19,7 +19,6 @@ setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
 
-
 def receive_handoff(
     robot_id: str,
     object_id: str,
@@ -93,9 +92,10 @@ def receive_handoff(
         lx = object_dimensions[0]
         approach_sign = 1.0 if receiver_pos[0] > object_position[0] else -1.0
         near_face_x = object_position[0] + approach_sign * lx * 0.5
-        # Move 2 cm past the near face so the gripper actually contacts the object.
-        # Previously stopping exactly at the face left a gap and the grasp missed.
-        ap_x = near_face_x - approach_sign * 0.02
+        # TCP at near face; fingers extend inward and close around the bar.
+        # Do NOT push past the face — MoveIt detects the endpoint in collision and
+        # re-routes in Z (free-space fallback), causing a Z-face grasp instead of X-face.
+        ap_x = near_face_x
         obj_height = object_dimensions[1] if len(object_dimensions) > 1 else 0.02
         logger.info(
             f"receive_handoff: object_dimensions={object_dimensions}, obj_height={obj_height:.4f}m"
@@ -124,7 +124,9 @@ def receive_handoff(
                     ],
                 )
         except Exception as _e:
-            logger.warning(f"receive_handoff: reach pre-check failed ({_e}), continuing")
+            logger.warning(
+                f"receive_handoff: reach pre-check failed ({_e}), continuing"
+            )
 
         # Robot2 base is 180° → yaw=0 local = toward -X (handoff). Mirrors Robot1's lock.
         static_yaw_deg = 0.0
@@ -182,8 +184,24 @@ def receive_handoff(
             )
             if not pre_result or not pre_result.get("success"):
                 logger.warning(
-                    f"receive_handoff: pre-waypoint failed ({(pre_result or {}).get('error', 'no response')}) — proceeding to final position"
+                    f"receive_handoff: pre-waypoint failed ({(pre_result or {}).get('error', 'no response')}) — trying hover pre-waypoint"
                 )
+                # Fallback: approach from above (no orientation constraint so OMPL
+                # can find a path from any joint config), then descend in free-space.
+                hover_y = ap_y + 0.18
+                logger.info(
+                    f"receive_handoff: hover pre-waypoint=({ap_x:.3f}, {hover_y:.3f}, {ap_z:.3f})"
+                )
+                hover_result = bridge.plan_and_execute(
+                    position={"x": ap_x, "y": hover_y, "z": ap_z},
+                    robot_id=robot_id,
+                    max_velocity_scaling=0.5,
+                    max_acceleration_scaling=0.4,
+                )
+                if not hover_result or not hover_result.get("success"):
+                    logger.warning(
+                        f"receive_handoff: hover pre-waypoint also failed ({(hover_result or {}).get('error', 'no response')}) — proceeding to final position"
+                    )
 
             # Locked-orientation Cartesian needs more start-state margin than free-space.
             _time.sleep(0.2)

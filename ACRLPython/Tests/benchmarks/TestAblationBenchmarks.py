@@ -47,6 +47,24 @@ def test_ablation_metrics_dataclass_exists():
     assert m.hallucinated_ops == 2
 
 
+def test_ablation_metrics_has_delta_fields():
+    from benchmarks.Result import AblationMetrics
+
+    m = AblationMetrics(
+        condition="enabled",
+        hallucinated_ops=1,
+        reflexion_recoveries=0,
+        negotiation_rounds=0,
+        success_rate=0.9,
+        ops_executed=10,
+        ops_succeeded=9,
+        condition_delta=0.2,
+        hallucination_delta=3,
+    )
+    assert m.condition_delta == 0.2
+    assert m.hallucination_delta == 3
+
+
 def test_benchmark_result_has_ablation_fields():
     from benchmarks.Result import BenchmarkResult, make_run_id
 
@@ -288,6 +306,7 @@ def test_benchmark_result_has_ablation_baseline_field():
 
 # Task source tests
 
+
 def test_b10_tasks_are_drawn_from_b1_to_b5():
     from ACRLPython.benchmarks.cases import B10RagAblation
     from ACRLPython.benchmarks.cases.B1NavigateToObject import get_task as b1
@@ -338,3 +357,121 @@ def test_b15_tasks_include_b1_and_b2():
     tasks = B15RosAblation.get_tasks(BenchmarkConfig())
     assert b1() in tasks
     assert b2() in tasks
+
+
+# ── New tests added by benchmark audit overhaul ────────────────────────────
+
+
+def test_b9_parser_exception_does_not_count_as_graceful_rejection():
+    """A parser crash must NOT count as graceful rejection."""
+    from benchmarks.Runner import BenchmarkRunner
+    from benchmarks.Config import BenchmarkConfig
+    from unittest.mock import patch
+
+    runner = BenchmarkRunner()
+    cfg = BenchmarkConfig(execution_mode="offline")
+
+    # CommandParser is imported inside _run_b9_impossible, so patch at its source module
+    with patch("orchestrators.CommandParser.CommandParser") as MockParser:
+        MockParser.return_value.parse.side_effect = RuntimeError("crash")
+        result = runner.run(9, cfg)
+
+    assert result.success is False, "Parser crash must not report graceful rejection"
+
+
+def test_parse_steps_populates_retry_count():
+    """_parse_steps must extract retry_count from raw result dicts."""
+    from benchmarks.Runner import BenchmarkRunner
+
+    runner = BenchmarkRunner()
+    raw_results = [
+        {
+            "index": 0,
+            "operation": "move_to_coordinate",
+            "success": True,
+            "duration_ms": 120.0,
+            "retry_count": 2,
+        }
+    ]
+    steps = runner._parse_steps(raw_results)
+    assert steps[0].retry_count == 2
+
+
+def test_b3_task_specifies_approach_and_lift_height():
+    from benchmarks.cases.B3NavigateAndLift import get_task
+
+    task = get_task()
+    assert "0.2" in task, "B3 must specify target lift height"
+    assert (
+        "above" in task.lower() or "top" in task.lower()
+    ), "B3 must specify approach from above"
+
+
+def test_b5_task_specifies_gripper_orientation():
+    from benchmarks.cases.B5PoseAwareGrasp import get_task
+
+    task = get_task()
+    assert any(
+        word in task.lower() for word in ["down", "downward", "orient", "pose"]
+    ), "B5 must specify gripper orientation to test pose-aware grasping"
+
+
+def test_b6_task_names_both_robots_and_transfer():
+    from benchmarks.cases.B6RobotHandoff import get_task
+
+    task = get_task()
+    assert "Robot1" in task and "Robot2" in task, "B6 must name both robots"
+    assert any(
+        word in task.lower() for word in ["pass", "hand", "transfer", "give"]
+    ), "B6 must specify transfer action"
+
+
+def test_b10_rag_ablation_has_delta_and_paired_conditions():
+    """B10 enabled condition must report hallucination_delta >= 0."""
+    from benchmarks.Runner import BenchmarkRunner
+    from benchmarks.Config import BenchmarkConfig
+
+    runner = BenchmarkRunner()
+    cfg = BenchmarkConfig(dry_run=False, execution_mode="offline")
+    result = runner.run(10, cfg)
+
+    assert result.ablation is not None
+    assert result.ablation_baseline is not None
+    assert result.ablation.condition == "enabled"
+    assert result.ablation_baseline.condition == "disabled"
+    assert (
+        result.ablation.hallucination_delta >= 0
+    ), "RAG enabled must not produce MORE hallucinations than disabled"
+
+
+def test_b11_reflexion_offline_produces_paired_conditions_with_delta():
+    """B11 offline must produce both conditions with condition_delta field set."""
+    from benchmarks.Runner import BenchmarkRunner
+    from benchmarks.Config import BenchmarkConfig
+
+    runner = BenchmarkRunner()
+    cfg = BenchmarkConfig(
+        dry_run=True, execution_mode="offline", reflexion_enabled=True
+    )
+    result = runner.run(11, cfg)
+
+    assert result.ablation is not None
+    assert result.ablation_baseline is not None
+    assert result.ablation.condition == "enabled"
+    assert result.ablation_baseline.condition == "disabled"
+    assert isinstance(result.ablation.condition_delta, float)
+
+
+def test_b12_negotiation_offline_produces_paired_conditions_with_delta():
+    """B12 offline must produce both conditions with delta fields."""
+    from benchmarks.Runner import BenchmarkRunner
+    from benchmarks.Config import DualRobotConfig
+
+    runner = BenchmarkRunner()
+    cfg = DualRobotConfig(dry_run=True, execution_mode="offline", use_negotiation=True)
+    result = runner.run(12, cfg)
+
+    assert result.ablation is not None
+    assert result.ablation_baseline is not None
+    assert isinstance(result.ablation.negotiation_rounds, int)
+    assert isinstance(result.ablation.condition_delta, float)

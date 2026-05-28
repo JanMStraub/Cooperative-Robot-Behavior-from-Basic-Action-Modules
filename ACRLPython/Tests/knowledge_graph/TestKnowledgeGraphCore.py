@@ -351,8 +351,10 @@ class TestCanReachPosition(unittest.TestCase):
     def test_unreachable_path_blocked(self):
         """Obstacle on path → path_blocked=True → not reachable."""
         self._add_robot(pos=(-0.475, 0.0, 0.0))
-        # Place an obstacle directly on the path
+        # Place an obstacle directly on the path and add NEAR edge so it is
+        # considered by _collect_obstacle_candidates (only NEAR objects are checked).
         self.graph.add_node("obstacle", node_type="object", position=(-0.475, 0.0, 0.1))
+        self.graph.add_edge("Robot1", "obstacle", "NEAR", distance=0.1)
 
         from unittest.mock import patch as mpatch
 

@@ -1073,7 +1073,7 @@ BoxCollider:
   m_Material: {fileID: 13400000, guid: 2e6591cd55e234d20b84b8efa94a5726, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 65
   m_ExcludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -2049,7 +2049,7 @@ BoxCollider:
   m_Material: {fileID: 13400000, guid: 2e6591cd55e234d20b84b8efa94a5726, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 65
   m_ExcludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -4563,7 +4563,7 @@ BoxCollider:
   m_Material: {fileID: 13400000, guid: 2e6591cd55e234d20b84b8efa94a5726, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 65
   m_ExcludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -6427,7 +6427,7 @@ BoxCollider:
   m_Material: {fileID: 13400000, guid: 2e6591cd55e234d20b84b8efa94a5726, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 65
   m_ExcludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -8906,7 +8906,7 @@ BoxCollider:
   m_Material: {fileID: 13400000, guid: 2e6591cd55e234d20b84b8efa94a5726, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 65
   m_ExcludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -10201,7 +10201,7 @@ BoxCollider:
   m_Material: {fileID: 13400000, guid: 2e6591cd55e234d20b84b8efa94a5726, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 65
   m_ExcludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -11803,7 +11803,7 @@ BoxCollider:
   m_Material: {fileID: 13400000, guid: 2e6591cd55e234d20b84b8efa94a5726, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 65
   m_ExcludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -12416,7 +12416,7 @@ BoxCollider:
   m_Material: {fileID: 13400000, guid: 2e6591cd55e234d20b84b8efa94a5726, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
-    m_Bits: 1
+    m_Bits: 65
   m_ExcludeLayers:
     serializedVersion: 2
     m_Bits: 0

@@ -175,9 +175,7 @@ JSON: {{"can_contribute":bool,"capabilities":[],"constraints":[],"suggested_role
             f'{{"parallel_group":1,"operation":"","params":{{"robot_id":"{rid}"}}}}'
             for rid in all_robot_ids
         ]
-        _example_json = (
-            f'{{"reasoning":"","commands":[{",".join(_example_cmds)}],"estimated_duration_s":0.0}}'
-        )
+        _example_json = f'{{"reasoning":"","commands":[{",".join(_example_cmds)}],"estimated_duration_s":0.0}}'
         user_prompt = f"""Round {round_number}: propose a coordinated plan.
 
 {context}
@@ -289,8 +287,8 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
         wb = WORKSPACE_REGIONS.get(self.workspace, {})
         sz = WORKSPACE_REGIONS.get("shared_zone", {})
         context = (
-            f"Robot: {self.robot_id} | Base: {self.base_position} | Reach: {self.max_reach}m\n"
-            f"Workspace: {self.workspace} x=[{wb.get('x_min')},{wb.get('x_max')}] z=[{wb.get('z_min')},{wb.get('z_max')}]\n"
+            f"Robot: {self.robot_id} | Base: {self.base_position} | Reach: {self.max_reach}m"
+            f"Workspace: {self.workspace} x=[{wb.get('x_min')},{wb.get('x_max')}] z=[{wb.get('z_min')},{wb.get('z_max')}]"
             f"Shared zone (both robots): x=[{sz.get('x_min')},{sz.get('x_max')}] -> objects here are reachable by either robot"
         )
 

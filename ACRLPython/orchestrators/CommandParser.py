@@ -225,17 +225,20 @@ class CommandParser:
 
     def _decompose_to_motions(self, command_text: str, robot_id: str) -> List[str]:
         """Stage 1: decompose a high-level command into concrete motion strings for chain-of-thought anchoring."""
-        prompt = (
-            f'High-level command: "{command_text}"\n'
-            f"Default robot: {robot_id}\n\n"
-            "Decompose this command into an ordered list of short, concrete physical motion descriptions. Each entry should describe one distinct robot motion (e.g. 'move end-effector to target position', 'lower arm to 0.3m height').\n"
-            "IMPORTANT: Do NOT add gripper open/close or grasp motions unless the command EXPLICITLY says to pick up, grab, grasp, or grip an object. Pure navigation ('move to it', 'navigate to X', 'go to position') must NOT include any gripper step.\n Navigation example: 'detect the blue cube and move to it': "
-            '["detect blue cube position", "move end-effector to detected position"]\n'
-            "Pick example: 'grasp the red cube': "
-            '["grasp red cube (full approach and grip)"]\n'
-            "IMPORTANT: grasp/pick/grab is always a SINGLE step (do NOT split into approach + descend + close).\n"
-            "Output a JSON array of strings only. No markdown."
-        )
+        prompt = f"""
+            High-level command: "{command_text}"
+            
+            Default robot: {robot_id}"
+            
+            Decompose this command into an ordered list of short, concrete physical motion descriptions. Each entry should describe one distinct robot motion (e.g. 'move end-effector to target position', 'lower arm to 0.3m height').
+            
+            IMPORTANT: Do NOT add gripper open/close or grasp motions unless the command EXPLICITLY says to pick up, grab, grasp, or grip an object. Pure navigation ('move to it', 'navigate to X', 'go to position') must NOT include any gripper step. Navigation example: 'detect the blue cube and move to it': '["detect blue cube position", "move end-effector to detected position"]'
+            "Pick example: 'grasp the red cube': '["grasp red cube (full approach and grip)"]'
+            
+            IMPORTANT: grasp/pick/grab is always a SINGLE step (do NOT split into approach + descend + close).
+            
+            Output a JSON array of strings only. No markdown.
+        """
         try:
             payload = {
                 "model": self.model,

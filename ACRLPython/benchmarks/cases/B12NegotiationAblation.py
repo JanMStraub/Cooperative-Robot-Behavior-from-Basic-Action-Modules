@@ -20,5 +20,5 @@ def get_tasks(config=None) -> List[str]:
     return [
         _b6(),
         _b7(),
-        "Robot1 picks up the red cube and passes it to Robot2 and Robot2 stacks it on the green block.",
+        "Robot1 picks up the yellow cube and passes it to Robot2 and Robot2 stacks it on the green block.",
     ]

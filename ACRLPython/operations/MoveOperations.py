@@ -68,6 +68,29 @@ def move_to_coordinate(
             )
             if result and result.get("success"):
                 logger.info(f"ROS motion completed for {robot_id}")
+                # ROS path bypasses Unity's SetTarget, so _targetTransform stays null
+                # and WorldState would publish (0,0,0) as target_position.  Write the
+                # confirmed target explicitly so operations like receive_handoff that
+                # read get_robot_target() get the correct position.
+                try:
+                    from ._imports import get_world_state
+
+                    ws = get_world_state()
+                    if ws is not None:
+                        ws.update_robot_state(
+                            robot_id,
+                            {
+                                "target_position": {
+                                    "x": actual_x,
+                                    "y": actual_y,
+                                    "z": actual_z,
+                                }
+                            },
+                        )
+                except Exception as _e:
+                    logger.debug(
+                        f"move_to_coordinate: could not write target to WorldState: {_e}"
+                    )
                 return OperationResult.success_result(
                     {
                         "robot_id": robot_id,

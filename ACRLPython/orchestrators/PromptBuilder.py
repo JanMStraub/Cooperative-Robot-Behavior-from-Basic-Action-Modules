@@ -59,12 +59,12 @@ class PromptBuilder:
         === ROBOT WORKSPACE BOUNDARIES ===
 
         Robot1 (left, x=-0.475): reachable x < 0.165. Robot2 (right, x=+0.475): reachable x > -0.165.
-        x > 0 → Robot2's side. x < 0 → Robot1's side. x ≈ 0 → shared.
-        Wrong-side task → use HANDOFF sequence.
+        x > 0 -> Robot2's side. x < 0 -> Robot1's side. x = 0 -> shared.
+        Wrong-side task -> use HANDOFF sequence.
 
         === MULTI-ROBOT COORDINATION ===
 
-        Multi-robot tasks use "plan" format (with "reasoning" + per-op "parallel_group"). Single-robot → "commands" format.
+        Multi-robot tasks use "plan" format (with "reasoning" + per-op "parallel_group"). Single-robot -> "commands" format.
         Same parallel_group = concurrent. Later group waits for all prior groups.
         VARIABLE DEPENDENCY LAW: if B reads $var captured by A, B must have strictly higher parallel_group than A. Never same group.
 
@@ -72,12 +72,12 @@ class PromptBuilder:
 
         Exact steps with required parallel_group numbers (no composite ops, no deviations):
         group=1: Robot1: detect_object_stereo (capture_var="target")
-        group=2: Robot1: grasp_object(object_id="$target.color") — MUST be group=2 (after detect)
-        group=3: Robot1: return_to_start_position — MUST be group=3 (after grasp, never same group as grasp)
-        group=4: Robot1: move_to_coordinate({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}) — NO approach_offset; own group
+        group=2: Robot1: grasp_object(object_id="$target.color"): MUST be group=2 (after detect)
+        group=3: Robot1: return_to_start_position: MUST be group=3 (after grasp, never same group as grasp)
+        group=4: Robot1: move_to_coordinate({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}): NO approach_offset; own group
         group=5: Robot1: adjust_end_effector_orientation(pitch=0, yaw=0, roll=0)
-        group=6: Robot1: signal("r1_at_handoff") + Robot2: wait_for_signal("r1_at_handoff") — SAME group
-        group=7: Robot2: detect_object_stereo(color=<same as step 1>, capture_var="handoff_target") — object moved with Robot1
+        group=6: Robot1: signal("r1_at_handoff") + Robot2: wait_for_signal("r1_at_handoff"): SAME group
+        group=7: Robot2: detect_object_stereo(color=<same as step 1>, capture_var="handoff_target"): object moved with Robot1
         group=8: Robot2: receive_handoff(object_id="$handoff_target.color", source_robot_id="Robot1")
         group=9: Robot1: release_object
 
@@ -90,9 +90,9 @@ class PromptBuilder:
 
         === NAVIGATION RULE ===
 
-        Move/navigate/approach WITHOUT pick/grab/grasp language → move_to_coordinate only (no gripper ops).
-        Always set approach_offset=0.10 when moving to a detected object (lifts gripper above table; range 0.0–0.10).
-        receive_handoff is not navigation — never replace with move_to_coordinate.
+        Move/navigate/approach WITHOUT pick/grab/grasp language -> move_to_coordinate only (no gripper ops).
+        Always set approach_offset=0.10 when moving to a detected object (lifts gripper above table; range 0.0-0.10).
+        receive_handoff is not navigation: never replace with move_to_coordinate.
 
         "detect blue cube and move to it":
         {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}}
@@ -100,22 +100,22 @@ class PromptBuilder:
 
         === GRASP RULE ===
 
-        Pick/grab/grasp → grasp_object (handles approach+descent+grip; no separate move_to_coordinate before it).
-        object_id always uses ".color" from detection ($target.color — never .id or .name).
+        Pick/grab/grasp -> grasp_object (handles approach+descent+grip; no separate move_to_coordinate before it).
+        object_id always uses ".color" from detection ($target.color: never .id or .name).
         Never use grasp_object with a $field var (detect_field has no .color). Never on place/deposit tasks. Never for receiving robot in handoff (use receive_handoff).
 
         === PLACE RULE ===
 
-        Place/drop/deposit → place_object(x, y, z) — hover, descend, open, ascend. Not release_object, not control_gripper.
+        Place/drop/deposit -> place_object(x, y, z): hover, descend, open, ascend. Not release_object, not control_gripper.
         release_object: only for immediate drop at current position (emergency/handoff transfer).
-        Typical sequence: detect_field → place_object($field.x/y/z).
+        Typical sequence: detect_field -> place_object($field.x/y/z).
 
         === BETWEEN PLACEMENT ===
 
         When the task says "place between X and Y", "put it midway between", or "place in the middle of X and Y":
-        PREFER place_between_objects — it resolves both objects from WorldState and computes the midpoint internally.
+        PREFER place_between_objects: it resolves both objects from WorldState and computes the midpoint internally.
 
-        Example — "place the held object between the blue and red cube":
+        Example: "place the held object between the blue and red cube":
         {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "parallel_group": 1}}
         {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "parallel_group": 1}}
         {{"operation": "place_between_objects", "params": {{"robot_id": "Robot1", "object_id_1": "blue", "object_id_2": "red"}}, "parallel_group": 2}}
@@ -123,7 +123,7 @@ class PromptBuilder:
         The two detect calls CAN share the same parallel_group (they are independent of each other).
         place_between_objects MUST be in a strictly higher parallel_group than both detects.
 
-        Fallback — if objects are already in WorldState (no detection needed):
+        Fallback: if objects are already in WorldState (no detection needed):
         {{"operation": "place_between_objects", "params": {{"robot_id": "Robot1", "object_id_1": "blue_cube", "object_id_2": "red_cube"}}}}
 
         Multi-variable arithmetic in params is also supported when you need a custom midpoint:
@@ -132,10 +132,10 @@ class PromptBuilder:
         === SINGLE-ROBOT RULES ===
 
         Each action = separate op. Include robot_id in every op. Preserve order.
-        "close gripper/grip" (not a pick) → control_gripper(open_gripper=false). "open gripper/release" → open_gripper=true.
+        "close gripper/grip" (not a pick) -> control_gripper(open_gripper=false). "open gripper/release" -> open_gripper=true.
         Never add return_to_start, signal, or adjust_end_effector_orientation after a grasp unless explicitly requested.
 
-        "grab the blue cube": detect_object_stereo(color="blue", capture_var="target") → grasp_object(object_id="$target.color")
+        "grab the blue cube": detect_object_stereo(color="blue", capture_var="target") -> grasp_object(object_id="$target.color")
 
         === VARIABLE PASSING ===
 
@@ -143,13 +143,13 @@ class PromptBuilder:
         detect_object_stereo fields: x, y, z, color, confidence. For grasp: $target.color (never .id/.name).
         detect_field fields: x, y, z directly (use $field.x not $field.center.x).
 
-        Pick-and-place: detect_object_stereo(capture_var="target") → grasp_object($target.color) → detect_field(field_label="G", capture_var="field") → place_object($field.x, $field.y, $field.z)
+        Pick-and-place: detect_object_stereo(capture_var="target") -> grasp_object($target.color) -> detect_field(field_label="G", capture_var="field") -> place_object($field.x, $field.y, $field.z)
 
         === DETECT_FIELD RULE (CRITICAL) ===
         detect_field ALWAYS requires field_label (a single letter A-I). NEVER omit it.
         WRONG: {{"operation": "detect_field", "params": {{"robot_id": "Robot1"}}}}
         RIGHT: {{"operation": "detect_field", "params": {{"robot_id": "Robot1", "field_label": "A"}}}}
-        If the task does not specify a field letter, infer it from context or ask — do NOT emit detect_field without field_label.
+        If the task does not specify a field letter, infer it from context or ask: do NOT emit detect_field without field_label.
 
         {spatial_block}{anti_pattern_block}{reflection_block} Output only valid JSON, no explanation, no comments."""
 

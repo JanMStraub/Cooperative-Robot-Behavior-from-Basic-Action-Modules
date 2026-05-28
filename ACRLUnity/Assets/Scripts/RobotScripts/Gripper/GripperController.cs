@@ -73,6 +73,11 @@ namespace Robotics
         [Tooltip("Force Limit.")]
         public float maxForce = 300f; // Increased from 200 to maintain grip under object weight/inertia
 
+        [Header("Attachment Safety")]
+        [Tooltip("Maximum distance (meters) between attachment point and object center for the link to form. Objects farther away are ignored.")]
+        [Range(0.01f, 0.3f)]
+        public float maxAttachRadius = 0.08f;
+
         [Header("Contact Sensing")]
         [Tooltip("Contact sensor used to stop gripper closure when object is gripped.")]
         public GripperContactSensor contactSensor;
@@ -461,6 +466,15 @@ namespace Robotics
             if (attachmentPoint == null)
             {
                 Debug.LogError($"{_logPrefix} No attachment point assigned! Cannot attach object.");
+                return;
+            }
+
+            float dist = Vector3.Distance(attachmentPoint.position, obj.transform.position);
+            if (dist > maxAttachRadius)
+            {
+                Debug.LogWarning(
+                    $"{_logPrefix} Attachment rejected: '{obj.name}' is {dist:F3}m from gripper (maxAttachRadius={maxAttachRadius:F3}m)"
+                );
                 return;
             }
 

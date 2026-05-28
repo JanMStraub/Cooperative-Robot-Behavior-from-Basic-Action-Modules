@@ -106,13 +106,19 @@ class VariableResolver:
             ):
                 continue
 
-            # Check if parameter is already provided
+            # Check if parameter is already provided with a concrete (non-$var) value.
+            # If the existing value is an unresolved $var reference (e.g. "$target.color"),
+            # fall through to auto-inject so the real captured value is used instead of
+            # a literal $var string reaching the downstream operation.
+            # None explicitly suppresses injection (caller's intent is preserved).
             target_param = flow.target_input_param
             if target_param in enhanced_params:
-                logger.debug(
-                    f"Parameter {target_param} already provided, skipping auto-injection"
-                )
-                continue
+                existing_val = enhanced_params[target_param]
+                if not (isinstance(existing_val, str) and existing_val.startswith("$")):
+                    logger.debug(
+                        f"Parameter {target_param} already provided with concrete value, skipping auto-injection"
+                    )
+                    continue
 
             # Try to get value from captured variables
             # Dots in source_output_key are stored as underscores (see auto_capture_outputs)

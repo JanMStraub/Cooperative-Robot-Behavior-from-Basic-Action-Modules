@@ -242,18 +242,23 @@ class SequenceExecutor:
                     _unres_str = ", ".join(_unresolved)
                     logger.error(
                         "Command %d/%d (%s): unresolved variable(s): %s — aborting",
-                        i + 1, len(commands), operation, _unres_str,
+                        i + 1,
+                        len(commands),
+                        operation,
+                        _unres_str,
                     )
                     _cmd_err = f"Unresolved variable(s): {_unres_str}"
-                    results.append({
-                        "index": i,
-                        "operation": operation,
-                        "success": False,
-                        "result": None,
-                        "error": _cmd_err,
-                        "error_code": "UNRESOLVED_VARIABLE",
-                        "duration_ms": 0,
-                    })
+                    results.append(
+                        {
+                            "index": i,
+                            "operation": operation,
+                            "success": False,
+                            "result": None,
+                            "error": _cmd_err,
+                            "error_code": "UNRESOLVED_VARIABLE",
+                            "duration_ms": 0,
+                        }
+                    )
                     self._notify_progress(i, len(commands), operation, "failed")
                     logger.error(f"Command {i + 1} failed: {_cmd_err}")
                     break

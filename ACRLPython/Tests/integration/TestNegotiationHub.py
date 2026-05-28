@@ -51,7 +51,7 @@ class TestNegotiationConfig:
     def test_default_values(self):
         assert NEGOTIATION_ENABLED is False
         assert MAX_NEGOTIATION_ROUNDS == 3
-        assert AGENT_LLM_TIMEOUT == 30.0
+        assert AGENT_LLM_TIMEOUT == 60.0
         assert NEGOTIATION_TIMEOUT == 120.0
         assert NEGOTIATION_TEMPERATURE == 0.3
         assert isinstance(COLLABORATION_KEYWORDS, list)

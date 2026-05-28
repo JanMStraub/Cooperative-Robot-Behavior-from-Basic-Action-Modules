@@ -68,6 +68,7 @@ def build_message(
     msg += struct.pack("<I", len(rob_b)) + rob_b
     msg += struct.pack("<I", len(cam_b)) + cam_b
     msg += struct.pack("<B", 1 if auto_execute else 0)
+    msg += struct.pack("<I", 0)  # flags_len=0 (no benchmark flag overrides)
     return msg
 
 
@@ -339,7 +340,7 @@ def run_handoff(
                     "params": {
                         "robot_id": receiver_id,
                         "camera_id": camera_id,
-                        "object_color": object_id,
+                        "color": object_id.split("_")[0],  # "red_cube" → "red"
                     },
                 }
             ],
@@ -460,7 +461,12 @@ def run_handoff(
         )
         req += 1
 
-    return all(r.get("success", False) for r in results.values())
+    # "detect" is soft-failure (warn + continue), so exclude it from the
+    # required-success check.  All other steps must succeed.
+    optional_steps = {"detect"}
+    return all(
+        r.get("success", False) for k, r in results.items() if k not in optional_steps
+    )
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────

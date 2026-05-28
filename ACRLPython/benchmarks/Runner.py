@@ -330,6 +330,7 @@ class BenchmarkRunner:
         ops_executed = len(steps)
         ops_succeeded = sum(1 for s in steps if s.success)
 
+        total_retries = sum(s.retry_count for s in steps)
         return BenchmarkResult(
             benchmark_id=benchmark_id,
             benchmark_name=_BENCHMARK_NAMES[benchmark_id],
@@ -342,6 +343,7 @@ class BenchmarkRunner:
             ops_succeeded=ops_succeeded,
             success_rate=(ops_succeeded / ops_executed) if ops_executed else 0.0,
             avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
+            retry_count=total_retries,
             first_failure_step=first_fail,
             feature_flags=self._extract_feature_flags(cfg),
             parsed_plan=[c.get("operation", "") for c in parsed_cmds],
@@ -394,6 +396,7 @@ class BenchmarkRunner:
                     duration_ms=float(r.get("duration_ms", 0.0)),
                     error_code=error_code,
                     error_message=error_message,
+                    retry_count=int(r.get("retry_count", 0)),
                     robot_id=cmd.get("params", {}).get("robot_id") or None,
                     parallel_group_id=cmd.get("parallel_group") or None,
                 )
@@ -473,7 +476,8 @@ class BenchmarkRunner:
         """
         Run B9 Impossible Task: verify the parser gracefully rejects an unexecutable task.
 
-        Success = parser returns no valid operations (parse failure or zero commands).
+        A graceful rejection means the parser explicitly returned success=False with
+        zero commands — NOT that it raised an exception. Crashes are failures.
         No Unity connection required — parse-only.
 
 
@@ -482,10 +486,21 @@ class BenchmarkRunner:
 
         task = module.get_task()
         parser = CommandParser(use_rag=cfg.use_rag)
-        parse_result = parser.parse(task, robot_id=cfg.robot_id)
 
-        commands = parse_result.get("commands", [])
-        gracefully_rejected = not parse_result.get("success", True) or len(commands) == 0
+        parse_exception: Optional[Exception] = None
+        parse_result: Dict[str, Any] = {}
+        try:
+            parse_result = parser.parse(task, robot_id=cfg.robot_id)
+        except Exception as exc:
+            parse_exception = exc
+
+        if parse_exception is not None:
+            # Parser threw — this is a bug, not a graceful rejection
+            gracefully_rejected = False
+        else:
+            commands = parse_result.get("commands", [])
+            parse_failed = not parse_result.get("success", True)
+            gracefully_rejected = parse_failed or len(commands) == 0
 
         return BenchmarkResult(
             benchmark_id=9,
@@ -495,7 +510,7 @@ class BenchmarkRunner:
             success=gracefully_rejected,
             total_duration_ms=0.0,
             steps=[],
-            ops_executed=len(commands),
+            ops_executed=len(parse_result.get("commands", [])),
             ops_succeeded=0,
             success_rate=1.0 if gracefully_rejected else 0.0,
             avg_step_duration_ms=0.0,
@@ -553,12 +568,30 @@ class BenchmarkRunner:
         ablation_on = condition_results["enabled"]
         ablation_off = condition_results["disabled"]
 
+        # Delta: positive = RAG reduced hallucinations / improved success
+        hallucination_delta = (
+            ablation_off.hallucinated_ops - ablation_on.hallucinated_ops
+        )
+        success_rate_delta = ablation_on.success_rate - ablation_off.success_rate
+        ablation_on = dataclasses.replace(
+            ablation_on,
+            condition_delta=round(success_rate_delta, 4),
+            hallucination_delta=hallucination_delta,
+        )
+
+        # Success: both conditions executed ops, and RAG must not be worse
+        success = (
+            ablation_on.ops_executed > 0
+            and ablation_off.ops_executed > 0
+            and ablation_on.hallucinated_ops <= ablation_off.hallucinated_ops
+        )
+
         return BenchmarkResult(
             benchmark_id=10,
             benchmark_name=_BENCHMARK_NAMES[10],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            success=(ablation_on.hallucinated_ops == 0 and ablation_off.ops_executed > 0),
+            success=success,
             total_duration_ms=0.0,
             steps=[],
             ops_executed=ablation_on.ops_executed,
@@ -711,12 +744,21 @@ class BenchmarkRunner:
         ablation_off = condition_results["disabled"]
         steps_on = condition_steps["enabled"]
 
+        delta = round(ablation_on.success_rate - ablation_off.success_rate, 4)
+        ablation_on = dataclasses.replace(ablation_on, condition_delta=delta)
+
+        # Success: enabled condition executed ops and is not worse than disabled
+        success = (
+            ablation_on.ops_executed > 0
+            and ablation_on.success_rate >= ablation_off.success_rate
+        )
+
         return BenchmarkResult(
             benchmark_id=11,
             benchmark_name=_BENCHMARK_NAMES[11],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            success=True,
+            success=success,
             total_duration_ms=0.0,
             steps=steps_on,
             ops_executed=ablation_on.ops_executed,
@@ -833,18 +875,26 @@ class BenchmarkRunner:
             _neg_cfg.NEGOTIATION_ENABLED = negotiation_on
             mock_original = MockRegistry.install_mock("always_succeed")
             try:
+                from core.Imports import get_negotiation_hub
+
+                hub = get_negotiation_hub()
+
                 parser = CommandParser(use_rag=cfg.use_rag)
                 for task in tasks:
                     parse_result = parser.parse(task, robot_id=robot_id)
                     if not parse_result["success"]:
                         continue
                     ops = parse_result["commands"]
-                    total_negotiation_rounds += sum(
-                        1 for op in ops if op.get("operation") == "signal"
-                    )
                     cfg_local = dataclasses.replace(cfg, dry_run=True)
                     raw = self._run_local(ops, cfg_local)
                     total_ms += float(raw.get("total_duration_ms", 0.0))
+                    # Prefer real hub round count; fall back to signal-op proxy
+                    if hub is not None:
+                        total_negotiation_rounds += hub.get_last_round_count()
+                    else:
+                        total_negotiation_rounds += sum(
+                            1 for op in ops if op.get("operation") == "signal"
+                        )
                     task_steps = self._parse_steps(raw.get("results") or [], ops)
                     step_offset = len(all_steps)
                     for s in task_steps:
@@ -873,12 +923,24 @@ class BenchmarkRunner:
         ablation_on = condition_results["enabled"]
         ablation_off = condition_results["disabled"]
 
+        round_delta = ablation_on.negotiation_rounds - ablation_off.negotiation_rounds
+        rate_delta = round(ablation_on.success_rate - ablation_off.success_rate, 4)
+        ablation_on = dataclasses.replace(
+            ablation_on, condition_delta=rate_delta, hallucination_delta=round_delta
+        )
+
+        # Success: enabled condition executed ops and is not worse than disabled
+        success = (
+            ablation_on.ops_executed > 0
+            and ablation_on.success_rate >= ablation_off.success_rate
+        )
+
         return BenchmarkResult(
             benchmark_id=12,
             benchmark_name=_BENCHMARK_NAMES[12],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            success=True,
+            success=success,
             total_duration_ms=0.0,
             steps=[],
             ops_executed=ablation_on.ops_executed,
@@ -1011,12 +1073,19 @@ class BenchmarkRunner:
         ablation_on = condition_results["enabled"]
         ablation_off = condition_results["disabled"]
 
+        delta = round(ablation_on.success_rate - ablation_off.success_rate, 4)
+        ablation_on = dataclasses.replace(ablation_on, condition_delta=delta)
+
+        # Offline: success = both conditions parsed ops (parse-path validation only)
+        # Actual grasp quality difference only measurable in live mode
+        success = ablation_on.ops_executed > 0 and ablation_off.ops_executed > 0
+
         return BenchmarkResult(
             benchmark_id=14,
             benchmark_name=_BENCHMARK_NAMES[14],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            success=True,
+            success=success,
             total_duration_ms=0.0,
             steps=last_steps,
             ops_executed=ablation_on.ops_executed,
@@ -1150,12 +1219,19 @@ class BenchmarkRunner:
         ablation_on = condition_results["ros"]
         ablation_off = condition_results["unity"]
 
+        delta = round(ablation_on.success_rate - ablation_off.success_rate, 4)
+        ablation_on = dataclasses.replace(ablation_on, condition_delta=delta)
+
+        # Offline: success = both conditions parsed ops (parse-path validation only)
+        # Timing difference only measurable in live mode
+        success = ablation_on.ops_executed > 0 and ablation_off.ops_executed > 0
+
         return BenchmarkResult(
             benchmark_id=15,
             benchmark_name=_BENCHMARK_NAMES[15],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
-            success=True,
+            success=success,
             total_duration_ms=0.0,
             steps=last_steps,
             ops_executed=ablation_on.ops_executed,
@@ -1216,7 +1292,8 @@ class BenchmarkRunner:
                                 params_str = str(cmd.get("params", {})).lower()
                                 uses_variable_ref = "$" in params_str
                                 has_kg_ref = uses_variable_ref or any(
-                                    obj.lower() in params_str for obj in module.KG_OBJECTS
+                                    obj.lower() in params_str
+                                    for obj in module.KG_OBJECTS
                                 )
                                 if not has_kg_ref and "object" in op_name:
                                     wrong_object += 1

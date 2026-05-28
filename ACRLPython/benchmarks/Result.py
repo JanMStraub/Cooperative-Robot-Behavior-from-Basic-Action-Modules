@@ -46,6 +46,9 @@ class AblationMetrics:
     success_rate: float
     ops_executed: int
     ops_succeeded: int
+    # Improvement over baseline (enabled - disabled); positive = feature helps
+    condition_delta: float = 0.0  # success_rate_enabled - success_rate_disabled
+    hallucination_delta: int = 0  # hallucinated_ops_disabled - hallucinated_ops_enabled
 
 
 @dataclasses.dataclass
@@ -70,7 +73,7 @@ class BenchmarkResult:
     reflexion_recoveries: int = 0
     negotiation_rounds: int = 0
     ablation: Optional[AblationMetrics] = None
-    ablation_baseline: Optional[AblationMetrics] = None   # disabled-condition metrics
+    ablation_baseline: Optional[AblationMetrics] = None  # disabled-condition metrics
     feature_flags: dict = dataclasses.field(default_factory=dict)
     parsed_plan: List[str] = dataclasses.field(default_factory=list)
     per_op_stats: dict = dataclasses.field(default_factory=dict)

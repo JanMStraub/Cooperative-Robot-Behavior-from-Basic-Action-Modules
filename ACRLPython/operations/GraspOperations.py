@@ -8,7 +8,6 @@ try:
         receive_handoff,
     )
     from .grasp._dispatcher import _get_command_broadcaster
-    from .grasp._handoff import _compute_handoff_approach_vector
     from .grasp._vgn import _grasp_via_vgn, _grasp_via_vgn_with_ros
     from .grasp._helpers import GRASP_TCP_OFFSET
 except ImportError:
@@ -19,7 +18,6 @@ except ImportError:
         receive_handoff,
     )
     from operations.grasp._dispatcher import _get_command_broadcaster  # type: ignore[no-redef]
-    from operations.grasp._handoff import _compute_handoff_approach_vector  # type: ignore[no-redef]
     from operations.grasp._vgn import _grasp_via_vgn, _grasp_via_vgn_with_ros  # type: ignore[no-redef]
     from operations.grasp._helpers import GRASP_TCP_OFFSET  # type: ignore[no-redef]
 
@@ -35,7 +33,6 @@ __all__ = [
     "GRASP_OBJECT_OPERATION",
     "RECEIVE_HANDOFF_OPERATION",
     "_get_command_broadcaster",
-    "_compute_handoff_approach_vector",
     "_grasp_via_vgn",
     "_grasp_via_vgn_with_ros",
     "GRASP_TCP_OFFSET",

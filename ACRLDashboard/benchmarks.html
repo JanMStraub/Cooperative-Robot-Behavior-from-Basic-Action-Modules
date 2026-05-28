@@ -442,6 +442,15 @@
                     <i class="fa-solid fa-table-cells"></i> Operation Timing
                     Heatmap (avg ms)
                   </span>
+                  <div class="analysis-panel-actions">
+                    <button
+                      class="btn-icon-small"
+                      onclick="exportHeatmapCsv()"
+                      title="Export CSV"
+                    >
+                      <i class="fa-solid fa-file-csv"></i>
+                    </button>
+                  </div>
                 </div>
                 <div class="analysis-chart-body analysis-chart-body--table">
                   <div id="chartF"></div>
@@ -501,6 +510,15 @@
                   <span class="analysis-panel-title">
                     <i class="fa-solid fa-grip"></i> Operation Coverage Matrix
                   </span>
+                  <div class="analysis-panel-actions">
+                    <button
+                      class="btn-icon-small"
+                      onclick="exportCoverageMatrixCsv()"
+                      title="Export CSV"
+                    >
+                      <i class="fa-solid fa-file-csv"></i>
+                    </button>
+                  </div>
                 </div>
                 <div class="analysis-chart-body analysis-chart-body--table">
                   <div id="chartI"></div>
@@ -512,6 +530,12 @@
                 <span class="export-row-label">EXPORT</span>
                 <button class="btn-action" onclick="exportAllCharts()">
                   <i class="fa-solid fa-images"></i> All Charts as PNG
+                </button>
+                <button class="btn-action" onclick="exportHeatmapCsv()">
+                  <i class="fa-solid fa-file-csv"></i> Timing Heatmap CSV
+                </button>
+                <button class="btn-action" onclick="exportCoverageMatrixCsv()">
+                  <i class="fa-solid fa-file-csv"></i> Coverage Matrix CSV
                 </button>
                 <button class="btn-action" onclick="downloadAggregateJson()">
                   <i class="fa-solid fa-file-code"></i> Aggregate JSON

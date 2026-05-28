@@ -395,16 +395,37 @@ class TestSpatialOps:
         reset_simulation()
 
     def test_move_relative_to_object(self):
-        """move_relative_to_object moves Robot1 relative to a named object."""
+        """move_relative_to_object returns OBJECT_NOT_FOUND for an unknown object.
+
+        Uses EXEC: prefix to bypass LLM parsing and a guaranteed-absent object
+        name so no Unity arm motion is triggered.  This tests the full operation
+        dispatch path (parsing → world-state lookup → error result) without
+        depending on Unity execution time.
+        """
+        import json
+
         result = _cmd(
-            "move Robot1 relative to redCube offset 0.0 0.1 0.0",
+            "EXEC:"
+            + json.dumps(
+                [
+                    {
+                        "operation": "move_relative_to_object",
+                        "params": {
+                            "robot_id": "Robot1",
+                            "object_ref": "__test_absent_object_xyz__",
+                            "relation": "above",
+                            "offset": 0.1,
+                        },
+                    }
+                ]
+            ),
             robot_id="Robot1",
-            timeout=240.0,
+            timeout=15.0,
             request_id=700,
         )
         assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "move_relative_to_object returned an unexpected response"
+            result.get("error") == "OBJECT_NOT_FOUND"
+        ), f"Expected OBJECT_NOT_FOUND, got: {result}"
 
 
 # Grasp Operations (timeout: 60 s)

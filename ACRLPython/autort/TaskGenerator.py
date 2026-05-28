@@ -298,9 +298,9 @@ Every operation needs robot_id and parameters ({{}} if none)
 detect_object_stereo: color must be a named color or null; selection must be "left"/"right"/"closest"/"first"/"all"; camera_id="{DEFAULT_CAMERA_ID}"
 Assign objects to nearest robot (X<-0.1: Robot1, X>0.1: Robot2, center: either)
 Every robot_id in operations must appear in required_robots
-GRASP RULE: Always use grasp_object (not pick_object_at_coordinate) when grasping a detected object — grasp_object uses the object's name/ID and handles detection internally
-HANDOFF RULE: For transferring an object between robots use handoff (sender) + receive_handoff (receiver) — never implement handoffs with raw move/signal/release sequences. Handoffs are ONLY allowed with the red object — never generate a handoff for any other color.
-PLACE RULE: For placing a held object use place_object (at a position) or place_between_objects (between two reference objects) — never use release_object or move_to_coordinate to place
+GRASP RULE: Always use grasp_object (not pick_object_at_coordinate) when grasping a detected object: grasp_object uses the object's name/ID and handles detection internally
+HANDOFF RULE: For transferring an object between robots use handoff (sender) + receive_handoff (receiver): never implement handoffs with raw move/signal/release sequences. Handoffs are ONLY allowed with the red object: never generate a handoff for any other color.
+PLACE RULE: For placing a held object use place_object (at a position) or place_between_objects (between two reference objects): never use release_object or move_to_coordinate to place
 FIELD RULE: Fields (field_a through field_i) are NOT in WorldState by default. Before using a field as a placement target (on_top_of param) you MUST call detect_field earlier in the same task's operations. Never reference a field ID unless detect_field for that field precedes it in the sequence.
 Output compact JSON array only, no markdown"""
 
