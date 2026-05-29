@@ -53,7 +53,12 @@ class PromptBuilder:
         # Suppress the default-robot hint for multi-robot tasks — the task text
         # names both robots explicitly, so a default would bias the LLM to one robot.
         import re as _re
-        _named_robots = {rid for rid in ["Robot1", "Robot2"] if _re.search(r"\b" + rid + r"\b", command_text)}
+
+        _named_robots = {
+            rid
+            for rid in ["Robot1", "Robot2"]
+            if _re.search(r"\b" + rid + r"\b", command_text)
+        }
         _robot_id_line = (
             f'Default robot_id: "{robot_id}"'
             if len(_named_robots) <= 1

@@ -425,7 +425,9 @@ class BenchmarkRunner:
         raw = self._send(task, robot_id, cfg)
         result = self._build_result(16, cfg, raw)
 
-        parallelism_ratio, ops_in_parallel = self._compute_parallelism_ratio(result.steps)
+        parallelism_ratio, ops_in_parallel = self._compute_parallelism_ratio(
+            result.steps
+        )
         parallelism_success = parallelism_ratio >= 0.5
 
         return dataclasses.replace(

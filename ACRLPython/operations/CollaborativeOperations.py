@@ -267,3 +267,162 @@ def create_stabilize_object_operation() -> BasicOperation:
 
 STABILIZE_OBJECT_OPERATION = create_stabilize_object_operation()
 # STABILIZE_AND_MANIPULATE_OPERATION removed - use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN instead
+
+
+def place_for_partner(
+    robot_id: str,
+    zone_id: str = "shared_zone",
+    signal_name: Optional[str] = None,
+    request_id: int = 0,
+    use_ros: Optional[bool] = None,
+) -> OperationResult:
+    """Place a held object at a shared zone for the partner robot to pick up, then signal readiness."""
+    try:
+        if not robot_id or not isinstance(robot_id, str):
+            return OperationResult.error_result(
+                "INVALID_ROBOT_ID",
+                "Robot ID must be a non-empty string",
+                ["Provide a valid robot ID"],
+            )
+
+        if not zone_id or not isinstance(zone_id, str):
+            return OperationResult.error_result(
+                "INVALID_ZONE_ID",
+                "Zone ID must be a non-empty string",
+                ["Provide a valid zone ID"],
+            )
+
+        try:
+            from ._imports import WORKSPACE_REGIONS, PLACE_MIN_Y
+        except ImportError:
+            from operations._imports import WORKSPACE_REGIONS, PLACE_MIN_Y  # type: ignore[no-redef]
+
+        try:
+            from ..config.Robot import HANDOFF_PRESENTATION_POSITION
+        except ImportError:
+            from config.Robot import HANDOFF_PRESENTATION_POSITION  # type: ignore[no-redef]
+
+        if zone_id == "shared_zone":
+            x, y, z = HANDOFF_PRESENTATION_POSITION
+        else:
+            zone = WORKSPACE_REGIONS.get(zone_id)
+            if zone is None:
+                return OperationResult.error_result(
+                    "UNKNOWN_ZONE",
+                    f"Zone '{zone_id}' not found in WORKSPACE_REGIONS",
+                    [f"Valid zones: {list(WORKSPACE_REGIONS.keys())}"],
+                )
+            x = (zone["x_min"] + zone["x_max"]) / 2
+            z = (zone["z_min"] + zone["z_max"]) / 2
+            y = PLACE_MIN_Y
+
+        try:
+            from .GripperOperations import place_object
+        except ImportError:
+            from operations.GripperOperations import place_object  # type: ignore[no-redef]
+
+        result = place_object(robot_id, x, y, z, request_id=request_id, use_ros=use_ros)
+
+        if result.success:
+            effective_signal = signal_name or f"object_ready_at_{zone_id}"
+
+            try:
+                from .SyncOperations import EventBus
+            except ImportError:
+                from operations.SyncOperations import EventBus  # type: ignore[no-redef]
+
+            EventBus().signal(effective_signal)
+
+            result_data = dict(result.result or {})
+            result_data["partner_signal"] = effective_signal
+            result_data["zone_id"] = zone_id
+            return OperationResult.success_result(result_data)
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Unexpected error in place_for_partner: {e}", exc_info=True)
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            f"Unexpected error occurred: {str(e)}",
+            ["Check logs"],
+        )
+
+
+def create_place_for_partner_operation() -> BasicOperation:
+    return BasicOperation(
+        operation_id="collaborative_place_for_partner_001",
+        name="place_for_partner",
+        category=OperationCategory.MANIPULATION,
+        complexity=OperationComplexity.INTERMEDIATE,
+        description="Place a held object at a shared zone for the partner robot to pick up, then signal readiness",
+        long_description="""
+            Moves to the target shared zone, places the held object there, then emits a
+            signal (default: object_ready_at_<zone_id>) so the partner robot knows it can
+            proceed to pick the object up. Avoids the need for a live simultaneous handoff.
+        """,
+        usage_examples=[
+            "place_for_partner('Robot1') — places at shared_zone center, signals object_ready_at_shared_zone",
+            "place_for_partner('Robot1', zone_id='center', signal_name='cube_dropped')",
+        ],
+        preconditions=[
+            "robot_is_initialized(robot_id)",
+            "robot_is_holding_object(robot_id)",
+        ],
+        postconditions=[
+            "object_at_zone_center(zone_id)",
+            "partner_notified_via_signal",
+        ],
+        parameters=[
+            OperationParameter(
+                name="robot_id",
+                type="str",
+                description="Robot ID performing the placement",
+                required=True,
+            ),
+            OperationParameter(
+                name="zone_id",
+                type="str",
+                description="Target shared zone ID from WORKSPACE_REGIONS",
+                required=False,
+                default="shared_zone",
+            ),
+            OperationParameter(
+                name="signal_name",
+                type="str",
+                description="Override signal name (default: object_ready_at_<zone_id>)",
+                required=False,
+                default=None,
+            ),
+        ],
+        average_duration_ms=3000.0,
+        success_rate=87.0,
+        failure_modes=[
+            "Place operation fails",
+            "Robot not holding an object",
+            "Zone out of reach",
+        ],
+        relationships=OperationRelationship(
+            operation_id="collaborative_place_for_partner_001",
+            required_operations=["manipulation_grasp_object_001"],
+            required_reasons={
+                "manipulation_grasp_object_001": "Robot must be holding object before placing for partner",
+            },
+            commonly_paired_with=[
+                "sync_wait_for_signal_001",
+                "coordination_yield_workspace_002",
+                "coordination_check_partner_001",
+            ],
+            pairing_reasons={
+                "sync_wait_for_signal_001": "Partner waits for object_ready_at_<zone> signal",
+                "coordination_yield_workspace_002": "Yield shared zone before placing",
+                "coordination_check_partner_001": "Check partner is idle before placing for pickup",
+            },
+            typical_before=["sync_signal_001"],
+            typical_after=["manipulation_grasp_object_001"],
+        ),
+        implementation=place_for_partner,
+    )
+
+
+PLACE_FOR_PARTNER_OPERATION = create_place_for_partner_operation()

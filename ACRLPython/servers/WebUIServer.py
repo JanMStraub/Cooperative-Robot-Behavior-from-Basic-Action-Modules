@@ -675,7 +675,9 @@ async def api_send_command(command_data: Dict[str, Any]):
             # Tell Unity to immediately stop all active movements
             try:
                 broadcaster = get_command_broadcaster()
-                broadcaster.send_command({"command_type": "halt_all", "robot_id": "system"})
+                broadcaster.send_command(
+                    {"command_type": "halt_all", "robot_id": "system"}
+                )
             except Exception as e:
                 logger.warning(f"E-Stop: halt_all send failed: {e}")
             return {
@@ -719,6 +721,7 @@ async def api_send_command(command_data: Dict[str, Any]):
 @app.post("/api/reset")
 async def api_reset_simulation():
     """Trigger a simulation reset directly, bypassing the LLM pipeline."""
+
     def _do_reset():
         broadcaster = get_command_broadcaster()
         return broadcaster.send_command_and_wait(
@@ -729,7 +732,10 @@ async def api_reset_simulation():
     try:
         completion = await asyncio.get_running_loop().run_in_executor(None, _do_reset)
         if completion is None:
-            return {"success": False, "error": "Unity did not respond (timeout or not connected)"}
+            return {
+                "success": False,
+                "error": "Unity did not respond (timeout or not connected)",
+            }
         if not completion.get("success", False):
             return {"success": False, "error": "Reset command failed in Unity"}
         return {"success": True}

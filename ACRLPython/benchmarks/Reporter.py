@@ -122,7 +122,8 @@ def print_summary(result: BenchmarkResult) -> None:
     print(f"  Retries:   {result.retry_count}")
     if result.per_op_stats:
         failing = {
-            op: v for op, v in result.per_op_stats.items()
+            op: v
+            for op, v in result.per_op_stats.items()
             if isinstance(v, dict) and v.get("fail_count", 0) > 0
         }
         if failing:

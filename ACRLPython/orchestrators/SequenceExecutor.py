@@ -231,12 +231,21 @@ class SequenceExecutor:
                 # Fail early if any param references a variable that hasn't been
                 # captured yet. VariableResolver returns the raw "$var.field" string
                 # on a miss, which causes type crashes inside operations expecting float.
+                # Also checks list elements (e.g. {"object_refs": ["$detected_a"]}).
+                def _has_unresolved_var(v):
+                    if isinstance(v, str) and v.startswith("$"):
+                        return v.lstrip("$").split(".")[0] not in self._variables
+                    if isinstance(v, list):
+                        return any(
+                            isinstance(e, str)
+                            and e.startswith("$")
+                            and e.lstrip("$").split(".")[0] not in self._variables
+                            for e in v
+                        )
+                    return False
+
                 _unresolved = [
-                    f"{_k}={_v}"
-                    for _k, _v in params.items()
-                    if isinstance(_v, str)
-                    and _v.startswith("$")
-                    and _v.lstrip("$").split(".")[0] not in self._variables
+                    f"{_k}={_v}" for _k, _v in params.items() if _has_unresolved_var(_v)
                 ]
                 if _unresolved:
                     _unres_str = ", ".join(_unresolved)
@@ -991,6 +1000,7 @@ class SequenceExecutor:
         logger.warning(f"Abort requested for sequence {self._current_sequence_id}")
         try:
             from core.Imports import get_command_broadcaster
+
             get_command_broadcaster().abort_all_pending()
         except Exception:
             pass

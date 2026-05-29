@@ -11,6 +11,7 @@ from .Base import (
     OperationCategory,
     OperationComplexity,
     OperationResult,
+    OperationRelationship,
 )
 from ._imports import get_command_broadcaster as _get_command_broadcaster
 from core.SingletonBase import SingletonBase
@@ -298,40 +299,6 @@ WAIT_OPERATION = BasicOperation(
 )
 
 
-def _reset_python_state() -> None:
-    """Clear all Python-side runtime state after a simulation reset."""
-    try:
-        from operations.WorldState import WorldState
-        WorldState().reset()
-    except Exception:
-        pass
-
-    try:
-        EventBus().reset()
-    except Exception:
-        pass
-
-    try:
-        from operations.SharedVisionState import SharedVisionState
-        SharedVisionState().clear()
-    except Exception:
-        pass
-
-    try:
-        from core.Imports import get_sequence_executor
-        executor = get_sequence_executor()
-        executor.abort()
-        executor._variables.clear()
-    except Exception:
-        pass
-
-    try:
-        from knowledge_graph._singleton import get_knowledge_graph
-        get_knowledge_graph().clear()
-    except Exception:
-        pass
-
-
 def _execute_reset_simulation(**_kwargs) -> OperationResult:
     command = {
         "command_type": "reset_simulation",
@@ -355,7 +322,6 @@ def _execute_reset_simulation(**_kwargs) -> OperationResult:
             ["Check Unity console for SimulationManager errors"],
         )
 
-    _reset_python_state()
     return OperationResult.success_result({"reset": True})
 
 
@@ -379,4 +345,168 @@ RESET_SIMULATION_OPERATION = BasicOperation(
     usage_examples=["reset_simulation() - Reset scene between benchmark runs"],
     relationships=None,
     implementation=_execute_reset_simulation,
+)
+
+
+def yield_workspace(
+    robot_id: str,
+    region_id: str,
+    timeout_ms: int = 10000,
+    request_id: int = 0,
+) -> OperationResult:
+    """Signal intent to enter a workspace region and wait until the region is cleared.
+
+    The partner robot must call signal("region_clear_<region_id>") when it leaves
+    the region. This makes workspace safety explicit for LLM planning.
+    """
+    # Validate inputs
+    if not robot_id or not isinstance(robot_id, str):
+        return OperationResult.error_result(
+            error_code="INVALID_ROBOT_ID",
+            message="robot_id must be a non-empty string",
+            recovery_suggestions=["Provide a valid robot_id string"],
+        )
+    if not region_id or not isinstance(region_id, str):
+        return OperationResult.error_result(
+            error_code="INVALID_REGION_ID",
+            message="region_id must be a non-empty string",
+            recovery_suggestions=["Provide a valid region_id string"],
+        )
+    if not (1000 <= timeout_ms <= 60000):
+        return OperationResult.error_result(
+            error_code="INVALID_TIMEOUT",
+            message=f"timeout_ms must be in range [1000, 60000], got {timeout_ms}",
+            recovery_suggestions=["Provide a timeout_ms value between 1000 and 60000"],
+        )
+
+    try:
+        try:
+            from .WorldState import WorldState
+        except ImportError:
+            from operations.WorldState import WorldState  # type: ignore[no-redef]
+
+        world_state = WorldState()
+        world_state.update_robot_state(robot_id, {"workspace_intent": region_id})
+    except Exception:
+        # WorldState unavailable — proceed without recording intent
+        world_state = None
+
+    event_bus = EventBus()
+    event_bus.signal(f"entering_{region_id}")
+
+    start_time = time.time()
+    granted = event_bus.wait_for_signal(
+        f"region_clear_{region_id}", timeout_ms=timeout_ms
+    )
+
+    if world_state is not None:
+        try:
+            world_state.update_robot_state(robot_id, {"workspace_intent": None})
+        except Exception:
+            pass
+
+    if not granted:
+        return OperationResult.error_result(
+            error_code="WORKSPACE_TIMEOUT",
+            message=(
+                f"Timeout waiting for workspace region '{region_id}' to be cleared "
+                f"after {timeout_ms}ms. Partner robot must call "
+                f"signal('region_clear_{region_id}') when leaving the region."
+            ),
+            recovery_suggestions=[
+                f"Partner robot should call signal('region_clear_{region_id}') when leaving the region",
+                "Increase timeout_ms if the partner robot needs more time",
+                "Verify the partner robot's task sequence includes the clear signal",
+            ],
+        )
+
+    waited_ms = (time.time() - start_time) * 1000
+    return OperationResult.success_result(
+        {
+            "robot_id": robot_id,
+            "region_id": region_id,
+            "granted": True,
+            "waited_ms": waited_ms,
+            "timestamp": time.time(),
+        }
+    )
+
+
+def _execute_yield_workspace(
+    robot_id: str,
+    region_id: str,
+    timeout_ms: int = 10000,
+    request_id: Optional[int] = None,
+    _use_ros: bool = False,
+    **_kwargs,
+) -> OperationResult:
+    return yield_workspace(
+        robot_id=robot_id,
+        region_id=region_id,
+        timeout_ms=timeout_ms,
+        request_id=request_id or 0,
+    )
+
+
+YIELD_WORKSPACE_OPERATION = BasicOperation(
+    operation_id="coordination_yield_workspace_002",
+    name="yield_workspace",
+    category=OperationCategory.COORDINATION,
+    complexity=OperationComplexity.ATOMIC,
+    description="Signal intent to enter a workspace region and wait until the region is cleared by the partner robot",
+    long_description=(
+        "Signals the partner robot that this robot intends to enter a shared workspace region, "
+        "then blocks until the partner signals 'region_clear_<region_id>'. "
+        "The partner robot must call signal('region_clear_<region_id>') when it leaves the region. "
+        "This makes workspace safety explicit and avoids collision-by-oversight in LLM-generated plans."
+    ),
+    parameters=[
+        OperationParameter(
+            name="robot_id",
+            type="str",
+            description="ID of the robot requesting workspace access",
+            required=True,
+        ),
+        OperationParameter(
+            name="region_id",
+            type="str",
+            description="Identifier for the shared workspace region (e.g., 'center_table', 'handoff_zone')",
+            required=True,
+        ),
+        OperationParameter(
+            name="timeout_ms",
+            type="int",
+            description="Maximum time to wait for the region to be cleared (milliseconds)",
+            required=False,
+            default=10000,
+            valid_range=(1000, 60000),
+        ),
+    ],
+    preconditions=[],
+    postconditions=[],
+    average_duration_ms=500.0,
+    success_rate=90.0,
+    failure_modes=[
+        "Partner robot doesn't signal region clear",
+        "Timeout waiting for workspace clearance",
+    ],
+    usage_examples=[
+        "yield_workspace('robot1', 'center_table') - Wait for center_table region to be free",
+        "yield_workspace('robot2', 'handoff_zone', timeout_ms=20000) - Wait up to 20s",
+    ],
+    relationships=OperationRelationship(
+        operation_id="coordination_yield_workspace_002",
+        required_operations=[],
+        commonly_paired_with=[
+            "sync_signal_001",
+            "sync_wait_for_signal_001",
+            "coordination_check_partner_001",
+        ],
+        typical_before=[
+            "motion_move_to_coord_001",
+            "manipulation_grasp_object_001",
+        ],
+        typical_after=["sync_signal_001"],
+    ),
+    implementation=_execute_yield_workspace,
 )

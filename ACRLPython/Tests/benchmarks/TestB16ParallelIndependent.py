@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-
 # ---------------------------------------------------------------------------
 # Case file tests
 # ---------------------------------------------------------------------------
@@ -36,7 +35,9 @@ def test_b16_task_uses_disjoint_objects():
     from benchmarks.cases.B16ParallelIndependent import get_task
 
     task = get_task().lower()
-    assert "blue" in task and ("red" in task or "green" in task), "B16 must reference two distinct objects"
+    assert "blue" in task and (
+        "red" in task or "green" in task
+    ), "B16 must reference two distinct objects"
 
 
 # ---------------------------------------------------------------------------
@@ -185,8 +186,18 @@ def test_b16_success_false_when_no_parallel_groups():
         return {
             "success": True,
             "results": [
-                {"index": 0, "operation": "move_to_coordinate", "success": True, "duration_ms": 50.0},
-                {"index": 1, "operation": "move_to_coordinate", "success": True, "duration_ms": 50.0},
+                {
+                    "index": 0,
+                    "operation": "move_to_coordinate",
+                    "success": True,
+                    "duration_ms": 50.0,
+                },
+                {
+                    "index": 1,
+                    "operation": "move_to_coordinate",
+                    "success": True,
+                    "duration_ms": 50.0,
+                },
             ],
             "parsed_commands": ops,
             "total_duration_ms": 100.0,
@@ -209,14 +220,32 @@ def test_b16_success_true_when_all_parallel():
 
     def fake_send(payload, robot_id, cfg, flags=None):
         ops = [
-            {"operation": "grasp_object", "params": {"robot_id": "Robot1"}, "parallel_group": 1},
-            {"operation": "grasp_object", "params": {"robot_id": "Robot2"}, "parallel_group": 1},
+            {
+                "operation": "grasp_object",
+                "params": {"robot_id": "Robot1"},
+                "parallel_group": 1,
+            },
+            {
+                "operation": "grasp_object",
+                "params": {"robot_id": "Robot2"},
+                "parallel_group": 1,
+            },
         ]
         return {
             "success": True,
             "results": [
-                {"index": 0, "operation": "grasp_object", "success": True, "duration_ms": 50.0},
-                {"index": 1, "operation": "grasp_object", "success": True, "duration_ms": 50.0},
+                {
+                    "index": 0,
+                    "operation": "grasp_object",
+                    "success": True,
+                    "duration_ms": 50.0,
+                },
+                {
+                    "index": 1,
+                    "operation": "grasp_object",
+                    "success": True,
+                    "duration_ms": 50.0,
+                },
             ],
             "parsed_commands": ops,
             "total_duration_ms": 100.0,

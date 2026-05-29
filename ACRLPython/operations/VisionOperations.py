@@ -371,17 +371,22 @@ def detect_object_stereo(
 
             # Retry once (0.4 s delay) if nothing was found — streaming frames
             # can briefly miss a held/elevated object between captures.
+            # Re-fetch the stereo pair so Unity's latest frame is used, not the
+            # stale one captured before the sleep.
             if not detection_result or not detection_result.detections:
                 logger.info("No detections on first attempt, retrying after 0.4s")
                 time.sleep(0.4)
-                detection_result = CubeDetector().detect_objects_stereo(
-                    imgL,
-                    imgR,
-                    camera_config,
-                    camera_id=camera_id,
-                    camera_rotation=camera_rotation,
-                    camera_position=camera_position,
-                )
+                _retry_stereo = storage.get_stereo_pair(camera_id)
+                if _retry_stereo is not None:
+                    _rL, _rR, _ = _retry_stereo
+                    detection_result = detector.detect_objects_stereo(
+                        _rL,
+                        _rR,
+                        camera_config,
+                        camera_id=camera_id,
+                        camera_rotation=camera_rotation,
+                        camera_position=camera_position,
+                    )
 
         if detection_result is None:
             return OperationResult.error_result(

@@ -32,12 +32,6 @@ from .PointCloudOperations import GENERATE_POINT_CLOUD_OPERATION
 from .SpatialOperations import (
     MOVE_RELATIVE_TO_OBJECT_OPERATION,
 )
-from .SyncOperations import (
-    SIGNAL_OPERATION,
-    WAIT_FOR_SIGNAL_OPERATION,
-    WAIT_OPERATION,
-    RESET_SIMULATION_OPERATION,
-)
 from .FieldOperations import (
     DETECT_FIELD_OPERATION,
     DETECT_ALL_FIELDS_OPERATION,
@@ -45,9 +39,22 @@ from .FieldOperations import (
 from .CoordinationOperations import (
     DETECT_OTHER_ROBOT_OPERATION,
     MIRROR_MOVEMENT_OPERATION,
+    CHECK_PARTNER_STATUS_OPERATION,
+)
+from .SyncOperations import (
+    SIGNAL_OPERATION,
+    WAIT_FOR_SIGNAL_OPERATION,
+    WAIT_OPERATION,
+    RESET_SIMULATION_OPERATION,
+    YIELD_WORKSPACE_OPERATION,
 )
 from .CollaborativeOperations import (
     STABILIZE_OBJECT_OPERATION,
+    PLACE_FOR_PARTNER_OPERATION,
+)
+from .BimanualOperations import (
+    SYNCHRONIZED_GRASP_OPERATION,
+    JOINT_TRANSPORT_OPERATION,
 )
 
 
@@ -84,6 +91,11 @@ class OperationRegistry:
             MIRROR_MOVEMENT_OPERATION,
             RECEIVE_HANDOFF_OPERATION,
             STABILIZE_OBJECT_OPERATION,
+            CHECK_PARTNER_STATUS_OPERATION,
+            YIELD_WORKSPACE_OPERATION,
+            PLACE_FOR_PARTNER_OPERATION,
+            SYNCHRONIZED_GRASP_OPERATION,
+            JOINT_TRANSPORT_OPERATION,
         ]
 
         for op in operations:

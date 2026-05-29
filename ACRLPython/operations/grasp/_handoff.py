@@ -101,10 +101,15 @@ def receive_handoff(
             f"receive_handoff: object_dimensions={object_dimensions}, obj_height={obj_height:.4f}m"
         )
         # Grip below center (40% height, min 4cm) so receiver clears source robot's fingers.
-        ap_y = object_position[1] - max(obj_height * 0.4, 0.04)
+        # Clamp to 3cm above desk surface — for small objects near the table the unclamped
+        # value can be so low that MoveIt's Cartesian planner fails (joints at limits),
+        # silently falling back to an orientation-unlocked plan and producing a Z-face grasp.
+        _Y_FLOOR_CLEARANCE = 0.03
+        ap_y = max(object_position[1] - max(obj_height * 0.4, 0.04), _Y_FLOOR_CLEARANCE)
         ap_z = object_position[2]
         logger.info(
             f"receive_handoff: approach_position=({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
+            f" (floor clearance {_Y_FLOOR_CLEARANCE}m)"
         )
 
         # Validate reachability before wasting time on MoveIt planning calls.

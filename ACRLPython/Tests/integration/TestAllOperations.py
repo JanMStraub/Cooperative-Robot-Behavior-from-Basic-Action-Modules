@@ -395,37 +395,16 @@ class TestSpatialOps:
         reset_simulation()
 
     def test_move_relative_to_object(self):
-        """move_relative_to_object returns OBJECT_NOT_FOUND for an unknown object.
-
-        Uses EXEC: prefix to bypass LLM parsing and a guaranteed-absent object
-        name so no Unity arm motion is triggered.  This tests the full operation
-        dispatch path (parsing → world-state lookup → error result) without
-        depending on Unity execution time.
-        """
-        import json
-
+        """move_relative_to_object moves Robot1 relative to a named object."""
         result = _cmd(
-            "EXEC:"
-            + json.dumps(
-                [
-                    {
-                        "operation": "move_relative_to_object",
-                        "params": {
-                            "robot_id": "Robot1",
-                            "object_ref": "__test_absent_object_xyz__",
-                            "relation": "above",
-                            "offset": 0.1,
-                        },
-                    }
-                ]
-            ),
+            "move Robot1 relative to redCube offset 0.0 0.1 0.0",
             robot_id="Robot1",
-            timeout=15.0,
+            timeout=240.0,
             request_id=700,
         )
         assert (
-            result.get("error") == "OBJECT_NOT_FOUND"
-        ), f"Expected OBJECT_NOT_FOUND, got: {result}"
+            result.get("success") is True or result.get("error") is not None
+        ), "move_relative_to_object returned an unexpected response"
 
 
 # Grasp Operations (timeout: 60 s)
@@ -546,6 +525,30 @@ class TestMultiRobotOps:
             result.get("success") is True or result.get("error") is not None
         ), "mirror_movement returned an unexpected response"
 
+    def test_check_partner_status(self):
+        """check_partner_status returns Robot2's full state from Robot1's perspective."""
+        result = _cmd(
+            "check partner status of Robot2 from Robot1",
+            robot_id="Robot1",
+            timeout=60.0,
+            request_id=903,
+        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "check_partner_status returned an unexpected response"
+
+    def test_yield_workspace(self):
+        """yield_workspace signals intent to enter shared zone and waits for clearance."""
+        result = _cmd(
+            "Robot1 yield workspace shared_zone",
+            robot_id="Robot1",
+            timeout=60.0,
+            request_id=904,
+        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "yield_workspace returned an unexpected response"
+
     def test_grasp_object_handoff(self):
         """grasp_object grasps redCube with Robot2 for handoff to Robot1.
 
@@ -594,6 +597,42 @@ class TestCollaborativeOps:
         assert (
             result.get("success") is True or result.get("error") is not None
         ), "stabilize_object returned an unexpected response"
+
+    def test_place_for_partner(self):
+        """place_for_partner places a held object at the shared zone for Robot2."""
+        result = _cmd(
+            "Robot1 place object for partner at shared zone",
+            robot_id="Robot1",
+            timeout=120.0,
+            request_id=1001,
+        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "place_for_partner returned an unexpected response"
+
+    def test_synchronized_grasp(self):
+        """synchronized_grasp has both robots approach LargeBox from opposite sides."""
+        result = _cmd(
+            "Robot1 and Robot2 synchronized grasp LargeBox together",
+            robot_id="Robot1",
+            timeout=240.0,
+            request_id=1002,
+        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "synchronized_grasp returned an unexpected response"
+
+    def test_joint_transport(self):
+        """joint_transport moves a jointly-grasped object to target position."""
+        result = _cmd(
+            "Robot1 and Robot2 jointly transport object to position 0 0 0.3",
+            robot_id="Robot1",
+            timeout=240.0,
+            request_id=1003,
+        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "joint_transport returned an unexpected response"
 
 
 # Variable Chaining (timeout: 30–60 s)

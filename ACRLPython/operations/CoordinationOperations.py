@@ -407,5 +407,202 @@ def create_mirror_movement_operation() -> BasicOperation:
     )
 
 
+def check_partner_status(
+    robot_id: str,
+    partner_robot_id: str,
+    request_id: int = 0,
+) -> OperationResult:
+    """Query a partner robot's full state before planning a joint task.
+
+    Pure WorldState read — no Unity command sent.
+    """
+    import math
+
+    try:
+        if not robot_id or not isinstance(robot_id, str):
+            return OperationResult.error_result(
+                "INVALID_ROBOT_ID",
+                "Robot ID must be a non-empty string",
+                ["Provide a valid robot ID"],
+            )
+
+        if not partner_robot_id or not isinstance(partner_robot_id, str):
+            return OperationResult.error_result(
+                "INVALID_PARTNER_ROBOT_ID",
+                "Partner robot ID must be a non-empty string",
+                ["Provide a valid partner robot ID"],
+            )
+
+        if robot_id == partner_robot_id:
+            return OperationResult.error_result(
+                "INVALID_PARTNER_ROBOT_ID",
+                "partner_robot_id must differ from robot_id",
+                ["Provide a different robot ID for the partner"],
+            )
+
+        try:
+            from .WorldState import WorldState
+        except ImportError:
+            from operations.WorldState import WorldState  # type: ignore[no-redef]
+
+        world_state = WorldState()
+
+        partner_state = world_state.get_robot_state(partner_robot_id)
+        if not partner_state:
+            return OperationResult.error_result(
+                "PARTNER_NOT_FOUND",
+                f"Partner robot '{partner_robot_id}' not found in world state",
+                [
+                    "Verify partner robot is active in Unity",
+                    "Check WorldStatePublisher is sending data",
+                ],
+            )
+
+        # Extract fields — support both RobotState dataclass and dict mocks (tests)
+        if isinstance(partner_state, dict):
+            gripper_state = partner_state.get("gripper_state", "unknown")
+            is_moving = partner_state.get("is_moving", False)
+            is_initialized = partner_state.get("is_initialized", False)
+            position = partner_state.get("position")
+            moving_toward_object = partner_state.get("moving_toward_object")
+            workspace_intent = partner_state.get("workspace_intent")
+            proximity_frozen = partner_state.get("proximity_frozen", False)
+        else:
+            gripper_state = getattr(partner_state, "gripper_state", "unknown")
+            is_moving = getattr(partner_state, "is_moving", False)
+            is_initialized = getattr(partner_state, "is_initialized", False)
+            position = getattr(partner_state, "position", None)
+            moving_toward_object = getattr(partner_state, "moving_toward_object", None)
+            workspace_intent = getattr(partner_state, "workspace_intent", None)
+            proximity_frozen = getattr(partner_state, "proximity_frozen", False)
+
+        # Compute euclidean distance between robot_id and partner_robot_id
+        distance = None
+        self_state = world_state.get_robot_state(robot_id)
+        if self_state is not None:
+            if isinstance(self_state, dict):
+                self_pos = self_state.get("position")
+            else:
+                self_pos = getattr(self_state, "position", None)
+
+            if self_pos is not None and position is not None:
+
+                def _xyz(pos):
+                    if isinstance(pos, dict):
+                        return pos.get("x", 0.0), pos.get("y", 0.0), pos.get("z", 0.0)
+                    return pos[0], pos[1], pos[2]
+
+                sx, sy, sz = _xyz(self_pos)
+                px, py, pz = _xyz(position)
+                distance = math.sqrt((sx - px) ** 2 + (sy - py) ** 2 + (sz - pz) ** 2)
+
+        if is_moving:
+            status = "busy"
+        elif gripper_state == "closed":
+            status = "holding_object"
+        else:
+            status = "idle"
+
+        logger.info(
+            f"check_partner_status: {robot_id} queried {partner_robot_id} — "
+            f"status={status}, distance={distance}"
+        )
+
+        return OperationResult.success_result(
+            {
+                "partner_robot_id": partner_robot_id,
+                "gripper_state": gripper_state,
+                "is_moving": is_moving,
+                "is_initialized": is_initialized,
+                "position": list(position) if position is not None else None,
+                "moving_toward_object": moving_toward_object,
+                "workspace_intent": workspace_intent,
+                "proximity_frozen": proximity_frozen,
+                "distance": distance,
+                "status": status,
+                "has_object": gripper_state == "closed",
+                "timestamp": time.time(),
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error in check_partner_status: {e}", exc_info=True)
+        return OperationResult.error_result(
+            "CHECK_PARTNER_STATUS_ERROR",
+            f"Failed to check partner status: {str(e)}",
+            ["Check logs for details"],
+        )
+
+
+def create_check_partner_status_operation() -> BasicOperation:
+    return BasicOperation(
+        operation_id="coordination_check_partner_001",
+        name="check_partner_status",
+        category=OperationCategory.COORDINATION,
+        complexity=OperationComplexity.INTERMEDIATE,
+        description="Query a partner robot's full state (gripper, motion, position) before planning a joint task",
+        long_description="""
+            Reads the partner robot's full state from WorldState without sending any
+            command to Unity. Returns gripper state, motion status, position, workspace
+            intent, and a derived summary status ("idle", "busy", "holding_object").
+
+            Use this before collaborative operations to understand what the partner is
+            currently doing and whether coordination is safe to proceed.
+        """,
+        usage_examples=[
+            "check_partner_status('Robot1', 'Robot2')",
+            "if result['status'] == 'idle': proceed with joint task",
+            "if result['has_object']: plan handoff receive workflow",
+        ],
+        parameters=[
+            OperationParameter(
+                name="robot_id",
+                type="str",
+                description="ID of the querying robot",
+                required=True,
+            ),
+            OperationParameter(
+                name="partner_robot_id",
+                type="str",
+                description="ID of the partner robot to query",
+                required=True,
+            ),
+        ],
+        preconditions=["robot_is_initialized(robot_id)"],
+        postconditions=[],
+        average_duration_ms=20.0,
+        success_rate=0.98,
+        failure_modes=[
+            "Partner robot not in WorldState",
+            "WorldStatePublisher not running",
+        ],
+        relationships=OperationRelationship(
+            operation_id="coordination_check_partner_001",
+            required_operations=["status_check_robot_001"],
+            required_reasons={
+                "status_check_robot_001": "Verify this robot is active before querying partner",
+            },
+            commonly_paired_with=[
+                "coordination_detect_robot_001",
+                "sync_signal_001",
+                "sync_wait_for_signal_001",
+            ],
+            pairing_reasons={
+                "coordination_detect_robot_001": "Combine spatial distance with full state for richer context",
+                "sync_signal_001": "Signal readiness after confirming partner state",
+                "sync_wait_for_signal_001": "Wait for partner readiness alongside state polling",
+            },
+            typical_before=[
+                "coordination_mirror_movement_002",
+                "collaborative_synchronized_grasp_001",
+                "collaborative_joint_transport_001",
+            ],
+            typical_after=["status_check_robot_001"],
+        ),
+        implementation=check_partner_status,
+    )
+
+
 DETECT_OTHER_ROBOT_OPERATION = create_detect_other_robot_operation()
 MIRROR_MOVEMENT_OPERATION = create_mirror_movement_operation()
+CHECK_PARTNER_STATUS_OPERATION = create_check_partner_status_operation()

@@ -1113,11 +1113,13 @@ class WorldState(SingletonBase):
 
     @_workspace_timeout.setter
     def _workspace_timeout(self, value: float):
-        self._workspace_allocator._timeout = value
+        # Route through set_timeout() to enforce max(1.0, ...) floor and RLock.
+        self._workspace_allocator.set_timeout(value)
 
     def _cleanup_stale_allocations(self):
         """No longer used directly; kept for safety. Delegates to WorkspaceAllocator."""
-        self._workspace_allocator._cleanup_stale()
+        with self._workspace_allocator._lock:
+            self._workspace_allocator._cleanup_stale()
 
     def set_workspace_timeout(self, timeout: float):
         """Set workspace allocation timeout in seconds."""

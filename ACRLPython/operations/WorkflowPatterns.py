@@ -514,6 +514,129 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
     ],
 )
 
+WORKSPACE_YIELD_PATTERN = WorkflowPattern(
+    pattern_id="workflow_workspace_yield_001",
+    name="workspace_yield",
+    category=WorkflowCategory.MULTI_ROBOT,
+    description="Safely coordinate entry into a shared workspace region: one robot yields, the occupying robot signals clear when done",
+    steps=[
+        WorkflowStep(
+            operation_id="coordination_yield_workspace_002",
+            parameter_bindings={
+                "robot_id": "entering_robot",
+                "region_id": "shared_zone",
+            },
+            description="Entering robot signals intent and waits for region to be cleared",
+        ),
+        WorkflowStep(
+            operation_id="sync_signal_001",
+            parameter_bindings={"event_name": "region_clear_shared_zone"},
+            description="Occupying robot signals it has left the shared zone",
+        ),
+    ],
+    success_criteria=[
+        "Entering robot signalled intent via entering_<region_id> event",
+        "Occupying robot cleared the region and signalled region_clear_<region_id>",
+        "Entering robot proceeds into region safely",
+    ],
+    failure_recovery="On WORKSPACE_TIMEOUT, the entering robot may proceed with caution or retry",
+    usage_examples=[
+        "Robot1 entering shared zone: yield_workspace('Robot1', 'shared_zone')",
+        "Robot2 leaving shared zone: signal('region_clear_shared_zone')",
+    ],
+)
+
+SYNCHRONIZED_GRASP_PATTERN = WorkflowPattern(
+    pattern_id="workflow_synchronized_grasp_001",
+    name="synchronized_grasp",
+    category=WorkflowCategory.MULTI_ROBOT,
+    description="Both robots simultaneously approach and grasp a large object from opposite sides (bimanual grasping)",
+    steps=[
+        WorkflowStep(
+            operation_id="coordination_check_partner_001",
+            parameter_bindings={
+                "robot_id": "robot1_id",
+                "partner_robot_id": "robot2_id",
+            },
+            description="Verify partner robot is idle and ready before starting bimanual task",
+        ),
+        WorkflowStep(
+            operation_id="collaborative_synchronized_grasp_001",
+            parameter_bindings={
+                "robot_id": "robot1_id",
+                "partner_robot_id": "robot2_id",
+                "object_id": "object_id",
+                "approach_axis": "x",
+            },
+            description="Both robots approach from opposite sides and close grippers simultaneously",
+        ),
+    ],
+    variable_bindings={
+        "partner_status": "coordination_check_partner_001.result",
+    },
+    success_criteria=[
+        "Partner robot confirmed idle before grasp",
+        "Both robots reached approach positions",
+        "Both grippers confirmed closed on object",
+    ],
+    failure_recovery="If one robot fails to reach position, use single-robot grasp_object instead",
+    usage_examples=[
+        "synchronized_grasp('Robot1', partner_robot_id='Robot2', object_id='LargeBox', approach_axis='x')",
+        "Bimanual grasping of objects too large for single-arm grasp",
+    ],
+)
+
+JOINT_TRANSPORT_PATTERN = WorkflowPattern(
+    pattern_id="workflow_joint_transport_001",
+    name="joint_transport",
+    category=WorkflowCategory.MULTI_ROBOT,
+    description="Both robots cooperatively transport a jointly-grasped object to a target position, then release it",
+    steps=[
+        WorkflowStep(
+            operation_id="collaborative_synchronized_grasp_001",
+            parameter_bindings={
+                "robot_id": "robot1_id",
+                "partner_robot_id": "robot2_id",
+                "object_id": "object_id",
+            },
+            description="Both robots grasp the object simultaneously (precondition for joint transport)",
+        ),
+        WorkflowStep(
+            operation_id="collaborative_joint_transport_001",
+            parameter_bindings={
+                "robot_id": "robot1_id",
+                "partner_robot_id": "robot2_id",
+                "target_x": "dest_x",
+                "target_y": "dest_y",
+                "target_z": "dest_z",
+                "lift_height": "0.05",
+            },
+            description="Both robots transport the object together maintaining relative positions",
+        ),
+        WorkflowStep(
+            operation_id="manipulation_release_object_001",
+            parameter_bindings={"robot_id": "robot1_id"},
+            description="Robot1 releases object at destination",
+        ),
+        WorkflowStep(
+            operation_id="manipulation_release_object_001",
+            parameter_bindings={"robot_id": "robot2_id"},
+            description="Robot2 releases object at destination",
+        ),
+    ],
+    variable_bindings={},
+    success_criteria=[
+        "Both robots grasped object successfully",
+        "Object transported to target position without dropping",
+        "Both robots released at destination",
+    ],
+    failure_recovery="If transport fails mid-way, both robots should return to start positions and retry",
+    usage_examples=[
+        "joint_transport('Robot1', partner_robot_id='Robot2', target_x=0.3, target_y=0.1, target_z=0.0)",
+        "Cooperative bimanual transport of large/heavy objects",
+    ],
+)
+
 
 class WorkflowPatternRegistry:
     def __init__(self):
@@ -528,6 +651,9 @@ class WorkflowPatternRegistry:
             SIMULTANEOUS_MOVE_PATTERN,
             HANDOFF_PATTERN,
             LLM_DRIVEN_COORDINATION_PATTERN,
+            WORKSPACE_YIELD_PATTERN,
+            SYNCHRONIZED_GRASP_PATTERN,
+            JOINT_TRANSPORT_PATTERN,
         ]
 
         for pattern in patterns:
