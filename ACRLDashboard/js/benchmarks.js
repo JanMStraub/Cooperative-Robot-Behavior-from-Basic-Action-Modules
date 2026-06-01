@@ -409,7 +409,7 @@ function renderRunInfo(data) {
             return `<span class="flag-pill flag-pill--${on ? 'on' : 'off'}" title="${meta.desc}">${meta.label}: ${on ? 'ON' : 'OFF'}</span>`;
         }).join('');
         html += `<div class="run-info-row run-info-row--flags">
-            <span class="run-info-label">Feature Flags <i class="fa-solid fa-circle-info kpi-info" title="Active system capabilities for this run. Enables comparing ablation conditions — each flag corresponds to a benchmark series (B9–B14). Hover each pill for details."></i></span>
+            <span class="run-info-label">Feature Flags <i class="fa-solid fa-circle-info kpi-info" title="Active system capabilities for this run. Enables comparing ablation conditions — each flag corresponds to a benchmark series (B11–B16). Hover each pill for details."></i></span>
             <div class="flag-pills">${pillsHtml}</div>
         </div>`;
     }
@@ -664,12 +664,12 @@ function renderMainResultsChart(sortedEntries) {
     });
 }
 
-// Chart B — Ablation: grouped bars enabled vs disabled for B9–B14
+// Chart B — Ablation: grouped bars enabled vs disabled for B11–B16
 function renderAblationChart(data) {
     destroyChart('B');
 
     const ablationBenchmarks = Object.values(data)
-        .filter(d => d.benchmark_id >= 9 && d.ablation)
+        .filter(d => d.benchmark_id >= 11 && d.ablation)
         .sort((a, b) => a.benchmark_id - b.benchmark_id);
 
     if (ablationBenchmarks.length === 0) return;
@@ -1074,7 +1074,7 @@ function renderOperationHeatmap(sortedEntries) {
             const bg = isDark
                 ? `rgba(230,159,0,${alpha})`
                 : `rgba(180,100,0,${alpha})`;
-            const textColor = t > 0.6 ? (isDark ? '#fff' : '#fff') : (isDark ? '#e6edf3' : '#333');
+            const textColor = t > 0.6 ? '#fff' : (isDark ? '#e6edf3' : '#333');
             const label = ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms.toFixed(0)}ms`;
             html += `<td class="heatmap-cell" style="background:${bg};color:${textColor}" title="${op}: ${ms.toFixed(0)}ms avg">${label}</td>`;
         });
@@ -1093,7 +1093,7 @@ function renderComplexityScaling(sortedEntries) {
     if (entries.length === 0) return;
 
     const points = entries.map(d => ({ x: d.mean_plan_length, y: +(d.mean_duration_ms / 1000).toFixed(2) }));
-    const pointLabels = entries.map(d => `B${d.benchmark_id}: ${d.benchmark_name}`);
+    const pointLabels = entries.map(d => `B${d.benchmark_id}: ${d.benchmark_name || 'Unknown'}`);
 
     const ctx = document.getElementById('chartG').getContext('2d');
     const tt = tooltipDefaults();
@@ -1315,7 +1315,7 @@ function renderCompareKPIMatrix(runsData) {
     const metrics = [
         { key: 'success_rate',       label: 'Success Rate',        fmt: v => (v * 100).toFixed(1) + '%',  higher: true  },
         { key: 'total_duration_ms',  label: 'Total Duration',       fmt: v => (v / 1000).toFixed(2) + 's', higher: false },
-        { key: 'ops_ratio',          label: 'Ops (succ/total)',     fmt: (v, r) => `${r.data.ops_succeeded}/${r.data.ops_executed}`, higher: true, val: r => r.data.ops_succeeded / Math.max(r.data.ops_executed, 1) },
+        { key: 'ops_ratio',          label: 'Ops (succ/total)',     fmt: (v, r) => `${r.data.ops_succeeded}/${r.data.ops_executed}`, avgFmt: v => (v * 100).toFixed(1) + '%', higher: true, val: r => r.data.ops_succeeded / Math.max(r.data.ops_executed, 1) },
         { key: 'avg_step_duration_ms', label: 'Avg Step Time',     fmt: v => v.toFixed(0) + 'ms',         higher: false },
         { key: 'hallucinated_ops',   label: 'Hallucinated Ops',     fmt: v => v,                           higher: false },
         { key: 'reflexion_recoveries', label: 'Reflexion Recoveries', fmt: v => v,                        higher: false },
@@ -1333,11 +1333,14 @@ function renderCompareKPIMatrix(runsData) {
         return { short, timeStr };
     });
 
+    const showAvg = runsData.length > 1;
+
     let html = `<table class="compare-kpi-table"><thead><tr>
         <th>Metric</th>`;
     colHeaders.forEach((h, i) => {
         html += `<th>Run ${i + 1}<span class="compare-run-header">${h.timeStr || h.short}</span></th>`;
     });
+    if (showAvg) html += `<th class="compare-kpi-avg-header">Avg</th>`;
     html += `</tr></thead><tbody>`;
 
     metrics.forEach(metric => {
@@ -1349,8 +1352,9 @@ function renderCompareKPIMatrix(runsData) {
 
         const numericVals = vals.filter(v => v !== null && !isNaN(v));
         const allSame = numericVals.length > 1 && numericVals.every(v => v === numericVals[0]);
-        const best = allSame ? null : (metric.higher ? Math.max(...numericVals) : Math.min(...numericVals));
-        const worst = allSame ? null : (metric.higher ? Math.min(...numericVals) : Math.max(...numericVals));
+        const hasData = numericVals.length > 0;
+        const best = (!hasData || allSame) ? null : (metric.higher ? Math.max(...numericVals) : Math.min(...numericVals));
+        const worst = (!hasData || allSame) ? null : (metric.higher ? Math.min(...numericVals) : Math.max(...numericVals));
 
         html += `<tr><td class="compare-kpi-label">${metric.label}</td>`;
         runsData.forEach((r, i) => {
@@ -1366,6 +1370,18 @@ function renderCompareKPIMatrix(runsData) {
             }
             html += `<td${cls ? ` class="${cls}"` : ''}>${display}</td>`;
         });
+
+        if (showAvg) {
+            if (numericVals.length > 0) {
+                const avg = numericVals.reduce((a, b) => a + b, 0) / numericVals.length;
+                const fmtFn = metric.avgFmt ?? (metric.fmt.length > 1 ? null : metric.fmt);
+                const display = fmtFn ? fmtFn(avg) : avg.toFixed(2);
+                html += `<td class="compare-kpi-avg">${display}</td>`;
+            } else {
+                html += `<td class="compare-kpi-avg">—</td>`;
+            }
+        }
+
         html += `</tr>`;
     });
 
@@ -1510,7 +1526,8 @@ function renderCompareStepChart(runsData) {
                     ticks: {
                         color: chartTextColor(),
                         font: { family: "'IBM Plex Mono', monospace", size: 9 },
-                        maxRotation: 35,
+                        maxRotation: 90,
+                        minRotation: 0,
                     }
                 },
                 y: {
@@ -1574,7 +1591,7 @@ function renderCompareOpStats(runsData) {
             const bg = isDark ? `rgba(230,159,0,${alpha})` : `rgba(180,100,0,${alpha})`;
             const textColor = t > 0.55 ? '#fff' : (isDark ? '#e6edf3' : '#333');
             const label = ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms.toFixed(0)}ms`;
-            const failSub = stat.fail_count > 0
+            const failSub = (stat.fail_count ?? 0) > 0
                 ? `<span class="compare-fail-sub">${stat.fail_count}✕</span>`
                 : '';
             html += `<td style="background:${bg};color:${textColor}">${label}${failSub}</td>`;

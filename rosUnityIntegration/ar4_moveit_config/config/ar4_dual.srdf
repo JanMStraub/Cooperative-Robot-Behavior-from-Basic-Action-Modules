@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Semantic Robot Description Format (SRDF) for AR4 dual-robot setup.
+  Used with ar4_dual.urdf and move_group_dual.launch.py.
+  Cross-robot collisions are ENABLED by default — MoveIt checks them automatically.
+-->
+<robot name="ar4_dual">
+
+  <!-- Planning Groups: one arm group per robot -->
+  <group name="robot1_arm">
+    <chain base_link="robot1_base_link" tip_link="robot1_ee_link"/>
+  </group>
+  <group name="robot2_arm">
+    <chain base_link="robot2_base_link" tip_link="robot2_ee_link"/>
+  </group>
+  <group name="robot1_gripper">
+    <joint name="robot1_gripper_jaw1_joint"/>
+    <joint name="robot1_gripper_jaw2_joint"/>
+  </group>
+  <group name="robot2_gripper">
+    <joint name="robot2_gripper_jaw1_joint"/>
+    <joint name="robot2_gripper_jaw2_joint"/>
+  </group>
+
+  <!-- Named states -->
+  <group_state name="home" group="robot1_arm">
+    <joint name="robot1_joint_1" value="0"/>
+    <joint name="robot1_joint_2" value="0"/>
+    <joint name="robot1_joint_3" value="0"/>
+    <joint name="robot1_joint_4" value="0"/>
+    <joint name="robot1_joint_5" value="0"/>
+    <joint name="robot1_joint_6" value="0"/>
+  </group_state>
+  <group_state name="ready" group="robot1_arm">
+    <joint name="robot1_joint_1" value="0"/>
+    <joint name="robot1_joint_2" value="0.5"/>
+    <joint name="robot1_joint_3" value="-0.5"/>
+    <joint name="robot1_joint_4" value="0"/>
+    <joint name="robot1_joint_5" value="0"/>
+    <joint name="robot1_joint_6" value="0"/>
+  </group_state>
+  <group_state name="open" group="robot1_gripper">
+    <joint name="robot1_gripper_jaw1_joint" value="0.014"/>
+    <joint name="robot1_gripper_jaw2_joint" value="0.014"/>
+  </group_state>
+  <group_state name="closed" group="robot1_gripper">
+    <joint name="robot1_gripper_jaw1_joint" value="0"/>
+    <joint name="robot1_gripper_jaw2_joint" value="0"/>
+  </group_state>
+
+  <group_state name="home" group="robot2_arm">
+    <joint name="robot2_joint_1" value="0"/>
+    <joint name="robot2_joint_2" value="0"/>
+    <joint name="robot2_joint_3" value="0"/>
+    <joint name="robot2_joint_4" value="0"/>
+    <joint name="robot2_joint_5" value="0"/>
+    <joint name="robot2_joint_6" value="0"/>
+  </group_state>
+  <group_state name="ready" group="robot2_arm">
+    <joint name="robot2_joint_1" value="0"/>
+    <joint name="robot2_joint_2" value="0.5"/>
+    <joint name="robot2_joint_3" value="-0.5"/>
+    <joint name="robot2_joint_4" value="0"/>
+    <joint name="robot2_joint_5" value="0"/>
+    <joint name="robot2_joint_6" value="0"/>
+  </group_state>
+  <group_state name="open" group="robot2_gripper">
+    <joint name="robot2_gripper_jaw1_joint" value="0.014"/>
+    <joint name="robot2_gripper_jaw2_joint" value="0.014"/>
+  </group_state>
+  <group_state name="closed" group="robot2_gripper">
+    <joint name="robot2_gripper_jaw1_joint" value="0"/>
+    <joint name="robot2_gripper_jaw2_joint" value="0"/>
+  </group_state>
+
+  <!-- End Effectors -->
+  <end_effector name="robot1_gripper" parent_link="robot1_ee_link" group="robot1_gripper"/>
+  <end_effector name="robot2_gripper" parent_link="robot2_ee_link" group="robot2_gripper"/>
+
+  <!-- Virtual Joint (single world anchor for the combined robot) -->
+  <virtual_joint name="virtual_joint" type="fixed" parent_frame="world" child_link="world"/>
+
+  <!-- ===== Self-Collision Matrix ===== -->
+  <!-- Robot1 intra-robot pairs (adjacent and never-collide) -->
+  <disable_collisions link1="robot1_base_link" link2="robot1_link_1" reason="Adjacent"/>
+  <disable_collisions link1="robot1_link_1" link2="robot1_link_2" reason="Adjacent"/>
+  <disable_collisions link1="robot1_link_2" link2="robot1_link_3" reason="Adjacent"/>
+  <disable_collisions link1="robot1_link_3" link2="robot1_link_4" reason="Adjacent"/>
+  <disable_collisions link1="robot1_link_4" link2="robot1_link_5" reason="Adjacent"/>
+  <disable_collisions link1="robot1_link_5" link2="robot1_link_6" reason="Adjacent"/>
+  <disable_collisions link1="robot1_link_6" link2="robot1_gripper_base_link" reason="Adjacent"/>
+  <disable_collisions link1="robot1_gripper_base_link" link2="robot1_gripper_jaw1_link" reason="Adjacent"/>
+  <disable_collisions link1="robot1_gripper_base_link" link2="robot1_gripper_jaw2_link" reason="Adjacent"/>
+  <disable_collisions link1="robot1_gripper_jaw1_link" link2="robot1_gripper_jaw2_link" reason="Adjacent"/>
+  <disable_collisions link1="robot1_base_link" link2="robot1_link_2" reason="Never"/>
+  <disable_collisions link1="robot1_base_link" link2="robot1_link_4" reason="Never"/>
+  <disable_collisions link1="robot1_base_link" link2="robot1_link_5" reason="Never"/>
+  <disable_collisions link1="robot1_base_link" link2="robot1_link_6" reason="Never"/>
+  <disable_collisions link1="robot1_base_link" link2="robot1_gripper_base_link" reason="Never"/>
+  <disable_collisions link1="robot1_link_1" link2="robot1_link_3" reason="Never"/>
+  <disable_collisions link1="robot1_link_1" link2="robot1_link_5" reason="Never"/>
+  <disable_collisions link1="robot1_link_1" link2="robot1_link_6" reason="Never"/>
+  <disable_collisions link1="robot1_link_2" link2="robot1_link_4" reason="Never"/>
+  <disable_collisions link1="robot1_link_2" link2="robot1_link_5" reason="Never"/>
+  <disable_collisions link1="robot1_link_2" link2="robot1_link_6" reason="Never"/>
+  <disable_collisions link1="robot1_link_3" link2="robot1_link_5" reason="Never"/>
+  <disable_collisions link1="robot1_link_3" link2="robot1_link_6" reason="Never"/>
+  <disable_collisions link1="robot1_link_3" link2="robot1_gripper_base_link" reason="Never"/>
+  <disable_collisions link1="robot1_link_4" link2="robot1_link_6" reason="Never"/>
+  <disable_collisions link1="robot1_link_4" link2="robot1_gripper_base_link" reason="Never"/>
+  <disable_collisions link1="robot1_link_5" link2="robot1_gripper_base_link" reason="Never"/>
+  <disable_collisions link1="robot1_link_6" link2="robot1_gripper_jaw1_link" reason="Never"/>
+  <disable_collisions link1="robot1_link_6" link2="robot1_gripper_jaw2_link" reason="Never"/>
+
+  <!-- Robot2 intra-robot pairs (adjacent and never-collide) -->
+  <disable_collisions link1="robot2_base_link" link2="robot2_link_1" reason="Adjacent"/>
+  <disable_collisions link1="robot2_link_1" link2="robot2_link_2" reason="Adjacent"/>
+  <disable_collisions link1="robot2_link_2" link2="robot2_link_3" reason="Adjacent"/>
+  <disable_collisions link1="robot2_link_3" link2="robot2_link_4" reason="Adjacent"/>
+  <disable_collisions link1="robot2_link_4" link2="robot2_link_5" reason="Adjacent"/>
+  <disable_collisions link1="robot2_link_5" link2="robot2_link_6" reason="Adjacent"/>
+  <disable_collisions link1="robot2_link_6" link2="robot2_gripper_base_link" reason="Adjacent"/>
+  <disable_collisions link1="robot2_gripper_base_link" link2="robot2_gripper_jaw1_link" reason="Adjacent"/>
+  <disable_collisions link1="robot2_gripper_base_link" link2="robot2_gripper_jaw2_link" reason="Adjacent"/>
+  <disable_collisions link1="robot2_gripper_jaw1_link" link2="robot2_gripper_jaw2_link" reason="Adjacent"/>
+  <disable_collisions link1="robot2_base_link" link2="robot2_link_2" reason="Never"/>
+  <disable_collisions link1="robot2_base_link" link2="robot2_link_4" reason="Never"/>
+  <disable_collisions link1="robot2_base_link" link2="robot2_link_5" reason="Never"/>
+  <disable_collisions link1="robot2_base_link" link2="robot2_link_6" reason="Never"/>
+  <disable_collisions link1="robot2_base_link" link2="robot2_gripper_base_link" reason="Never"/>
+  <disable_collisions link1="robot2_link_1" link2="robot2_link_3" reason="Never"/>
+  <disable_collisions link1="robot2_link_1" link2="robot2_link_5" reason="Never"/>
+  <disable_collisions link1="robot2_link_1" link2="robot2_link_6" reason="Never"/>
+  <disable_collisions link1="robot2_link_2" link2="robot2_link_4" reason="Never"/>
+  <disable_collisions link1="robot2_link_2" link2="robot2_link_5" reason="Never"/>
+  <disable_collisions link1="robot2_link_2" link2="robot2_link_6" reason="Never"/>
+  <disable_collisions link1="robot2_link_3" link2="robot2_link_5" reason="Never"/>
+  <disable_collisions link1="robot2_link_3" link2="robot2_link_6" reason="Never"/>
+  <disable_collisions link1="robot2_link_3" link2="robot2_gripper_base_link" reason="Never"/>
+  <disable_collisions link1="robot2_link_4" link2="robot2_link_6" reason="Never"/>
+  <disable_collisions link1="robot2_link_4" link2="robot2_gripper_base_link" reason="Never"/>
+  <disable_collisions link1="robot2_link_5" link2="robot2_gripper_base_link" reason="Never"/>
+  <disable_collisions link1="robot2_link_6" link2="robot2_gripper_jaw1_link" reason="Never"/>
+  <disable_collisions link1="robot2_link_6" link2="robot2_gripper_jaw2_link" reason="Never"/>
+
+  <!-- Cross-robot base collisions: bases are far apart and fixed, never reach each other -->
+  <disable_collisions link1="robot1_base_link" link2="robot2_base_link" reason="Never"/>
+  <disable_collisions link1="robot1_base_link" link2="robot2_link_1" reason="Never"/>
+  <disable_collisions link1="robot2_base_link" link2="robot1_link_1" reason="Never"/>
+
+  <!-- NOTE: All other cross-robot link pairs remain ENABLED so MoveIt checks them for collisions -->
+
+</robot>

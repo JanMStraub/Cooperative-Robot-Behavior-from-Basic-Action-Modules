@@ -113,7 +113,7 @@ def cmd_snapshot(args) -> None:
 
 def cmd_b12(args) -> None:
     """Populate the B12 synthetic KG, render it, then clear."""
-    from ACRLPython.benchmarks.cases.B13KgAblation import (
+    from ACRLPython.benchmarks.cases.B14KgAblation import (
         populate_synthetic_kg,
         clear_synthetic_kg,
         KG_OBJECTS,

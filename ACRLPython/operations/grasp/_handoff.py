@@ -92,10 +92,12 @@ def receive_handoff(
         lx = object_dimensions[0]
         approach_sign = 1.0 if receiver_pos[0] > object_position[0] else -1.0
         near_face_x = object_position[0] + approach_sign * lx * 0.5
-        # TCP at near face; fingers extend inward and close around the bar.
-        # Do NOT push past the face — MoveIt detects the endpoint in collision and
-        # re-routes in Z (free-space fallback), causing a Z-face grasp instead of X-face.
+        # ap_x = near_face_x: used for reach check and ROS pre-waypoint anchor.
+        # center_x = object center: final move/insertion target for both paths.
+        # Keeping ap_x at the near face avoids MoveIt detecting the primary endpoint
+        # inside the object collision mesh and re-routing out-of-plane.
         ap_x = near_face_x
+        center_x = object_position[0]
         obj_height = object_dimensions[1] if len(object_dimensions) > 1 else 0.02
         logger.info(
             f"receive_handoff: object_dimensions={object_dimensions}, obj_height={obj_height:.4f}m"
@@ -243,10 +245,27 @@ def receive_handoff(
                 approach_error = (approach_result or {}).get(
                     "error", "No response from ROS bridge"
                 )
+
         else:
+            # Disable ProximityGuard so the receiver can approach past the EE_STOP_THRESHOLD
+            # (0.25m). Without this, the guard freezes both robots before the gripper reaches
+            # the object. Re-enabled after gripper close regardless of outcome.
+            _broadcaster = None
+            try:
+                from .._imports import get_command_broadcaster
+
+                _broadcaster = get_command_broadcaster()
+                _broadcaster.send_command(
+                    {"command_type": "set_proximity_guard", "parameters": {"enabled": False}},
+                    request_id,
+                )
+                logger.info("receive_handoff: ProximityGuard disabled for approach")
+            except Exception as _pg_err:
+                logger.warning(f"receive_handoff: could not disable ProximityGuard — {_pg_err}")
+
             _move = move_to_coordinate(
                 robot_id=robot_id,
-                x=ap_x,
+                x=center_x,
                 y=ap_y,
                 z=ap_z,
                 request_id=request_id,
@@ -254,6 +273,25 @@ def receive_handoff(
             )
             approach_success = _move.success
             approach_error = _move.error
+
+            if approach_success:
+                # move_to_coordinate (TCP) is fire-and-forget — Robot2 hasn't reached
+                # the position yet when it returns. Poll WorldState until the arm
+                # actually stops before issuing the gripper close. Without this wait,
+                # control_gripper races the movement and creates a FixedJoint at the
+                # wrong position; the IK solver then fights the misplaced joint → flapping.
+                try:
+                    from ..MoveOperations import _tcp_wait_for_not_moving
+
+                    _tcp_wait_for_not_moving(robot_id, timeout=20.0)
+                except Exception as _wait_err:
+                    logger.warning(
+                        f"receive_handoff: move-completion poll failed ({_wait_err})"
+                        " — falling back to 4s fixed delay"
+                    )
+                    import time as _t_move
+
+                    _t_move.sleep(4.0)
 
         if not approach_success:
             return OperationResult.error_result(
@@ -279,11 +317,9 @@ def receive_handoff(
                 ["Check gripper state", "Verify object is within gripper reach"],
             )
 
-        # GripperContactSensor: 100ms contact + 167ms force avg ≈ 270ms. 0.5s for side-grasp margin.
-        import time as _time_grip
-
-        _time_grip.sleep(0.5)
-
+        # Signal source robot to release before the contact-verification sleep so Robot1
+        # starts opening its gripper while Robot2 verifies the grip. Emitting after the
+        # sleep would leave both FixedJoints active for 0.5s → dual-grip physics jerk.
         if release_signal:
             try:
                 from ..SyncOperations import EventBus
@@ -294,6 +330,27 @@ def receive_handoff(
                 )
             except Exception as e:
                 logger.warning(f"receive_handoff: failed to emit release signal — {e}")
+
+        # Re-enable ProximityGuard now that the gripper has closed and transfer is done.
+        # Only needed for the TCP path (ROS path never disabled it).
+        if not _use_ros_approach:
+            try:
+                from .._imports import get_command_broadcaster as _gcb
+
+                _gcb().send_command(
+                    {"command_type": "set_proximity_guard", "parameters": {"enabled": True}},
+                    request_id,
+                )
+                logger.info("receive_handoff: ProximityGuard re-enabled")
+            except Exception as _pg_re_err:
+                logger.warning(
+                    f"receive_handoff: could not re-enable ProximityGuard — {_pg_re_err}"
+                )
+
+        # GripperContactSensor: 100ms contact + 167ms force avg ≈ 270ms. 0.5s for side-grasp margin.
+        import time as _time_grip
+
+        _time_grip.sleep(0.5)
 
         return OperationResult.success_result(
             {
@@ -328,16 +385,16 @@ RECEIVE_HANDOFF_OPERATION = BasicOperation(
         handoff.  Equivalent to grasp_object for the receiving robot.
 
         Autonomously derives approach position (object centre ± half-width + clearance)
-        and gripper yaw (robot-base → object vector) from WorldState.  No hardcoded
-        coordinates required.
+        and gripper orientation from WorldState.  No hardcoded coordinates required.
 
         Internal sequence:
           1. Fetch object position + dimensions from WorldState.
-          2. Compute approach position offset toward receiver.
-          3. Compute yaw from _yaw_toward_object(); pitch=0 (horizontal approach).
-          4. adjust_end_effector_orientation(pitch=0, yaw=yaw_deg, roll=0).
-          5. move_to_coordinate(approach_position).
-          6. control_gripper(open_gripper=False).
+          2. Compute near_face_x (reach check, pre-waypoint) and center_x (insert target).
+          3. Open gripper — guarantee maximum jaw width before approach.
+          4. TCP path: move_to_coordinate(center_x) — jaw gap straddles object center.
+             ROS path: pre-waypoint → Cartesian to near_face_x → slow insertion to center_x.
+          5. control_gripper(open_gripper=False) — close symmetrically around object center.
+          6. Emit release_signal so source robot opens in parallel (optional).
 
         Must be called AFTER the source robot has signalled readiness (r1_at_handoff)
         and AFTER detect_object_stereo so WorldState has current object geometry.

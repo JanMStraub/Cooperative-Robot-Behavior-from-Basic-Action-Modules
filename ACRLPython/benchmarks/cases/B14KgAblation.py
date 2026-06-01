@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B13: Knowledge Graph Ablation — spatial context enrichment vs none."""
+"""B14: Knowledge Graph Ablation — spatial context enrichment vs none."""
 
 from __future__ import annotations
 

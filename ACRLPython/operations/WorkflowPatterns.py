@@ -106,12 +106,12 @@ DETECT_AND_APPROACH_PATTERN = WorkflowPattern(
     description="Detect an object using vision and move robot to its location",
     steps=[
         WorkflowStep(
-            operation_id="perception_stereo_detect_001",
+            operation_id="detect_object_stereo",
             parameter_bindings={},
             description="Detect object with stereo vision to get 3D coordinates",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
+            operation_id="move_to_coordinate",
             parameter_bindings={
                 "x": "detect_result.x",
                 "y": "detect_result.y",
@@ -138,56 +138,43 @@ PICK_AND_PLACE_PATTERN = WorkflowPattern(
     pattern_id="workflow_pick_place_001",
     name="pick_and_place",
     category=WorkflowCategory.MANIPULATION,
-    description="Detect object, move to it, grasp it, move to target, and release",
+    description="Detect object, grasp it with grasp_object, detect field, and place with place_object",
     steps=[
         WorkflowStep(
-            operation_id="perception_stereo_detect_001",
-            parameter_bindings={"color": "source_color"},
-            description="Detect source object to pick up",
+            operation_id="detect_object_stereo",
+            parameter_bindings={"color": "source_color", "capture_var": "target"},
+            description="Detect source object to pick up (capture_var='target')",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
-            parameter_bindings={
-                "x": "source.x",
-                "y": "source.y",
-                "z": "source.z",
-                "approach_offset": "0.05",
-            },
-            description="Approach source object with offset",
+            operation_id="grasp_object",
+            parameter_bindings={"object_id": "$target.color"},
+            description="Grasp detected object — handles approach, descent, and grip; NO prior move_to_coordinate",
         ),
         WorkflowStep(
-            operation_id="manipulation_control_gripper_001",
-            parameter_bindings={"open_gripper": "False"},
-            description="Close gripper to grasp object",
+            operation_id="detect_field",
+            parameter_bindings={"field_label": "target_field_letter", "capture_var": "field"},
+            description="Detect placement field by letter (A-I) to get its coordinates (capture_var='field')",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
-            parameter_bindings={
-                "x": "target_x",
-                "y": "target_y",
-                "z": "target_z",
-            },
-            description="Move to target placement location",
-        ),
-        WorkflowStep(
-            operation_id="manipulation_control_gripper_001",
-            parameter_bindings={"open_gripper": "True"},
-            description="Open gripper to release object",
+            operation_id="place_object",
+            parameter_bindings={"x": "$field.x", "y": "$field.y", "z": "$field.z"},
+            description="Place held object at field coordinates — hover, descend, open gripper, ascend",
         ),
     ],
     variable_bindings={
-        "source": "perception_stereo_detect_001.result",
+        "target": "detect_object_stereo.result",
+        "field": "detect_field.result",
     },
     success_criteria=[
         "Source object detected",
-        "Gripper successfully grasped object",
-        "Object transported to target location",
-        "Object released at target",
+        "grasp_object successfully gripped object",
+        "Target field detected",
+        "place_object released at field position",
     ],
-    failure_recovery="If grasp fails, retry with adjusted gripper position",
+    failure_recovery="If grasp fails, retry detect_object_stereo then grasp_object",
     usage_examples=[
-        "Pick blue cube and place at (0.2, 0.0, 0.15)",
-        "Rearrange objects by color",
+        "Grasp blue cube and place it in field G: detect_object_stereo -> grasp_object($target.color) -> detect_field('G') -> place_object($field.x/y/z)",
+        "Pick magenta cube and deposit in field H",
     ],
 )
 
@@ -198,17 +185,17 @@ VERIFY_AND_ACT_PATTERN = WorkflowPattern(
     description="Analyze scene with LLM vision, then perform appropriate action based on understanding",
     steps=[
         WorkflowStep(
-            operation_id="perception_analyze_scene_001",
+            operation_id="analyze_scene",
             parameter_bindings={"prompt": "analysis_prompt"},
             description="Use LLM vision to understand current scene state",
         ),
         WorkflowStep(
-            operation_id="perception_stereo_detect_001",
+            operation_id="detect_object_stereo",
             conditional="scene_analysis indicates object is present",
             description="Detect object if LLM confirms it's visible",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
+            operation_id="move_to_coordinate",
             parameter_bindings={
                 "x": "detection.x",
                 "y": "detection.y",
@@ -241,17 +228,17 @@ SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
     description="Move two robots simultaneously to different targets using atomic operations and sync primitives (LLM-driven coordination)",
     steps=[
         WorkflowStep(
-            operation_id="status_check_robot_001",
+            operation_id="check_robot_status",
             parameter_bindings={"robot_id": "robot1_id"},
             description="Check robot 1 status before moving",
         ),
         WorkflowStep(
-            operation_id="status_check_robot_001",
+            operation_id="check_robot_status",
             parameter_bindings={"robot_id": "robot2_id"},
             description="Check robot 2 status before moving",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
+            operation_id="move_to_coordinate",
             parameter_bindings={
                 "robot_id": "robot1_id",
                 "x": "target1_x",
@@ -261,7 +248,7 @@ SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
             description="Robot1 moves to target (parallel with Robot2)",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
+            operation_id="move_to_coordinate",
             parameter_bindings={
                 "robot_id": "robot2_id",
                 "x": "target2_x",
@@ -271,7 +258,7 @@ SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
             description="Robot2 moves to target (parallel with Robot1)",
         ),
         WorkflowStep(
-            operation_id="sync_signal_001",
+            operation_id="signal",
             parameter_bindings={"event_name": "both_robots_positioned"},
             description="Signal that both robots reached targets",
         ),
@@ -300,12 +287,12 @@ HANDOFF_PATTERN = WorkflowPattern(
     description="Transfer object from one robot to another using atomic operations and synchronization primitives (LLM-driven coordination)",
     steps=[
         WorkflowStep(
-            operation_id="perception_stereo_detect_001",
+            operation_id="detect_object_stereo",
             parameter_bindings={"color": "object_color", "robot_id": "source_robot"},
             description="Detect object to handoff",
         ),
         WorkflowStep(
-            operation_id="manipulation_grasp_object_001",
+            operation_id="grasp_object",
             parameter_bindings={
                 "robot_id": "{source_robot_id}",
                 "object_id": "{object_id}",
@@ -313,22 +300,22 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Source robot grasps object",
         ),
         WorkflowStep(
-            operation_id="sync_signal_001",
+            operation_id="signal",
             parameter_bindings={"event_name": "object_gripped"},
             description="Signal that object has been gripped",
         ),
         WorkflowStep(
-            operation_id="sync_wait_for_signal_001",
+            operation_id="wait_for_signal",
             parameter_bindings={"event_name": "object_gripped", "timeout_ms": "10000"},
             description="Target robot waits for grip confirmation (in parallel)",
         ),
         WorkflowStep(
-            operation_id="motion_return_to_start_001",
+            operation_id="return_to_start_position",
             parameter_bindings={"robot_id": "{source_robot_id}", "speed": "0.5"},
             description="Source robot returns to start for deterministic joint config",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
+            operation_id="move_to_coordinate",
             parameter_bindings={
                 "robot_id": "{source_robot_id}",
                 "x": "{handoff_x}",
@@ -338,7 +325,7 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Source robot moves to HANDOFF_PRESENTATION_POSITION",
         ),
         WorkflowStep(
-            operation_id="motion_adjust_orientation_003",
+            operation_id="adjust_end_effector_orientation",
             parameter_bindings={
                 "robot_id": "{source_robot_id}",
                 "pitch": "0.0",
@@ -348,17 +335,17 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Lock wrist to deterministic orientation (prevents joint 5/6 variance)",
         ),
         WorkflowStep(
-            operation_id="sync_signal_001",
+            operation_id="signal",
             parameter_bindings={"event_name": "r1_at_handoff"},
             description="Source robot signals it is at handoff position",
         ),
         WorkflowStep(
-            operation_id="sync_wait_for_signal_001",
+            operation_id="wait_for_signal",
             parameter_bindings={"event_name": "r1_at_handoff", "timeout_ms": "10000"},
             description="Target robot waits for source at handoff position",
         ),
         WorkflowStep(
-            operation_id="perception_stereo_detect_001",
+            operation_id="detect_object_stereo",
             parameter_bindings={
                 "color": "object_color",
                 "robot_id": "{target_robot_id}",
@@ -366,7 +353,7 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Target robot re-detects object at presentation position",
         ),
         WorkflowStep(
-            operation_id="coordination_receive_handoff_001",
+            operation_id="receive_handoff",
             parameter_bindings={
                 "robot_id": "{target_robot_id}",
                 "object_id": "{object_id}",
@@ -375,12 +362,17 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Target robot receives handoff: orient gripper, move to approach, close gripper",
         ),
         WorkflowStep(
-            operation_id="manipulation_release_object_001",
+            operation_id="release_object",
             parameter_bindings={"robot_id": "{source_robot_id}"},
             description="Source robot releases object",
         ),
         WorkflowStep(
-            operation_id="sync_signal_001",
+            operation_id="return_to_start_position",
+            parameter_bindings={"robot_id": "{source_robot_id}", "speed": "0.5"},
+            description="Source robot returns to start after releasing",
+        ),
+        WorkflowStep(
+            operation_id="signal",
             parameter_bindings={"event_name": "handoff_complete"},
             description="Signal handoff completion",
         ),
@@ -410,12 +402,12 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
     description="Example of LLM-planned multi-robot coordination using only atomic operations and sync primitives - demonstrates the power of emergent coordination without hardcoded patterns",
     steps=[
         WorkflowStep(
-            operation_id="perception_stereo_detect_001",
+            operation_id="detect_object_stereo",
             parameter_bindings={"color": "red", "robot_id": "Robot1"},
             description="Robot1: Detect red cube",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
+            operation_id="move_to_coordinate",
             parameter_bindings={
                 "robot_id": "Robot1",
                 "x": "cube.x",
@@ -425,22 +417,22 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
             description="Robot1: Move to cube",
         ),
         WorkflowStep(
-            operation_id="manipulation_control_gripper_001",
+            operation_id="control_gripper",
             parameter_bindings={"robot_id": "Robot1", "open_gripper": "False"},
             description="Robot1: Grip cube",
         ),
         WorkflowStep(
-            operation_id="sync_signal_001",
+            operation_id="signal",
             parameter_bindings={"event_name": "cube_gripped"},
             description="Robot1: Signal that cube is gripped",
         ),
         WorkflowStep(
-            operation_id="sync_wait_for_signal_001",
+            operation_id="wait_for_signal",
             parameter_bindings={"event_name": "cube_gripped", "timeout_ms": "5000"},
             description="Robot2: Wait for Robot1 to grip cube (parallel execution)",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
+            operation_id="move_to_coordinate",
             parameter_bindings={
                 "robot_id": "Robot1",
                 "x": "0.0",
@@ -450,7 +442,7 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
             description="Robot1: Move to handoff position",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
+            operation_id="move_to_coordinate",
             parameter_bindings={
                 "robot_id": "Robot2",
                 "x": "0.0",
@@ -460,37 +452,37 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
             description="Robot2: Move to handoff position (parallel with Robot1)",
         ),
         WorkflowStep(
-            operation_id="sync_signal_001",
+            operation_id="signal",
             parameter_bindings={"event_name": "robot1_ready"},
             description="Robot1: Signal arrival at handoff",
         ),
         WorkflowStep(
-            operation_id="sync_signal_001",
+            operation_id="signal",
             parameter_bindings={"event_name": "robot2_ready"},
             description="Robot2: Signal arrival at handoff",
         ),
         WorkflowStep(
-            operation_id="sync_wait_for_signal_001",
+            operation_id="wait_for_signal",
             parameter_bindings={"event_name": "robot2_ready", "timeout_ms": "5000"},
             description="Robot1: Wait for Robot2 to arrive",
         ),
         WorkflowStep(
-            operation_id="sync_wait_for_signal_001",
+            operation_id="wait_for_signal",
             parameter_bindings={"event_name": "robot1_ready", "timeout_ms": "5000"},
             description="Robot2: Wait for Robot1 to arrive",
         ),
         WorkflowStep(
-            operation_id="manipulation_control_gripper_001",
+            operation_id="control_gripper",
             parameter_bindings={"robot_id": "Robot2", "open_gripper": "False"},
             description="Robot2: Close gripper to receive cube",
         ),
         WorkflowStep(
-            operation_id="sync_wait_001",
+            operation_id="wait",
             parameter_bindings={"duration_ms": "500"},
             description="Wait for gripper to stabilize",
         ),
         WorkflowStep(
-            operation_id="manipulation_control_gripper_001",
+            operation_id="control_gripper",
             parameter_bindings={"robot_id": "Robot1", "open_gripper": "True"},
             description="Robot1: Release cube",
         ),
@@ -521,7 +513,7 @@ WORKSPACE_YIELD_PATTERN = WorkflowPattern(
     description="Safely coordinate entry into a shared workspace region: one robot yields, the occupying robot signals clear when done",
     steps=[
         WorkflowStep(
-            operation_id="coordination_yield_workspace_002",
+            operation_id="yield_workspace",
             parameter_bindings={
                 "robot_id": "entering_robot",
                 "region_id": "shared_zone",
@@ -529,7 +521,7 @@ WORKSPACE_YIELD_PATTERN = WorkflowPattern(
             description="Entering robot signals intent and waits for region to be cleared",
         ),
         WorkflowStep(
-            operation_id="sync_signal_001",
+            operation_id="signal",
             parameter_bindings={"event_name": "region_clear_shared_zone"},
             description="Occupying robot signals it has left the shared zone",
         ),
@@ -553,7 +545,7 @@ SYNCHRONIZED_GRASP_PATTERN = WorkflowPattern(
     description="Both robots simultaneously approach and grasp a large object from opposite sides (bimanual grasping)",
     steps=[
         WorkflowStep(
-            operation_id="coordination_check_partner_001",
+            operation_id="check_partner_status",
             parameter_bindings={
                 "robot_id": "robot1_id",
                 "partner_robot_id": "robot2_id",
@@ -561,7 +553,7 @@ SYNCHRONIZED_GRASP_PATTERN = WorkflowPattern(
             description="Verify partner robot is idle and ready before starting bimanual task",
         ),
         WorkflowStep(
-            operation_id="collaborative_synchronized_grasp_001",
+            operation_id="synchronized_grasp",
             parameter_bindings={
                 "robot_id": "robot1_id",
                 "partner_robot_id": "robot2_id",
@@ -593,7 +585,7 @@ JOINT_TRANSPORT_PATTERN = WorkflowPattern(
     description="Both robots cooperatively transport a jointly-grasped object to a target position, then release it",
     steps=[
         WorkflowStep(
-            operation_id="collaborative_synchronized_grasp_001",
+            operation_id="synchronized_grasp",
             parameter_bindings={
                 "robot_id": "robot1_id",
                 "partner_robot_id": "robot2_id",
@@ -602,7 +594,7 @@ JOINT_TRANSPORT_PATTERN = WorkflowPattern(
             description="Both robots grasp the object simultaneously (precondition for joint transport)",
         ),
         WorkflowStep(
-            operation_id="collaborative_joint_transport_001",
+            operation_id="joint_transport",
             parameter_bindings={
                 "robot_id": "robot1_id",
                 "partner_robot_id": "robot2_id",
@@ -614,12 +606,12 @@ JOINT_TRANSPORT_PATTERN = WorkflowPattern(
             description="Both robots transport the object together maintaining relative positions",
         ),
         WorkflowStep(
-            operation_id="manipulation_release_object_001",
+            operation_id="release_object",
             parameter_bindings={"robot_id": "robot1_id"},
             description="Robot1 releases object at destination",
         ),
         WorkflowStep(
-            operation_id="manipulation_release_object_001",
+            operation_id="release_object",
             parameter_bindings={"robot_id": "robot2_id"},
             description="Robot2 releases object at destination",
         ),
@@ -744,7 +736,10 @@ or receive_handoff ops exist. Each step gets its own Unity ACK via SequenceExecu
    → receive_handoff(target_robot, object_id, source_robot_id=source_robot)
 
 9. Source robot releases
-    → release_object(source_robot)
+   → release_object(source_robot)
+
+10. Source robot returns to start after releasing
+    → return_to_start_position(source_robot, speed=0.5)
 
 **Key Anti-Patterns to Avoid:**
 - Do NOT use move_to_coordinate + control_gripper for step 2 — use grasp_object
@@ -753,6 +748,7 @@ or receive_handoff ops exist. Each step gets its own Unity ACK via SequenceExecu
 - Do NOT skip step 3 — return_to_start is required for deterministic IK convergence
 - Do NOT skip step 4 — source MUST move to the presentation position before receiver approaches
 - Do NOT skip step 5 — adjust_end_effector_orientation locks wrist (joint 5/6 variance otherwise)
+- Do NOT skip step 10 — source robot must return to start after releasing
 
 **Example LLM Usage:**
 "Robot1, hand the red bar to Robot2"
@@ -769,6 +765,7 @@ wait_for_signal("Robot2", "r1_at_handoff") # parallel
 detect_object_stereo("Robot2", color="red")
 receive_handoff("Robot2", object_id="RedBar", source_robot_id="Robot1")
 release_object("Robot1")
+return_to_start_position("Robot1", speed=0.5)
 ```
 """
 

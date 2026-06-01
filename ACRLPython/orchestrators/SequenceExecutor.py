@@ -68,6 +68,9 @@ class SequenceExecutor:
     # Class-level atomic counter for request IDs (shared across all instances)
     _request_id_counter = 0
     _request_id_lock = threading.Lock()
+    # Monotonic sequence counter — ensures unique seq_ IDs even for concurrent requests
+    # arriving within the same millisecond.
+    _seq_counter = 0
 
     class _MetricsTracker:
         """Welford online-average tracker for per-executor operation metrics."""
@@ -185,7 +188,21 @@ class SequenceExecutor:
     ) -> Dict[str, Any]:
         """Execute commands sequentially or in parallel groups; returns full result dict."""
         self._abort_flag = False
-        self._current_sequence_id = sequence_id or f"seq_{int(time.time() * 1000)}"
+        try:
+            from core.Imports import clear_sequence_abort
+            clear_sequence_abort()
+        except ImportError:
+            pass
+        if sequence_id:
+            self._current_sequence_id = sequence_id
+        else:
+            with SequenceExecutor._request_id_lock:
+                SequenceExecutor._seq_counter += 1
+                _n = SequenceExecutor._seq_counter
+            self._current_sequence_id = f"seq_{int(time.time() * 1000)}_{_n:04d}"
+        # Snapshot the ID as a method-local variable so concurrent calls on the
+        # same executor instance don't overwrite each other's ID in log output.
+        _sid = self._current_sequence_id
         timeout = timeout_per_command or self.default_timeout
 
         # Clear variables for new sequence (clear in-place to preserve VariableResolver's shared reference)
@@ -196,9 +213,7 @@ class SequenceExecutor:
         completed = 0
         reflexion_recoveries = 0
 
-        logger.info(
-            f"Starting sequence {self._current_sequence_id} with {len(commands)} commands"
-        )
+        logger.info(f"Starting sequence {_sid} with {len(commands)} commands")
 
         # Check if commands use parallel_group
         has_parallel_groups = any("parallel_group" in cmd for cmd in commands)
@@ -216,9 +231,7 @@ class SequenceExecutor:
             logger.info("Sequential execution mode (no parallel_group)")
             for i, cmd in enumerate(commands):
                 if self._abort_flag:
-                    logger.warning(
-                        f"Sequence {self._current_sequence_id} aborted at command {i}"
-                    )
+                    logger.warning(f"Sequence {_sid} aborted at command {i}")
                     break
 
                 operation = cmd.get("operation", "")
@@ -227,6 +240,22 @@ class SequenceExecutor:
 
                 # Auto-inject parameters from previous operations based on ParameterFlow definitions
                 params = self._auto_inject_parameters(operation, params)
+
+                # Self-reference guard: null out params that reference their own capture_var,
+                # preventing false-positive UNRESOLVED_VARIABLE aborts on detect→capture patterns.
+                for _k, _v in list(params.items()):
+                    if (
+                        isinstance(_v, str)
+                        and _v.startswith("$")
+                        and capture_var
+                        and _v.lstrip("$").split(".")[0] == capture_var
+                    ):
+                        logger.warning(
+                            "Pre-exec: param '%s' self-references capture_var '%s' — nulling out",
+                            _k,
+                            capture_var,
+                        )
+                        params[_k] = None
 
                 # Fail early if any param references a variable that hasn't been
                 # captured yet. VariableResolver returns the raw "$var.field" string
@@ -386,6 +415,16 @@ class SequenceExecutor:
                                 retry_op, retry_params
                             )
 
+                            # Re-inject camera_id for perception ops — SequenceServer
+                            # normally does this but is bypassed in the Reflexion path.
+                            _PERCEPTION_OPS = {"detect_object_stereo", "analyze_scene"}
+                            if retry_op in _PERCEPTION_OPS:
+                                _original_camera_id = params.get("camera_id")
+                                if _original_camera_id and not retry_params.get(
+                                    "camera_id"
+                                ):
+                                    retry_params["camera_id"] = _original_camera_id
+
                             retry_start = time.time()
                             retry_result = self._execute_single_command(
                                 retry_op, retry_params, timeout
@@ -460,7 +499,7 @@ class SequenceExecutor:
 
         result = {
             "success": success,
-            "sequence_id": self._current_sequence_id,
+            "sequence_id": _sid,
             "total_commands": len(commands),
             "completed_commands": completed,
             "results": results,
@@ -471,7 +510,7 @@ class SequenceExecutor:
 
         _safe_log(
             logger.info,
-            f"Sequence {self._current_sequence_id} finished: "
+            f"Sequence {_sid} finished: "
             f"{completed}/{len(commands)} commands in {total_duration:.0f}ms",
         )
 
@@ -496,7 +535,7 @@ class SequenceExecutor:
                     )
                 ws.broadcast_task_outcome(
                     robot_id=_broadcast_robot_id,
-                    task_id=self._current_sequence_id or "unknown",
+                    task_id=_sid or "unknown",
                     success=success,
                     duration_ms=total_duration,
                     final_object_states=final_states,
@@ -615,7 +654,14 @@ class SequenceExecutor:
                                 )
                 except FuturesTimeoutError:
                     # One or more futures did not finish within timeout+5s.
-                    # Return immediately — do not wait for stray threads.
+                    # Signal background threads (e.g. follow_target in grasp) to stop
+                    # at their next checkpoint so they don't keep sending commands after
+                    # reset_simulation fires.
+                    try:
+                        from core.Imports import signal_sequence_abort
+                        signal_sequence_abort()
+                    except ImportError:
+                        pass
                     logger.warning(
                         f"[Group {group_num}] as_completed timed out; some commands may not have finished"
                     )

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B14: VGN Ablation — neural grasp prediction vs geometric fallback."""
+"""B15: VGN Ablation — neural grasp prediction vs geometric fallback."""
 
 from __future__ import annotations
 

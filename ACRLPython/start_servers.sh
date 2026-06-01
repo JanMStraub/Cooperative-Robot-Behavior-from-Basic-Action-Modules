@@ -17,6 +17,7 @@ UNITY_BUILD="$(cd "$SCRIPT_DIR/.." && pwd)/ACRLUnity/ACRLUnity_build.app"
 CONTROLLER_PID=""
 ROS_INTEGRATION=true
 STOP_DOCKER_ON_EXIT=false
+DOCKER_PROFILE="dual"
 WEB_PORT="8000"
 ENV_FLAG="sim"
 LAUNCH_UNITY=true
@@ -71,7 +72,9 @@ start_ros() {
             return
         fi
 
-        "$ROS_DIR/start_ros_endpoint.sh" up
+        ROS_PROFILE_ARGS=()
+        [ -n "$DOCKER_PROFILE" ] && ROS_PROFILE_ARGS+=("--profile" "$DOCKER_PROFILE")
+        "$ROS_DIR/start_ros_endpoint.sh" up "${ROS_PROFILE_ARGS[@]}"
         echo ""
 
         # Wait for ros_tcp_endpoint (port 10000) AND ros_bridge motion server (port 5020)
@@ -199,7 +202,9 @@ cleanup() {
     # Stop ROS Docker containers if ROS integration was enabled and stop-on-exit is active
     if "$ROS_INTEGRATION" && "$STOP_DOCKER_ON_EXIT" && [ -d "$ROS_DIR" ] && command -v docker &>/dev/null; then
         echo "Stopping ROS Docker containers..."
-        "$ROS_DIR/start_ros_endpoint.sh" down
+        ROS_PROFILE_ARGS=()
+        [ -n "$DOCKER_PROFILE" ] && ROS_PROFILE_ARGS+=("--profile" "$DOCKER_PROFILE")
+        "$ROS_DIR/start_ros_endpoint.sh" down "${ROS_PROFILE_ARGS[@]}"
         echo "  ROS Docker containers stopped."
     fi
 
@@ -213,6 +218,10 @@ main() {
         case "$1" in
             --without-ros)
                 ROS_INTEGRATION=false
+                shift
+                ;;
+            --dual)
+                DOCKER_PROFILE="dual"
                 shift
                 ;;
             --no-stop-docker)
@@ -245,7 +254,7 @@ main() {
                 ;;
             *)
                 echo "Unknown option: $1" >&2
-                echo "Usage: $0 [--without-ros] [--no-stop-docker] [--web PORT] [--no-web] [--env sim|real] [--no-unity] [--unity PATH]" >&2
+                echo "Usage: $0 [--without-ros] [--dual] [--no-stop-docker] [--web PORT] [--no-web] [--env sim|real] [--no-unity] [--unity PATH]" >&2
                 exit 1
                 ;;
         esac

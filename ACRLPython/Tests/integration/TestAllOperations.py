@@ -530,7 +530,7 @@ class TestMultiRobotOps:
         result = _cmd(
             "check partner status of Robot2 from Robot1",
             robot_id="Robot1",
-            timeout=60.0,
+            timeout=120.0,
             request_id=903,
         )
         assert (

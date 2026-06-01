@@ -341,11 +341,13 @@ def _grasp_via_vgn_with_ros(
     _detection_depth_m: "Optional[float]" = None  # stereo bbox depth for VGN hint
 
     _detected_world_pos: "Optional[List[float]]" = None
+    _original_center: "Optional[List[float]]" = None
     _object_dimensions = None
     try:
         ws_pos = world_state.get_object_position(object_id)
         if ws_pos is not None:
             _detected_world_pos = list(ws_pos)
+            _original_center = list(ws_pos)
             logger.info(
                 f"[VGN+ROS] Using WorldState position for '{object_id}': "
                 f"{[round(v, 3) for v in _detected_world_pos]}"
@@ -511,6 +513,48 @@ def _grasp_via_vgn_with_ros(
                 f"[VGN+ROS] No grasp with |X_approach| >= {_MIN_X_APPROACH} — "
                 f"using most-horizontal candidate (X_approach={top['approach_direction'][0]:.2f})"
             )
+    elif _approach_lower in ("left_side", "right_side"):
+        # Top-down approach offset along the object's longest horizontal axis (left or right end).
+        # Select the best-scoring candidate for orientation; position is set geometrically below.
+        top = max(world_grasps, key=lambda g: g.get("score", 0.0))
+        logger.info(
+            f"[VGN+ROS] Selected {_approach_lower} grasp (best score) from {len(world_grasps)} candidates"
+        )
+        # Offset along the longest WORLD-space axis so the gripper lands at the
+        # left/right end of the object.  The local dims must be projected through
+        # the object's yaw rotation to find which world axis (X or Z) is longer.
+        if _detected_world_pos and _object_dimensions:
+            _lx, _, _lz = _object_dimensions
+            # Get object yaw (rotation[1] = Unity Y-axis degrees) to project to world.
+            _obj_yaw_rad = 0.0
+            try:
+                if world_state is not None:
+                    _rot = world_state.get_object_rotation(object_id)
+                    if _rot is not None:
+                        _obj_yaw_rad = math.radians(_rot[1])
+            except Exception:
+                pass
+            _cy, _sy = abs(math.cos(_obj_yaw_rad)), abs(math.sin(_obj_yaw_rad))
+            _world_half_x = _cy * (_lx / 2.0) + _sy * (_lz / 2.0)
+            _world_half_z = _sy * (_lx / 2.0) + _cy * (_lz / 2.0)
+            _side_sign = -1.0 if _approach_lower == "left_side" else 1.0
+            _detected_world_pos = list(_detected_world_pos)
+            if _world_half_x >= _world_half_z:
+                _offset = _side_sign * 0.75 * _world_half_x
+                _detected_world_pos[0] += _offset
+                logger.info(
+                    f"[VGN+ROS] {_approach_lower}: X offset {_offset:+.3f}m "
+                    f"(world half_x={_world_half_x:.3f}m > half_z={_world_half_z:.3f}m) "
+                    f"→ target_x={_detected_world_pos[0]:.3f}"
+                )
+            else:
+                _offset = _side_sign * 0.75 * _world_half_z
+                _detected_world_pos[2] += _offset
+                logger.info(
+                    f"[VGN+ROS] {_approach_lower}: Z offset {_offset:+.3f}m "
+                    f"(world half_z={_world_half_z:.3f}m > half_x={_world_half_x:.3f}m) "
+                    f"→ target_z={_detected_world_pos[2]:.3f}"
+                )
     elif _approach_lower == "front":
         _MIN_Z_APPROACH = 0.3
         front_candidates = [
@@ -774,7 +818,17 @@ def _grasp_via_vgn_with_ros(
         return None
 
     # Arm has descended — do NOT return None from here; return error result.
-    gripper_ok = _execute_grasp_with_follow_target(
+    # XZ offset from object centre to the approach-side grasp target. Passed to
+    # follow_target so drift correction targets the same side (e.g. left_side Z offset)
+    # instead of the raw object centre, which may collide with a bracing partner robot.
+    _approach_offset_xz = (0.0, 0.0)
+    if _original_center and _detected_world_pos:
+        _approach_offset_xz = (
+            _detected_world_pos[0] - _original_center[0],
+            _detected_world_pos[2] - _original_center[2],
+        )
+
+    grasp_ok, grasp_fail_reason = _execute_grasp_with_follow_target(
         bridge=bridge,
         robot_id=robot_id,
         object_id=object_id,
@@ -782,14 +836,16 @@ def _grasp_via_vgn_with_ros(
         orientation=orientation,
         tcp_y_offset=GRASP_TCP_OFFSET,
         world_state=world_state,
+        approach_offset_xz=_approach_offset_xz,
     )
-    if not gripper_ok:
+    if not grasp_ok:
         return OperationResult.error_result(
-            "GRIPPER_CLOSE_FAILED",
-            f"Arm reached VGN pose but gripper close failed for {robot_id}",
+            "GRASP_EXECUTION_FAILED",
+            f"VGN+ROS grasp failed for {robot_id}: {grasp_fail_reason}",
             [
                 "Check gripper hardware/simulation state",
                 "Verify GripperContactSensor is active",
+                "If corrective move failed, check for workspace collision with partner robot",
             ],
         )
 

@@ -68,8 +68,10 @@ def grasp_object(
                 ],
             )
 
-        valid_approaches = ["auto", "top", "front", "side"]
-        if preferred_approach.lower() not in valid_approaches:
+        _approach_aliases = {"left": "left_side", "right": "right_side"}
+        preferred_approach = _approach_aliases.get(preferred_approach.lower(), preferred_approach.lower())
+        valid_approaches = ["auto", "top", "front", "side", "left_side", "right_side"]
+        if preferred_approach not in valid_approaches:
             return OperationResult.error_result(
                 "INVALID_APPROACH",
                 f"Preferred approach must be one of {valid_approaches}, got: {preferred_approach}",
@@ -462,10 +464,10 @@ GRASP_OBJECT_OPERATION = BasicOperation(
         OperationParameter(
             name="preferred_approach",
             type="str",
-            description="Preferred grasp approach: 'top' (default, top-down), 'front', 'side', 'auto'",
+            description="Preferred grasp approach: 'top' (default, top-down), 'front', 'side' (any horizontal), 'left_side' (left end of longest object axis), 'right_side' (right end of longest object axis), 'auto'",
             required=False,
             default="top",
-            valid_values=["auto", "top", "front", "side"],
+            valid_values=["auto", "top", "front", "side", "left_side", "right_side", "left", "right"],
         ),
         OperationParameter(
             name="pre_grasp_distance",

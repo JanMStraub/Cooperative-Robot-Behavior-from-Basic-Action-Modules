@@ -144,7 +144,8 @@ class GraphQueryEngine:
         bx, by, bz = target
         dx, dy, dz = bx - ax, by - ay, bz - az
         seg_len_sq = dx * dx + dy * dy + dz * dz
-        blocking_threshold = 0.05  # 5cm
+        blocking_threshold = 0.05  # 5cm path proximity
+        ee_exclusion_radius = 0.12  # 12cm — skips objects co-located with EE (held/just released)
 
         for obj_id in candidates:
             obj_node = self._graph.get_node(obj_id)
@@ -155,7 +156,8 @@ class GraphQueryEngine:
                 continue
 
             if self._obstacle_blocks_path(
-                obj_pos, robot_pos, target, seg_len_sq, dx, dy, dz, blocking_threshold
+                obj_pos, robot_pos, target, seg_len_sq, dx, dy, dz,
+                blocking_threshold, ee_exclusion_radius
             ):
                 logger.warning(
                     f"Path blocked: obj={obj_id} pos={obj_pos} "
@@ -203,14 +205,15 @@ class GraphQueryEngine:
         dy: float,
         dz: float,
         threshold: float,
+        ee_exclusion_radius: float = 0.05,
     ) -> bool:
         """Return True if obj_pos lies within threshold of the robot→target segment.
 
-        Skips objects co-located with robot or target (they are not blocking obstacles).
-        Uses point-to-line-segment projection; degenerate (zero-length) segment falls
-        back to point distance.
+        Skips objects within ee_exclusion_radius of robot EE (held/just released)
+        and objects co-located with the target. Uses point-to-line-segment projection;
+        degenerate (zero-length) segment falls back to point distance.
         """
-        if math.dist(obj_pos, robot_pos) < threshold:
+        if math.dist(obj_pos, robot_pos) < ee_exclusion_radius:
             return False
         if math.dist(obj_pos, target) < threshold:
             return False

@@ -67,7 +67,6 @@ class TestNegotiationConfig:
             "cooperate",
             "collaborate",
             "coordinate",
-            "simultaneously",
             "handoff",
         ]
         for kw in expected_keywords:
@@ -335,7 +334,7 @@ class TestNegotiationHub:
         hub = NegotiationHub()
         assert hub.needs_negotiation("Both robots lift the cube together") is True
         assert hub.needs_negotiation("Cooperate to move the object") is True
-        assert hub.needs_negotiation("Simultaneously grasp the beam") is True
+        assert hub.needs_negotiation("Jointly grasp the beam") is True
 
     @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     def test_needs_negotiation_multi_robot_ref(self):

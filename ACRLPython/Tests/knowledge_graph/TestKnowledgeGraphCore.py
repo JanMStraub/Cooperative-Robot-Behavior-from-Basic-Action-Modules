@@ -351,10 +351,11 @@ class TestCanReachPosition(unittest.TestCase):
     def test_unreachable_path_blocked(self):
         """Obstacle on path → path_blocked=True → not reachable."""
         self._add_robot(pos=(-0.475, 0.0, 0.0))
-        # Place an obstacle directly on the path and add NEAR edge so it is
-        # considered by _collect_obstacle_candidates (only NEAR objects are checked).
-        self.graph.add_node("obstacle", node_type="object", position=(-0.475, 0.0, 0.1))
-        self.graph.add_edge("Robot1", "obstacle", "NEAR", distance=0.1)
+        # Obstacle at 0.15m from robot (beyond ee_exclusion_radius=0.12m) and
+        # directly on the path to target at 0.3m; NEAR edge required by
+        # _collect_obstacle_candidates.
+        self.graph.add_node("obstacle", node_type="object", position=(-0.475, 0.0, 0.15))
+        self.graph.add_edge("Robot1", "obstacle", "NEAR", distance=0.15)
 
         from unittest.mock import patch as mpatch
 
@@ -362,7 +363,7 @@ class TestCanReachPosition(unittest.TestCase):
             "operations.SpatialPredicates.target_within_reach",
             return_value=(True, ""),
         ):
-            result = self.qe.can_reach_position("Robot1", (-0.475, 0.0, 0.2))
+            result = self.qe.can_reach_position("Robot1", (-0.475, 0.0, 0.3))
 
         self.assertFalse(result["reachable"])
         self.assertTrue(result["path_blocked"])

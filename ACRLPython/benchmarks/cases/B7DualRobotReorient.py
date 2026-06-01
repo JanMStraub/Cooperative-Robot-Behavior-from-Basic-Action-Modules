@@ -9,4 +9,6 @@ def get_task() -> str:
     Return natural language task description for B7.
 
     """
-    return "Robot1 and Robot2 work together to grasp the red cube. Robot1 should grasp on one side and Robot2  on the other side and they should lift the cube together to y=0.1."
+    return (
+        "Robot1 and Robot2 cooperatively handle the red cube. First, Robot2 grasps the right side of the cube. After Robot2 is in position, Robot1 grasps the cube from the left side Once Robot1 has secured the cube, both robots simultaneously lift it to y=0.15."
+    )

@@ -95,6 +95,7 @@ class PromptBuilder:
         group=7: Robot2: detect_object_stereo(color=<same as step 1>, capture_var="handoff_target"): object moved with Robot1
         group=8: Robot2: receive_handoff(object_id="$handoff_target.color", source_robot_id="Robot1")
         group=9: Robot1: release_object
+        group=10: Robot1: return_to_start_position(speed=0.5)
 
         Receiving robot: always receive_handoff, never grasp_object. Handoff coord is always exactly ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}). Step 7 color must match step 1 (never null). signal+wait_for_signal always same group.
 
@@ -147,8 +148,41 @@ class PromptBuilder:
         === INDEPENDENT PARALLEL RULE ===
 
         When two robots have fully independent tasks (no shared objects, no handoff, no sync point), assign MATCHING parallel_group numbers so both chains execute simultaneously.
-        Step N for Robot1 and step N for Robot2 belong in the same group — do NOT assign monotonically increasing groups across both robots.
+        Step N for Robot1 and step N for Robot2 belong in the same group, do NOT assign monotonically increasing groups across both robots.
         Use distinct capture_var names per robot (e.g. "r1_target" / "r2_target") to avoid collisions.
+
+        === COOPERATIVE POSITIONING RULE ===
+
+        When both robots work on one shared object but only ONE grips and the other braces/supports/steadies (NOT a handoff):
+        - Gripping robot: grasp_object with preferred_approach="left_side" or "right_side".
+        - Support/brace robot: move_to_coordinate to opposite-side position (x offset ~±0.08m, y=0.08 — NOT $target.y which is table level) — NEVER grasp_object.
+        - Grasp + brace move share the SAME parallel_group.
+        - Lift step: both robots move_to_coordinate to target y height in SAME parallel_group.
+
+        Canonical pattern ("Robot1 grasps left side, Robot2 braces right side, lift to y=H"):
+        group=1: Robot1: detect_object_stereo(color=<color>, capture_var="target")
+        group=2: Robot1: grasp_object(object_id="$target.color", preferred_approach="left_side")
+        group=2: Robot2: move_to_coordinate(x="$target.x + 0.08", y=0.08, z="$target.z", approach_offset=0.0)
+        group=3: Robot1: move_to_coordinate(x="$target.x", y=H, z="$target.z")
+        group=3: Robot2: move_to_coordinate(x="$target.x + 0.08", y=H, z="$target.z")
+
+        Trigger phrases: "brace", "support", "steadies", "one grasps … other supports".
+
+        === DUAL GRASP RULE ===
+
+        When BOTH robots physically grip the same object from opposite sides (both "grasp", "grip", or "pick" the object):
+        - Both robots use grasp_object with complementary preferred_approach ("left_side" / "right_side").
+        - Sequential: brace robot grasps first (lower group), then grasping robot (higher group) — avoids cube drift.
+        - Lift step: both robots move_to_coordinate to target y in SAME parallel_group.
+
+        Canonical pattern ("Robot2 grasps right side first, then Robot1 grasps left side, lift to y=H"):
+        group=1: Robot1: detect_object_stereo(color=<color>, capture_var="target")
+        group=2: Robot2: grasp_object(object_id="$target.color", preferred_approach="right_side")
+        group=3: Robot1: grasp_object(object_id="$target.color", preferred_approach="left_side")
+        group=4: Robot1: move_to_coordinate(x="$target.x", y=H, z="$target.z")
+        group=4: Robot2: move_to_coordinate(x="$target.x + 0.08", y=H, z="$target.z")
+
+        Trigger phrases: "both grasp", "both grip", "both pick", "Robot1 grasps … Robot2 grasps", "cooperatively grasp", "cooperatively handle" (when both sides explicitly grip).
 
         === SINGLE-ROBOT RULES ===
 

@@ -32,6 +32,7 @@
 
     /* Legacy accent alias — used in components, keep for compat */
     --accent:           #2f9e8c;
+    --accent-rgb:       47, 158, 140;
 
     /* Fonts */
     --font-sans:        'IBM Plex Sans', sans-serif;

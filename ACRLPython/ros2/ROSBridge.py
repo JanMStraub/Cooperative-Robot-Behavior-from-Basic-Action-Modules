@@ -400,13 +400,14 @@ class ROSBridge:
         return self._send_command(cmd, timeout=planning_time + 10)
 
     def plan_return_to_start(
-        self, robot_id="Robot1", planning_time=5.0, target_joint_angles=None
+        self, robot_id="Robot1", planning_time=5.0, target_joint_angles=None, speed=1.0
     ):
         """Plan and execute a return to the robot's home configuration."""
         cmd = {
             "command": "plan_return_to_start",
             "robot_id": robot_id,
             "planning_time": planning_time,
+            "speed": speed,
         }
         if target_joint_angles is not None:
             cmd["target_joint_angles"] = target_joint_angles

@@ -42,13 +42,13 @@ _BENCHMARK_NAMES: Dict[int, str] = {
     7: "Dual-Robot Reorient",
     8: "Heterogeneous Chain",
     9: "Impossible Task",
-    10: "RAG Ablation",
-    11: "Reflexion Ablation",
-    12: "Negotiation Ablation",
-    13: "Knowledge Graph Ablation",
-    14: "VGN Ablation",
-    15: "ROS vs Unity Movement",
-    16: "Parallel Independent Tasks",
+    10: "Parallel Independent Tasks",
+    11: "RAG Ablation",
+    12: "Reflexion Ablation",
+    13: "Negotiation Ablation",
+    14: "Knowledge Graph Ablation",
+    15: "VGN Ablation",
+    16: "ROS vs Unity Movement",
 }
 
 _CASE_MODULES: Dict[int, str] = {
@@ -61,13 +61,13 @@ _CASE_MODULES: Dict[int, str] = {
     7: "benchmarks.cases.B7DualRobotReorient",
     8: "benchmarks.cases.B8HeterogeneousChain",
     9: "benchmarks.cases.B9Impossible",
-    10: "benchmarks.cases.B10RagAblation",
-    11: "benchmarks.cases.B11ReflexionAblation",
-    12: "benchmarks.cases.B12NegotiationAblation",
-    13: "benchmarks.cases.B13KgAblation",
-    14: "benchmarks.cases.B14VGNAblation",
-    15: "benchmarks.cases.B15RosAblation",
-    16: "benchmarks.cases.B16ParallelIndependent",
+    10: "benchmarks.cases.B10ParallelIndependent",
+    11: "benchmarks.cases.B11RagAblation",
+    12: "benchmarks.cases.B12ReflexionAblation",
+    13: "benchmarks.cases.B13NegotiationAblation",
+    14: "benchmarks.cases.B14KgAblation",
+    15: "benchmarks.cases.B15VGNAblation",
+    16: "benchmarks.cases.B16RosAblation",
 }
 
 
@@ -93,20 +93,20 @@ class BenchmarkRunner:
             if benchmark_id == 9:
                 return self._run_b9_impossible(cfg, module)
             if benchmark_id == 10:
-                return self._run_b9_rag(cfg, module)
+                return self._run_b10_parallel(cfg, module)
             if benchmark_id == 11:
-                return self._run_b10_reflexion(cfg, module)
+                return self._run_b11_rag(cfg, module)
             if benchmark_id == 12:
-                return self._run_b11_negotiation(cfg, module)
+                return self._run_b12_reflexion(cfg, module)
             if benchmark_id == 13:
-                return self._run_b12_kg(cfg, module)
+                return self._run_b13_negotiation(cfg, module)
             if benchmark_id == 14:
-                return self._run_b13_vgn(cfg, module)
+                return self._run_b14_kg(cfg, module)
             if benchmark_id == 15:
-                return self._run_b14_ros(cfg, module)
+                return self._run_b15_vgn(cfg, module)
 
             if benchmark_id == 16:
-                return self._run_b16_parallel(cfg, module)
+                return self._run_b16_ros(cfg, module)
 
             if benchmark_id == 8:
                 return self._run_b8_chain(cfg, module)
@@ -408,9 +408,9 @@ class BenchmarkRunner:
             )
         return steps
 
-    def _run_b16_parallel(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+    def _run_b10_parallel(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Run B16 Parallel Independent Tasks.
+        Run B10 Parallel Independent Tasks.
 
         Sends a single NL prompt covering both robots doing independent work.
         The LLM is expected to assign Robot1 ops and Robot2 ops to the same
@@ -423,7 +423,7 @@ class BenchmarkRunner:
         task = module.get_task()
         robot_id = getattr(cfg, "robot_id_a", cfg.robot_id)
         raw = self._send(task, robot_id, cfg)
-        result = self._build_result(16, cfg, raw)
+        result = self._build_result(10, cfg, raw)
 
         parallelism_ratio, ops_in_parallel = self._compute_parallelism_ratio(
             result.steps
@@ -479,8 +479,13 @@ class BenchmarkRunner:
         recovery_count = 0
         all_steps: List[StepResult] = []
         total_ms = 0.0
+        phase_results: Dict[str, List[bool]] = {"phase_a": [], "phase_b": [], "phase_c": []}
 
-        for robot_id, _, task in sub_tasks:
+        for robot_id, task_name, task in sub_tasks:
+            phase = next(
+                (p for p in ("phase_a", "phase_b", "phase_c") if p in task_name),
+                "phase_a",
+            )
             raw = self._send(task, robot_id, cfg)
             total_ms += float(raw.get("total_duration_ms", 0.0))
 
@@ -494,13 +499,20 @@ class BenchmarkRunner:
                     error_counts[s.error_code] = error_counts.get(s.error_code, 0) + 1
             all_steps.extend(task_steps)
 
-            if not cfg.dry_run:
-                self._reset(cfg)
-
-            if raw.get("success"):
+            success = bool(raw.get("success"))
+            phase_results[phase].append(success)
+            if success:
                 completed += 1
             else:
                 recovery_count += 1
+
+        if not cfg.dry_run:
+            self._reset(cfg)
+
+        per_phase_success = {
+            phase: round(sum(vals) / len(vals), 4) if vals else 0.0
+            for phase, vals in phase_results.items()
+        }
 
         ops_executed = len(all_steps)
         ops_succeeded = sum(1 for s in all_steps if s.success)
@@ -526,6 +538,7 @@ class BenchmarkRunner:
                 error_rate=error_rate,
                 recovery_count=recovery_count,
                 per_error_code=error_counts,
+                per_phase_success=per_phase_success,
             ),
             feature_flags=self._extract_feature_flags(cfg),
             per_op_stats=self._compute_per_op_stats(all_steps),
@@ -578,9 +591,9 @@ class BenchmarkRunner:
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
-    def _run_b9_rag(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+    def _run_b11_rag(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Run B10 RAG ablation: parse all tasks under both conditions in one pass.
+        Run B11 RAG ablation: parse all tasks under both conditions in one pass.
 
         Returns AblationMetrics for enabled and disabled conditions so a single
         invocation produces a self-contained paired comparison.
@@ -647,8 +660,8 @@ class BenchmarkRunner:
         )
 
         return BenchmarkResult(
-            benchmark_id=10,
-            benchmark_name=_BENCHMARK_NAMES[10],
+            benchmark_id=11,
+            benchmark_name=_BENCHMARK_NAMES[11],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=success,
@@ -665,9 +678,9 @@ class BenchmarkRunner:
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
-    def _run_b10_reflexion_live(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+    def _run_b12_reflexion_live(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Send B10 tasks to live SequenceServer; measure reflexion recoveries from server response.
+        Send B11 tasks to live SequenceServer; measure reflexion recoveries from server response.
 
 
         """
@@ -711,8 +724,8 @@ class BenchmarkRunner:
             ops_succeeded=ops_succeeded,
         )
         return BenchmarkResult(
-            benchmark_id=11,
-            benchmark_name=_BENCHMARK_NAMES[11],
+            benchmark_id=12,
+            benchmark_name=_BENCHMARK_NAMES[12],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=success_rate > 0.5,
@@ -729,9 +742,9 @@ class BenchmarkRunner:
             execution_mode="live",
         )
 
-    def _run_b10_reflexion(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+    def _run_b12_reflexion(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Run B10 Reflexion ablation.
+        Run B12 Reflexion ablation.
 
         In live mode (cfg.execution_mode == "live"), sends NL tasks to SequenceServer and
         reads reflexion_recoveries from the server response.
@@ -741,7 +754,7 @@ class BenchmarkRunner:
 
         """
         if cfg.execution_mode == "live":
-            return self._run_b10_reflexion_live(cfg, module)
+            return self._run_b12_reflexion_live(cfg, module)
 
         from orchestrators.CommandParser import CommandParser
         from .Result import AblationMetrics
@@ -814,8 +827,8 @@ class BenchmarkRunner:
         )
 
         return BenchmarkResult(
-            benchmark_id=11,
-            benchmark_name=_BENCHMARK_NAMES[11],
+            benchmark_id=12,
+            benchmark_name=_BENCHMARK_NAMES[12],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=success,
@@ -833,11 +846,11 @@ class BenchmarkRunner:
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
-    def _run_b11_negotiation_live(
+    def _run_b13_negotiation_live(
         self, cfg: BenchmarkConfig, module
     ) -> BenchmarkResult:
         """
-        Send B11 dual-robot tasks to live SequenceServer; measure negotiation rounds via hub.
+        Send B13 dual-robot tasks to live SequenceServer; measure negotiation rounds via hub.
 
 
         """
@@ -887,8 +900,8 @@ class BenchmarkRunner:
             ops_succeeded=ops_succeeded,
         )
         return BenchmarkResult(
-            benchmark_id=12,
-            benchmark_name=_BENCHMARK_NAMES[12],
+            benchmark_id=13,
+            benchmark_name=_BENCHMARK_NAMES[13],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=success_rate > 0.5,
@@ -902,9 +915,9 @@ class BenchmarkRunner:
             ablation=ablation,
         )
 
-    def _run_b11_negotiation(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+    def _run_b13_negotiation(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Run B11 Negotiation ablation.
+        Run B13 Negotiation ablation.
 
         In live mode (cfg.execution_mode == "live"), sends dual-robot NL tasks to
         SequenceServer and reads negotiation_rounds from the hub.
@@ -915,7 +928,7 @@ class BenchmarkRunner:
 
         """
         if cfg.execution_mode == "live":
-            return self._run_b11_negotiation_live(cfg, module)
+            return self._run_b13_negotiation_live(cfg, module)
 
         import config.Negotiation as _neg_cfg
         from orchestrators.CommandParser import CommandParser
@@ -996,8 +1009,8 @@ class BenchmarkRunner:
         )
 
         return BenchmarkResult(
-            benchmark_id=12,
-            benchmark_name=_BENCHMARK_NAMES[12],
+            benchmark_id=13,
+            benchmark_name=_BENCHMARK_NAMES[13],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=success,
@@ -1015,9 +1028,9 @@ class BenchmarkRunner:
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
-    def _run_b13_vgn(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+    def _run_b15_vgn(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Run B13 VGN ablation: execute grasp tasks with VGN enabled vs disabled.
+        Run B15 VGN ablation: execute grasp tasks with VGN enabled vs disabled.
 
         Offline mode patches VGN_ENABLED, mocks operations with always_succeed, and
         verifies the parse+dry-run path works for both conditions.  Live mode sends
@@ -1065,8 +1078,8 @@ class BenchmarkRunner:
                 ops_succeeded=ops_succeeded,
             )
             return BenchmarkResult(
-                benchmark_id=14,
-                benchmark_name=_BENCHMARK_NAMES[14],
+                benchmark_id=15,
+                benchmark_name=_BENCHMARK_NAMES[15],
                 run_id=make_run_id(),
                 config_snapshot=dataclasses.asdict(cfg),
                 success=success_rate > 0.5,
@@ -1141,8 +1154,8 @@ class BenchmarkRunner:
         success = ablation_on.ops_executed > 0 and ablation_off.ops_executed > 0
 
         return BenchmarkResult(
-            benchmark_id=14,
-            benchmark_name=_BENCHMARK_NAMES[14],
+            benchmark_id=15,
+            benchmark_name=_BENCHMARK_NAMES[15],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=success,
@@ -1159,9 +1172,9 @@ class BenchmarkRunner:
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
-    def _run_b14_ros(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+    def _run_b16_ros(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Run B14 ROS vs Unity movement ablation.
+        Run B16 ROS vs Unity movement ablation.
 
         Patches config.ROS.ROS_ENABLED and DEFAULT_CONTROL_MODE, then executes
         movement tasks.  Offline mode uses always_succeed mock + dry-run to verify
@@ -1208,8 +1221,8 @@ class BenchmarkRunner:
                 ops_succeeded=ops_succeeded,
             )
             return BenchmarkResult(
-                benchmark_id=15,
-                benchmark_name=_BENCHMARK_NAMES[15],
+                benchmark_id=16,
+                benchmark_name=_BENCHMARK_NAMES[16],
                 run_id=make_run_id(),
                 config_snapshot=dataclasses.asdict(cfg),
                 success=success_rate > 0.5,
@@ -1287,8 +1300,8 @@ class BenchmarkRunner:
         success = ablation_on.ops_executed > 0 and ablation_off.ops_executed > 0
 
         return BenchmarkResult(
-            benchmark_id=15,
-            benchmark_name=_BENCHMARK_NAMES[15],
+            benchmark_id=16,
+            benchmark_name=_BENCHMARK_NAMES[16],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=success,
@@ -1305,9 +1318,9 @@ class BenchmarkRunner:
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
-    def _run_b12_kg(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+    def _run_b14_kg(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Run B13 KG ablation: parse spatial tasks under both conditions in one pass.
+        Run B14 KG ablation: parse spatial tasks under both conditions in one pass.
 
         Populates synthetic KG for the enabled condition; skips it for disabled.
         Measures whether parsed ops reference correct KG object IDs.
@@ -1380,8 +1393,8 @@ class BenchmarkRunner:
         ablation_off = condition_results["disabled"]
 
         return BenchmarkResult(
-            benchmark_id=13,
-            benchmark_name=_BENCHMARK_NAMES[13],
+            benchmark_id=14,
+            benchmark_name=_BENCHMARK_NAMES[14],
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=(ablation_on.success_rate >= 0.5 and ablation_off.ops_executed > 0),

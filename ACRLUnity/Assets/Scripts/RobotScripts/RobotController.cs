@@ -936,6 +936,22 @@ namespace Robotics
 
             _trajectoryController?.Reset();
 
+            // Snap drive targets to current joint positions so the PD controller
+            // holds the arm in place rather than drifting toward stale IK targets.
+            if (robotJoints != null)
+            {
+                for (int i = 0; i < robotJoints.Length; i++)
+                {
+                    if (robotJoints[i] == null)
+                        continue;
+                    ArticulationDrive drive = robotJoints[i].xDrive;
+                    drive.target = robotJoints[i].jointPosition[0] * Mathf.Rad2Deg;
+                    robotJoints[i].xDrive = drive;
+                    if (i < jointDriveTargets.Length)
+                        jointDriveTargets[i] = drive.target;
+                }
+            }
+
             Debug.Log($"{_logPrefix} [{robotId}] Target cleared");
         }
 

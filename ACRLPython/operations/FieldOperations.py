@@ -139,6 +139,17 @@ def detect_field(
             )
 
         detected_letter = detected_class[6:].upper()
+
+        if detected_letter != field_label.strip().upper():
+            return OperationResult.error_result(
+                "FIELD_LABEL_MISMATCH",
+                f"Requested field '{field_label.upper()}' but YOLO returned '{detected_letter}' — filter leak or model error",
+                [
+                    f"Verify YOLO model correctly distinguishes field_{field_label.lower()} from adjacent fields",
+                    "Check that filter_classes is respected by the detector",
+                ],
+            )
+
         world_position = detection.world_position
 
         if not world_position:

@@ -288,6 +288,41 @@ def create_move_to_coordinate_operation() -> BasicOperation:
 MOVE_TO_COORDINATE_OPERATION = create_move_to_coordinate_operation()
 
 
+def _tcp_wait_for_not_moving(
+    robot_id: str, timeout: float = 15.0, poll_interval: float = 0.5
+) -> None:
+    """Poll WorldState until robot.is_moving is False, or timeout.
+
+    Used by the TCP fallback path for adjust_end_effector_orientation to provide
+    blocking semantics equivalent to the ROS path (which blocks via ROSBridge).
+    Falls back to a fixed sleep if WorldState is unavailable.
+    """
+    try:
+        from ._imports import get_world_state
+
+        ws = get_world_state()
+        if ws is None:
+            time.sleep(timeout)
+            return
+        start = time.time()
+        while time.time() - start < timeout:
+            state = ws.get_robot_state(robot_id)
+            if state is not None and not state.is_moving:
+                logger.debug(
+                    f"[tcp_orientation] {robot_id} is no longer moving after {time.time() - start:.1f}s"
+                )
+                return
+            time.sleep(poll_interval)
+        logger.warning(
+            f"[tcp_orientation] {robot_id} still moving after {timeout}s — continuing anyway"
+        )
+    except Exception as e:
+        logger.warning(
+            f"[tcp_orientation] WorldState poll failed ({e}), sleeping {timeout}s"
+        )
+        time.sleep(timeout)
+
+
 def adjust_end_effector_orientation(
     robot_id: str,
     roll: float = 0.0,
@@ -357,11 +392,16 @@ def adjust_end_effector_orientation(
                     ["Ensure Unity is running", "Verify CommandServer is running"],
                 )
             logger.info(f"Successfully sent orientation adjustment to {robot_id}")
+            # Block until robot is no longer moving (mirrors ROS path blocking
+            # semantics). Unity's completion signal for TCP orientation commands is
+            # unreliable when the robot is holding an object, so we poll WorldState
+            # instead of relying on the outer _wait_for_completion mechanism.
+            _tcp_wait_for_not_moving(robot_id, timeout=15.0)
             return OperationResult.success_result(
                 {
                     "robot_id": robot_id,
                     "orientation": {"roll": roll, "pitch": pitch, "yaw": yaw},
-                    "status": "command_sent",
+                    "status": "tcp_executed",
                     "timestamp": time.time(),
                 }
             )

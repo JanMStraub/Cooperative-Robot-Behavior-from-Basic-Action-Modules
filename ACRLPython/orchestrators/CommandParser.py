@@ -115,6 +115,12 @@ class CommandParser:
         if motion_layer and self._is_perception_only_command(command_text):
             motion_layer = False
 
+        # Place/deposit commands must bypass the motion layer: decomposition rewrites
+        # them as "move end-effector to position …", stripping the place semantic and
+        # causing the LLM to pick move_to_coordinate instead of place_object.
+        if motion_layer and self._is_place_command(command_text):
+            motion_layer = False
+
         # Try LLM parsing first
         if use_llm:
             if motion_layer:
@@ -217,6 +223,19 @@ class CommandParser:
         r"wait\s+for\s+(signal|event))\b",
         re.IGNORECASE,
     )
+
+    _PLACE_PATTERNS = re.compile(
+        r"\b(place|deposit|put\s+down|put\s+it)\b", re.IGNORECASE
+    )
+
+    def _is_place_command(self, command_text: str) -> bool:
+        """Return True if command intends to place/deposit an object.
+
+        The motion layer rewrites 'place object at X Y Z' as 'move end-effector
+        to target position X Y Z', stripping the place semantic and causing the
+        LLM to pick move_to_coordinate instead of place_object. Bypass it.
+        """
+        return bool(self._PLACE_PATTERNS.search(command_text))
 
     def _is_perception_only_command(self, command_text: str) -> bool:
         if re.match(r"\s*signal\s+\S", command_text, re.IGNORECASE):
@@ -592,9 +611,41 @@ class CommandParser:
     def _extract_json_from_response(self, content: str) -> Optional[Dict]:
         return _extract_json_util(content)
 
+    def _expand_array_operations(self, commands: List[Dict]) -> List[Dict]:
+        """Expand {operation: [...], params: [...]} LLM responses into separate command dicts.
+
+        LLMs occasionally pack multiple ops into a single entry in two forms:
+          Form A: {"operation": ["signal", "wait_for_signal"], "params": [{...}, {...}], "parallel_group": 6}
+          Form B: {"operation": [{"operation": "signal", "params": {...}}, ...], "parallel_group": 6}
+        Both are zipped/expanded so the rest of the pipeline sees normal single-op commands.
+        """
+        expanded = []
+        for cmd in commands:
+            op = cmd.get("operation", "")
+            params = cmd.get("params", {})
+            shared = {k: v for k, v in cmd.items() if k not in ("operation", "params")}
+            if isinstance(op, list) and len(op) > 0:
+                if isinstance(params, list) and len(params) == len(op):
+                    # Form A: parallel string names + matching params list
+                    for o, p in zip(op, params):
+                        expanded.append({**shared, "operation": o, "params": p})
+                elif all(isinstance(o, dict) for o in op):
+                    # Form B: list of sub-operation dicts, each with own "operation"/"params"
+                    for sub in op:
+                        new_cmd = {**shared}
+                        new_cmd["operation"] = sub.get("operation", "")
+                        new_cmd["params"] = sub.get("params", {})
+                        expanded.append(new_cmd)
+                else:
+                    expanded.append(cmd)
+            else:
+                expanded.append(cmd)
+        return expanded
+
     def _validate_commands(
         self, commands: List[Dict], default_robot_id: str
     ) -> List[Dict]:
+        commands = self._expand_array_operations(commands)
         validated = []
         for cmd in commands:
             operation = cmd.get("operation", "")
@@ -605,6 +656,17 @@ class CommandParser:
             # Ensure robot_id is present (use "robot" field if specified in multi-robot plan)
             if "robot_id" not in params:
                 params["robot_id"] = cmd.get("robot", default_robot_id)
+
+            # Reject unknown robot IDs
+            from config.Robot import ROBOT_BASE_POSITIONS as _KNOWN_ROBOTS
+            robot_id_in_cmd = params.get("robot_id", default_robot_id)
+            if robot_id_in_cmd not in _KNOWN_ROBOTS:
+                logger.warning(
+                    "Unknown robot_id '%s', skipping command '%s'",
+                    robot_id_in_cmd,
+                    operation,
+                )
+                continue
 
             # Verify operation exists
             op = self.registry.get_operation_by_name(operation)

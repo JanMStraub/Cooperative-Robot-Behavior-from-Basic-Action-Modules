@@ -58,3 +58,9 @@ ARM_JOINT_LIMITS = {
 # Publish the other robot's arm as collision objects in MoveIt planning scenes.
 # Disable to debug planning failures (objects may cause no-path-found errors).
 INTER_ROBOT_COLLISION_ENABLED = True
+
+# Use a single shared dual-robot move_group (/move_action) instead of per-robot
+# instances (/Robot1/move_action, /Robot2/move_action). Requires the moveit_dual
+# Docker service running (docker compose --profile dual up). When False, existing
+# per-robot instances are used.
+SHARED_PLANNING_SCENE = True

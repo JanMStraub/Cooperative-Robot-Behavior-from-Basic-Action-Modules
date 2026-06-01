@@ -33,6 +33,8 @@ class ChainMetrics:
     error_rate: float
     recovery_count: int
     per_error_code: Dict[str, int]
+    per_phase_success: Dict[str, float] = dataclasses.field(default_factory=dict)
+    # keys: "phase_a", "phase_b", "phase_c" → fraction of cycles that succeeded
 
 
 @dataclasses.dataclass

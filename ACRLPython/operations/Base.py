@@ -56,7 +56,9 @@ class OperationParameter:
         if value == "None":
             value = None
         if self.valid_values and value is not None:
-            if value not in self.valid_values:
+            check_value = value.lower() if isinstance(value, str) else value
+            check_valid = [v.lower() if isinstance(v, str) else v for v in self.valid_values]
+            if check_value not in check_valid:
                 valid_str = ", ".join([f"'{v}'" for v in self.valid_values])
                 return (
                     False,

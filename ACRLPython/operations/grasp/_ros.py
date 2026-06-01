@@ -242,7 +242,7 @@ def _grasp_via_ros_planned(
 
     # Follow-target drift correction + gripper close
     logger.info(f"Arm at grasp position, starting follow-target for {robot_id}")
-    gripper_ok = _execute_grasp_with_follow_target(
+    grasp_ok, grasp_fail_reason = _execute_grasp_with_follow_target(
         bridge=bridge,
         robot_id=robot_id,
         object_id=object_id,
@@ -251,11 +251,11 @@ def _grasp_via_ros_planned(
         tcp_y_offset=GRASP_TCP_OFFSET,
         world_state=world_state,
     )
-    if not gripper_ok:
+    if not grasp_ok:
         return (
             OperationResult.error_result(
-                "GRIPPER_CLOSE_FAILED",
-                f"Arm reached grasp position but gripper close command failed for {robot_id}",
+                "GRASP_EXECUTION_FAILED",
+                f"Grasp execution failed for {robot_id}: {grasp_fail_reason}",
                 [
                     "Check gripper hardware/simulation state",
                     "Verify GripperContactSensor is active",
@@ -420,7 +420,7 @@ def _grasp_via_ros_position_only(
         return err, False
 
     logger.info(f"Arm at grasp position, starting follow-target for {robot_id}")
-    gripper_ok = _execute_grasp_with_follow_target(
+    grasp_ok, grasp_fail_reason = _execute_grasp_with_follow_target(
         bridge=bridge,
         robot_id=robot_id,
         object_id=object_id,
@@ -429,11 +429,11 @@ def _grasp_via_ros_position_only(
         tcp_y_offset=GRASP_TCP_OFFSET,
         world_state=world_state,
     )
-    if not gripper_ok:
+    if not grasp_ok:
         return (
             OperationResult.error_result(
-                "GRIPPER_CLOSE_FAILED",
-                f"Arm reached grasp position but gripper close command failed for {robot_id}",
+                "GRASP_EXECUTION_FAILED",
+                f"Grasp execution failed for {robot_id}: {grasp_fail_reason}",
                 [
                     "Check gripper hardware/simulation state",
                     "Verify GripperContactSensor is active",

@@ -75,6 +75,15 @@ def extract_json(content: str) -> Optional[Dict]:
             return json.loads(json_str_clean)
         except json.JSONDecodeError:
             pass
+        # Stage 2b-pre: wrap entire block in array brackets — handles comma-separated
+        # multi-object responses like: { "operation": "a", ... }, { "operation": "b", ... }
+        try:
+            wrapped = "[" + json_str + "]"
+            _result = json.loads(wrapped)
+            if isinstance(_result, list) and all(isinstance(x, dict) for x in _result):
+                return {"commands": _result}
+        except json.JSONDecodeError:
+            pass
         # Stage 2b: JSONL fallback — model emitted newline-delimited JSON objects
         # Wrap into {"commands": [...]} so downstream parser can handle it
         lines = [l.strip() for l in json_str.splitlines() if l.strip().startswith("{")]
@@ -107,6 +116,24 @@ def extract_json(content: str) -> Optional[Dict]:
     # If the first bare object is flat (no nested dicts), Stage 3 parses it
     # and returns it alone — Stage 3b will not run.  This is accepted behaviour
     # for the project's use case where operations always have a "params" dict.
+
+    # Stage 3b-pre: array-wrap attempt for bare multi-line multi-object content.
+    # Finds the first { and last } in content and wraps in [...].
+    _first_brace = content.find("{")
+    _last_brace = content.rfind("}")
+    if _first_brace != -1 and _last_brace > _first_brace:
+        try:
+            _candidate = content[_first_brace : _last_brace + 1]
+            _result = json.loads("[" + _candidate + "]")
+            if (
+                isinstance(_result, list)
+                and len(_result) > 1
+                and all(isinstance(x, dict) for x in _result)
+            ):
+                return {"commands": _result}
+        except json.JSONDecodeError:
+            pass
+
     bare_lines = [l.strip() for l in content.splitlines() if l.strip().startswith("{")]
     if len(bare_lines) > 1:
         try:

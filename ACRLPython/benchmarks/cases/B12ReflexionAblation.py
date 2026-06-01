@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B11: Reflexion Ablation — measure recovery rate with/without reflexion."""
+"""B12: Reflexion Ablation — measure recovery rate with/without reflexion."""
 
 from __future__ import annotations
 

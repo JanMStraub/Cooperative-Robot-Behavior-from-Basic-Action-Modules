@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B8: Heterogeneous Chain — alternating dual-robot narrative sequence."""
+"""B8: Heterogeneous Chain — rotating cube colors, field targets, and three phase types per cycle."""
 
 from __future__ import annotations
 
@@ -7,38 +7,36 @@ from typing import List, Tuple
 
 from ..Config import BenchmarkConfig
 
-# Each robot runs: navigate → grasp+lift → place, targeting its own field.
-_ROBOT_CHAINS: dict[str, List[Tuple[str, str]]] = {
-    "Robot1": [
-        ("b1_navigate", "Detect the blue cube and move to it."),
-        ("b3_lift", "The blue cube is in front of you. Grasp it and lift it to y=0.2."),
-        ("b4_place", "You are holding the blue cube at y=0.2. Place it in field B."),
-    ],
-    "Robot2": [
-        ("b1_navigate", "Detect the blue cube and move to it."),
-        ("b3_lift", "The blue cube is in front of you. Grasp it and lift it to y=0.2."),
-        ("b4_place", "You are holding the blue cube at y=0.2. Place it in field H."),
-    ],
-}
 
-_ROBOT_ORDER = ["Robot1", "Robot2"]
+def _phase_a() -> str:
+    return "Robot1: Grasp the blue cube and place it on field h, then return to start position."
 
 
-def get_sub_tasks(cfg: BenchmarkConfig, task_count: int) -> List[Tuple[str, str, str]]:
+def _phase_b() -> str:
+    return "Robot2: Grasp the blue cube and place it on field b, then return to start position."
+
+
+def _phase_c() -> str:
+    return "Robot1: Grasp the blue cube and place it on field e, then return to start position."
+
+
+def _phase_d() -> str:
+    return (
+        "Robot1 and Robot2: Survey the scene. "
+        "Robot1 should detect all visible fields. "
+        "Robot2 should detect the yellow cube and report its current position."
+    )
+
+
+def get_sub_tasks(_cfg: BenchmarkConfig, task_count: int) -> List[Tuple[str, str, str]]:
     """
-    Return an alternating dual-robot narrative chain where each step assumes the prior succeeded.
-
-    Robot1 and Robot2 alternate full chains (navigate → grasp+lift → place).
-    Robot1 targets field B; Robot2 targets field H.
-    Cycles indefinitely up to task_count entries.
-
-    Returns list of (robot_id, task_name, task_text) tuples.
+    Return task_count full cycles; each cycle has 4 sub-tasks (phases A, B, C).
+    Total sub-tasks returned = task_count * 4.
     """
     result: List[Tuple[str, str, str]] = []
-    chain_len = len(next(iter(_ROBOT_CHAINS.values())))
     for i in range(task_count):
-        robot = _ROBOT_ORDER[(i // chain_len) % len(_ROBOT_ORDER)]
-        step = i % chain_len
-        name, prompt = _ROBOT_CHAINS[robot][step]
-        result.append((robot, f"{robot}_{name}_{i}", f"{robot}: {prompt}"))
+        result.append(("Robot1", f"cycle_{i}_phase_a", _phase_a()))
+        result.append(("Robot2", f"cycle_{i}_phase_b", _phase_b()))
+        result.append(("Robot1", f"cycle_{i}_phase_c", _phase_c()))
+        result.append(("Robot1", f"cycle_{i}_phase_d", _phase_d()))
     return result

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for B16 Parallel Independent Tasks benchmark."""
+"""Tests for B10 Parallel Independent Tasks benchmark."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 
 def test_b16_get_task_returns_string():
-    from benchmarks.cases.B16ParallelIndependent import get_task
+    from ACRLPython.benchmarks.cases.B10ParallelIndependent import get_task
 
     task = get_task()
     assert isinstance(task, str)
@@ -17,7 +17,7 @@ def test_b16_get_task_returns_string():
 
 
 def test_b16_task_names_both_robots():
-    from benchmarks.cases.B16ParallelIndependent import get_task
+    from ACRLPython.benchmarks.cases.B10ParallelIndependent import get_task
 
     task = get_task()
     assert "Robot1" in task
@@ -25,19 +25,19 @@ def test_b16_task_names_both_robots():
 
 
 def test_b16_task_contains_independence_signal():
-    from benchmarks.cases.B16ParallelIndependent import get_task
+    from ACRLPython.benchmarks.cases.B10ParallelIndependent import get_task
 
     task = get_task().lower()
     assert any(word in task for word in ["independently", "simultaneously", "parallel"])
 
 
 def test_b16_task_uses_disjoint_objects():
-    from benchmarks.cases.B16ParallelIndependent import get_task
+    from ACRLPython.benchmarks.cases.B10ParallelIndependent import get_task
 
     task = get_task().lower()
     assert "blue" in task and (
         "red" in task or "green" in task
-    ), "B16 must reference two distinct objects"
+    ), "B10 must reference two distinct objects"
 
 
 # ---------------------------------------------------------------------------
@@ -48,15 +48,15 @@ def test_b16_task_uses_disjoint_objects():
 def test_b16_registered_in_benchmark_names():
     from benchmarks.Runner import _BENCHMARK_NAMES
 
-    assert 16 in _BENCHMARK_NAMES
-    assert _BENCHMARK_NAMES[16] == "Parallel Independent Tasks"
+    assert 10 in _BENCHMARK_NAMES
+    assert _BENCHMARK_NAMES[10] == "Parallel Independent Tasks"
 
 
 def test_b16_registered_in_case_modules():
     from benchmarks.Runner import _CASE_MODULES
 
-    assert 16 in _CASE_MODULES
-    assert "B16" in _CASE_MODULES[16]
+    assert 10 in _CASE_MODULES
+    assert "B10" in _CASE_MODULES[10]
 
 
 # ---------------------------------------------------------------------------
@@ -160,9 +160,9 @@ def test_b16_dry_run_has_parallelism_metrics():
 
     runner = BenchmarkRunner()
     cfg = DualRobotConfig(dry_run=True)
-    result = runner.run(16, cfg)
+    result = runner.run(10, cfg)
 
-    assert result.benchmark_id == 16
+    assert result.benchmark_id == 10
     assert result.benchmark_name == "Parallel Independent Tasks"
     assert "_parallelism_ratio" in result.per_op_stats
     assert "_ops_in_parallel" in result.per_op_stats
@@ -205,7 +205,7 @@ def test_b16_success_false_when_no_parallel_groups():
 
     runner._send = fake_send  # type: ignore[method-assign]
     cfg = DualRobotConfig(dry_run=False)
-    result = runner.run(16, cfg)
+    result = runner.run(10, cfg)
 
     assert result.per_op_stats["_parallelism_ratio"] == 0.0
     assert result.success is False
@@ -253,7 +253,7 @@ def test_b16_success_true_when_all_parallel():
 
     runner._send = fake_send  # type: ignore[method-assign]
     cfg = DualRobotConfig(dry_run=False)
-    result = runner.run(16, cfg)
+    result = runner.run(10, cfg)
 
     assert result.per_op_stats["_parallelism_ratio"] == 1.0
     assert result.per_op_stats["_parallelism_success"] is True

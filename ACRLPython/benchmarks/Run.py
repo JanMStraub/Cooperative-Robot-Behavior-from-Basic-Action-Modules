@@ -4,6 +4,7 @@ Benchmark CLI entry point.
 
 Usage:
     python -m benchmarks.run --benchmark 3
+    python -m benchmarks.run --benchmark 1-6 --live
     python -m benchmarks.run --all
     python -m benchmarks.run --benchmark 8 --task-count 20 --dry-run
     python -m benchmarks.run --all --output-dir ./results/
@@ -20,8 +21,8 @@ from .Config import BenchmarkConfig, DualRobotConfig
 from .Reporter import print_summary, write_json
 from .Runner import BenchmarkRunner
 
-_DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 12, 16}
-_PARSE_ONLY_BENCHMARKS = {9, 10, 13}  # no server required
+_DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 10, 13}  # B10=Parallel, B13=Negotiation
+_PARSE_ONLY_BENCHMARKS = {9, 11, 14}  # no server required: B9=Impossible, B11=RAG, B14=KG
 _REQUIRED_PORTS = (5007, 5008)
 
 
@@ -46,6 +47,26 @@ def _check_servers_running() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+
+
+def _parse_benchmark_arg(value: str) -> list[int]:
+    """Parse '3' or '1-6' into a list of benchmark IDs."""
+    if "-" in value:
+        parts = value.split("-", 1)
+        try:
+            lo, hi = int(parts[0]), int(parts[1])
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"Invalid benchmark range: {value!r}")
+        if lo < 1 or hi > 16 or lo > hi:
+            raise argparse.ArgumentTypeError(f"Range must be within 1–16 and lo ≤ hi, got {value!r}")
+        return list(range(lo, hi + 1))
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Invalid benchmark id: {value!r}")
+    if n < 1 or n > 16:
+        raise argparse.ArgumentTypeError(f"Benchmark id must be 1–16, got {n}")
+    return [n]
 
 
 def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig:
@@ -103,16 +124,15 @@ def main() -> None:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "--benchmark",
-        type=int,
-        choices=range(1, 17),
-        metavar="N",
-        help="Run a single benchmark (1–16); 10–15 are ablation benchmarks, 16 is parallel",
+        type=str,
+        metavar="N or N-M",
+        help="Run benchmark(s) 1–16; accepts single id (e.g. 3) or range (e.g. 1-6)",
     )
     group.add_argument("--all", action="store_true", help="Run all benchmarks (1–16)")
     group.add_argument(
         "--ablation",
         action="store_true",
-        help="Run ablation benchmarks only (10–15, no server required for 10 and 13)",
+        help="Run ablation benchmarks only (11–16, no server required for 11 and 14)",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Use mock operations (no hardware)"
@@ -121,7 +141,7 @@ def main() -> None:
         "--live",
         action="store_true",
         default=False,
-        help="Run B10/B11 ablations against live SequenceServer instead of dry-run mocks",
+        help="Run B12/B13 ablations against live SequenceServer instead of dry-run mocks",
     )
     parser.add_argument(
         "--reflexion",
@@ -131,27 +151,27 @@ def main() -> None:
     parser.add_argument(
         "--no-rag",
         action="store_true",
-        help="Disable RAG retrieval (B9 ablation: disabled condition)",
+        help="Disable RAG retrieval (B11 ablation: disabled condition)",
     )
     parser.add_argument(
         "--no-kg",
         action="store_true",
-        help="Disable Knowledge Graph context (B12 ablation: disabled condition)",
+        help="Disable Knowledge Graph context (B14 ablation: disabled condition)",
     )
     parser.add_argument(
         "--no-negotiation",
         action="store_true",
-        help="Disable LLM negotiation (B11 ablation: disabled condition)",
+        help="Disable LLM negotiation (B13 ablation: disabled condition)",
     )
     parser.add_argument(
         "--no-vgn",
         action="store_true",
-        help="Disable VGN neural grasp (B13 ablation: disabled condition)",
+        help="Disable VGN neural grasp (B15 ablation: disabled condition)",
     )
     parser.add_argument(
         "--no-ros",
         action="store_true",
-        help="Disable ROS/MoveIt movement (B14 ablation: disabled condition)",
+        help="Disable ROS/MoveIt movement (B16 ablation: disabled condition)",
     )
     parser.add_argument(
         "--output-dir",
@@ -164,25 +184,41 @@ def main() -> None:
         default=5,
         help="Number of sub-tasks for B8 (default: 5)",
     )
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Run the selected benchmarks N times in sequence (default: 1)",
+    )
     args = parser.parse_args()
 
     runner = BenchmarkRunner()
     if args.all:
         benchmark_ids = list(range(1, 17))
     elif args.ablation:
-        benchmark_ids = list(range(10, 16))
+        benchmark_ids = list(range(11, 17))
     else:
-        benchmark_ids = [args.benchmark]
+        try:
+            benchmark_ids = _parse_benchmark_arg(args.benchmark)
+        except argparse.ArgumentTypeError as exc:
+            parser.error(str(exc))
 
     needs_server = any(
         (bid not in _PARSE_ONLY_BENCHMARKS and not args.dry_run)
-        or (bid in {11, 12} and getattr(args, "live", False))
+        or (bid in {12, 13} and getattr(args, "live", False))
         for bid in benchmark_ids
     )
     if needs_server:
         _check_servers_running()
 
-    exit_code = _run_benchmarks(runner, benchmark_ids, args)
+    exit_code = 0
+    for run_index in range(args.repeat):
+        if args.repeat > 1:
+            print(f"\n=== Run {run_index + 1}/{args.repeat} ===")
+        code = _run_benchmarks(runner, benchmark_ids, args)
+        if code != 0:
+            exit_code = code
     sys.exit(exit_code)
 
 

@@ -70,7 +70,9 @@ def return_to_start_position(
             except Exception:
                 pass
             result = bridge.plan_return_to_start(
-                robot_id=robot_id, target_joint_angles=start_joint_angles
+                robot_id=robot_id,
+                target_joint_angles=start_joint_angles,
+                speed=speed,
             )
             if result and result.get("success"):
                 logger.info(f"ROS return to start completed for {robot_id}")

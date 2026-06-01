@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B16: Parallel Independent Tasks — dual-robot, zero shared objects, no sync point."""
+"""B10: Parallel Independent Tasks — dual-robot, zero shared objects, no sync point."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def get_task() -> str:
     so both chains execute concurrently.
     """
     return (
-        "Robot1 and Robot2 work independently and simultaneously. "
+        "Robot1 and Robot2 work independently. "
         "Robot1: detect the blue cube, grasp it, and place it in field A. "
         "Robot2: detect the green cube, grasp it, and place it in field B."
     )

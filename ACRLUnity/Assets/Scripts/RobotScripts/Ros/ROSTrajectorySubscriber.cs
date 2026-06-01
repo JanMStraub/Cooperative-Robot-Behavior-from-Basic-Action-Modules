@@ -262,10 +262,16 @@ namespace Robotics
 
             for (int i = 0; i < trajectoryJointNames.Length; i++)
             {
+                // Strip "robot1_" / "robot2_" prefix emitted by shared MoveIt planning scene
+                string jointName = trajectoryJointNames[i];
+                int sep = jointName.IndexOf('_');
+                if (jointName.StartsWith("robot") && sep > 0)
+                    jointName = jointName.Substring(sep + 1);
+
                 int found = -1;
                 for (int j = 0; j < ExpectedJointNames.Length; j++)
                 {
-                    if (trajectoryJointNames[i] == ExpectedJointNames[j])
+                    if (jointName == ExpectedJointNames[j])
                     {
                         found = j;
                         break;
@@ -441,30 +447,30 @@ namespace Robotics
 
                     double rawSegmentDuration = targetTime - prevPointTime;
 
-                    // Timed trajectory: interpolate from previous planned point so overall
-                    // timing matches MoveIt's plan. The first-segment correction (using actual
-                    // physics state at coroutine start) absorbs residual lag from the previous
-                    // trajectory.
-                    double[] fromPositions =
-                        (prevPoint != null && prevPoint.positions != null)
-                            ? prevPoint.positions
-                            : _startPositions;
-
                     // Wall-clock duration after applying speed scaling (e.g. 0.5x → 2x wall time).
                     double segmentDuration = rawSegmentDuration / _speedScaling;
 
                     // MoveIt often includes a start-state duplicate at waypoint 0 with
                     // time_from_start = 0.0, giving rawSegmentDuration = 0. Skip interpolation
-                    // for zero-duration segments and commit the target positions directly to avoid
-                    // t = elapsed/0 = NaN propagating into the Hermite formula and drive targets.
+                    // and do NOT call SetDriveTargets — snapping joints to MoveIt's (possibly
+                    // stale) planned start state causes a visible jump when the actual physics
+                    // position differs by even a few degrees. The first real segment uses
+                    // _startPositions (actual joint positions) as its from-state instead.
                     if (segmentDuration <= 0.0)
                     {
-                        if (targetPoint.positions != null)
-                            SetDriveTargets(targetPoint.positions);
                         prevPoint = targetPoint;
                         prevPointTime = targetTime;
                         continue;
                     }
+
+                    // For the first real segment (prevPointTime == 0 means only the start-state
+                    // duplicate has been processed so far), interpolate from the actual physical
+                    // joint positions so the trajectory blends smoothly from wherever the arm
+                    // actually is rather than from MoveIt's planned start state.
+                    double[] fromPositions =
+                        (prevPoint != null && prevPoint.positions != null && prevPointTime > 1e-9)
+                            ? prevPoint.positions
+                            : _startPositions;
 
                     // Cubic Hermite interpolation uses MoveIt's planned velocities for C1-continuity.
                     double[] fromVelocities = prevPoint?.velocities;

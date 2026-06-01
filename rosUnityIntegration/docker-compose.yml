@@ -16,7 +16,8 @@ services:
     command: >
       /bin/bash -c "
         source /opt/ros/humble/setup.bash &&
-        ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765 address:=0.0.0.0 send_buffer_limit:=10000000 topic_whitelist:='[\"^(?!/planning_scene$).*\"]'
+        source /ros_ws/install/setup.bash &&
+        ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765 address:=0.0.0.0 send_buffer_limit:=10000000 topic_whitelist:='[\"^(?!/planning_scene$).*\"]' asset_uri_allowlist:='[\"^package://ar4_moveit_config/.*\"]'
       "
 
   ros_tcp_endpoint:
@@ -31,7 +32,7 @@ services:
         ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=0.0.0.0
       "
 
-  # Robot1 MoveIt instance
+  # Per-robot MoveIt instances (single-robot planning, solo mode)
   moveit_robot1:
     <<: *ros-base
     container_name: acrl_moveit_robot1
@@ -46,8 +47,9 @@ services:
         source /ros_ws/install/setup.bash &&
         ros2 launch ar4_moveit_config move_group.launch.py robot_id:=Robot1 use_sim_time:=false
       "
+    profiles:
+      - solo
 
-  # Robot2 MoveIt instance
   moveit_robot2:
     <<: *ros-base
     container_name: acrl_moveit_robot2
@@ -62,8 +64,9 @@ services:
         source /ros_ws/install/setup.bash &&
         ros2 launch ar4_moveit_config move_group.launch.py robot_id:=Robot2 use_sim_time:=false
       "
+    profiles:
+      - solo
 
-  # Robot1 state publisher
   robot_state_publisher_robot1:
     <<: *ros-base
     container_name: acrl_robot_state_publisher_robot1
@@ -75,8 +78,9 @@ services:
         source /ros_ws/install/setup.bash &&
         ros2 launch ar4_moveit_config robot_state_publisher.launch.py robot_id:=Robot1
       "
+    profiles:
+      - solo
 
-  # Robot2 state publisher
   robot_state_publisher_robot2:
     <<: *ros-base
     container_name: acrl_robot_state_publisher_robot2
@@ -88,6 +92,56 @@ services:
         source /ros_ws/install/setup.bash &&
         ros2 launch ar4_moveit_config robot_state_publisher.launch.py robot_id:=Robot2
       "
+    profiles:
+      - solo
+
+  # Shared dual-robot MoveIt instance (SHARED_PLANNING_SCENE=True mode)
+  # Both robots share one planning scene; enables true inter-robot collision avoidance.
+  # Start with: docker compose --profile dual up
+  joint_state_aggregator:
+    <<: *ros-base
+    container_name: acrl_joint_state_aggregator
+    depends_on:
+      - ros_tcp_endpoint
+    command: >
+      /bin/bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        python3 /ros_ws/src/ar4_moveit_config/scripts/joint_state_aggregator.py
+      "
+    profiles:
+      - dual
+
+  robot_state_publisher_dual:
+    <<: *ros-base
+    container_name: acrl_robot_state_publisher_dual
+    depends_on:
+      - joint_state_aggregator
+    command: >
+      /bin/bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        ros2 launch ar4_moveit_config robot_state_publisher_dual.launch.py
+      "
+    profiles:
+      - dual
+
+  moveit_dual:
+    <<: *ros-base
+    container_name: acrl_moveit_dual
+    depends_on:
+      - robot_state_publisher_dual
+    volumes:
+      - ./ar4_moveit_config/config:/ros_ws/src/ar4_moveit_config/config
+    command: >
+      /bin/bash -c "
+        sleep 15 &&
+        source /opt/ros/humble/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        ros2 launch ar4_moveit_config move_group_dual.launch.py use_sim_time:=false
+      "
+    profiles:
+      - dual
 
   ros_bridge:
     <<: *ros-base
@@ -100,6 +154,7 @@ services:
     volumes:
       - ../ACRLPython/ros2:/ros_ws/src/ros_bridge
       - ../ACRLPython/operations/AR4Kinematics.py:/ros_ws/src/ros_bridge/AR4Kinematics.py
+      - ../ACRLPython/config:/ros_ws/src/ros_bridge/config
     command: >
       /bin/bash -c "
         source /opt/ros/humble/setup.bash &&
@@ -111,3 +166,30 @@ services:
         echo 'MoveIt action servers detected, starting ROSMotionClient' &&
         python3 /ros_ws/src/ros_bridge/ROSMotionClient.py
       "
+    profiles:
+      - solo
+
+  ros_bridge_dual:
+    <<: *ros-base
+    container_name: acrl_ros_bridge_dual
+    depends_on:
+      - moveit_dual
+    ports:
+      - "5020:5020"
+    volumes:
+      - ../ACRLPython/ros2:/ros_ws/src/ros_bridge
+      - ../ACRLPython/operations/AR4Kinematics.py:/ros_ws/src/ros_bridge/AR4Kinematics.py
+      - ../ACRLPython/config:/ros_ws/src/ros_bridge/config
+    command: >
+      /bin/bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        echo 'Waiting for shared MoveIt action server...' &&
+        for i in $$(seq 1 60); do
+          ros2 action list 2>/dev/null | grep -q '^/move_action$$' && break || sleep 2;
+        done &&
+        echo 'Shared MoveIt action server detected, starting ROSMotionClient' &&
+        python3 /ros_ws/src/ros_bridge/ROSMotionClient.py
+      "
+    profiles:
+      - dual

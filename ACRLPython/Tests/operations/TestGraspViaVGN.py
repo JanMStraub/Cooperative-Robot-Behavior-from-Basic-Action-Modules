@@ -564,10 +564,11 @@ class _VGNROSPatch:
         )
         self._patches.append(bridge_patch.start())
 
-        # Follow-target + gripper helper mock
+        # Follow-target + gripper helper mock — returns (success, reason) tuple
+        _follow_rv = (self.gripper_success, "" if self.gripper_success else "gripper close command failed")
         follow_patch = patch(
             "operations.grasp._vgn._execute_grasp_with_follow_target",
-            return_value=self.gripper_success,
+            return_value=_follow_rv,
         )
         self._patches.append(follow_patch.start())
 
@@ -719,7 +720,7 @@ class TestGraspViaVGNWithROSHappyPath:
             import operations.grasp._vgn as go_module
 
             with patch.object(
-                go_module, "_execute_grasp_with_follow_target", return_value=True
+                go_module, "_execute_grasp_with_follow_target", return_value=(True, "")
             ) as mock_follow:
                 _grasp_via_vgn_with_ros(
                     bridge=ctx.mock_bridge,
@@ -857,7 +858,7 @@ class TestGraspViaVGNWithROSErrors:
         assert result is not None
         assert result.success is False
         assert result.error is not None
-        assert result.error["code"] == "GRIPPER_CLOSE_FAILED"
+        assert result.error["code"] == "GRASP_EXECUTION_FAILED"
 
 
 # Routing tests via grasp_object() with both ROS and VGN enabled

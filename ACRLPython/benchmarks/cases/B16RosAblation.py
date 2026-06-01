@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B15: ROS vs Unity Movement Ablation — MoveIt planning path vs direct TCP path."""
+"""B16: ROS vs Unity Movement Ablation — MoveIt planning path vs direct TCP path."""
 
 from __future__ import annotations
 

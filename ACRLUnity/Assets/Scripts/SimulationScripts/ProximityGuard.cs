@@ -156,6 +156,24 @@ namespace Simulation
         }
 
         /// <summary>
+        /// Temporarily enable or disable proximity checking (e.g. during a handoff approach).
+        /// When disabled all currently-frozen robots are also unfrozen so they can continue moving.
+        /// </summary>
+        public static void SetEnabled(bool value)
+        {
+            if (Instance == null)
+                return;
+            Instance._enabled = value;
+            if (!value)
+            {
+                // Unfreeze all robots so they can continue approaching.
+                foreach (var kvp in Instance._robotManager.RobotInstances)
+                    if (kvp.Value.controller != null)
+                        kvp.Value.controller.IsFrozenByProximity = false;
+            }
+        }
+
+        /// <summary>
         /// Rebuilds the flat controller cache when robot count changes. Zero-allocation in steady state.
         /// </summary>
         private void RefreshCache()

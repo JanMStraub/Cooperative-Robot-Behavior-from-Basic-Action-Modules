@@ -706,9 +706,11 @@ body.thesis-mode .export-row-label {
     font-weight: 600;
     border-bottom: 1px solid var(--glass-border);
     text-align: center;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-all;
     vertical-align: bottom;
-    min-width: 80px;
+    min-width: 60px;
+    max-width: 100px;
 }
 
 .heatmap-table th:first-child {
@@ -727,6 +729,9 @@ body.thesis-mode .export-row-label {
     font-weight: 600;
     border-right: 1px solid var(--glass-border);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
     position: sticky;
     left: 0;
     background: var(--bg-surface, var(--bg-card));
@@ -893,6 +898,15 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
 }
 .compare-kpi-worst {
     color: #D55E00;
+}
+.compare-kpi-avg-header,
+.compare-kpi-avg {
+    border-left: 1px solid var(--glass-border);
+    color: var(--text-dim);
+    font-style: italic;
+}
+.compare-kpi-avg {
+    text-align: center;
 }
 .compare-run-header {
     font-family: 'IBM Plex Mono', monospace;

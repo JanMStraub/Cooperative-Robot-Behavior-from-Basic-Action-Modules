@@ -61,12 +61,14 @@ try:
         MOVEIT_GOAL_TOLERANCE,
         MOVEIT_PLANNING_ATTEMPTS,
         MOVEIT_PLANNING_TIME,
+        SHARED_PLANNING_SCENE,
     )
 except ImportError:
     MOVEIT_PLANNING_TIME = 5.0
     MOVEIT_PLANNING_ATTEMPTS = 10
     MOVEIT_GOAL_TOLERANCE = 0.01
     INTER_ROBOT_COLLISION_ENABLED = True
+    SHARED_PLANNING_SCENE = False
     ARM_JOINT_LIMITS = {
         "joint_1": (-2.9670597283903604, 2.9670597283903604),
         "joint_2": (-0.7330382858376184, 1.5707963267948966),
@@ -259,24 +261,67 @@ class ROSMotionServer:
             for robot_id in ["Robot1", "Robot2"]:
                 self._publish_ground_plane(robot_id)
 
+    def _get_planning_group(self, robot_id: str) -> str:
+        """Return MoveIt planning group name for the given robot."""
+        if SHARED_PLANNING_SCENE:
+            return f"{robot_id.lower()}_arm"  # "Robot1" -> "robot1_arm"
+        return "arm"
+
+    def _get_base_link(self, robot_id: str) -> str:
+        """Return the ROS base_link frame name for the given robot."""
+        if SHARED_PLANNING_SCENE:
+            return f"{robot_id.lower()}_base_link"  # "Robot1" -> "robot1_base_link"
+        return "base_link"
+
+    def _get_ee_link(self, robot_id: str) -> str:
+        """Return the end-effector link name for the given robot."""
+        if SHARED_PLANNING_SCENE:
+            return f"{robot_id.lower()}_ee_link"  # "Robot1" -> "robot1_ee_link"
+        return "ee_link"
+
+    def _get_joint_name(self, robot_id: str, joint_name: str) -> str:
+        """Return robot-prefixed joint name for the shared planning scene."""
+        if SHARED_PLANNING_SCENE:
+            return f"{robot_id.lower()}_{joint_name}"
+        return joint_name
+
+    def _prefix_joint_state(self, joint_state, robot_id: str):
+        """Return a JointState with robot-prefixed joint names for the shared planning scene.
+
+        Unity publishes unprefixed names (joint_1 … joint_6). In shared mode the dual
+        URDF uses robot1_joint_1 etc., so MoveIt rejects start_state unless names match.
+        When SHARED_PLANNING_SCENE=False the original object is returned unchanged.
+        """
+        if not SHARED_PLANNING_SCENE:
+            return joint_state
+        prefix = f"{robot_id.lower()}_"
+        prefixed = JointState()
+        prefixed.header = joint_state.header
+        prefixed.name = [prefix + n for n in joint_state.name]
+        prefixed.position = list(joint_state.position)
+        prefixed.velocity = list(joint_state.velocity) if joint_state.velocity else []
+        prefixed.effort = list(joint_state.effort) if joint_state.effort else []
+        return prefixed
+
     def _initialize_robot(self, robot_id: str):
         """Initialize MoveIt clients and publishers for a specific robot."""
         logger.info(f"Initializing ROS clients for {robot_id}")
 
+        _ns = "" if SHARED_PLANNING_SCENE else f"/{robot_id}"
         self._move_group_clients[robot_id] = ActionClient(
-            self._node, MoveGroup, f"/{robot_id}/move_action"
+            self._node, MoveGroup, f"{_ns}/move_action"
         )
 
         self._ik_service_clients[robot_id] = self._node.create_client(
-            GetPositionIK, f"/{robot_id}/compute_ik"
+            GetPositionIK, f"{_ns}/compute_ik"
         )
 
         self._fk_service_clients[robot_id] = self._node.create_client(
-            GetPositionFK, f"/{robot_id}/compute_fk"
+            GetPositionFK, f"{_ns}/compute_fk"
         )
 
         self._cartesian_path_clients[robot_id] = self._node.create_client(
-            GetCartesianPath, f"/{robot_id}/compute_cartesian_path"
+            GetCartesianPath, f"{_ns}/compute_cartesian_path"
         )
 
         # NOTE: Do not block here waiting for the action server. MoveIt may take
@@ -333,22 +378,24 @@ class ROSMotionServer:
         if not HAS_ROS:
             return
 
-        # Create publisher if not already created for this robot
+        # Create publisher if not already created for this robot.
+        # Shared mode: single /planning_scene topic; per-robot mode: /{robot_id}/planning_scene.
+        _scene_topic = "/planning_scene" if SHARED_PLANNING_SCENE else f"/{robot_id}/planning_scene"
         if robot_id not in self._planning_scene_pubs:
             self._planning_scene_pubs[robot_id] = self._node.create_publisher(
-                PlanningScene, f"/{robot_id}/planning_scene", 10
+                PlanningScene, _scene_topic, 10
             )
 
         scene = PlanningScene()
         scene.is_diff = True  # Incremental update, not a full scene replacement
 
-        # Ground plane: 2m x 2m x 10cm slab in base_link frame.
-        # Ground plane: 2m x 2m x 10cm slab in base_link frame.
-        # Unity table surface (BottomPanel) is at Y=0, which maps to Z=0 in ROS
-        # base_link (Z-up). Top face of the box is placed at Z=0 so MoveIt treats the actual table surface as the collision boundary.
+        # Ground plane: 2m x 2m x 10cm slab.
+        # Unity table surface (BottomPanel) is at Y=0, which maps to Z=0 in ROS (Z-up).
+        # Top face of the box at Z=0 so MoveIt treats the actual table surface as a collision boundary.
         # Box center at Z=-0.05 with 10cm thickness → top face at Z=0.
+        # Shared mode: use "world" frame (both robots are children of world in ar4_dual.urdf).
         ground = CollisionObject()
-        ground.header.frame_id = "base_link"
+        ground.header.frame_id = self._get_base_link(robot_id)
         ground.id = "ground_plane"
         ground.operation = CollisionObject.ADD
 
@@ -858,7 +905,7 @@ class ROSMotionServer:
 
         goal = MoveGroup.Goal()
         goal.request = MotionPlanRequest()
-        goal.request.group_name = "arm"
+        goal.request.group_name = self._get_planning_group(robot_id)
         # Explicitly select OMPL pipeline and RRTConnect planner.
         # pipeline_id="ompl" is required — without it, MoveIt 2 Humble may pick
         # CHOMP (also installed) as the default, which does not support pose goals
@@ -884,7 +931,7 @@ class ROSMotionServer:
         goal.request.max_acceleration_scaling_factor = acc_scaling
 
         # Set workspace bounds so OMPL knows the planning volume
-        goal.request.workspace_parameters.header.frame_id = "base_link"
+        goal.request.workspace_parameters.header.frame_id = self._get_base_link(robot_id)
         goal.request.workspace_parameters.min_corner = Vector3(x=-1.0, y=-1.0, z=-1.0)
         goal.request.workspace_parameters.max_corner = Vector3(x=1.0, y=1.0, z=1.0)
 
@@ -908,6 +955,7 @@ class ROSMotionServer:
         with self._joint_states_lock:
             joint_state = self._current_joint_states.get(robot_id)
         if joint_state is not None:
+            _jprefix = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
             filtered_js = JointState()
             filtered_js.header = joint_state.header
             for name, (lower, upper) in ARM_JOINT_LIMITS.items():
@@ -920,7 +968,7 @@ class ROSMotionServer:
                             f"{robot_id} {name} position {raw:.6f} rad out of bounds "
                             f"[{lower:.4f}, {upper:.4f}] — clamped to {clamped:.6f} for MoveIt start state"
                         )
-                    filtered_js.name.append(name)
+                    filtered_js.name.append(_jprefix + name)
                     filtered_js.position.append(clamped)
                     if joint_state.velocity:
                         filtered_js.velocity.append(0.0)  # zero velocity at start
@@ -937,7 +985,7 @@ class ROSMotionServer:
 
         # Build pose for constraints
         pose_goal = PoseStamped()
-        pose_goal.header.frame_id = "base_link"
+        pose_goal.header.frame_id = self._get_base_link(robot_id)
         pose_goal.pose.position = Point(
             x=position.get("x", 0.0),
             y=position.get("y", 0.0),
@@ -960,8 +1008,8 @@ class ROSMotionServer:
 
         # Position constraint
         pos_constraint = PositionConstraint()
-        pos_constraint.header.frame_id = "base_link"
-        pos_constraint.link_name = "ee_link"
+        pos_constraint.header.frame_id = self._get_base_link(robot_id)
+        pos_constraint.link_name = self._get_ee_link(robot_id)
         pos_constraint.target_point_offset = Vector3(x=0.0, y=0.0, z=0.0)
 
         bounding_vol = BoundingVolume()
@@ -981,8 +1029,8 @@ class ROSMotionServer:
         # Only add orientation constraint when explicitly requested
         if orientation:
             orient_constraint = OrientationConstraint()
-            orient_constraint.header.frame_id = "base_link"
-            orient_constraint.link_name = "ee_link"
+            orient_constraint.header.frame_id = self._get_base_link(robot_id)
+            orient_constraint.link_name = self._get_ee_link(robot_id)
             orient_constraint.orientation = pose_goal.pose.orientation
             orient_constraint.absolute_x_axis_tolerance = 0.1
             orient_constraint.absolute_y_axis_tolerance = 0.1
@@ -1010,7 +1058,7 @@ class ROSMotionServer:
             _j6_path_upper = min(_j6_upper, _j6_current + _window)
             _j6_center = (_j6_path_lower + _j6_path_upper) / 2.0
             _j6c = JointConstraint()
-            _j6c.joint_name = "joint_6"
+            _j6c.joint_name = self._get_joint_name(robot_id, "joint_6")
             _j6c.position = _j6_center
             _j6c.tolerance_below = _j6_center - _j6_path_lower
             _j6c.tolerance_above = _j6_path_upper - _j6_center
@@ -1040,7 +1088,7 @@ class ROSMotionServer:
             _j4_path_upper = min(_j4_upper, _j4_current + _j4_window)
             _j4_center = (_j4_path_lower + _j4_path_upper) / 2.0
             _j4c = JointConstraint()
-            _j4c.joint_name = "joint_4"
+            _j4c.joint_name = self._get_joint_name(robot_id, "joint_4")
             _j4c.position = _j4_center
             _j4c.tolerance_below = _j4_center - _j4_path_lower
             _j4c.tolerance_above = _j4_path_upper - _j4_center
@@ -1097,10 +1145,15 @@ class ROSMotionServer:
             )
 
         other_robots = []
-        if INTER_ROBOT_COLLISION_ENABLED:
+        if INTER_ROBOT_COLLISION_ENABLED and not SHARED_PLANNING_SCENE:
             other_robots = [r for r in self.ROBOT_BASE_TRANSFORMS if r != robot_id]
             for other in other_robots:
                 self._publish_other_robot_collision(robot_id, other)
+            # Wait for MoveIt's planning_scene_monitor to process the scene update
+            # before submitting the planning goal. Without this, the goal arrives
+            # before MoveIt has ingested the collision objects and the planner
+            # treats the other robot's arm as free space.
+            time.sleep(0.3)
 
         try:
             # Check server availability once; skip the blocking wait on subsequent calls.
@@ -1323,7 +1376,12 @@ class ROSMotionServer:
         # -2π shifts are meaningful options. Skip joints with smaller ranges
         # (joint_1 ±170°, joint_2/3 with asymmetric limits) where a shift
         # would likely leave the value out of bounds.
-        FULL_ROTATION_JOINTS = {"joint_4", "joint_6"}
+        # Derive which keys are the ±π joints from the provided dict — handles
+        # both unprefixed ("joint_4") and prefixed ("robot1_joint_4") names.
+        FULL_ROTATION_JOINTS = {
+            name for name in joint_names_to_limits
+            if name.endswith("joint_4") or name.endswith("joint_6")
+        }
         prev_positions = None
         for point in trajectory.points:
             if not point.positions:
@@ -1391,8 +1449,9 @@ class ROSMotionServer:
         # Diagnostic: log joint_6 values to detect ±π boundary crossings.
         if trajectory.joint_names and trajectory.points:
             _j6i = None
+            _j6_name = self._get_joint_name(robot_id, "joint_6")
             for _ji, _jn in enumerate(trajectory.joint_names):
-                if _jn == "joint_6":
+                if _jn == _j6_name:
                     _j6i = _ji
                     break
             if _j6i is not None:
@@ -1417,7 +1476,9 @@ class ROSMotionServer:
 
         # Normalize all joint angles into their physical limit range before publishing.
         # Prevents MoveIt ±π boundary crossings from causing Unity to spin 360°.
-        self._normalize_trajectory_angles(trajectory, ARM_JOINT_LIMITS)
+        _pfx = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
+        _limits = {_pfx + k: v for k, v in ARM_JOINT_LIMITS.items()} if _pfx else ARM_JOINT_LIMITS
+        self._normalize_trajectory_angles(trajectory, _limits)
 
         trajectory_pub.publish(trajectory)
 
@@ -1625,9 +1686,9 @@ class ROSMotionServer:
             return {"success": False, "error": f"No joint state for {robot_id}"}
 
         req = GetPositionFK.Request()
-        req.header.frame_id = "base_link"
-        req.fk_link_names = ["ee_link"]
-        req.robot_state.joint_state = joint_state
+        req.header.frame_id = self._get_base_link(robot_id)
+        req.fk_link_names = [self._get_ee_link(robot_id)]
+        req.robot_state.joint_state = self._prefix_joint_state(joint_state, robot_id)
 
         if not fk_client.wait_for_service(timeout_sec=timeout):
             return {"success": False, "error": "FK service not available"}
@@ -1889,7 +1950,7 @@ class ROSMotionServer:
 
         # Build target waypoint pose
         target_pose = PoseStamped()
-        target_pose.header.frame_id = "base_link"
+        target_pose.header.frame_id = self._get_base_link(robot_id)
         target_pose.pose.position = Point(
             x=local_position.get("x", 0.0),
             y=local_position.get("y", 0.0),
@@ -1906,9 +1967,9 @@ class ROSMotionServer:
             target_pose.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
 
         req = GetCartesianPath.Request()
-        req.header.frame_id = "base_link"
-        req.group_name = "arm"
-        req.link_name = "ee_link"
+        req.header.frame_id = self._get_base_link(robot_id)
+        req.group_name = self._get_planning_group(robot_id)
+        req.link_name = self._get_ee_link(robot_id)
         req.waypoints = [target_pose.pose]
         req.max_step = 0.10  # 10cm maximum interpolation step — reduces waypoints for short descents (5cm → 150 pts, 10cm → ~75 pts)
         req.jump_threshold = 0.0  # Disable jump detection; non-zero values prematurely terminate descent at workspace edges
@@ -1928,8 +1989,8 @@ class ROSMotionServer:
         # both are valid orientations but the long arc causes a large physical wrist swing.
         if lock_orientation and OrientationConstraint is not None:
             orient_constraint = OrientationConstraint()
-            orient_constraint.header.frame_id = "base_link"
-            orient_constraint.link_name = "ee_link"
+            orient_constraint.header.frame_id = self._get_base_link(robot_id)
+            orient_constraint.link_name = self._get_ee_link(robot_id)
             orient_constraint.orientation = target_pose.pose.orientation
             orient_constraint.absolute_x_axis_tolerance = 0.15  # ~9 deg
             orient_constraint.absolute_y_axis_tolerance = 0.15
@@ -1952,7 +2013,7 @@ class ROSMotionServer:
                 _j4_path_upper = min(_j4_upper, _j4_current + _j4_window)
                 _j4_center = (_j4_path_lower + _j4_path_upper) / 2.0
                 _j4c = JointConstraint()
-                _j4c.joint_name = "joint_4"
+                _j4c.joint_name = self._get_joint_name(robot_id, "joint_4")
                 _j4c.position = _j4_center
                 _j4c.tolerance_below = _j4_center - _j4_path_lower
                 _j4c.tolerance_above = _j4_path_upper - _j4_center
@@ -1977,7 +2038,7 @@ class ROSMotionServer:
                 _j6_path_upper = min(_j6_upper, _j6_current + _j6_window)
                 _j6_center = (_j6_path_lower + _j6_path_upper) / 2.0
                 _j6c = JointConstraint()
-                _j6c.joint_name = "joint_6"
+                _j6c.joint_name = self._get_joint_name(robot_id, "joint_6")
                 _j6c.position = _j6_center
                 _j6c.tolerance_below = _j6_center - _j6_path_lower
                 _j6c.tolerance_above = _j6_path_upper - _j6_center
@@ -1997,6 +2058,7 @@ class ROSMotionServer:
         # applied manually after GetCartesianPath returns (see below).
 
         if joint_state is not None:
+            _jprefix = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
             filtered_js = JointState()
             filtered_js.header = joint_state.header
             for name, (lower, upper) in ARM_JOINT_LIMITS.items():
@@ -2009,7 +2071,7 @@ class ROSMotionServer:
                             f"{robot_id} {name} position {raw:.6f} rad out of bounds "
                             f"[{lower:.4f}, {upper:.4f}] — clamped for Cartesian start state"
                         )
-                    filtered_js.name.append(name)
+                    filtered_js.name.append(_jprefix + name)
                     filtered_js.position.append(clamped)
             start_state = RobotState()
             start_state.is_diff = (
@@ -2074,8 +2136,9 @@ class ROSMotionServer:
         # Diagnostic: log joint_6 values to detect ±π boundary crossings in the planned trajectory.
         if trajectory.joint_names and trajectory.points:
             j6_idx = None
+            _j6_name = self._get_joint_name(robot_id, "joint_6")
             for _ji, _jn in enumerate(trajectory.joint_names):
-                if _jn == "joint_6":
+                if _jn == _j6_name:
                     j6_idx = _ji
                     break
             if j6_idx is not None:
@@ -2108,7 +2171,9 @@ class ROSMotionServer:
             )
 
         # Enforce shortest-path continuity before publishing.
-        self._normalize_trajectory_angles(trajectory, ARM_JOINT_LIMITS)
+        _pfx = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
+        _limits = {_pfx + k: v for k, v in ARM_JOINT_LIMITS.items()} if _pfx else ARM_JOINT_LIMITS
+        self._normalize_trajectory_angles(trajectory, _limits)
 
         # Publish and wait for completion (same as _plan_and_publish)
         trajectory_pub = self._trajectory_pubs[robot_id]
@@ -2167,7 +2232,7 @@ class ROSMotionServer:
 
         goal = MoveGroup.Goal()
         goal.request = MotionPlanRequest()
-        goal.request.group_name = "arm"
+        goal.request.group_name = self._get_planning_group(robot_id)
         goal.request.pipeline_id = "ompl"
         goal.request.planner_id = "RRTConnect"
         goal.request.num_planning_attempts = MOVEIT_PLANNING_ATTEMPTS
@@ -2175,7 +2240,7 @@ class ROSMotionServer:
         goal.planning_options.plan_only = True
 
         # Set workspace bounds
-        goal.request.workspace_parameters.header.frame_id = "base_link"
+        goal.request.workspace_parameters.header.frame_id = self._get_base_link(robot_id)
         goal.request.workspace_parameters.min_corner = Vector3(x=-1.0, y=-1.0, z=-1.0)
         goal.request.workspace_parameters.max_corner = Vector3(x=1.0, y=1.0, z=1.0)
 
@@ -2183,6 +2248,7 @@ class ROSMotionServer:
         with self._joint_states_lock:
             joint_state = self._current_joint_states.get(robot_id)
         if joint_state is not None:
+            _jprefix = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
             filtered_js = JointState()
             filtered_js.header = joint_state.header
             for name, (lower, upper) in ARM_JOINT_LIMITS.items():
@@ -2190,7 +2256,7 @@ class ROSMotionServer:
                     idx = list(joint_state.name).index(name)
                     raw = joint_state.position[idx]
                     clamped = max(lower, min(upper, raw))
-                    filtered_js.name.append(name)
+                    filtered_js.name.append(_jprefix + name)
                     filtered_js.position.append(clamped)
                     if joint_state.velocity:
                         filtered_js.velocity.append(0.0)
@@ -2205,6 +2271,7 @@ class ROSMotionServer:
         # which may be singular or differ from the scene's initial robot position.
         target_joint_angles = request.get("target_joint_angles")
         joint_names = list(ARM_JOINT_LIMITS.keys())
+        _jprefix = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
         constraints = Constraints()
         for i, joint_name in enumerate(joint_names):
             target_rad = (
@@ -2215,7 +2282,7 @@ class ROSMotionServer:
             lower, upper = ARM_JOINT_LIMITS[joint_name]
             target_rad = max(lower, min(upper, target_rad))
             jc = JointConstraint()
-            jc.joint_name = joint_name
+            jc.joint_name = _jprefix + joint_name
             jc.position = target_rad
             jc.tolerance_above = 0.01
             jc.tolerance_below = 0.01
@@ -2242,7 +2309,7 @@ class ROSMotionServer:
                     window_lower = max(lower, current_rad - _PATH_CONSTRAINT_WINDOW)
                     window_upper = min(upper, current_rad + _PATH_CONSTRAINT_WINDOW)
                     jc = JointConstraint()
-                    jc.joint_name = name
+                    jc.joint_name = _jprefix + name
                     jc.position = (window_lower + window_upper) / 2.0
                     jc.tolerance_below = jc.position - window_lower
                     jc.tolerance_above = window_upper - jc.position
@@ -2268,7 +2335,9 @@ class ROSMotionServer:
         # for return-to-start since the home pose has near-zero IK error.
 
         # Enforce shortest-path continuity before publishing (same as _plan_and_publish)
-        self._normalize_trajectory_angles(trajectory, ARM_JOINT_LIMITS)
+        _pfx = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
+        _limits = {_pfx + k: v for k, v in ARM_JOINT_LIMITS.items()} if _pfx else ARM_JOINT_LIMITS
+        self._normalize_trajectory_angles(trajectory, _limits)
 
         # Publish trajectory to Unity and wait for completion (same as _plan_and_publish)
         trajectory_pub = self._trajectory_pubs[robot_id]
@@ -2378,7 +2447,7 @@ class ROSMotionServer:
 
                 # Build IK request
                 ik_request = GetPositionIK.Request()
-                ik_request.ik_request.group_name = "arm"
+                ik_request.ik_request.group_name = self._get_planning_group(robot_id)
                 ik_request.ik_request.avoid_collisions = False  # Fast validation only
                 ik_request.ik_request.timeout.sec = 0
                 ik_request.ik_request.timeout.nanosec = (
@@ -2386,7 +2455,7 @@ class ROSMotionServer:
                 )
 
                 # Set target pose
-                ik_request.ik_request.pose_stamped.header.frame_id = "base_link"
+                ik_request.ik_request.pose_stamped.header.frame_id = self._get_base_link(robot_id)
                 ik_request.ik_request.pose_stamped.pose.position = Point(
                     x=local_position.get("x", 0.0),
                     y=local_position.get("y", 0.0),
@@ -2412,12 +2481,13 @@ class ROSMotionServer:
                         "joint_5",
                         "joint_6",
                     ]
+                    _jprefix = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
                     filtered_js = JointState()
                     filtered_js.header = joint_state.header
                     for name in arm_joint_names:
                         if name in joint_state.name:
                             idx = list(joint_state.name).index(name)
-                            filtered_js.name.append(name)
+                            filtered_js.name.append(_jprefix + name)
                             filtered_js.position.append(joint_state.position[idx])
 
                     ik_request.ik_request.robot_state.joint_state = filtered_js

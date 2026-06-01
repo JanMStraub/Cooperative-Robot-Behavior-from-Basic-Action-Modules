@@ -136,7 +136,7 @@ class WorkspaceAllocator:
     def set_timeout(self, timeout: float):
         """Set workspace allocation timeout in seconds."""
         with self._lock:
-            self._timeout = max(1.0, timeout)
+            self._timeout = timeout
             logger.info(f"Set workspace timeout to {self._timeout}s")
 
     def _cleanup_stale(self):

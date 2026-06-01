@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    robot1_arm:
+      kinematics_solver: lma_kinematics_plugin/LMAKinematicsPlugin
+      kinematics_solver_search_resolution: 0.005
+      kinematics_solver_timeout: 0.05
+      kinematics_solver_attempts: 3
+    robot2_arm:
+      kinematics_solver: lma_kinematics_plugin/LMAKinematicsPlugin
+      kinematics_solver_search_resolution: 0.005
+      kinematics_solver_timeout: 0.05
+      kinematics_solver_attempts: 3

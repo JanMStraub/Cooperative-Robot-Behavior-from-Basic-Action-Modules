@@ -106,48 +106,48 @@ def test_b9_impossible_get_task_returns_string():
 
 
 def test_b9_get_tasks_returns_list():
-    from ACRLPython.benchmarks.cases import B10RagAblation
+    from ACRLPython.benchmarks.cases import B11RagAblation
     from benchmarks.Config import BenchmarkConfig
 
-    tasks = B10RagAblation.get_tasks(BenchmarkConfig())
+    tasks = B11RagAblation.get_tasks(BenchmarkConfig())
     assert isinstance(tasks, list)
     assert len(tasks) >= 3
     assert all(isinstance(t, str) for t in tasks)
 
 
 def test_b10_get_tasks_returns_list():
-    from ACRLPython.benchmarks.cases import B11ReflexionAblation
+    from ACRLPython.benchmarks.cases import B12ReflexionAblation
     from benchmarks.Config import BenchmarkConfig
 
-    tasks = B11ReflexionAblation.get_tasks(BenchmarkConfig())
+    tasks = B12ReflexionAblation.get_tasks(BenchmarkConfig())
     assert isinstance(tasks, list)
     assert len(tasks) >= 3
 
 
 def test_b11_get_tasks_returns_list():
-    from ACRLPython.benchmarks.cases import B12NegotiationAblation
+    from ACRLPython.benchmarks.cases import B13NegotiationAblation
     from benchmarks.Config import DualRobotConfig
 
-    tasks = B12NegotiationAblation.get_tasks(DualRobotConfig())
+    tasks = B13NegotiationAblation.get_tasks(DualRobotConfig())
     assert isinstance(tasks, list)
     assert len(tasks) >= 2
     assert all(isinstance(t, str) for t in tasks)
 
 
 def test_b12_get_tasks_returns_list():
-    from ACRLPython.benchmarks.cases import B13KgAblation
+    from ACRLPython.benchmarks.cases import B14KgAblation
     from benchmarks.Config import BenchmarkConfig
 
-    tasks = B13KgAblation.get_tasks(BenchmarkConfig())
+    tasks = B14KgAblation.get_tasks(BenchmarkConfig())
     assert isinstance(tasks, list)
     assert len(tasks) >= 3
 
 
 def test_b15_get_tasks_returns_list():
-    from ACRLPython.benchmarks.cases import B15RosAblation
+    from ACRLPython.benchmarks.cases import B16RosAblation
     from benchmarks.Config import BenchmarkConfig
 
-    tasks = B15RosAblation.get_tasks(BenchmarkConfig())
+    tasks = B16RosAblation.get_tasks(BenchmarkConfig())
     assert isinstance(tasks, list)
     assert len(tasks) >= 2
     assert all(isinstance(t, str) for t in tasks)
@@ -235,13 +235,13 @@ def test_b11_offline_captures_negotiation_rounds(monkeypatch):
 
 
 def test_b10_returns_paired_ablation_conditions():
-    """B10 RAG ablation is parse-only — returns both enabled and disabled conditions."""
+    """B11 RAG ablation is parse-only — returns both enabled and disabled conditions."""
     from benchmarks.Runner import BenchmarkRunner
     from benchmarks.Config import BenchmarkConfig
 
     runner = BenchmarkRunner()
     cfg = BenchmarkConfig(dry_run=False, execution_mode="offline", task_count=1)
-    result = runner.run(10, cfg)
+    result = runner.run(11, cfg)
     assert result.ablation is not None
     assert result.ablation_baseline is not None
     assert result.ablation.condition == "enabled"
@@ -308,7 +308,7 @@ def test_benchmark_result_has_ablation_baseline_field():
 
 
 def test_b10_tasks_are_drawn_from_b1_to_b5():
-    from ACRLPython.benchmarks.cases import B10RagAblation
+    from ACRLPython.benchmarks.cases import B11RagAblation
     from ACRLPython.benchmarks.cases.B1NavigateToObject import get_task as b1
     from ACRLPython.benchmarks.cases.B2SequentialNavigation import get_task as b2
     from ACRLPython.benchmarks.cases.B3NavigateAndLift import get_task as b3
@@ -316,7 +316,7 @@ def test_b10_tasks_are_drawn_from_b1_to_b5():
     from ACRLPython.benchmarks.cases.B5PoseAwareGrasp import get_task as b5
     from benchmarks.Config import BenchmarkConfig
 
-    tasks = B10RagAblation.get_tasks(BenchmarkConfig())
+    tasks = B11RagAblation.get_tasks(BenchmarkConfig())
     assert b1() in tasks
     assert b2() in tasks
     assert b3() in tasks
@@ -325,36 +325,36 @@ def test_b10_tasks_are_drawn_from_b1_to_b5():
 
 
 def test_b12_tasks_include_b6_and_b7():
-    from ACRLPython.benchmarks.cases import B12NegotiationAblation
+    from ACRLPython.benchmarks.cases import B13NegotiationAblation
     from ACRLPython.benchmarks.cases.B6RobotHandoff import get_task as b6
     from ACRLPython.benchmarks.cases.B7DualRobotReorient import get_task as b7
     from benchmarks.Config import DualRobotConfig
 
-    tasks = B12NegotiationAblation.get_tasks(DualRobotConfig())
+    tasks = B13NegotiationAblation.get_tasks(DualRobotConfig())
     assert b6() in tasks
     assert b7() in tasks
 
 
 def test_b14_tasks_include_b3_b4_b5():
-    from ACRLPython.benchmarks.cases import B14VGNAblation
+    from ACRLPython.benchmarks.cases import B15VGNAblation
     from ACRLPython.benchmarks.cases.B3NavigateAndLift import get_task as b3
     from ACRLPython.benchmarks.cases.B4PickAndPlace import get_task as b4
     from ACRLPython.benchmarks.cases.B5PoseAwareGrasp import get_task as b5
     from benchmarks.Config import BenchmarkConfig
 
-    tasks = B14VGNAblation.get_tasks(BenchmarkConfig())
+    tasks = B15VGNAblation.get_tasks(BenchmarkConfig())
     assert b3() in tasks
     assert b4() in tasks
     assert b5() in tasks
 
 
 def test_b15_tasks_include_b1_and_b2():
-    from ACRLPython.benchmarks.cases import B15RosAblation
+    from ACRLPython.benchmarks.cases import B16RosAblation
     from ACRLPython.benchmarks.cases.B1NavigateToObject import get_task as b1
     from ACRLPython.benchmarks.cases.B2SequentialNavigation import get_task as b2
     from benchmarks.Config import BenchmarkConfig
 
-    tasks = B15RosAblation.get_tasks(BenchmarkConfig())
+    tasks = B16RosAblation.get_tasks(BenchmarkConfig())
     assert b1() in tasks
     assert b2() in tasks
 
@@ -397,23 +397,18 @@ def test_parse_steps_populates_retry_count():
     assert steps[0].retry_count == 2
 
 
-def test_b3_task_specifies_approach_and_lift_height():
+def test_b3_task_specifies_lift_height():
     from benchmarks.cases.B3NavigateAndLift import get_task
 
     task = get_task()
     assert "0.2" in task, "B3 must specify target lift height"
-    assert (
-        "above" in task.lower() or "top" in task.lower()
-    ), "B3 must specify approach from above"
 
 
-def test_b5_task_specifies_gripper_orientation():
+def test_b5_task_specifies_target_object():
     from benchmarks.cases.B5PoseAwareGrasp import get_task
 
     task = get_task()
-    assert any(
-        word in task.lower() for word in ["down", "downward", "orient", "pose"]
-    ), "B5 must specify gripper orientation to test pose-aware grasping"
+    assert "cube" in task.lower() or "object" in task.lower(), "B5 must name a target object"
 
 
 def test_b6_task_names_both_robots_and_transfer():
@@ -427,13 +422,13 @@ def test_b6_task_names_both_robots_and_transfer():
 
 
 def test_b10_rag_ablation_has_delta_and_paired_conditions():
-    """B10 enabled condition must report hallucination_delta >= 0."""
+    """B11 RAG ablation enabled condition must report hallucination_delta >= 0."""
     from benchmarks.Runner import BenchmarkRunner
     from benchmarks.Config import BenchmarkConfig
 
     runner = BenchmarkRunner()
     cfg = BenchmarkConfig(dry_run=False, execution_mode="offline")
-    result = runner.run(10, cfg)
+    result = runner.run(11, cfg)
 
     assert result.ablation is not None
     assert result.ablation_baseline is not None

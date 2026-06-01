@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B10: RAG Ablation — parse-only comparison with and without RAG retrieval."""
+"""B11: RAG Ablation — parse-only comparison with and without RAG retrieval."""
 
 from __future__ import annotations
 

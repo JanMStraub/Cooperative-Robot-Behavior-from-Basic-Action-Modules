@@ -45,7 +45,11 @@ class GraspPlanner:
         saved_state = None
         if preferred_approach is not None:
             saved_state = self._save_approach_state()
-            self._filter_approaches(preferred_approach)
+            # Map directional top-down variants to "top" for geometric planning
+            _approach_for_filter = (
+                "top" if preferred_approach in ("left_side", "right_side") else preferred_approach
+            )
+            self._filter_approaches(_approach_for_filter)
 
         try:
             candidates = self.generator.generate_candidates(

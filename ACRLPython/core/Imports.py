@@ -9,6 +9,28 @@ Circular chain avoided:
     operations/DetectionOperations (CIRCULAR!)
 """
 
+import threading
+
+# Session-scoped abort event. Set when a sequence is cancelled/timed out so that
+# long-running background operations (e.g. follow_target in grasp) stop between
+# steps instead of continuing after reset_simulation fires.
+_sequence_abort_event = threading.Event()
+
+
+def signal_sequence_abort() -> None:
+    """Signal all background operations to stop at their next checkpoint."""
+    _sequence_abort_event.set()
+
+
+def clear_sequence_abort() -> None:
+    """Clear the abort signal at the start of a new sequence."""
+    _sequence_abort_event.clear()
+
+
+def is_sequence_aborted() -> bool:
+    """Return True if the current sequence has been cancelled."""
+    return _sequence_abort_event.is_set()
+
 
 def get_command_broadcaster():
     """Get the CommandBroadcaster singleton instance."""

@@ -679,11 +679,36 @@ def main():
         web_port=args.web,
     )
 
-    # Handle shutdown signals
+    # Handle shutdown signals — abort in-flight ops, clean up, then force-exit
+    # so Ctrl+C always terminates even when threads are blocked mid-movement.
+    _shutdown_called = False
+
     def signal_handler(_sig, _frame):
-        logger.info("Shutdown signal received")
-        controller.stop()
-        sys.exit(0)
+        nonlocal _shutdown_called
+        if _shutdown_called:
+            logger.info("Forced exit")
+            os._exit(1)
+        _shutdown_called = True
+        logger.info("Shutdown signal received — stopping servers (force-exit in 5s)")
+
+        # Abort any in-flight sequence so operation threads unblock sooner.
+        try:
+            from orchestrators.SequenceExecutor import get_sequence_executor
+            get_sequence_executor().abort()
+        except Exception:
+            pass
+
+        # Stop servers in a daemon thread; force-exit after timeout regardless.
+        def _stop():
+            try:
+                controller.stop()
+            except Exception:
+                pass
+
+        t = threading.Thread(target=_stop, daemon=True)
+        t.start()
+        t.join(timeout=5.0)
+        os._exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)

@@ -71,6 +71,9 @@ namespace PythonCommunication
         public float hover_offset; // Hover height above target before descent (metres)
         public float tcp_offset; // Gripper-open height above target surface (metres)
 
+        // set_proximity_guard parameters
+        public bool enabled;
+
         // GraspNet: optional pre-computed neural grasp candidates.
         // When non-empty, GraspPlanningPipeline skips geometric candidate generation
         // and feeds these directly into IK/collision filtering.
@@ -398,6 +401,10 @@ namespace PythonCommunication
                     ExecuteResetSimulation(command);
                     break;
 
+                case "set_proximity_guard":
+                    ExecuteSetProximityGuard(command);
+                    break;
+
                 default:
                     Debug.LogWarning($"{_logPrefix} Unknown command type: {command.command_type}");
                     _failedCommands++;
@@ -692,6 +699,25 @@ namespace PythonCommunication
                 {
                     gripperController.OnGripperActionComplete -= onComplete;
                     _activeGripperListeners.Remove(listenerKey); // FIX #2
+
+                    // Stop IK after gripper closes so the arm holds position and
+                    // doesn't fight residual forces once the object is attached.
+                    // (The open path clears target eagerly above; close must wait
+                    // until the grip is confirmed before clearing.)
+                    if (!command.parameters.open_gripper)
+                    {
+                        RobotController rc =
+                            robotInstance.robotGameObject.GetComponent<RobotController>();
+                        if (rc != null)
+                        {
+                            rc.ClearTarget();
+                            if (_verboseLogging)
+                                Debug.Log(
+                                    $"{_logPrefix} Cleared robot target after closing gripper on {command.robot_id}"
+                                );
+                        }
+                    }
+
                     if (_activeCommands.ContainsKey(commandKey))
                     {
                         _activeCommands.Remove(commandKey);
@@ -3934,6 +3960,24 @@ namespace PythonCommunication
             }
             bool success = sim.CurrentState != SimulationState.Resetting;
             SendCommandCompletion(robotId, "reset_simulation", success, requestId);
+        }
+
+        private void ExecuteSetProximityGuard(RobotCommand command)
+        {
+            string robotId = command.robot_id ?? "system";
+            uint requestId = command.request_id;
+            try
+            {
+                bool enabled = command.parameters?.enabled ?? true;
+                ProximityGuard.SetEnabled(enabled);
+                Debug.Log($"{_logPrefix} set_proximity_guard: enabled={enabled}");
+                SendCommandCompletion(robotId, "set_proximity_guard", true, requestId);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"{_logPrefix} set_proximity_guard error: {ex.Message}");
+                SendCommandCompletion(robotId, "set_proximity_guard", false, requestId);
+            }
         }
 
         /// <summary>

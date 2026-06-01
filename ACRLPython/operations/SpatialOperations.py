@@ -113,16 +113,19 @@ def move_relative_to_object(
         if not move_result.success:
             return move_result
 
-        return OperationResult.success_result(
-            {
-                "robot_id": robot_id,
-                "relation": relation,
-                "object_position": position,
-                "target_position": (target_x, target_y, target_z),
-                "offset": offset,
-                "timestamp": time.time(),
-            }
-        )
+        result_data = {
+            "robot_id": robot_id,
+            "relation": relation,
+            "object_position": position,
+            "target_position": (target_x, target_y, target_z),
+            "offset": offset,
+            "timestamp": time.time(),
+        }
+        # Propagate ROS/VGN execution status so SequenceExecutor skips Unity
+        # completion wait (which would otherwise time out after 60 s).
+        if move_result.result and "status" in move_result.result:
+            result_data["status"] = move_result.result["status"]
+        return OperationResult.success_result(result_data)
 
     except Exception as e:
         logger.error(f"Error in move_relative_to_object: {e}", exc_info=True)

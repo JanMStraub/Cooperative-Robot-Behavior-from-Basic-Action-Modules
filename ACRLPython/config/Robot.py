@@ -67,11 +67,6 @@ ROBOT_BASE_POSITIONS = {
 # Matches the scene's standard 2 cm cube prefabs.
 DEFAULT_HANDOFF_OBJECT_DIMENSIONS = (0.02, 0.02, 0.02)
 
-# Extra clearance added to the half-extent offset so grippers don't overlap.
-HANDOFF_GRIPPER_CLEARANCE = float(
-    os.environ.get("HANDOFF_GRIPPER_CLEARANCE", "0.03")
-)  # meters
-
 # Fixed world-space position where Robot A presents the object for handoff.
 # Chosen to be reachable by both AR4 arms and clear of the table surface.
 # Robot B approaches this same point from the side (pitch=90°) while Robot A
