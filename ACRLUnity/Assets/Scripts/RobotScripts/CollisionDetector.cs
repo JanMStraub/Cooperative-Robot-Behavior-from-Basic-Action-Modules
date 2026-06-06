@@ -54,10 +54,6 @@ namespace Robotics
         private Dictionary<string, float> _lastCollisionTime = new Dictionary<string, float>();
         private int _totalCollisions;
 
-        // Properties
-        public CollisionConfig Config => config;
-        public int TotalCollisions => _totalCollisions;
-
         // Helper variables
         private const string _logPrefix = "[COLLISION_DETECTOR]";
 
@@ -235,20 +231,6 @@ namespace Robotics
         private void UpdateCollisionMetrics(string robotId, CollisionData collisionData)
         {
             _totalCollisions++;
-        }
-
-        public void ResetMetrics()
-        {
-            _totalCollisions = 0;
-            _lastCollisionTime.Clear();
-
-            Debug.Log($"{_logPrefix}  Metrics reset for target: {targetId}");
-        }
-
-        public void SetTargetReward(float rewardValue)
-        {
-            targetRewardValue = rewardValue;
-            Debug.Log($"{_logPrefix}  Target reward changed: {targetId}, NewReward: {rewardValue}");
         }
 
         private void OnDrawGizmos()

@@ -5,20 +5,20 @@ from __future__ import annotations
 
 from typing import List
 
-from benchmarks.cases.B6RobotHandoff import get_task as _b6
-from benchmarks.cases.B7DualRobotReorient import get_task as _b7
-
 
 def get_tasks(config=None) -> List[str]:
     """
     Return dual-robot coordination tasks for negotiation ablation.
 
-    B6 and B7 are included verbatim so the ablation measures negotiation's
-    contribution on the same tasks as the main dual-robot benchmarks.
-    The third task adds an explicit stacking goal absent from B6/B7.
+    All tasks have ambiguous or unspecified role assignment so negotiation
+    must add value: resolving who leads, ordering sequential dependencies,
+    or arbitrating resource contention. Tasks with explicit per-robot
+    instructions (like B6/B7) are excluded — the direct planner can follow
+    those without negotiation, making the enabled/disabled delta uninformative.
     """
     return [
-        _b6(),
-        _b7(),
-        "Robot1 picks up the yellow cube and passes it to Robot2 and Robot2 stacks it on the red block.",
+        "Both robots need to retrieve their respective objects from the table.",
+        "Stack the blue cube on top of the red cube using both robots.",
+        "One of the robots should pick up the red cube and pass it to the other robot.",
+        "One robot picks up the red cube and places it on the desk. Then the other robot picks up the blue cube and stacks it on top of the red cube.",
     ]

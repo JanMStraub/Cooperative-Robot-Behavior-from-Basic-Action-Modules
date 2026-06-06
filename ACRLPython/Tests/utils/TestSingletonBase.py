@@ -38,7 +38,6 @@ class SingletonTestMixin:
         Get the singleton instance to test.
 
         Must be implemented by subclass.
-
         """
         raise NotImplementedError("Subclass must implement get_singleton_instance()")
 
@@ -47,7 +46,6 @@ class SingletonTestMixin:
         Get the name of the cleanup fixture.
 
         Optional - only needed if cleanup fixture exists.
-
         """
         return None
 

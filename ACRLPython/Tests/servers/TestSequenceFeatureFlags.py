@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import struct
 
-import pytest
-
 import config.Servers as srv_cfg
 import config.ROS as ros_cfg
 import config.Negotiation as neg_cfg

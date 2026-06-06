@@ -31,7 +31,6 @@ class _MockOperation:
     def __init__(self, real_op, profile: str) -> None:
         """
         Initialise mock from real operation.
-
         """
         self.__dict__.update(real_op.__dict__)
         self._real_op = real_op
@@ -105,8 +104,6 @@ class _MockOperation:
 def install_mock(profile: str = "always_succeed") -> Callable:
     """
     Monkeypatch get_operation_by_name on the global registry singleton.
-
-
     """
     from core.Imports import get_global_registry
 
@@ -133,7 +130,6 @@ def reset_counts() -> None:
 def restore_mock(original: Callable) -> None:
     """
     Restore get_operation_by_name to original implementation.
-
     """
     from core.Imports import get_global_registry
 

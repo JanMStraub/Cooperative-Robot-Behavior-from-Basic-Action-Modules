@@ -116,9 +116,7 @@ def _execute_signal(
         )
     except Exception as e:
         return OperationResult.error_result(
-            error_code="SIGNAL_FAILED",
-            message=f"Failed to signal event '{event_name}': {str(e)}",
-            recovery_suggestions=["Verify event_name is a valid string"],
+            "SIGNAL_FAILED", f"Failed to signal event '{event_name}': {e}"
         )
 
 
@@ -144,7 +142,7 @@ SIGNAL_OPERATION = BasicOperation(
     preconditions=[],
     postconditions=[],
     average_duration_ms=1,
-    success_rate=99.9,
+    success_rate=0.999,
     failure_modes=["Invalid event name"],
     usage_examples=[
         "signal('cube_gripped') - Signal that cube has been gripped",
@@ -186,12 +184,7 @@ def _execute_wait_for_signal(
             )
     except Exception as e:
         return OperationResult.error_result(
-            error_code="WAIT_FAILED",
-            message=f"Failed to wait for event '{event_name}': {str(e)}",
-            recovery_suggestions=[
-                "Check event_name is a valid string",
-                "Verify timeout_ms is a positive integer",
-            ],
+            "WAIT_FAILED", f"Failed to wait for event '{event_name}': {e}"
         )
 
 
@@ -204,7 +197,10 @@ WAIT_FOR_SIGNAL_OPERATION = BasicOperation(
     long_description=(
         "Waits for another robot to signal a named event. Blocks execution until the event "
         "is signaled or timeout is reached. Use this to synchronize multi-robot tasks. "
-        "Common pattern: Robot2 waits for 'cube_gripped' while Robot1 detects and grips cube."
+        "Common pattern: Robot2 waits for 'cube_gripped' while Robot1 detects and grips cube. "
+        "Trigger phrases: 'do not move until signal', 'wait for the go signal', 'hold position "
+        "until Robot1 signals', 'stay still until you receive the signal', 'block until partner "
+        "is ready', 'do not start until signal received', 'pause until go signal from Robot1'."
     ),
     parameters=[
         OperationParameter(
@@ -225,7 +221,7 @@ WAIT_FOR_SIGNAL_OPERATION = BasicOperation(
     preconditions=[],
     postconditions=[],
     average_duration_ms=5000,  # Depends on when signal is sent
-    success_rate=95.0,
+    success_rate=0.95,
     failure_modes=["Timeout reached", "Signal never sent", "Event name mismatch"],
     usage_examples=[
         "wait_for_signal('cube_gripped') - Wait for another robot to grip cube",
@@ -245,9 +241,8 @@ def _execute_wait(
     try:
         if duration_ms < 0:
             return OperationResult.error_result(
-                error_code="INVALID_DURATION",
-                message=f"Duration must be non-negative, got {duration_ms}ms",
-                recovery_suggestions=["Provide a non-negative duration_ms value"],
+                "INVALID_DURATION",
+                f"duration_ms must be non-negative, got {duration_ms}",
             )
 
         start_time = time.time()
@@ -259,9 +254,7 @@ def _execute_wait(
         )
     except Exception as e:
         return OperationResult.error_result(
-            error_code="WAIT_FAILED",
-            message=f"Failed to wait for {duration_ms}ms: {str(e)}",
-            recovery_suggestions=["Verify duration_ms is a valid integer"],
+            "WAIT_FAILED", f"wait({duration_ms}ms) failed: {e}"
         )
 
 
@@ -288,7 +281,7 @@ WAIT_OPERATION = BasicOperation(
     preconditions=[],
     postconditions=[],
     average_duration_ms=1000,  # Depends on parameter
-    success_rate=99.9,
+    success_rate=0.999,
     failure_modes=["Invalid duration"],
     usage_examples=[
         "wait(500) - Wait 0.5 seconds for gripper to close",
@@ -340,7 +333,7 @@ RESET_SIMULATION_OPERATION = BasicOperation(
     preconditions=[],
     postconditions=[],
     average_duration_ms=3000,
-    success_rate=99.0,
+    success_rate=0.99,
     failure_modes=["Unity not connected", "SimulationManager not found"],
     usage_examples=["reset_simulation() - Reset scene between benchmark runs"],
     relationships=None,
@@ -359,36 +352,25 @@ def yield_workspace(
     The partner robot must call signal("region_clear_<region_id>") when it leaves
     the region. This makes workspace safety explicit for LLM planning.
     """
-    # Validate inputs
     if not robot_id or not isinstance(robot_id, str):
         return OperationResult.error_result(
-            error_code="INVALID_ROBOT_ID",
-            message="robot_id must be a non-empty string",
-            recovery_suggestions=["Provide a valid robot_id string"],
+            "INVALID_ROBOT_ID", "robot_id must be a non-empty string"
         )
     if not region_id or not isinstance(region_id, str):
         return OperationResult.error_result(
-            error_code="INVALID_REGION_ID",
-            message="region_id must be a non-empty string",
-            recovery_suggestions=["Provide a valid region_id string"],
+            "INVALID_REGION_ID", "region_id must be a non-empty string"
         )
     if not (1000 <= timeout_ms <= 60000):
         return OperationResult.error_result(
-            error_code="INVALID_TIMEOUT",
-            message=f"timeout_ms must be in range [1000, 60000], got {timeout_ms}",
-            recovery_suggestions=["Provide a timeout_ms value between 1000 and 60000"],
+            "INVALID_TIMEOUT", f"timeout_ms must be in [1000, 60000], got {timeout_ms}"
         )
 
     try:
-        try:
-            from .WorldState import WorldState
-        except ImportError:
-            from operations.WorldState import WorldState  # type: ignore[no-redef]
+        from .WorldState import WorldState
 
         world_state = WorldState()
         world_state.update_robot_state(robot_id, {"workspace_intent": region_id})
     except Exception:
-        # WorldState unavailable — proceed without recording intent
         world_state = None
 
     event_bus = EventBus()
@@ -454,12 +436,17 @@ YIELD_WORKSPACE_OPERATION = BasicOperation(
     category=OperationCategory.COORDINATION,
     complexity=OperationComplexity.ATOMIC,
     description="Signal intent to enter a workspace region and wait until the region is cleared by the partner robot",
-    long_description=(
-        "Signals the partner robot that this robot intends to enter a shared workspace region, "
-        "then blocks until the partner signals 'region_clear_<region_id>'. "
-        "The partner robot must call signal('region_clear_<region_id>') when it leaves the region. "
-        "This makes workspace safety explicit and avoids collision-by-oversight in LLM-generated plans."
-    ),
+    long_description="""
+        Request access to a shared workspace region and block until the partner robot has
+        vacated it. Use this before moving into any region that another robot may occupy.
+
+        Trigger phrases: "request access to workspace", "wait until Robot2 has cleared",
+        "need the shared zone", "enter the handoff area", "wait for region to be free",
+        "hold until partner clears", "request workspace access".
+
+        Internally signals the partner and waits for a clearance acknowledgement before
+        returning. Prevents collision when both robots need the same region.
+    """,
     parameters=[
         OperationParameter(
             name="robot_id",
@@ -482,31 +469,18 @@ YIELD_WORKSPACE_OPERATION = BasicOperation(
             valid_range=(1000, 60000),
         ),
     ],
-    preconditions=[],
-    postconditions=[],
     average_duration_ms=500.0,
-    success_rate=90.0,
-    failure_modes=[
-        "Partner robot doesn't signal region clear",
-        "Timeout waiting for workspace clearance",
-    ],
     usage_examples=[
-        "yield_workspace('robot1', 'center_table') - Wait for center_table region to be free",
-        "yield_workspace('robot2', 'handoff_zone', timeout_ms=20000) - Wait up to 20s",
+        "yield_workspace('robot1', 'center_table')",
+        "yield_workspace('robot2', 'handoff_zone', timeout_ms=20000)",
     ],
     relationships=OperationRelationship(
         operation_id="coordination_yield_workspace_002",
-        required_operations=[],
         commonly_paired_with=[
             "sync_signal_001",
             "sync_wait_for_signal_001",
             "coordination_check_partner_001",
         ],
-        typical_before=[
-            "motion_move_to_coord_001",
-            "manipulation_grasp_object_001",
-        ],
-        typical_after=["sync_signal_001"],
     ),
     implementation=_execute_yield_workspace,
 )

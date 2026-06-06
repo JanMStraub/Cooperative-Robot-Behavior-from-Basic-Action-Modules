@@ -97,14 +97,12 @@ try:
     try:
         from .StereoConfig import (
             CameraConfig,
-            ReconstructionConfig,
             DEFAULT_CAMERA_CONFIG,
             DEFAULT_RECONSTRUCTION_CONFIG,
         )
     except ImportError:
         from vision.StereoConfig import (
             CameraConfig,
-            ReconstructionConfig,
             DEFAULT_CAMERA_CONFIG,
             DEFAULT_RECONSTRUCTION_CONFIG,
         )

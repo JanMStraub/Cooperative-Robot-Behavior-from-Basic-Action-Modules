@@ -565,7 +565,10 @@ class _VGNROSPatch:
         self._patches.append(bridge_patch.start())
 
         # Follow-target + gripper helper mock — returns (success, reason) tuple
-        _follow_rv = (self.gripper_success, "" if self.gripper_success else "gripper close command failed")
+        _follow_rv = (
+            self.gripper_success,
+            "" if self.gripper_success else "gripper close command failed",
+        )
         follow_patch = patch(
             "operations.grasp._vgn._execute_grasp_with_follow_target",
             return_value=_follow_rv,

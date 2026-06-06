@@ -61,7 +61,6 @@ class GraspCandidateGenerator:
 
     Optimized for object-size-adaptive candidate generation with randomized variations.
     Matches Unity's GraspCandidateGenerator.cs algorithm.
-
     """
 
     # Approach axes in object-local space (Unity convention: Y=up, X=right, Z=forward)
@@ -76,7 +75,6 @@ class GraspCandidateGenerator:
     ):
         """
         Initialize grasp candidate generator.
-
         """
         self.config = config or GraspConfig.create_default()
         self.random = np.random.RandomState(seed)
@@ -93,8 +91,6 @@ class GraspCandidateGenerator:
 
         Generates candidates for all enabled approach types (top/front/side)
         with randomized variations in angle, distance, and depth.
-
-
         """
         candidates = []
 
@@ -139,8 +135,6 @@ class GraspCandidateGenerator:
     ) -> List[GraspCandidate]:
         """
         Generate grasp candidates for a specific approach type.
-
-
         """
         candidates = []
 
@@ -225,8 +219,6 @@ class GraspCandidateGenerator:
         Calculate the primary approach axis and a reference tangent in world space.
 
         Respects the object's rotation by transforming local axes to world space.
-
-
         """
         if approach == "top":
             # Top: approach from above (Y-axis), tangent is right (X-axis)
@@ -256,8 +248,6 @@ class GraspCandidateGenerator:
     def _get_dimension_on_axis(self, approach: str, obj_size: np.ndarray) -> float:
         """
         Get object dimension along approach axis.
-
-
         """
         # Unity convention: size = (width=X, height=Y, depth=Z)
         if approach == "top":
@@ -276,8 +266,6 @@ class GraspCandidateGenerator:
         Perturb a direction vector within a small cone.
 
         Uses random cone sampling to generate varied approach directions.
-
-
         """
         # Random angle within cone (in degrees)
         perturbation_angle = (
@@ -312,8 +300,6 @@ class GraspCandidateGenerator:
 
         Accounts for URDF gripper coordinate frame (90° Z-rotation baked in).
         Matches Unity's Quaternion.Euler conventions.
-
-
         """
         # Calculate base rotation in object-local space
         if approach == "top":
@@ -360,8 +346,6 @@ class GraspCandidateGenerator:
 
         Approach-aware: Top approaches use centering-only scoring since traditional
         antipodal (opposing contact points) concept doesn't apply to top-down grasps.
-
-
         """
         to_center = obj_center - grasp_pos
 
@@ -407,8 +391,6 @@ class GraspCandidateGenerator:
     def _calculate_pre_grasp_distance(self, obj_size: np.ndarray) -> float:
         """
         Calculate pre-grasp distance from object size.
-
-
         """
         avg_size = np.mean(obj_size)
         distance = avg_size * self.config.pre_grasp_distance_factor
@@ -423,8 +405,6 @@ class GraspCandidateGenerator:
     def _calculate_retreat_distance(self, obj_size: np.ndarray) -> float:
         """
         Calculate retreat distance from object size.
-
-
         """
         avg_size = np.mean(obj_size)
         return float(avg_size * self.config.retreat_distance_factor)
@@ -432,8 +412,6 @@ class GraspCandidateGenerator:
     def _sample_distance_variation(self, base_dist: float) -> float:
         """
         Sample distance variation for pre-grasp distance.
-
-
         """
         variation = (
             self.random.rand() * 2.0 - 1.0
@@ -448,15 +426,12 @@ class GraspCandidateGenerator:
     def _sample_angle_variation(self) -> float:
         """
         Sample angle variation for gripper rotation.
-
         """
         return (self.random.rand() * 2.0 - 1.0) * self.config.angle_variation_range
 
     def _sample_depth_variation(self, obj_size: np.ndarray) -> float:
         """
         Sample depth variation for grasp penetration.
-
-
         """
         avg_size = np.mean(obj_size)
         base_depth = self.config.target_grasp_depth * avg_size

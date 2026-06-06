@@ -38,14 +38,19 @@ class TestRAGSystemIntegration:
     @patch("rag.EmbeddingGenerator")
     def test_auto_load_index(self, mock_embedding_gen, mock_registry):
         """Test automatic index loading on initialization"""
-        # Mock loaded store
+        # Mock loaded store — embedding_dimension is an instance attribute (set in
+        # __init__), so spec=VectorStore excludes it; set it explicitly.
         mock_store = Mock(spec=VectorStore)
+        mock_store.embedding_dimension = 384
         mock_store.__len__ = Mock(return_value=5)
 
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
 
         mock_emb = Mock()
+        mock_emb.get_embedding_dimension.return_value = (
+            384  # match mock_store.embedding_dimension
+        )
         mock_embedding_gen.return_value = mock_emb
 
         # Patch VectorStore.load class method where the class is imported

@@ -70,7 +70,9 @@ class TestParameterMatchScore(unittest.TestCase):
         score = calculate_parameter_match_score(
             "pick up the cube", ["x", "y", "z", "speed"]
         )
-        self.assertEqual(score, 0.3)  # Low score for no matches
+        self.assertEqual(
+            score, 0.5
+        )  # Neutral — op can be relevant without mentioning params
 
     def test_partial_parameter_match(self):
         """Test scoring with partial parameter matches"""

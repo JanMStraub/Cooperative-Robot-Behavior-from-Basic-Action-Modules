@@ -145,7 +145,9 @@ class GraphQueryEngine:
         dx, dy, dz = bx - ax, by - ay, bz - az
         seg_len_sq = dx * dx + dy * dy + dz * dz
         blocking_threshold = 0.05  # 5cm path proximity
-        ee_exclusion_radius = 0.12  # 12cm — skips objects co-located with EE (held/just released)
+        ee_exclusion_radius = (
+            0.12  # 12cm — skips objects co-located with EE (held/just released)
+        )
 
         for obj_id in candidates:
             obj_node = self._graph.get_node(obj_id)
@@ -156,8 +158,15 @@ class GraphQueryEngine:
                 continue
 
             if self._obstacle_blocks_path(
-                obj_pos, robot_pos, target, seg_len_sq, dx, dy, dz,
-                blocking_threshold, ee_exclusion_radius
+                obj_pos,
+                robot_pos,
+                target,
+                seg_len_sq,
+                dx,
+                dy,
+                dz,
+                blocking_threshold,
+                ee_exclusion_radius,
             ):
                 logger.warning(
                     f"Path blocked: obj={obj_id} pos={obj_pos} "

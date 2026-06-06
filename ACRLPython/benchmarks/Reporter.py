@@ -12,8 +12,6 @@ from .Result import BenchmarkResult
 def write_json(result: BenchmarkResult, output_dir: str = ".") -> str:
     """
     Serialise BenchmarkResult to a JSON file.
-
-
     """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     fname = f"benchmark{result.benchmark_id}_{result.run_id}.json"
@@ -27,8 +25,6 @@ def write_csv(result: BenchmarkResult, output_dir: str = ".") -> str:
     Serialise BenchmarkResult to a flat CSV file for offline analysis.
 
     One row per step; benchmark-level summary columns repeated on every row.
-
-
     """
     import csv
 
@@ -103,7 +99,6 @@ def write_csv(result: BenchmarkResult, output_dir: str = ".") -> str:
 def print_summary(result: BenchmarkResult) -> None:
     """
     Print a human-readable benchmark summary to stdout.
-
     """
     status = "PASS" if result.success else "FAIL"
     ok = sum(1 for s in result.steps if s.success)

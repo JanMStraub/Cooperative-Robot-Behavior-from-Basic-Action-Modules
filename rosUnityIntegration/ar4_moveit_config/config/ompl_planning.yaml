@@ -1,16 +1,9 @@
-# OMPL planner configs for AR4 mk3
-#
-# Contains the nested planner_configs/arm/gripper blocks which cannot be
-# expressed as ROS 2 launch parameter scalars.
-# Uses /**:  so params apply to any namespaced move_group node (Robot1, Robot2).
-# The "ompl." prefix matches the named pipeline declared in move_group.launch.py
-# via planning_pipelines: "ompl".
+# OMPL planner configs for AR4 mk3.
+# Nested planner_configs blocks can't be expressed as ROS 2 launch scalars — must live here.
+# /**:  applies to any namespaced move_group node (Robot1, Robot2).
 /**:
   ros__parameters:
-    # Declare the named planning pipeline. move_group reads this as a string_array
-    # and registers a pipeline named "ompl", which MotionPlanRequest.pipeline_id
-    # can then reference. Must live in a YAML file — the ROS 2 launch inline dict
-    # only accepts scalar types and cannot represent string_array.
+    # string_array — must come from YAML; ROS 2 launch inline dict only supports scalars
     planning_pipelines:
       - ompl
 

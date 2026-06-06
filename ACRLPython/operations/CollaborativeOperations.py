@@ -183,16 +183,16 @@ def create_stabilize_object_operation() -> BasicOperation:
         complexity=OperationComplexity.COMPLEX,
         description="Hold object stable while partner robot manipulates it",
         long_description="""
-            This operation commands a robot to grasp and hold an object stable,
-            providing support for another robot to perform manipulation tasks.
+            Commands a robot to grasp and hold an object stable, providing support
+            while a partner robot performs manipulation on the same object.
 
-            Requires:
-            - Force control to maintain stable grip without crushing object
-            - Position stability to prevent movement during partner manipulation
-            - Coordination with partner robot timing
+            Trigger phrases: "keep it stable", "hold the object still", "keep it steady
+            while Robot2 works", "stabilize while partner manipulates", "brace the object",
+            "hold it in place", "support the object for the other robot", "don't move it".
 
-            Critical for tasks requiring dual-arm support: assembly, insertion,
-            precision placement.
+            Requires force control to maintain grip without crushing. The holding robot
+            stays stationary for the full duration while the partner manipulates.
+            Critical for assembly, insertion, and precision placement tasks.
         """,
         usage_examples=[
             "stabilize_object('Robot1', 'LargeCube', duration_ms=5000)",
@@ -396,7 +396,7 @@ def create_place_for_partner_operation() -> BasicOperation:
             ),
         ],
         average_duration_ms=3000.0,
-        success_rate=87.0,
+        success_rate=0.87,
         failure_modes=[
             "Place operation fails",
             "Robot not holding an object",

@@ -13,7 +13,6 @@ namespace Robotics.Grasp
     {
         private readonly GraspConfig _config;
 
-
         public GraspScorer(GraspConfig config)
         {
             _config = config;
@@ -275,20 +274,6 @@ namespace Robotics.Grasp
         }
 
         /// <summary>
-        /// Filter candidates below a minimum score threshold.
-        /// </summary>
-        /// <param name="candidates">Scored candidates</param>
-        /// <param name="minScore">Minimum total score threshold</param>
-        /// <returns>Filtered list of candidates</returns>
-        public List<GraspCandidate> FilterByMinScore(
-            List<GraspCandidate> candidates,
-            float minScore
-        )
-        {
-            return candidates.Where(c => c.totalScore >= minScore).ToList();
-        }
-
-        /// <summary>
         /// Get top N candidates from scored list.
         /// </summary>
         /// <param name="candidates">Scored and sorted candidates</param>
@@ -297,31 +282,6 @@ namespace Robotics.Grasp
         public List<GraspCandidate> GetTopN(List<GraspCandidate> candidates, int count)
         {
             return candidates.Take(count).ToList();
-        }
-
-        /// <summary>
-        /// Normalize all candidate scores to 0-1 range within the list.
-        /// Useful for comparing candidates across different scenarios.
-        /// </summary>
-        /// <param name="candidates">Candidates to normalize</param>
-        public void NormalizeScores(List<GraspCandidate> candidates)
-        {
-            if (candidates.Count == 0)
-                return;
-
-            float minScore = candidates.Min(c => c.totalScore);
-            float maxScore = candidates.Max(c => c.totalScore);
-            float range = maxScore - minScore;
-
-            if (range < 0.001f)
-                return;
-
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                var candidate = candidates[i];
-                candidate.totalScore = (candidate.totalScore - minScore) / range;
-                candidates[i] = candidate;
-            }
         }
     }
 }

@@ -354,7 +354,9 @@ class TestCanReachPosition(unittest.TestCase):
         # Obstacle at 0.15m from robot (beyond ee_exclusion_radius=0.12m) and
         # directly on the path to target at 0.3m; NEAR edge required by
         # _collect_obstacle_candidates.
-        self.graph.add_node("obstacle", node_type="object", position=(-0.475, 0.0, 0.15))
+        self.graph.add_node(
+            "obstacle", node_type="object", position=(-0.475, 0.0, 0.15)
+        )
         self.graph.add_edge("Robot1", "obstacle", "NEAR", distance=0.15)
 
         from unittest.mock import patch as mpatch

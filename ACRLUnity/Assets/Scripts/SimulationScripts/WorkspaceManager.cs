@@ -82,12 +82,6 @@ namespace Simulation
         [SerializeField]
         private float _minRobotSeparation = 0.2f;
 
-        [Tooltip(
-            "Additional safety margin added to collision geometry (meters). Mirrors COLLISION_SAFETY_MARGIN in config/Robot.py."
-        )]
-        [SerializeField]
-        private float _collisionSafetyMargin = 0.01f;
-
         [Header("Robot Base Positions")]
         [Tooltip(
             "Base position of Robot1 in world coordinates. Mirrors ROBOT_BASE_POSITIONS[Robot1] in config/Robot.py."
@@ -204,44 +198,6 @@ namespace Simulation
             }
         }
 
-        public List<WorkspaceRegion> GetRegionsAtPosition(Vector3 position)
-        {
-            List<WorkspaceRegion> matchingRegions = new List<WorkspaceRegion>();
-            foreach (var region in _workspaceRegions)
-            {
-                if (region.ContainsPosition(position))
-                {
-                    matchingRegions.Add(region);
-                }
-            }
-            return matchingRegions;
-        }
-
-        /// <summary>
-        /// Get all regions containing a specific position using buffer pattern.
-        /// </summary>
-        /// <param name="position">World position to check</param>
-        /// <param name="resultBuffer">Pre-allocated list to populate</param>
-        /// <returns>Number of matching regions found</returns>
-        public int GetRegionsAtPosition(Vector3 position, List<WorkspaceRegion> resultBuffer)
-        {
-            if (resultBuffer == null)
-            {
-                Debug.LogError($"{LOG_PREFIX} GetRegionsAtPosition: resultBuffer cannot be null");
-                return 0;
-            }
-
-            resultBuffer.Clear();
-            foreach (var region in _workspaceRegions)
-            {
-                if (region.ContainsPosition(position))
-                {
-                    resultBuffer.Add(region);
-                }
-            }
-            return resultBuffer.Count;
-        }
-
         public WorkspaceRegion GetRegionAtPosition(Vector3 position)
         {
             WorkspaceRegion smallestRegion = null;
@@ -307,12 +263,6 @@ namespace Simulation
             Debug.LogWarning($"{LOG_PREFIX} Unknown robotId '{robotId}' in GetRobotBasePosition");
             return Vector3.zero;
         }
-
-        /// <summary>
-        /// Get the collision safety margin (additional clearance on top of robot geometry).
-        /// Mirrors COLLISION_SAFETY_MARGIN in ACRLPython/config/Robot.py.
-        /// </summary>
-        public float CollisionSafetyMargin => _collisionSafetyMargin;
 
         private void OnDrawGizmos()
         {

@@ -162,17 +162,14 @@ class KnowledgeGraph:
             return list(self._nodes_by_type.get(node_type, set()))
 
     def node_count(self) -> int:
-        """Get total number of nodes."""
         with self._lock:
             return self._graph.number_of_nodes()
 
     def edge_count(self) -> int:
-        """Get total number of edges."""
         with self._lock:
             return self._graph.number_of_edges()
 
     def clear(self):
-        """Remove all nodes and edges from the graph."""
         with self._lock:
             self._graph.clear()
             self._nodes_by_type.clear()

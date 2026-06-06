@@ -44,7 +44,6 @@ def _cmd(
 
     Helper that encapsulates BackendClient construction so each test body
     stays focused on the assertion rather than the framing.
-
     """
     with BackendClient(timeout=timeout) as client:
         return client.send_command(
@@ -100,7 +99,7 @@ class TestSyncOps:
         """wait(duration=0.5) completes in reasonable wall-clock time."""
         start = time.time()
         result = _cmd(
-            "wait 0.5 seconds for Robot1",
+            "pause execution for 500 milliseconds",
             robot_id="Robot1",
             timeout=240.0,
             request_id=200,

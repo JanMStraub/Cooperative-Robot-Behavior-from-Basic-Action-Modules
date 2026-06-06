@@ -10,9 +10,6 @@ using Vision;
 
 namespace PythonCommunication
 {
-    /// <summary>
-    /// Data structure for robot commands received from Python operations
-    /// </summary>
     [System.Serializable]
     public class RobotCommand
     {
@@ -21,7 +18,6 @@ namespace PythonCommunication
         public string robot_id;
         public string camera_id; // For camera-targeted commands
         public CommandParameters parameters;
-        public float timestamp;
         public uint request_id; // Protocol V2: for request/response correlation
     }
 
@@ -29,7 +25,6 @@ namespace PythonCommunication
     public class CommandParameters
     {
         public TargetPosition target_position;
-        public TargetPosition original_target;
         public float speed_multiplier;
         public float approach_offset;
         public bool detailed; // For status queries
@@ -40,8 +35,6 @@ namespace PythonCommunication
         public bool use_advanced_planning; // Use full grasp planning pipeline
         public string preferred_approach; // "auto", "top", "front", "side"
         public float pre_grasp_distance; // Custom pre-grasp distance (0 = use config)
-        public bool enable_retreat; // Whether to retreat after grasping
-        public float retreat_distance; // Custom retreat distance (0 = use config)
         public TargetPosition custom_approach_vector; // Custom approach direction
 
         // New operation parameters (Phase 2 - Atomic Operations)
@@ -51,7 +44,6 @@ namespace PythonCommunication
         public float pitch; // For adjust_orientation
         public float yaw; // For adjust_orientation
         public TargetPosition[] waypoints; // For follow_path
-        public string alignment_type; // For align_object
         public TargetPosition target_orientation; // For align_object
         public string shape; // For draw_with_pen
         public TargetPosition pen_position; // For draw_with_pen
@@ -64,8 +56,8 @@ namespace PythonCommunication
 
         // Bimanual operation parameters
         public string partner_robot_id; // For synchronized_grasp, joint_transport
-        public string approach_axis;    // For synchronized_grasp ("x" or "z")
-        public float lift_height;       // For joint_transport
+        public string approach_axis; // For synchronized_grasp ("x" or "z")
+        public float lift_height; // For joint_transport
 
         // place_object parameters
         public float hover_offset; // Hover height above target before descent (metres)
@@ -131,24 +123,7 @@ namespace PythonCommunication
         public float timestamp;
     }
 
-    /// <summary>
-    /// Handles commands from Python operations and executes them on Unity robots.
-    ///
-    /// This handler listens to SequenceClient for incoming commands from Python
-    /// SequenceServer and executes them using RobotManager and RobotController.
-    ///
-    /// Supported Commands:
-    /// - move_to_coordinate: Move robot end effector to target position
-    /// - control_gripper: Open or close the gripper
-    /// - check_robot_status: Get current robot state
-    /// - return_to_start_position: Move robot back to initial position
-    /// - pick_object_at_coordinate: Hover → descent → grasp sequence at known coordinates
-    ///
-    /// Usage:
-    /// 1. Attach this component to a GameObject in your scene
-    /// 2. Ensure SequenceClient and RobotManager are active
-    /// 3. Python SequenceServer will send commands via port 5008
-    /// </summary>
+    /// <summary>Receives commands from Python SequenceServer (port 5008) and executes them on Unity robots.</summary>
     public class PythonCommandHandler : MonoBehaviour
     {
         public static PythonCommandHandler Instance { get; private set; }
@@ -173,42 +148,30 @@ namespace PythonCommunication
 
         private RobotManager _robotManager;
 
-        /// <summary>
-        /// Track active commands for completion notification
-        /// </summary>
         private System.Collections.Generic.Dictionary<string, uint> _activeCommands =
             new System.Collections.Generic.Dictionary<string, uint>();
 
-        /// <summary>
-        /// Manages active event listeners per robot to prevent zombie delegates.
-        ///
-        /// Replaces the four separate Dictionary&lt;string, Action&gt; fields that
-        /// previously implemented identical subscribe/fire/clear patterns.
-        /// </summary>
+        // Prevents zombie delegates on controller events; one manager per command type.
         private sealed class CommandListenerManager
         {
-            private readonly System.Collections.Generic.Dictionary<
-                string,
-                System.Action
-            > _listeners = new System.Collections.Generic.Dictionary<string, System.Action>();
+            private readonly System.Collections.Generic.Dictionary<string, Action> _listeners =
+                new System.Collections.Generic.Dictionary<string, Action>();
 
-            /// <summary>Register a callback for the given robot key, overwriting any prior entry.</summary>
-            public void Register(string key, System.Action callback)
+            // Overwrites any prior entry for the key.
+            public void Register(string key, Action callback)
             {
                 _listeners[key] = callback;
             }
 
-            /// <summary>Return the stored callback without removing it, or null if absent.</summary>
-            public System.Action Get(string key)
+            public Action Get(string key)
             {
-                _listeners.TryGetValue(key, out System.Action cb);
+                _listeners.TryGetValue(key, out Action cb);
                 return cb;
             }
 
-            /// <summary>Remove and return the stored callback, or null if absent.</summary>
-            public System.Action Remove(string key)
+            public Action Remove(string key)
             {
-                if (_listeners.TryGetValue(key, out System.Action cb))
+                if (_listeners.TryGetValue(key, out Action cb))
                 {
                     _listeners.Remove(key);
                     return cb;
@@ -217,13 +180,8 @@ namespace PythonCommunication
             }
 
             public bool Contains(string key) => _listeners.ContainsKey(key);
-
-            public void ClearAll() => _listeners.Clear();
         }
 
-        /// <summary>
-        /// Per-command-type active listener managers — prevent zombie delegates on controller events.
-        /// </summary>
         private readonly CommandListenerManager _activeMoveListeners = new CommandListenerManager();
         private readonly CommandListenerManager _activeGraspListeners =
             new CommandListenerManager();
@@ -232,9 +190,6 @@ namespace PythonCommunication
         private readonly CommandListenerManager _activeOrientationListeners =
             new CommandListenerManager();
 
-        /// <summary>
-        /// Object lookup cache to avoid expensive FindObjectsByType calls
-        /// </summary>
         private System.Collections.Generic.Dictionary<string, GameObject> _objectCache =
             new System.Collections.Generic.Dictionary<string, GameObject>();
         private const float OBJECT_CACHE_VALIDITY = 5.0f;
@@ -257,9 +212,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Subscribe to CommandReceiver events when component starts
-        /// </summary>
         private void Start()
         {
             _robotManager = RobotManager.Instance;
@@ -275,17 +227,11 @@ namespace PythonCommunication
             Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
         }
 
-        /// <summary>
-        /// Public method to handle commands routed from UnifiedPythonReceiver
-        /// </summary>
         public void HandleCommand(RobotCommand command)
         {
             HandlePythonCommand(command);
         }
 
-        /// <summary>
-        /// Handle incoming commands from Python SequenceServer
-        /// </summary>
         private void HandlePythonCommand(RobotCommand command)
         {
             if (command == null)
@@ -301,9 +247,6 @@ namespace PythonCommunication
             ProcessCommand(command);
         }
 
-        /// <summary>
-        /// Process a validated robot command
-        /// </summary>
         private void ProcessCommand(RobotCommand command)
         {
             // Determine target type for logging
@@ -412,16 +355,7 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Validate and retrieve robot instance with controller.
-        /// Handles error logging and failed command counting.
-        /// Supports both RobotController and SimpleRobotController.
-        /// </summary>
-        /// <param name="robotId">Robot identifier</param>
-        /// <param name="commandName">Command name for error messages</param>
-        /// <param name="robotInstance">Output: robot instance if found</param>
-        /// <param name="controller">Output: robot controller if found (null if using SimpleRobotController)</param>
-        /// <returns>True if validation passed, false if failed</returns>
+        // Returns false and logs an error if robot is not found or has no controller.
         private bool ValidateAndGetRobot(
             string robotId,
             string commandName,
@@ -462,16 +396,7 @@ namespace PythonCommunication
             return true;
         }
 
-        /// <summary>
-        /// Check if the robot is in ROS control mode and should skip Unity execution.
-        /// When in ROS mode, movement is handled by Python -> ROS -> MoveIt -> ROSTrajectorySubscriber.
-        /// Unity sends an immediate completion response since it won't process the command itself.
-        /// </summary>
-        /// <param name="controller">The RobotController to check.</param>
-        /// <param name="robotId">Robot ID for logging.</param>
-        /// <param name="commandName">Command name for logging and completion.</param>
-        /// <param name="requestId">Request ID for completion response.</param>
-        /// <returns>True if ROS mode is active and Unity should skip execution.</returns>
+        // In ROS mode, motion is handled by Python→ROS→MoveIt; Unity sends immediate completion and skips execution.
         private bool ShouldSkipForROSMode(
             RobotController controller,
             string robotId,
@@ -504,13 +429,6 @@ namespace PythonCommunication
         // Then pass to controller.SetTarget() via GraspOptions struct
         // This would enable LLM-driven grasp planning from Python operations
 
-        /// <summary>
-        /// Execute move_to_coordinate command
-        /// Phase 4: Now includes Python CoordinationVerifier integration
-        /// Supports both RobotController and SimpleRobotController
-        /// When robot is in ROS control mode, movement is handled by MoveIt
-        /// via ROSTrajectorySubscriber, not by Unity IK.
-        /// </summary>
         private void ExecuteMoveToCoordinate(RobotCommand command)
         {
             try
@@ -549,7 +467,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // FIX #4: Get target position using helper
                 Vector3 targetPosition = TargetPositionToVector3(
                     command.parameters.target_position
                 );
@@ -567,11 +484,10 @@ namespace PythonCommunication
                 string commandKey = $"move_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // FIX #2: CLEANUP - Remove old listener for this robot if one exists
                 string robotListenerKey = $"move_{command.robot_id}";
                 if (_activeMoveListeners.Contains(robotListenerKey))
                 {
-                    System.Action oldListener = _activeMoveListeners.Remove(robotListenerKey);
+                    Action oldListener = _activeMoveListeners.Remove(robotListenerKey);
                     if (controller != null)
                         controller.OnTargetReached -= oldListener;
                     else if (robotInstance.simpleController != null)
@@ -580,7 +496,7 @@ namespace PythonCommunication
                     _activeMoveListeners.Remove(robotListenerKey);
                 }
 
-                System.Action onComplete = null;
+                Action onComplete = null;
                 onComplete = () =>
                 {
                     if (controller != null)
@@ -645,9 +561,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Execute control_gripper command
-        /// </summary>
         private void ExecuteControlGripper(RobotCommand command)
         {
             try
@@ -685,20 +598,19 @@ namespace PythonCommunication
                 string commandKey = $"gripper_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // FIX #2: CLEANUP - Remove old gripper listener for this robot if one exists
                 string listenerKey = $"gripper_{command.robot_id}";
                 if (_activeGripperListeners.Contains(listenerKey))
                 {
-                    System.Action oldListener = _activeGripperListeners.Remove(listenerKey);
+                    Action oldListener = _activeGripperListeners.Remove(listenerKey);
                     gripperController.OnGripperActionComplete -= oldListener;
                     _activeGripperListeners.Remove(listenerKey);
                 }
 
-                System.Action onComplete = null;
+                Action onComplete = null;
                 onComplete = () =>
                 {
                     gripperController.OnGripperActionComplete -= onComplete;
-                    _activeGripperListeners.Remove(listenerKey); // FIX #2
+                    _activeGripperListeners.Remove(listenerKey);
 
                     // Stop IK after gripper closes so the arm holds position and
                     // doesn't fight residual forces once the object is attached.
@@ -729,7 +641,7 @@ namespace PythonCommunication
                         );
                     }
                 };
-                _activeGripperListeners.Register(listenerKey, onComplete); // FIX #2: Track it
+                _activeGripperListeners.Register(listenerKey, onComplete);
                 gripperController.OnGripperActionComplete += onComplete;
 
                 bool openGripper = command.parameters.open_gripper;
@@ -787,11 +699,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Execute grasp_object command using advanced grasp planning pipeline.
-        /// Supports both RobotController (with GraspOptions) and SimpleRobotController (basic grasp).
-        /// </summary>
-        /// <param name="command">Robot command with grasp parameters</param>
         private void ExecuteGraspObject(RobotCommand command)
         {
             try
@@ -847,14 +754,13 @@ namespace PythonCommunication
                 string commandKey = $"grasp_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // FIX #2: CLEANUP - Remove old grasp listener for this robot if one exists
                 string robotGraspKey = $"grasp_{command.robot_id}";
 
                 if (controller != null)
                 {
                     if (_activeGraspListeners.Contains(robotGraspKey))
                     {
-                        System.Action oldListener = _activeGraspListeners.Remove(robotGraspKey);
+                        Action oldListener = _activeGraspListeners.Remove(robotGraspKey);
                         controller.OnTargetReached -= oldListener;
                         _activeGraspListeners.Remove(robotGraspKey);
                     }
@@ -873,11 +779,11 @@ namespace PythonCommunication
                         graspConfig = null,
                     };
 
-                    System.Action onComplete = null;
+                    Action onComplete = null;
                     onComplete = () =>
                     {
                         controller.OnTargetReached -= onComplete;
-                        _activeGraspListeners.Remove(robotGraspKey); // FIX #2
+                        _activeGraspListeners.Remove(robotGraspKey);
                         if (_activeCommands.ContainsKey(commandKey))
                         {
                             _activeCommands.Remove(commandKey);
@@ -933,16 +839,16 @@ namespace PythonCommunication
 
                     if (_activeGraspListeners.Contains(robotGraspKey))
                     {
-                        System.Action oldListener = _activeGraspListeners.Remove(robotGraspKey);
+                        Action oldListener = _activeGraspListeners.Remove(robotGraspKey);
                         simpleController.OnTargetReached -= oldListener;
                         _activeGraspListeners.Remove(robotGraspKey);
                     }
 
-                    System.Action onComplete = null;
+                    Action onComplete = null;
                     onComplete = () =>
                     {
                         simpleController.OnTargetReached -= onComplete;
-                        _activeGraspListeners.Remove(robotGraspKey); // FIX #2
+                        _activeGraspListeners.Remove(robotGraspKey);
                         if (_activeCommands.ContainsKey(commandKey))
                         {
                             _activeCommands.Remove(commandKey);
@@ -1005,10 +911,7 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Convert GraspCandidateData array from Python into GraspCandidate list for Unity pipeline.
-        /// Preserves all scoring metadata so GraspScorer can rank candidates correctly.
-        /// </summary>
+        // Preserves scoring metadata (antipodal_score, graspnet_score) so GraspScorer can rank correctly.
         /// <param name="data">Serialized candidate data from Python GraspNet backend</param>
         /// <returns>List of GraspCandidate objects ready for GraspIKFilter</returns>
         private System.Collections.Generic.List<Robotics.Grasp.GraspCandidate> ConvertExternalCandidates(
@@ -1081,13 +984,10 @@ namespace PythonCommunication
             if (vector == null)
                 return null;
 
-            return TargetPositionToVector3(vector); // FIX #3: Use helper
+            return TargetPositionToVector3(vector);
         }
 
-        /// <summary>
-        /// Execute release_object command - ATOMIC operation that ONLY opens gripper.
-        /// Does NOT move the robot. For positioned release, chain with move_to_coordinate first.
-        /// </summary>
+        // ATOMIC: only opens gripper, does NOT move the robot. Chain with move_to_coordinate for positioned release.
         private void ExecuteReleaseObject(RobotCommand command)
         {
             try
@@ -1155,13 +1055,7 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Execute pick_object_at_coordinate command.
-        /// Encodes the hover → descent → grasp sequence that prevents the gripper
-        /// from closing while still above the object.
-        /// Sequence: open gripper → move to hover (target + approach_offset) →
-        ///           descend to contact (target) → close gripper.
-        /// </summary>
+        // Sequence: open gripper → hover (target + approach_offset) → descend → close gripper.
         private void ExecutePickObjectAtCoordinate(RobotCommand command)
         {
             try
@@ -1248,11 +1142,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Coroutine for pick_object_at_coordinate.
-        /// Steps: open gripper → move to hover → descend to contact → close gripper.
-        /// Each movement step has a 15-second timeout; gripper actions wait 0.5 s.
-        /// </summary>
         private IEnumerator PickObjectAtCoordinateCoroutine(
             RobotController controller,
             SimpleRobotController simpleController,
@@ -1383,12 +1272,7 @@ namespace PythonCommunication
             SendCommandCompletion(robotId, "pick_object_at_coordinate", true, requestId);
         }
 
-        /// <summary>
-        /// Execute place_object command.
-        /// Performs a controlled hover → descent → open gripper → ascent sequence
-        /// so the held object is set down gently at the target position instead of
-        /// dropping from the current end-effector height.
-        /// </summary>
+        // Sequence: hover → descend → open gripper → ascend. Prevents dropping from current height.
         private void ExecutePlaceObject(RobotCommand command)
         {
             try
@@ -1485,11 +1369,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Coroutine for place_object.
-        /// Steps: move to hover → descend to place height → open gripper → ascend to hover.
-        /// Each movement segment has a 15-second timeout.
-        /// </summary>
         private IEnumerator PlaceObjectCoroutine(
             RobotController controller,
             SimpleRobotController simpleController,
@@ -1592,7 +1471,24 @@ namespace PythonCommunication
 
             // Step 3: Open gripper to release the object onto the surface.
             gripperController.OpenGrippers();
-            yield return new WaitForSeconds(0.5f);
+            float releaseTimer = 0f;
+            const float releaseTimeout = 2.0f;
+            while (gripperController.IsHoldingObject && releaseTimer < releaseTimeout)
+            {
+                releaseTimer += 0.1f;
+                yield return new WaitForSeconds(0.1f);
+            }
+            // If the deferred-detach threshold was never reached (e.g. cube physically
+            // blocked the fingers), force-detach now so the object is never left stuck.
+            if (gripperController.IsHoldingObject)
+            {
+                Debug.LogWarning(
+                    $"{_logPrefix} place_object: release timeout for {robotId} — force-detaching object"
+                );
+                gripperController.DetachObject();
+                yield return new WaitForSeconds(0.1f);
+            }
+            yield return new WaitForSeconds(0.1f); // brief physics settle
 
             // Step 4: Ascend back to hover height, maintaining top-down orientation.
             if (controller != null)
@@ -1628,10 +1524,6 @@ namespace PythonCommunication
             SendCommandCompletion(robotId, "place_object", true, requestId);
         }
 
-        /// <summary>
-        /// Execute move_from_a_to_b command - waypoint-based movement.
-        /// Moves robot from point A to point B in a straight line trajectory.
-        /// </summary>
         private void ExecuteMoveFromAToB(RobotCommand command)
         {
             try
@@ -1701,9 +1593,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Coroutine for move_from_a_to_b - moves through point A then to point B.
-        /// </summary>
         private IEnumerator MoveFromAToBCoroutine(
             RobotController controller,
             SimpleRobotController simpleController,
@@ -1774,7 +1663,6 @@ namespace PythonCommunication
                 simpleController.SetTarget(pointB);
             }
 
-            // FIX #1: Wait for arrival at point B with TIMEOUT
             float pointBTimer = 0f;
             if (usingSimpleController)
             {
@@ -1817,9 +1705,6 @@ namespace PythonCommunication
             SendCommandCompletion(robotId, "move_from_a_to_b", true, requestId);
         }
 
-        /// <summary>
-        /// Execute adjust_end_effector_orientation command - rotate end effector without moving position.
-        /// </summary>
         private void ExecuteAdjustOrientation(RobotCommand command)
         {
             try
@@ -1876,7 +1761,6 @@ namespace PythonCommunication
                 string commandKey = $"adjust_orientation_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // FIX #2: CLEANUP - Remove old orientation listener for this robot if one exists
                 string listenerKey = $"orientation_{command.robot_id}";
                 if (_activeOrientationListeners.Contains(listenerKey))
                 {
@@ -1896,7 +1780,7 @@ namespace PythonCommunication
                     else if (robotInstance.simpleController != null)
                         robotInstance.simpleController.OnTargetReached -= onComplete;
 
-                    _activeOrientationListeners.Remove(listenerKey); // FIX #2
+                    _activeOrientationListeners.Remove(listenerKey);
 
                     if (_activeCommands.ContainsKey(commandKey))
                     {
@@ -1994,7 +1878,6 @@ namespace PythonCommunication
                 string commandKey = $"align_object_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // FIX #2: CLEANUP - Remove old alignment listener for this robot if one exists
                 string listenerKey = $"align_{command.robot_id}";
                 if (_activeOrientationListeners.Contains(listenerKey))
                 {
@@ -2014,7 +1897,7 @@ namespace PythonCommunication
                     else if (robotInstance.simpleController != null)
                         robotInstance.simpleController.OnTargetReached -= onComplete;
 
-                    _activeOrientationListeners.Remove(listenerKey); // FIX #2
+                    _activeOrientationListeners.Remove(listenerKey);
 
                     if (_activeCommands.ContainsKey(commandKey))
                     {
@@ -2028,7 +1911,7 @@ namespace PythonCommunication
                     }
                 };
 
-                _activeOrientationListeners.Register(listenerKey, onComplete); // FIX #2: Track it
+                _activeOrientationListeners.Register(listenerKey, onComplete);
 
                 // Execute alignment
                 if (controller != null)
@@ -2058,9 +1941,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Execute follow_path command - multi-waypoint trajectory following.
-        /// </summary>
         private void ExecuteFollowPath(RobotCommand command)
         {
             try
@@ -2099,7 +1979,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // FIX #3: Convert waypoints to Vector3 array using helper
                 Vector3[] waypoints = new Vector3[command.parameters.waypoints.Length];
                 for (int i = 0; i < command.parameters.waypoints.Length; i++)
                 {
@@ -2135,9 +2014,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Coroutine for follow_path - moves through all waypoints sequentially.
-        /// </summary>
         private IEnumerator FollowPathCoroutine(
             RobotController controller,
             SimpleRobotController simpleController,
@@ -2147,7 +2023,7 @@ namespace PythonCommunication
         )
         {
             bool usingSimpleController = (controller == null && simpleController != null);
-            float segmentTimeout = 15.0f; // FIX #1: Timeout per waypoint
+            float segmentTimeout = 15.0f;
 
             // Move through each waypoint
             for (int i = 0; i < waypoints.Length; i++)
@@ -2164,7 +2040,6 @@ namespace PythonCommunication
                     simpleController.SetTarget(waypoint);
                 }
 
-                // FIX #1: Wait for arrival with TIMEOUT
                 float timer = 0f;
                 if (usingSimpleController)
                 {
@@ -2209,9 +2084,6 @@ namespace PythonCommunication
             SendCommandCompletion(robotId, "follow_path", true, requestId);
         }
 
-        /// <summary>
-        /// Execute draw_with_pen command - tool manipulation for drawing.
-        /// </summary>
         private void ExecuteDrawWithPen(RobotCommand command)
         {
             try
@@ -2252,7 +2124,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // FIX #3: Use helper for Vector3 conversion
                 Vector3 penPosition = TargetPositionToVector3(command.parameters.pen_position);
                 Vector3 paperPosition = TargetPositionToVector3(command.parameters.paper_position);
 
@@ -2287,9 +2158,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Coroutine for draw_with_pen - pick up pen, move to paper, draw shape.
-        /// </summary>
         private IEnumerator DrawWithPenCoroutine(
             RobotController controller,
             SimpleRobotController simpleController,
@@ -2314,7 +2182,6 @@ namespace PythonCommunication
                 simpleController.SetTarget(penPosition);
             }
 
-            // FIX: Wait for arrival at pen with TIMEOUT
             if (usingSimpleController)
             {
                 while (!simpleController.HasReachedTarget)
@@ -2377,7 +2244,6 @@ namespace PythonCommunication
                 simpleController.SetTarget(paperPosition);
             }
 
-            // FIX: Wait for arrival at paper with TIMEOUT
             timer = 0f; // Reset timer for paper segment
             if (usingSimpleController)
             {
@@ -2419,9 +2285,6 @@ namespace PythonCommunication
             SendCommandCompletion(robotId, "draw_with_pen", true, requestId);
         }
 
-        /// <summary>
-        /// Execute mirror_movement command - mirror movements of another robot.
-        /// </summary>
         private void ExecuteMirrorMovement(RobotCommand command)
         {
             try
@@ -2509,9 +2372,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Coroutine for mirror_movement - continuously mirror target robot's movements.
-        /// </summary>
         private IEnumerator MirrorMovementCoroutine(
             RobotController controller,
             SimpleRobotController simpleController,
@@ -2577,9 +2437,6 @@ namespace PythonCommunication
             SendCommandCompletion(robotId, "mirror_movement", true, requestId);
         }
 
-        /// <summary>
-        /// Execute stabilize_object command - hold object stable with force control.
-        /// </summary>
         private void ExecuteStabilizeObject(RobotCommand command)
         {
             try
@@ -2660,9 +2517,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Coroutine for stabilize_object - hold gripper closed with force control for specified duration.
-        /// </summary>
         private IEnumerator StabilizeObjectCoroutine(
             GripperController gripperController,
             int duration_ms,
@@ -2690,11 +2544,24 @@ namespace PythonCommunication
         {
             try
             {
-                if (!ValidateAndGetRobot(command.robot_id, "synchronized_grasp",
-                        out RobotInstance robot1Instance, out RobotController controller1))
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "synchronized_grasp",
+                        out RobotInstance robot1Instance,
+                        out RobotController controller1
+                    )
+                )
                     return;
 
-                if (ShouldSkipForROSMode(controller1, command.robot_id, "synchronized_grasp", command.request_id))
+                if (
+                    ShouldSkipForROSMode(
+                        controller1,
+                        command.robot_id,
+                        "synchronized_grasp",
+                        command.request_id
+                    )
+                )
                     return;
 
                 if (command.parameters == null)
@@ -2707,13 +2574,21 @@ namespace PythonCommunication
                 string partnerId = command.parameters.partner_robot_id;
                 if (string.IsNullOrEmpty(partnerId))
                 {
-                    Debug.LogError($"{_logPrefix} synchronized_grasp: partner_robot_id is required");
+                    Debug.LogError(
+                        $"{_logPrefix} synchronized_grasp: partner_robot_id is required"
+                    );
                     _failedCommands++;
                     return;
                 }
 
-                if (!ValidateAndGetRobot(partnerId, "synchronized_grasp",
-                        out RobotInstance robot2Instance, out RobotController controller2))
+                if (
+                    !ValidateAndGetRobot(
+                        partnerId,
+                        "synchronized_grasp",
+                        out RobotInstance robot2Instance,
+                        out RobotController controller2
+                    )
+                )
                     return;
 
                 string objectId = command.parameters.object_id;
@@ -2727,13 +2602,18 @@ namespace PythonCommunication
                 GameObject targetObject = FindObjectFlexible(objectId);
                 if (targetObject == null)
                 {
-                    Debug.LogError($"{_logPrefix} synchronized_grasp: Object '{objectId}' not found");
+                    Debug.LogError(
+                        $"{_logPrefix} synchronized_grasp: Object '{objectId}' not found"
+                    );
                     _failedCommands++;
                     return;
                 }
 
-                string axis = string.IsNullOrEmpty(command.parameters.approach_axis) ? "x" : command.parameters.approach_axis;
-                int timeoutMs = command.parameters.duration_ms > 0 ? command.parameters.duration_ms : 15000;
+                string axis = string.IsNullOrEmpty(command.parameters.approach_axis)
+                    ? "x"
+                    : command.parameters.approach_axis;
+                int timeoutMs =
+                    command.parameters.duration_ms > 0 ? command.parameters.duration_ms : 15000;
 
                 // Compute approach positions: object center ± half-extent along axis + 0.12m clearance
                 Bounds bounds = new Bounds(targetObject.transform.position, Vector3.zero);
@@ -2742,7 +2622,8 @@ namespace PythonCommunication
 
                 Vector3 center = bounds.center;
                 float clearance = 0.12f;
-                Vector3 approach1, approach2;
+                Vector3 approach1,
+                    approach2;
                 if (axis == "z")
                 {
                     float halfZ = bounds.extents.z + clearance;
@@ -2756,33 +2637,48 @@ namespace PythonCommunication
                     approach2 = new Vector3(center.x - halfX, center.y, center.z);
                 }
 
-                StartCoroutine(SynchronizedGraspCoroutine(
-                    controller1, controller2,
-                    robot1Instance, robot2Instance,
-                    approach1, approach2,
-                    command.robot_id, partnerId,
-                    timeoutMs, command.request_id));
+                StartCoroutine(
+                    SynchronizedGraspCoroutine(
+                        controller1,
+                        controller2,
+                        robot1Instance,
+                        robot2Instance,
+                        approach1,
+                        approach2,
+                        command.robot_id,
+                        partnerId,
+                        timeoutMs,
+                        command.request_id
+                    )
+                );
 
                 _successfulCommands++;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"{_logPrefix} Error in synchronized_grasp: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogError(
+                    $"{_logPrefix} Error in synchronized_grasp: {ex.Message}\n{ex.StackTrace}"
+                );
                 _failedCommands++;
             }
         }
 
         private IEnumerator SynchronizedGraspCoroutine(
-            RobotController controller1, RobotController controller2,
-            RobotInstance robot1Instance, RobotInstance robot2Instance,
-            Vector3 approach1, Vector3 approach2,
-            string robot1Id, string robot2Id,
-            int timeoutMs, uint requestId)
+            RobotController controller1,
+            RobotController controller2,
+            RobotInstance robot1Instance,
+            RobotInstance robot2Instance,
+            Vector3 approach1,
+            Vector3 approach2,
+            string robot1Id,
+            string robot2Id,
+            int timeoutMs,
+            uint requestId
+        )
         {
             float timeout = timeoutMs / 1000.0f;
             float elapsed = 0f;
 
-            // Phase 1: Both robots move to approach positions simultaneously
             controller1.SetTarget(approach1);
             controller2.SetTarget(approach2);
 
@@ -2791,7 +2687,8 @@ namespace PythonCommunication
             {
                 bool r1Reached = controller1.TargetReached;
                 bool r2Reached = controller2.TargetReached;
-                if (r1Reached && r2Reached) break;
+                if (r1Reached && r2Reached)
+                    break;
                 elapsed += Time.deltaTime;
                 yield return null;
             }
@@ -2803,12 +2700,15 @@ namespace PythonCommunication
                 yield break;
             }
 
-            // Phase 2: Close both grippers simultaneously
-            GripperController gripper1 = robot1Instance.robotGameObject.GetComponentInChildren<GripperController>();
-            GripperController gripper2 = robot2Instance.robotGameObject.GetComponentInChildren<GripperController>();
+            GripperController gripper1 =
+                robot1Instance.robotGameObject.GetComponentInChildren<GripperController>();
+            GripperController gripper2 =
+                robot2Instance.robotGameObject.GetComponentInChildren<GripperController>();
 
-            if (gripper1 != null) gripper1.CloseGrippers();
-            if (gripper2 != null) gripper2.CloseGrippers();
+            if (gripper1 != null)
+                gripper1.CloseGrippers();
+            if (gripper2 != null)
+                gripper2.CloseGrippers();
 
             // Wait for gripper close (allow 1.5s)
             yield return new WaitForSeconds(1.5f);
@@ -2820,11 +2720,24 @@ namespace PythonCommunication
         {
             try
             {
-                if (!ValidateAndGetRobot(command.robot_id, "joint_transport",
-                        out RobotInstance _, out RobotController controller1))
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "joint_transport",
+                        out RobotInstance _,
+                        out RobotController controller1
+                    )
+                )
                     return;
 
-                if (ShouldSkipForROSMode(controller1, command.robot_id, "joint_transport", command.request_id))
+                if (
+                    ShouldSkipForROSMode(
+                        controller1,
+                        command.robot_id,
+                        "joint_transport",
+                        command.request_id
+                    )
+                )
                     return;
 
                 if (command.parameters == null)
@@ -2842,40 +2755,65 @@ namespace PythonCommunication
                     return;
                 }
 
-                if (!ValidateAndGetRobot(partnerId, "joint_transport",
-                        out RobotInstance _, out RobotController controller2))
+                if (
+                    !ValidateAndGetRobot(
+                        partnerId,
+                        "joint_transport",
+                        out RobotInstance _,
+                        out RobotController controller2
+                    )
+                )
                     return;
 
                 // target_position carries the destination; fall back to zero if missing
-                Vector3 destination = command.parameters.target_position != null
-                    ? new Vector3(command.parameters.target_position.x,
-                                  command.parameters.target_position.y,
-                                  command.parameters.target_position.z)
-                    : Vector3.zero;
+                Vector3 destination =
+                    command.parameters.target_position != null
+                        ? new Vector3(
+                            command.parameters.target_position.x,
+                            command.parameters.target_position.y,
+                            command.parameters.target_position.z
+                        )
+                        : Vector3.zero;
 
-                float liftHeight = command.parameters.lift_height > 0f ? command.parameters.lift_height : 0.05f;
-                int timeoutMs = command.parameters.duration_ms > 0 ? command.parameters.duration_ms : 20000;
+                float liftHeight =
+                    command.parameters.lift_height > 0f ? command.parameters.lift_height : 0.05f;
+                int timeoutMs =
+                    command.parameters.duration_ms > 0 ? command.parameters.duration_ms : 20000;
 
-                StartCoroutine(JointTransportCoroutine(
-                    controller1, controller2,
-                    destination, liftHeight,
-                    command.robot_id, partnerId,
-                    timeoutMs, command.request_id));
+                StartCoroutine(
+                    JointTransportCoroutine(
+                        controller1,
+                        controller2,
+                        destination,
+                        liftHeight,
+                        command.robot_id,
+                        partnerId,
+                        timeoutMs,
+                        command.request_id
+                    )
+                );
 
                 _successfulCommands++;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"{_logPrefix} Error in joint_transport: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogError(
+                    $"{_logPrefix} Error in joint_transport: {ex.Message}\n{ex.StackTrace}"
+                );
                 _failedCommands++;
             }
         }
 
         private IEnumerator JointTransportCoroutine(
-            RobotController controller1, RobotController controller2,
-            Vector3 destination, float liftHeight,
-            string robot1Id, string robot2Id,
-            int timeoutMs, uint requestId)
+            RobotController controller1,
+            RobotController controller2,
+            Vector3 destination,
+            float liftHeight,
+            string robot1Id,
+            string robot2Id,
+            int timeoutMs,
+            uint requestId
+        )
         {
             float timeout = timeoutMs / 1000.0f;
             float elapsed = 0f;
@@ -2884,7 +2822,6 @@ namespace PythonCommunication
             Vector3 r1Start = controller1.GetCurrentEndEffectorPosition();
             Vector3 r2Start = controller2.GetCurrentEndEffectorPosition();
 
-            // Phase 1: Lift both robots
             Vector3 r1Lift = r1Start + new Vector3(0, liftHeight, 0);
             Vector3 r2Lift = r2Start + new Vector3(0, liftHeight, 0);
             controller1.SetTarget(r1Lift);
@@ -2892,12 +2829,13 @@ namespace PythonCommunication
 
             while (elapsed < timeout * 0.25f)
             {
-                if (controller1.TargetReached && controller2.TargetReached) break;
+                if (controller1.TargetReached && controller2.TargetReached)
+                    break;
                 elapsed += Time.deltaTime;
                 yield return null;
             }
 
-            // Phase 2: Transport — each robot's target = destination + its original offset from r1Start
+            // each robot's target = destination + its original offset from r1Start
             Vector3 r2Offset = r2Start - r1Start; // r2's offset relative to r1
             Vector3 r1Target = destination;
             Vector3 r2Target = destination + r2Offset;
@@ -2907,22 +2845,18 @@ namespace PythonCommunication
 
             while (elapsed < timeout * 0.75f)
             {
-                if (controller1.TargetReached && controller2.TargetReached) break;
+                if (controller1.TargetReached && controller2.TargetReached)
+                    break;
                 elapsed += Time.deltaTime;
                 yield return null;
             }
 
-            // Phase 3: Lower to destination Y (already there; just settle)
             yield return new WaitForSeconds(0.3f);
 
             SendCommandCompletion(robot1Id, "joint_transport", true, requestId);
         }
 
-        /// <summary>
-        /// Set ClearTargetOnComplete on the ROSTrajectorySubscriber for a robot.
-        /// Called by Python before publishing a return-to-start ROS trajectory so the
-        /// subscriber calls ClearTarget() instead of SyncIKTargetToCurrentPose().
-        /// </summary>
+        // Must be called before Python publishes a return-to-start trajectory so ROSTrajectorySubscriber calls ClearTarget() instead of SyncIKTargetToCurrentPose().
         private void ExecuteSetClearTargetOnComplete(RobotCommand command)
         {
             if (
@@ -2951,12 +2885,7 @@ namespace PythonCommunication
             );
         }
 
-        /// <summary>
-        /// Execute return_to_start_position command. In Unity mode, smoothly interpolates
-        /// joint drive targets back to the saved start position while IK is suspended.
-        /// In ROS mode, exits immediately — Python must call set_clear_target_on_complete
-        /// and push a return-to-start trajectory via MoveIt.
-        /// </summary>
+        // In ROS mode, exits immediately — Python handles the trajectory via MoveIt after calling set_clear_target_on_complete.
         private void ExecuteReturnToStartPosition(RobotCommand command)
         {
             // DEBUG: always log entry so we know the command reached Unity
@@ -3076,9 +3005,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Coroutine to smoothly interpolate joint targets to start position
-        /// </summary>
         private IEnumerator ReturnToStartPositionCoroutine(
             RobotController controller,
             float[] targetJoints,
@@ -3092,8 +3018,6 @@ namespace PythonCommunication
                 SendCommandCompletion(robotId, "return_to_start_position", false, requestId);
                 yield break;
             }
-
-            // FIX #5: DISABLE IK during manual joint interpolation
             controller.IsManuallyDriven = true;
 
             try
@@ -3302,7 +3226,6 @@ namespace PythonCommunication
                     joint.xDrive = drive;
                 }
 
-                // FIX #5: Clear the target and mark as reached to allow IK to run again
                 controller.ClearTarget(); // This resets _targetTransform and _hasReachedTarget
 
                 if (_verboseLogging)
@@ -3319,9 +3242,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Coroutine to smoothly interpolate joint targets to start position for SimpleRobotController
-        /// </summary>
         private IEnumerator ReturnToStartPositionSimpleCoroutine(
             SimpleRobotController controller,
             float[] targetJoints,
@@ -3397,9 +3317,6 @@ namespace PythonCommunication
             SendCommandCompletion(robotId, "return_to_start_position", true, requestId);
         }
 
-        /// <summary>
-        /// Execute capture_stereo_images command - capture and send stereo images to Python
-        /// </summary>
         private void ExecuteCaptureSteroImages(RobotCommand command)
         {
             try
@@ -3446,9 +3363,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Execute get_robot_status command - gather robot state and send back to Python
-        /// </summary>
         private void ExecuteCheckRobotStatus(RobotCommand command)
         {
             try
@@ -3499,10 +3413,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Gather robot status data and return as JSON
-        /// Supports both RobotController and SimpleRobotController
-        /// </summary>
         private string GatherRobotStatus(string robotId, RobotController controller, bool detailed)
         {
             // Find the robot instance to check for SimpleRobotController
@@ -3607,9 +3517,6 @@ namespace PythonCommunication
             return JsonUtility.ToJson(statusResponse);
         }
 
-        /// <summary>
-        /// Gather joint angles from robot controller
-        /// </summary>
         private float[] GatherJointAngles(RobotController controller, bool detailed)
         {
             if (!detailed || controller.robotJoints == null)
@@ -3630,9 +3537,6 @@ namespace PythonCommunication
             return jointAngles;
         }
 
-        /// <summary>
-        /// Send command completion notification to Python via CommandServer
-        /// </summary>
         private void SendCommandCompletion(
             string robotId,
             string commandType,
@@ -3668,9 +3572,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Send status error response to Python (Protocol V2)
-        /// </summary>
         private void SendStatusErrorResponse(
             string robotId,
             string errorCode,
@@ -3700,9 +3601,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Send status response (success or error) to Python on the same connection (Protocol V2)
-        /// </summary>
         private bool SendStatusResponseToPython(string statusJson, uint requestId)
         {
             // Use UnifiedPythonReceiver to send response on the same connection that received the command
@@ -3717,18 +3615,12 @@ namespace PythonCommunication
             return UnifiedPythonReceiver.Instance.SendCompletion(statusJson, requestId);
         }
 
-        /// <summary>
-        /// Find GameObject with flexible name matching.
-        /// Tries multiple strategies to handle naming mismatches between Python and Unity.
-        /// </summary>
-        /// <param name="objectId">Object identifier (e.g., "blue_cube", "blueCube", "Cube_01")</param>
-        /// <returns>GameObject if found, null otherwise</returns>
+        // Tries exact match, camelCase, normalized, and prefix-search to handle Python↔Unity naming mismatches.
         private GameObject FindObjectFlexible(string objectId)
         {
             if (string.IsNullOrEmpty(objectId))
                 return null;
 
-            // FIX #3: Check cache first
             if (_objectCache.TryGetValue(objectId, out GameObject cachedObj))
             {
                 if (cachedObj != null) // Object still exists in scene
@@ -3744,7 +3636,6 @@ namespace PythonCommunication
                 }
             }
 
-            // FIX #3: Periodically clear stale entries (every 5 seconds)
             if (Time.time - _lastCacheRefreshTime > OBJECT_CACHE_VALIDITY)
             {
                 var deadKeys = new System.Collections.Generic.List<string>();
@@ -3764,7 +3655,7 @@ namespace PythonCommunication
             GameObject obj = GameObject.Find(objectId);
             if (obj != null)
             {
-                _objectCache[objectId] = obj; // FIX #3: Cache it
+                _objectCache[objectId] = obj;
                 if (_verboseLogging)
                     Debug.Log($"{_logPrefix} Found object '{objectId}' via exact match");
                 return obj;
@@ -3774,9 +3665,9 @@ namespace PythonCommunication
             GameObject[] allObjects = FindObjectsByType<GameObject>(FindObjectsSortMode.None);
             foreach (var candidate in allObjects)
             {
-                if (candidate.name.Equals(objectId, System.StringComparison.OrdinalIgnoreCase))
+                if (candidate.name.Equals(objectId, StringComparison.OrdinalIgnoreCase))
                 {
-                    _objectCache[objectId] = candidate; // FIX #3: Cache it
+                    _objectCache[objectId] = candidate;
                     if (_verboseLogging)
                         Debug.Log(
                             $"{_logPrefix} Found object '{candidate.name}' via case-insensitive match for '{objectId}'"
@@ -3793,7 +3684,7 @@ namespace PythonCommunication
                 obj = GameObject.Find(camelCase);
                 if (obj != null)
                 {
-                    _objectCache[objectId] = obj; // FIX #3: Cache it
+                    _objectCache[objectId] = obj;
                     if (_verboseLogging)
                         Debug.Log(
                             $"{_logPrefix} Found object '{camelCase}' via snake_case->camelCase conversion from '{objectId}'"
@@ -3806,7 +3697,7 @@ namespace PythonCommunication
                 {
                     if (candidate.name.Equals(camelCase, System.StringComparison.OrdinalIgnoreCase))
                     {
-                        _objectCache[objectId] = candidate; // FIX #3: Cache it
+                        _objectCache[objectId] = candidate;
                         if (_verboseLogging)
                             Debug.Log(
                                 $"{_logPrefix} Found object '{candidate.name}' via camelCase case-insensitive match for '{objectId}'"
@@ -3823,7 +3714,7 @@ namespace PythonCommunication
                     candidate.name.IndexOf(objectId, System.StringComparison.OrdinalIgnoreCase) >= 0
                 )
                 {
-                    _objectCache[objectId] = candidate; // FIX #3: Cache it
+                    _objectCache[objectId] = candidate;
                     if (_verboseLogging)
                         Debug.Log(
                             $"{_logPrefix} Found object '{candidate.name}' via partial match for '{objectId}'"
@@ -3855,10 +3746,7 @@ namespace PythonCommunication
             return null;
         }
 
-        /// <summary>
-        /// Remove all non-alphanumeric characters and lowercase.
-        /// "Red Cube" → "redcube", "red_cube" → "redcube", "redCube" → "redcube".
-        /// </summary>
+        // e.g. "Red Cube" / "red_cube" / "redCube" → "redcube"
         private static string StripToAlnum(string s)
         {
             var sb = new System.Text.StringBuilder(s.Length);
@@ -3870,9 +3758,6 @@ namespace PythonCommunication
             return sb.ToString();
         }
 
-        /// <summary>
-        /// FIX #4: Convert TargetPosition to Vector3.
-        /// </summary>
         private Vector3 TargetPositionToVector3(TargetPosition target)
         {
             if (target == null)
@@ -3880,10 +3765,7 @@ namespace PythonCommunication
             return new Vector3(target.x, target.y, target.z);
         }
 
-        /// <summary>
-        /// Convert snake_case to camelCase.
-        /// Example: "blue_cube" -> "blueCube"
-        /// </summary>
+        // e.g. "blue_cube" → "blueCube"
         private string SnakeToCamelCase(string snakeCase)
         {
             if (string.IsNullOrEmpty(snakeCase) || !snakeCase.Contains("_"))
@@ -3903,18 +3785,12 @@ namespace PythonCommunication
             return result;
         }
 
-        /// <summary>
-        /// Get command processing statistics
-        /// </summary>
         public (int successful, int failed) GetCommandStats()
         {
             return (_successfulCommands, _failedCommands);
         }
 
-        /// <summary>
-        /// Execute reset_simulation command — resets all robots and scene objects to initial state.
-        /// Sends completion after SimulationManager finishes the reset coroutine.
-        /// </summary>
+        // Sends completion after SimulationManager finishes the reset coroutine.
         private void ExecuteResetSimulation(RobotCommand command)
         {
             string robotId = command.robot_id ?? "system";
@@ -3931,31 +3807,23 @@ namespace PythonCommunication
                 StopAllCoroutines();
                 StartCoroutine(ResetAndConfirm(sim, robotId, requestId));
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 Debug.LogError($"{_logPrefix} reset_simulation error: {ex.Message}");
                 SendCommandCompletion(robotId, "reset_simulation", false, requestId);
             }
         }
 
-        /// <summary>
-        /// Triggers SimulationManager.ResetSimulation() then waits for it to finish
-        /// before sending completion back to Python.
-        /// </summary>
-        private System.Collections.IEnumerator ResetAndConfirm(
-            SimulationManager sim,
-            string robotId,
-            uint requestId
-        )
+        private IEnumerator ResetAndConfirm(SimulationManager sim, string robotId, uint requestId)
         {
             sim.ResetSimulation();
             // Wait until SimulationManager leaves the Resetting state
             float timeout = 10f;
             float elapsed = 0f;
-            yield return new UnityEngine.WaitForSeconds(0.1f);
+            yield return new WaitForSeconds(0.1f);
             while (sim.CurrentState == SimulationState.Resetting && elapsed < timeout)
             {
-                elapsed += UnityEngine.Time.deltaTime;
+                elapsed += Time.deltaTime;
                 yield return null;
             }
             bool success = sim.CurrentState != SimulationState.Resetting;
@@ -3980,9 +3848,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Reset command statistics
-        /// </summary>
         public void ResetStats()
         {
             _successfulCommands = 0;

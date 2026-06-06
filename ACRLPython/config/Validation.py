@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Configuration Validation
-=========================
-
-Validates configuration values to catch common errors early.
-"""
+"""Validates configuration values; warns on out-of-range thresholds, port conflicts, and ordering constraints."""
 
 import logging
 import warnings
@@ -14,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 def _validate_range(name: str, value: float, min_val: float, max_val: float) -> bool:
-    """Validate that a value is within a range."""
     if not (min_val <= value <= max_val):
         warnings.warn(
             f"{name}={value} is outside valid range [{min_val}, {max_val}]. "
@@ -25,7 +19,6 @@ def _validate_range(name: str, value: float, min_val: float, max_val: float) -> 
 
 
 def _validate_port(name: str, port: int) -> bool:
-    """Validate that a port number is valid."""
     if not (1024 <= port <= 65535):
         warnings.warn(
             f"{name}={port} is outside valid port range [1024, 65535]. "
@@ -36,7 +29,6 @@ def _validate_port(name: str, port: int) -> bool:
 
 
 def _validate_positive(name: str, value: float) -> bool:
-    """Validate that a value is positive."""
     if value <= 0:
         warnings.warn(f"{name}={value} must be positive.")
         return False
@@ -44,15 +36,6 @@ def _validate_positive(name: str, value: float) -> bool:
 
 
 def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, list]:
-    """
-    Validate configuration values.
-
-    Args:
-        config_dict: Dictionary of config values to validate (default: current module)
-
-    Returns:
-        Dict with 'errors' and 'warnings' lists
-    """
     errors = []
     warnings_list = []
 
@@ -133,7 +116,6 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
         if config_dict["MIN_ASPECT_RATIO"] >= config_dict["MAX_ASPECT_RATIO"]:
             errors.append("MIN_ASPECT_RATIO must be less than MAX_ASPECT_RATIO")
 
-    # Duplicate debug directories warning (from original analysis)
     if "DEBUG_IMAGES_DIR" in config_dict and "DEBUG_DISPARITY_DIR" in config_dict:
         if config_dict["DEBUG_IMAGES_DIR"] == config_dict["DEBUG_DISPARITY_DIR"]:
             warnings_list.append(

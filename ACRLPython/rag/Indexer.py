@@ -99,16 +99,9 @@ class OperationIndexer:
         - Unity automatically checks for collisions
 
         Pattern 2: Sequential Handoff
-        When transferring object from Robot1 to Robot2:
-        1. Robot1: detect_object → move_to_coordinate → control_gripper (close)
-        2. Robot1: signal("object_gripped")
-        3. Robot2: wait_for_signal("object_gripped")
-        4. Both: move_to_coordinate (handoff zone, e.g., x=0.0, y=0.0, z=0.3)
-        5. Robot1: signal("robot1_ready"), Robot2: signal("robot2_ready")
-        6. Robot1: wait_for_signal("robot2_ready"), Robot2: wait_for_signal("robot1_ready")
-        7. Robot2: control_gripper (close)
-        8. wait(500) - Allow gripper to stabilize
-        9. Robot1: control_gripper (open)
+        When transferring object from Robot1 to Robot2, use the HANDOFF RULE from the system prompt.
+        Key operations: grasp_object (Robot1), receive_handoff (Robot2), release_object (Robot1).
+        Never use control_gripper for handoff — use grasp_object and receive_handoff instead.
 
         Pattern 3: One Robot Waits While Other Works
         When Robot2 depends on Robot1 completing a task:
@@ -206,15 +199,10 @@ class OperationIndexer:
         - All operations in a group run simultaneously (in threads)
         - Next group waits for all operations in current group to complete
 
-        Example: Two-Robot Handoff
-        parallel_group=0: Robot1 detect_object, Robot2 idle
-        parallel_group=1: Robot1 move_to_coordinate, Robot2 wait_for_signal
-        parallel_group=2: Robot1 control_gripper (close), Robot1 signal
-        parallel_group=3: Robot1 move (handoff), Robot2 move (handoff)
-        parallel_group=4: Robot1 signal, Robot2 signal
-        parallel_group=5: Robot1 wait_for_signal, Robot2 wait_for_signal
-        parallel_group=6: Robot2 control_gripper (close), wait(500)
-        parallel_group=7: Robot1 control_gripper (open)
+        Example: Two robots picking objects in parallel (independent tasks)
+        parallel_group=1: Robot1 detect_object_stereo, Robot2 detect_object_stereo (same group = concurrent)
+        parallel_group=2: Robot1 grasp_object, Robot2 grasp_object (each waits for its own detect)
+        parallel_group=3: Robot1 place_object, Robot2 place_object
 
         When to Use Parallel Groups:
         - Moving both robots to different regions simultaneously
@@ -431,8 +419,8 @@ class OperationIndexer:
     def rebuild_index(self) -> VectorStore:
         return self.build_index(save=True)
 
-    def update_index(self, _existing_store: VectorStore) -> VectorStore:
-        return self.build_index(save=True)
+    def update_index(self, existing_store: VectorStore) -> VectorStore:
+        return self.refresh_index(existing_store, save=True)
 
     def get_indexer_stats(self) -> dict:
         operations = self.registry.get_all_operations()

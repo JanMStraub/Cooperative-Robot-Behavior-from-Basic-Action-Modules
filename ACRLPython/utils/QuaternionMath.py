@@ -19,8 +19,6 @@ def quaternion_from_euler(
     Convert Euler angles (in radians) to quaternion.
 
     Uses the ZYX convention (yaw-pitch-roll) to match Unity's Quaternion.Euler behavior.
-
-
     """
     cy = np.cos(yaw * 0.5)
     sy = np.sin(yaw * 0.5)
@@ -45,8 +43,6 @@ def euler_from_quaternion(
     Convert quaternion to Euler angles (in radians).
 
     Returns Euler angles in ZYX convention (yaw-pitch-roll) to match Unity.
-
-
     """
     # Roll (x-axis rotation)
     sinr_cosp = 2.0 * (w * x + y * z)
@@ -76,8 +72,6 @@ def quaternion_multiply(
 
     Performs Hamilton product: q1 * q2. The order matters - this represents
     applying q2 first, then q1 (like matrix multiplication).
-
-
     """
     x1, y1, z1, w1 = q1
     x2, y2, z2, w2 = q2
@@ -98,8 +92,6 @@ def quaternion_rotate_vector(
 
     Uses the formula: v' = q * v * q^(-1)
     Optimized implementation avoids explicit quaternion multiplication.
-
-
     """
     x, y, z, w = quat
 
@@ -121,8 +113,6 @@ def quaternion_angle(
     Calculate the angular distance between two quaternions in degrees.
 
     Returns the minimum angle needed to rotate from q1 to q2.
-
-
     """
     # Normalize quaternions
     q1_norm = np.array(q1) / np.linalg.norm(q1)
@@ -149,8 +139,6 @@ def quaternion_inverse(
 
     For a unit quaternion, the inverse equals the conjugate: (x, y, z, w)^(-1) = (-x, -y, -z, w)
     This function assumes the input is a unit quaternion (or normalizes it).
-
-
     """
     x, y, z, w = quat
 
@@ -171,8 +159,6 @@ def quaternion_normalize(
 ) -> Tuple[float, float, float, float]:
     """
     Normalize a quaternion to unit length.
-
-
     """
     x, y, z, w = quat
     norm = np.sqrt(x * x + y * y + z * z + w * w)
@@ -187,7 +173,6 @@ def quaternion_normalize(
 def quaternion_identity() -> Tuple[float, float, float, float]:
     """
     Return the identity quaternion (no rotation).
-
     """
     return (0.0, 0.0, 0.0, 1.0)
 
@@ -197,8 +182,6 @@ def quaternion_from_axis_angle(
 ) -> Tuple[float, float, float, float]:
     """
     Create a quaternion from an axis-angle representation.
-
-
     """
     # Normalize axis — guard against zero-length axis
     norm = np.linalg.norm(axis)

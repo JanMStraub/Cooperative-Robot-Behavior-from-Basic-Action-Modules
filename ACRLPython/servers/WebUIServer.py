@@ -193,7 +193,7 @@ class ConnectionManager:
             try:
                 await connection.send_text(message)
             except Exception as e:
-                logger.error(f"Error broadcasting to client: {e}")
+                logger.debug(f"Dropping dead WebSocket client: {e}")
                 dead.append(connection)
         for connection in dead:
             self.disconnect(connection)
@@ -235,7 +235,6 @@ async def get_index():
 
 
 def _check_ros_connected() -> bool:
-    """Return True if the ROSBridge is currently connected."""
     try:
         from ros2.ROSBridge import ROSBridge
 
@@ -246,7 +245,6 @@ def _check_ros_connected() -> bool:
 
 
 def _check_unity_connected() -> bool:
-    """Return True if at least one Unity client is connected to CommandServer."""
     try:
         broadcaster = get_command_broadcaster()
         if hasattr(broadcaster, "_server") and broadcaster._server is not None:
@@ -257,7 +255,6 @@ def _check_unity_connected() -> bool:
 
 
 def _check_camera_available() -> bool:
-    """Return True if at least one camera frame has been received."""
     try:
         from servers.ImageStorageCore import UnifiedImageStorage
 
@@ -299,7 +296,6 @@ async def api_status():
 
 @app.get("/api/world_state")
 async def api_world_state():
-    """Get the current world state"""
     world_state = get_world_state()
     try:
         data = {
@@ -473,7 +469,6 @@ async def api_export_benchmark(filename: str):
 
 @app.get("/api/benchmarks/{filename}")
 async def api_get_benchmark_detail(filename: str):
-    """Get full details of a specific benchmark run."""
     try:
         # Prevent directory traversal
         clean_name = os.path.basename(filename)
@@ -653,7 +648,6 @@ async def stream_depth():
 
 @app.post("/api/command")
 async def api_send_command(command_data: Dict[str, Any]):
-    """Send a command directly to the CommandBroadcaster or AutoRT"""
     try:
         cmd_type = command_data.get("type", "direct")
 
@@ -746,7 +740,6 @@ async def api_reset_simulation():
 
 @app.get("/api/autort/tasks")
 async def api_autort_tasks():
-    """Return all currently pending AutoRT tasks."""
     try:
         from servers.AutoRTIntegration import AutoRTHandler
 

@@ -66,6 +66,7 @@ def _execute_grasp_with_follow_target(
     try:
         from core.Imports import is_sequence_aborted as _is_aborted
     except ImportError:
+
         def _is_aborted() -> bool:
             return False
 
@@ -74,7 +75,9 @@ def _execute_grasp_with_follow_target(
     if FOLLOW_TARGET_ENABLED and world_state is not None:
         for correction in range(FOLLOW_TARGET_MAX_CORRECTIONS):
             if _is_aborted():
-                logger.info(f"[follow_target] {robot_id}: sequence aborted — stopping correction")
+                logger.info(
+                    f"[follow_target] {robot_id}: sequence aborted — stopping correction"
+                )
                 return False, "sequence aborted"
 
             live_pos = world_state.get_object_position(object_id)
@@ -163,7 +166,9 @@ def _execute_grasp_with_follow_target(
             time.sleep(0.1)
 
             if _is_aborted():
-                logger.info(f"[follow_target] {robot_id}: sequence aborted after hover — stopping")
+                logger.info(
+                    f"[follow_target] {robot_id}: sequence aborted after hover — stopping"
+                )
                 return False, "sequence aborted"
 
             # Step B: Move to corrected grasp position.
@@ -182,7 +187,11 @@ def _execute_grasp_with_follow_target(
                 max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
             )
             if not correction_result or not correction_result.get("success"):
-                corr_err = correction_result.get("error") if correction_result else "no response"
+                corr_err = (
+                    correction_result.get("error")
+                    if correction_result
+                    else "no response"
+                )
                 logger.warning(
                     f"[follow_target] {robot_id}: corrective move failed — {corr_err}"
                     " — retrying without orientation constraint"
@@ -196,7 +205,11 @@ def _execute_grasp_with_follow_target(
                     max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
                 )
             if not correction_result or not correction_result.get("success"):
-                corr_err = correction_result.get("error") if correction_result else "no response"
+                corr_err = (
+                    correction_result.get("error")
+                    if correction_result
+                    else "no response"
+                )
                 logger.warning(
                     f"[follow_target] {robot_id}: corrective move failed — {corr_err}"
                 )

@@ -28,6 +28,17 @@ from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
 
+# Operations that intentionally colocate EEs (serialized via signal/wait and with
+# ProximityGuard disabled internally) — skip path-collision check for these.
+_HANDOFF_EXEMPT_OPERATIONS = frozenset(
+    {
+        "receive_handoff",
+        "place_for_partner",
+        "synchronized_grasp",
+        "joint_transport",
+    }
+)
+
 
 @dataclass
 class CoordinationIssue:
@@ -98,6 +109,7 @@ class CoordinationVerifier:
         operation_category: OperationCategory,
         params: Dict[str, Any],
         world_state=None,
+        operation_name: Optional[str] = None,
     ) -> CoordinationCheckResult:
         """Check if planned operation conflicts with other robots or pending operations."""
         if world_state is None:
@@ -110,7 +122,12 @@ class CoordinationVerifier:
         other_robots = [rid for rid in ROBOT_BASE_POSITIONS.keys() if rid != robot_id]
 
         # Check 1: Path collision with other robots
-        if operation_category == OperationCategory.NAVIGATION:
+        # Skipped for handoff-class operations — they intentionally colocate EEs and
+        # manage safety internally via signal/wait serialization and ProximityGuard disable.
+        if (
+            operation_category == OperationCategory.NAVIGATION
+            and operation_name not in _HANDOFF_EXEMPT_OPERATIONS
+        ):
             target_pos = self._extract_target_position(params)
             if target_pos is not None:
                 for other_robot in other_robots:

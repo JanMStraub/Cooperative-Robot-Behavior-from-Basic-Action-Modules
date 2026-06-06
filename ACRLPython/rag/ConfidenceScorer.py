@@ -63,7 +63,7 @@ def calculate_parameter_match_score(
 
     matches = len(param_terms & query_terms)
     if matches == 0:
-        return 0.3  # Low but not zero - query might not mention params
+        return 0.5  # Neutral — query needn't mention params for op to be relevant
 
     return min(1.0, 0.5 + (matches / len(param_terms)) * 0.5)
 
@@ -95,7 +95,10 @@ def calculate_metadata_match_score(
 
 def calculate_reliability_score(metadata: Dict[str, Any]) -> float:
     success_rate = metadata.get("success_rate", 0.95)
-    return float(success_rate)
+    # Guard against values stored as percentages (e.g. 87.0 instead of 0.87)
+    if success_rate > 1.0:
+        success_rate = success_rate / 100.0
+    return float(min(1.0, success_rate))
 
 
 def compute_confidence_score(

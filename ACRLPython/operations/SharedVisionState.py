@@ -245,7 +245,6 @@ class SharedVisionState:
                     obj.claim_timestamp = 0.0
 
     def get_stats(self) -> dict:
-        """Get state statistics."""
         with self.lock:
             total = len(self.detections)
             claimed = sum(

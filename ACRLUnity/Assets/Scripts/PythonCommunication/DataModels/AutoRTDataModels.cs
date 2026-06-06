@@ -59,7 +59,6 @@ namespace PythonCommunication.DataModels
         public List<ProposedTask> tasks;
         public bool loop_running;
         public string error;
-        public string status; // Execution status: "started", "not_found", "error", etc.
         public uint request_id;
 
         public AutoRTResponse()
@@ -78,34 +77,6 @@ namespace PythonCommunication.DataModels
         public string ErrorMessage
         {
             get { return HasError ? error : "No error"; }
-        }
-    }
-
-    [Serializable]
-    public class AutoRTLoopConfig
-    {
-        public float delay;
-        public List<string> robot_ids;
-        public string strategy;
-
-        public AutoRTLoopConfig()
-        {
-            robot_ids = new List<string>();
-        }
-    }
-
-    [Serializable]
-    public class AutoRTStatus
-    {
-        public bool success;
-        public bool loop_running;
-        public int pending_tasks_count;
-        public AutoRTLoopConfig loop_config;
-        public string error;
-
-        public AutoRTStatus()
-        {
-            loop_config = new AutoRTLoopConfig();
         }
     }
 

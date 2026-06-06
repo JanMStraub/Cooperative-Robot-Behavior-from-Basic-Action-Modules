@@ -17,6 +17,7 @@ try:
         LLM_REQUEST_TIMEOUT,
         LLM_THINKING_BUDGET,
         LLM_THINKING_ENABLED,
+        LLM_MAX_TOKENS,
         SYSTEM_PROMPT_BASE,
         USE_MOTION_LAYER,
     )
@@ -31,6 +32,7 @@ except ImportError:
         LLM_REQUEST_TIMEOUT,
         LLM_THINKING_BUDGET,
         LLM_THINKING_ENABLED,
+        LLM_MAX_TOKENS,
         SYSTEM_PROMPT_BASE,
         USE_MOTION_LAYER,
     )
@@ -115,12 +117,6 @@ class CommandParser:
         if motion_layer and self._is_perception_only_command(command_text):
             motion_layer = False
 
-        # Place/deposit commands must bypass the motion layer: decomposition rewrites
-        # them as "move end-effector to position …", stripping the place semantic and
-        # causing the LLM to pick move_to_coordinate instead of place_object.
-        if motion_layer and self._is_place_command(command_text):
-            motion_layer = False
-
         # Try LLM parsing first
         if use_llm:
             if motion_layer:
@@ -183,18 +179,7 @@ class CommandParser:
                 return {"success": False, "commands": [], "error": result.get("error")}
             parsed = result["parsed"]
             if "plan" in parsed and "commands" not in parsed:
-                flat = []
-                for item in parsed["plan"]:
-                    if "operations" in item:
-                        pg = item.get("parallel_group")
-                        for op in item["operations"]:
-                            op = dict(op)
-                            if pg is not None:
-                                op["parallel_group"] = pg
-                            flat.append(op)
-                    else:
-                        flat.append(item)
-                parsed["commands"] = flat
+                parsed["commands"] = self._flatten_plan(parsed["plan"])
             commands = parsed.get("commands", [])
             validated = self._validate_commands(commands, robot_id)
             if not validated:
@@ -246,16 +231,25 @@ class CommandParser:
         """Stage 1: decompose a high-level command into concrete motion strings for chain-of-thought anchoring."""
         prompt = f"""
             High-level command: "{command_text}"
-            
-            Default robot: {robot_id}"
-            
+
+            Default robot: {robot_id}
+
             Decompose this command into an ordered list of short, concrete physical motion descriptions. Each entry should describe one distinct robot motion (e.g. 'move end-effector to target position', 'lower arm to 0.3m height').
-            
-            IMPORTANT: Do NOT add gripper open/close or grasp motions unless the command EXPLICITLY says to pick up, grab, grasp, or grip an object. Pure navigation ('move to it', 'navigate to X', 'go to position') must NOT include any gripper step. Navigation example: 'detect the blue cube and move to it': '["detect blue cube position", "move end-effector to detected position"]'
-            "Pick example: 'grasp the red cube': '["grasp red cube (full approach and grip)"]'
-            
-            IMPORTANT: grasp/pick/grab is always a SINGLE step (do NOT split into approach + descend + close).
-            
+
+            RULES:
+            1. Navigation only (no grasp/pick/grab/grip in command): detect position, then move. Do NOT add any gripper or grasp step.
+               Example: 'detect the orange cube and approach it': ["detect orange cube position", "move end-effector to detected position"]
+
+            2. Grasp command (grasp/pick/pick up/grab/grip appears in command): detect position, then grasp as a SINGLE step. Never write 'move end-effector' for a grasp, always write 'grasp <object> (full approach and grip)'.
+               Example: 'grasp the purple cube': ["detect purple cube position", "grasp purple cube (full approach and grip)"]
+               Example: 'Robot1: grasp the yellow cube, and lift it to y=0.15': ["detect yellow cube position", "grasp yellow cube (full approach and grip)", "lift end-effector to y=0.15"]
+
+            3. Place command (place/deposit/put down in command): always a SINGLE step written as 'place object at <target>'. Never write 'move end-effector to position' for a place step. Place always follows a grasp; do NOT merge them.
+               Example: 'grasp the cyan cube and place it in field C': ["detect cyan cube position", "grasp cyan cube (full approach and grip)", "place cyan cube at field C"]
+
+            4. Multi-robot tasks: include motions for ALL robots in sequence order.
+               Example: 'Robot1 grasps the green cube and hands it to Robot2': ["Robot1: detect green cube", "Robot1: grasp green cube (full approach and grip)", "Robot1: move to handoff position", "Robot1: orient end-effector", "Robot1: signal ready + Robot2: wait for signal", "Robot2: receive handoff from Robot1", "Robot1: release object"]
+
             Output a JSON array of strings only. No markdown.
         """
         try:
@@ -279,6 +273,9 @@ class CommandParser:
                 )
                 return []
             content = response.json()["choices"][0]["message"]["content"]
+            if not content or not content.strip():
+                logger.warning("Motion decomposition returned empty response")
+                return []
             motions = _extract_json_util(content)
             if isinstance(motions, list) and all(isinstance(m, str) for m in motions):
                 logger.info(f"Motion decomposition: {motions}")
@@ -305,7 +302,9 @@ class CommandParser:
         motion_context = "\n".join(f"  {i + 1}. {m}" for i, m in enumerate(motions))
         augmented_command = (
             f"{command_text}\n\n"
-            f"Motion plan (use as chain-of-thought guidance):\n{motion_context}"
+            f"Motion plan ({len(motions)} steps — map each step to exactly one operation; "
+            f"steps are strictly sequential unless the step text says '+ ' or 'parallel with', "
+            f"in which case those steps share the same parallel_group):\n{motion_context}"
         )
         logger.info(f"Motion layer Stage 2 with {len(motions)} motion steps")
         return self._parse_with_llm(augmented_command, robot_id)
@@ -334,24 +333,19 @@ class CommandParser:
             #   A) flat list: [{parallel_group, robot, operation, params, ...}, ...]
             #   B) grouped:   [{parallel_group, operations:[{robot, operation, ...}]}, ...]
             # Shape A has "operation" directly on each item; shape B has "operations" sub-list.
+            # Also accept "operations" as a top-level alias for "commands"
+            if (
+                "operations" in parsed
+                and "commands" not in parsed
+                and "plan" not in parsed
+            ):
+                parsed["commands"] = parsed["operations"]
+
             if "plan" in parsed and "commands" not in parsed:
                 logger.info(
                     f"Multi-robot plan detected with reasoning: {parsed.get('reasoning', 'N/A')}"
                 )
-                flat: List[Dict] = []
-                for item in parsed["plan"]:
-                    if "operations" in item:
-                        # Shape B: grouped format
-                        pg = item.get("parallel_group")
-                        for op in item["operations"]:
-                            op = dict(op)
-                            if pg is not None:
-                                op["parallel_group"] = pg
-                            flat.append(op)
-                    else:
-                        # Shape A: flat format — item is already an operation
-                        flat.append(item)
-                parsed["commands"] = flat
+                parsed["commands"] = self._flatten_plan(parsed["plan"])
 
             logger.info(f"Parsed {len(parsed.get('commands', []))} commands from LLM")
 
@@ -408,7 +402,7 @@ class CommandParser:
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
-                "max_tokens": 8192,  # Must cover thinking budget + actual JSON response
+                "max_tokens": LLM_MAX_TOKENS,
                 **(
                     {
                         "thinking": {
@@ -431,12 +425,38 @@ class CommandParser:
             )
 
             if response.status_code != 200:
-                return {
-                    "success": False,
-                    "parsed": None,
-                    "content": None,
-                    "error": f"LLM request failed with status {response.status_code}",
-                }
+                try:
+                    err_body = response.json()
+                except Exception:
+                    err_body = response.text[:400]
+                logger.error("LLM returned %d: %s", response.status_code, err_body)
+                # If the request included a thinking block and the model rejected it
+                # (some LM Studio models don't support the OpenAI-style thinking
+                # extension), retry once without it.
+                if "thinking" in payload and response.status_code == 400:
+                    payload_no_thinking = {
+                        k: v for k, v in payload.items() if k != "thinking"
+                    }
+                    logger.info("Retrying LLM request without thinking block")
+                    response = self._session.post(
+                        f"{self.lm_studio_url}/chat/completions",
+                        json=payload_no_thinking,
+                        timeout=LLM_REQUEST_TIMEOUT,
+                    )
+                    if response.status_code != 200:
+                        return {
+                            "success": False,
+                            "parsed": None,
+                            "content": None,
+                            "error": f"LLM request failed with status {response.status_code}",
+                        }
+                else:
+                    return {
+                        "success": False,
+                        "parsed": None,
+                        "content": None,
+                        "error": f"LLM request failed with status {response.status_code}",
+                    }
 
             # Extract content from response
             result = response.json()
@@ -614,20 +634,42 @@ class CommandParser:
     def _expand_array_operations(self, commands: List[Dict]) -> List[Dict]:
         """Expand {operation: [...], params: [...]} LLM responses into separate command dicts.
 
-        LLMs occasionally pack multiple ops into a single entry in two forms:
+        LLMs occasionally pack multiple ops into a single entry in four forms:
           Form A: {"operation": ["signal", "wait_for_signal"], "params": [{...}, {...}], "parallel_group": 6}
           Form B: {"operation": [{"operation": "signal", "params": {...}}, ...], "parallel_group": 6}
-        Both are zipped/expanded so the rest of the pipeline sees normal single-op commands.
+          Form C: {"parallel_group": 6, "operations": [{"operation": "signal", "params": {...}}, ...]}
+          Form D: {"operation": ["signal", ...], "parallel_group": 6, "ops": [{...}, ...]}
+        All are expanded so the rest of the pipeline sees normal single-op commands.
         """
+        _SUB_LIST_KEYS = ("operations", "ops", "commands", "steps")
+
         expanded = []
         for cmd in commands:
             op = cmd.get("operation", "")
             params = cmd.get("params", {})
-            shared = {k: v for k, v in cmd.items() if k not in ("operation", "params")}
-            if isinstance(op, list) and len(op) > 0:
+            shared = {
+                k: v
+                for k, v in cmd.items()
+                if k not in ("operation", "params", *_SUB_LIST_KEYS)
+            }
+
+            # Form C/D: sub-op list under "operations", "ops", "commands", or "steps"
+            sub_list_key = next(
+                (k for k in _SUB_LIST_KEYS if isinstance(cmd.get(k), list)), None
+            )
+            if sub_list_key and isinstance(cmd.get(sub_list_key), list):
+                for sub in cmd[sub_list_key]:
+                    new_cmd = {**shared}
+                    new_cmd["operation"] = sub.get("operation", "")
+                    new_cmd["params"] = sub.get("params", {})
+                    expanded.append(new_cmd)
+            elif isinstance(op, list) and len(op) > 0:
                 if isinstance(params, list) and len(params) == len(op):
                     # Form A: parallel string names + matching params list
                     for o, p in zip(op, params):
+                        # guard: if p is itself a sub-op dict, unwrap its params
+                        if isinstance(p, dict) and "params" in p:
+                            p = p["params"]
                         expanded.append({**shared, "operation": o, "params": p})
                 elif all(isinstance(o, dict) for o in op):
                     # Form B: list of sub-operation dicts, each with own "operation"/"params"
@@ -641,6 +683,43 @@ class CommandParser:
             else:
                 expanded.append(cmd)
         return expanded
+
+    def _flatten_plan(self, plan) -> List[Dict]:
+        """Normalize LLM plan shapes into a flat list of command dicts.
+
+        Handles:
+          A) flat list of op dicts (with optional parallel_group)
+          B) grouped: [{parallel_group, operations:[...]}, ...]
+          C) nested dict: {commands:[...], parallel_groups:[{group, commands:[...]}, ...]}
+        """
+        flat: List[Dict] = []
+        parallel_groups_items: List[Dict] = []
+
+        if isinstance(plan, dict):
+            parallel_groups_items = plan.get("parallel_groups") or []
+            plan = plan.get("commands") or plan.get("operations") or []
+
+        for item in plan:
+            sub_ops = item.get("operations") or item.get("commands")
+            if sub_ops:
+                pg = item.get("parallel_group")
+                for op in sub_ops:
+                    op = dict(op)
+                    if pg is not None:
+                        op["parallel_group"] = pg
+                    flat.append(op)
+            else:
+                flat.append(item)
+
+        for group_item in parallel_groups_items:
+            pg = group_item.get("group") or group_item.get("parallel_group")
+            for op in group_item.get("commands") or group_item.get("operations") or []:
+                op = dict(op)
+                if pg is not None:
+                    op["parallel_group"] = pg
+                flat.append(op)
+
+        return flat
 
     def _validate_commands(
         self, commands: List[Dict], default_robot_id: str
@@ -659,6 +738,7 @@ class CommandParser:
 
             # Reject unknown robot IDs
             from config.Robot import ROBOT_BASE_POSITIONS as _KNOWN_ROBOTS
+
             robot_id_in_cmd = params.get("robot_id", default_robot_id)
             if robot_id_in_cmd not in _KNOWN_ROBOTS:
                 logger.warning(
@@ -672,17 +752,20 @@ class CommandParser:
             op = self.registry.get_operation_by_name(operation)
             if op is None:
                 logger.warning(
-                    "Unknown operation '%s' (params=%s), skipping",
+                    "Unknown operation '%s' (params=%s), full cmd=%s, skipping",
                     operation,
                     list(params.keys()),
+                    cmd,
                 )
                 continue
 
             validated_cmd = {"operation": operation, "params": params}
 
-            # Preserve capture_var if present
+            # Promote capture_var to top level (LLM sometimes puts it inside params)
             if "capture_var" in cmd:
                 validated_cmd["capture_var"] = cmd["capture_var"]
+            elif "capture_var" in params:
+                validated_cmd["capture_var"] = params.pop("capture_var")
 
             # Preserve parallel_group if present (for multi-robot coordination)
             if "parallel_group" in cmd:
@@ -694,14 +777,42 @@ class CommandParser:
         # operation A and both are in the same parallel_group, move B to a later group.
         validated = self._fix_intra_group_dependencies(validated)
 
-        # Validate multi-robot plans (signal/wait pairs and variable usage)
+        # Validate multi-robot plans (signal/wait pairs and variable usage).
+        # Run the same capture_var inference the executor will apply so that
+        # missing capture_var on perception ops doesn't generate false-positive warnings.
         if len(validated) > 1:
+            validated = self._infer_capture_vars_for_validation(validated)
             is_valid, errors = self._validate_multi_robot_plan(validated)
             if not is_valid:
                 for error in errors:
                     logger.warning(f"Multi-robot plan validation warning: {error}")
 
         return validated
+
+    def _infer_capture_vars_for_validation(self, commands: List[Dict]) -> List[Dict]:
+        """Backfill missing capture_var on perception ops so the validator sees correct definitions.
+
+        Mirrors SequenceExecutor._infer_capture_vars — keep in sync if the logic changes.
+        """
+        from operations.Base import OperationCategory
+
+        commands = [dict(cmd) for cmd in commands]
+        for i, cmd in enumerate(commands):
+            if cmd.get("capture_var"):
+                continue
+            op_name = cmd.get("operation", "")
+            op_def = self.registry.get_operation_by_name(op_name)
+            if op_def is None or op_def.category != OperationCategory.PERCEPTION:
+                continue
+            for later_cmd in commands[i + 1 :]:
+                for v in later_cmd.get("params", {}).values():
+                    if isinstance(v, str) and v.startswith("$"):
+                        var_name = v.lstrip("$").split(".")[0]
+                        cmd["capture_var"] = var_name
+                        break
+                if cmd.get("capture_var"):
+                    break
+        return commands
 
     def _fix_intra_group_dependencies(self, commands: List[Dict]) -> List[Dict]:
         """Push commands that read a $var to a later group than the one capturing it."""
@@ -742,11 +853,14 @@ class CommandParser:
                     cmd["parallel_group"] = min_required
                     changed = True
 
-        # Renumber groups to be contiguous (1, 2, 3, …) preserving relative order
+        # Renumber groups to be contiguous, starting AFTER sequential (ungrouped)
+        # commands. The executor assigns those groups 0, 1, 2, … in order, so
+        # renumbering from 1 causes parallel groups to collide with them.
+        n_sequential = sum(1 for cmd in commands if "parallel_group" not in cmd)
         groups_sorted = sorted(
             set(cmd["parallel_group"] for cmd in commands if "parallel_group" in cmd)
         )
-        remap = {old: new for new, old in enumerate(groups_sorted, start=1)}
+        remap = {old: new for new, old in enumerate(groups_sorted, start=n_sequential)}
         for cmd in commands:
             if "parallel_group" in cmd:
                 cmd["parallel_group"] = remap[cmd["parallel_group"]]

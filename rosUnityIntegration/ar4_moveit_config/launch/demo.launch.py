@@ -8,7 +8,6 @@ from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-    """Generate demo launch combining robot state publisher and move_group."""
     pkg_dir = get_package_share_directory("ar4_moveit_config")
 
     return LaunchDescription(

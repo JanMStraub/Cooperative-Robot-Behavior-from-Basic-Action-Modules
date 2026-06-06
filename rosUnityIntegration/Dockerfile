@@ -1,10 +1,8 @@
 FROM ros:humble
 
-# Set environment variables to avoid interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
 
 # 1. Install system build tools, git, and ROS tools
-# Added: ros-humble-foxglove-bridge
 RUN apt-get update && apt-get install -y \
     git \
     python3-pip \
@@ -94,7 +92,6 @@ EXPOSE 10000
 EXPOSE 8765
 EXPOSE 5020
 
-# 7. Default Command (kept as Unity endpoint)
 CMD ["/bin/bash", "-c", \
     "source /opt/ros/humble/setup.bash && \
      source /ros_ws/install/setup.bash && \

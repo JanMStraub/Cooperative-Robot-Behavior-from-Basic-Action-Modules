@@ -28,10 +28,6 @@ def generate_launch_description():
                     {"robot_description": robot_description},
                     {"use_sim_time": False},
                 ],
-                remappings=[
-                    # robot_state_publisher subscribes to /joint_states by default;
-                    # the aggregator already publishes there, so no remapping needed.
-                ],
             ),
         ]
     )

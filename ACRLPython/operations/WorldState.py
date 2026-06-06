@@ -56,6 +56,14 @@ class RobotState:
     target_position: Optional[Tuple[float, float, float]] = None
     target_rotation: Optional[Tuple[float, float, float]] = None
     gripper_state: str = "unknown"
+    is_holding_object: bool = False  # GripperContactSensor ground truth from Unity
+    held_object_id: Optional[str] = (
+        None  # GameObject name of held object, None if not holding
+    )
+    gripper_has_contact: bool = (
+        False  # contact sensor: stable both-finger contact on any object
+    )
+    gripper_contact_force: float = 0.0  # contact sensor: estimated grasp force (N)
     is_moving: bool = False
     is_initialized: bool = False
     joint_angles: Optional[list[float]] = None
@@ -112,7 +120,6 @@ class WorldState(SingletonBase):
 
     @classmethod
     def get_instance(cls):
-        """Get the singleton instance of WorldState."""
         return cls()
 
     def _singleton_init(self):
@@ -244,7 +251,6 @@ class WorldState(SingletonBase):
         return status.get("position")
 
     def get_robot_target(self, robot_id: str) -> Optional[Tuple[float, float, float]]:
-        """Get robot movement target position."""
         with self._lock:
             robot_state = self._robot_states.get(robot_id)
             if robot_state:
@@ -253,20 +259,7 @@ class WorldState(SingletonBase):
 
     @staticmethod
     def _to_position_tuple(value) -> Optional[Tuple[float, float, float]]:
-        """
-        Normalize a position value to a (float, float, float) tuple.
-
-        Unity serializes Vector3 as {"x": ..., "y": ..., "z": ...}.  This
-        helper converts that dict form to the tuple form expected everywhere
-        else in the codebase.  Plain tuples/lists pass through unchanged.
-
-        Args:
-            value: Position as dict {"x","y","z"}, list, tuple, or None.
-
-        Returns:
-            (float, float, float) tuple, or the original value if conversion
-            is not possible (so existing None defaults are preserved).
-        """
+        """Normalize Unity Vector3 dict {"x","y","z"} or list/tuple to (float, float, float)."""
         if isinstance(value, dict):
             return (
                 float(value.get("x", 0.0)),
@@ -279,21 +272,7 @@ class WorldState(SingletonBase):
 
     @staticmethod
     def _to_rotation_tuple(value) -> Optional[Tuple[float, float, float]]:
-        """
-        Normalize a rotation value to a (roll, pitch, yaw) tuple in degrees.
-
-        Unity serializes Quaternion as {"x":..., "y":..., "z":..., "w":...}.
-        This helper converts that to Euler angles using pure-math intrinsic
-        ZXY decomposition (roll=X, pitch=Y, yaw=Z), which matches Unity's
-        convention.  Plain tuples/lists of length ≥ 3 are passed through as-is
-        (assumed to already be in Euler-degree form).
-
-        Args:
-            value: Rotation as dict {"x","y","z","w"}, list, tuple, or None.
-
-        Returns:
-            (roll, pitch, yaw) tuple in degrees, or None if not convertible.
-        """
+        """Convert Unity Quaternion dict {"x","y","z","w"} to (roll, pitch, yaw) degrees via intrinsic ZXY decomposition."""
         if isinstance(value, dict) and "w" in value:
             x = float(value.get("x", 0.0))
             y = float(value.get("y", 0.0))
@@ -341,6 +320,18 @@ class WorldState(SingletonBase):
                 state_data.get("target_rotation", state.target_rotation)
             )
             state.gripper_state = state_data.get("gripper_state", state.gripper_state)
+            state.is_holding_object = state_data.get(
+                "is_holding_object", state.is_holding_object
+            )
+            state.held_object_id = state_data.get(
+                "held_object_id", state.held_object_id
+            )
+            state.gripper_has_contact = state_data.get(
+                "gripper_has_contact", state.gripper_has_contact
+            )
+            state.gripper_contact_force = state_data.get(
+                "gripper_contact_force", state.gripper_contact_force
+            )
             state.is_moving = state_data.get("is_moving", state.is_moving)
             state.is_initialized = state_data.get(
                 "is_initialized", state.is_initialized
@@ -454,7 +445,6 @@ class WorldState(SingletonBase):
         self.update_robot_state(robot_id, state_data)
 
     def get_robot_state(self, robot_id: str) -> Optional[RobotState]:
-        """Get robot state object."""
         with self._lock:
             return self._robot_states.get(robot_id)
 
@@ -482,7 +472,6 @@ class WorldState(SingletonBase):
         rotation: Optional[Tuple[float, float, float]] = None,
         source: str = "vision",
     ):
-        """Update object position from detection results."""
         with self._lock:
             if object_id not in self._objects:
                 self._objects[object_id] = ObjectState(
@@ -678,19 +667,7 @@ class WorldState(SingletonBase):
     def get_object_rotation(
         self, object_id: str
     ) -> Optional[Tuple[float, float, float]]:
-        """Get object rotation (roll, pitch, yaw) in degrees with partial-match fallback.
-
-        Uses the same normalised-key lookup as ``get_object_state`` and
-        ``get_object_position`` so compound names like "red_cube" resolve to an
-        object stored as "red".  Returns ``None`` when the object is not found or
-        has no rotation recorded.
-
-        Args:
-            object_id: Object identifier (exact key, color, or compound name).
-
-        Returns:
-            Rotation tuple ``(roll_deg, pitch_deg, yaw_deg)`` or ``None``.
-        """
+        """Return (roll, pitch, yaw) degrees with same partial-match fallback as get_object_position."""
         with self._lock:
             obj = self._objects.get(object_id)
             if obj is None:
@@ -785,19 +762,16 @@ class WorldState(SingletonBase):
             return None
 
     def get_objects_by_color(self, color: str) -> list[ObjectState]:
-        """Get all objects of a specific color."""
         with self._lock:
             return [obj for obj in self._objects.values() if obj.color == color]
 
     def mark_object_grasped(self, object_id: str, robot_id: str):
-        """Mark an object as grasped by a robot."""
         with self._lock:
             if object_id in self._objects:
                 self._objects[object_id].grasped_by = robot_id
                 logger.info(f"Object {object_id} grasped by {robot_id}")
 
     def mark_object_released(self, object_id: str):
-        """Mark an object as released (no longer grasped)."""
         with self._lock:
             if object_id in self._objects:
                 self._objects[object_id].grasped_by = None
@@ -817,7 +791,6 @@ class WorldState(SingletonBase):
         self.update_object_position(object_id, position, color, object_type, confidence)
 
     def get_all_objects(self) -> list[ObjectState]:
-        """Get all registered objects."""
         with self._lock:
             return list(self._objects.values())
 
@@ -882,7 +855,6 @@ class WorldState(SingletonBase):
     def find_robots_near(
         self, position: Tuple[float, float, float], radius: float = 0.2
     ) -> list[RobotState]:
-        """Find all robots within radius of a position."""
         with self._lock:
             nearby = []
             for robot in self._robot_states.values():
@@ -933,7 +905,6 @@ class WorldState(SingletonBase):
     def get_objects_in_region(
         self, region: str, exclude_stale: bool = True
     ) -> list[ObjectState]:
-        """Get all objects in a workspace region."""
         with self._lock:
             if region not in WORKSPACE_REGIONS:
                 logger.warning(f"Unknown workspace region: {region}")
@@ -958,7 +929,6 @@ class WorldState(SingletonBase):
     def get_region_for_position(
         self, position: Tuple[float, float, float]
     ) -> Optional[str]:
-        """Get which workspace region contains a position."""
         x, y, z = position
 
         for region, bounds in WORKSPACE_REGIONS.items():
@@ -1034,15 +1004,12 @@ class WorldState(SingletonBase):
         )
 
     def release_workspace(self, region: str, robot_id: str) -> bool:
-        """Release a workspace region allocation."""
         return self._workspace_allocator.release(region, robot_id)
 
     def get_workspace_owner(self, region: str) -> Optional[str]:
-        """Get the robot that owns a workspace region."""
         return self._workspace_allocator.get_owner(region)
 
     def get_free_workspace_regions(self) -> list:
-        """Return list of region names currently unallocated."""
         return self._workspace_allocator.get_free_regions()
 
     def get_robot_intents(self) -> Dict[str, str]:
@@ -1055,7 +1022,6 @@ class WorldState(SingletonBase):
             }
 
     def get_all_robots(self) -> list:
-        """Return list of all RobotState objects currently tracked."""
         with self._lock:
             return list(self._robot_states.values())
 

@@ -152,7 +152,10 @@ PICK_AND_PLACE_PATTERN = WorkflowPattern(
         ),
         WorkflowStep(
             operation_id="detect_field",
-            parameter_bindings={"field_label": "target_field_letter", "capture_var": "field"},
+            parameter_bindings={
+                "field_label": "target_field_letter",
+                "capture_var": "field",
+            },
             description="Detect placement field by letter (A-I) to get its coordinates (capture_var='field')",
         ),
         WorkflowStep(
@@ -330,9 +333,9 @@ HANDOFF_PATTERN = WorkflowPattern(
                 "robot_id": "{source_robot_id}",
                 "pitch": "0.0",
                 "yaw": "0.0",
-                "roll": "0.0",
+                "roll": "90.0",
             },
-            description="Lock wrist to deterministic orientation (prevents joint 5/6 variance)",
+            description="Rotate wrist so held object's long axis becomes vertical (Y) for handoff presentation",
         ),
         WorkflowStep(
             operation_id="signal",
@@ -714,14 +717,16 @@ or receive_handoff ops exist. Each step gets its own Unity ACK via SequenceExecu
    → grasp_object(source_robot, object_id)
    NOTE: Do NOT use move_to_coordinate + control_gripper here.
 
-3. Source robot returns to start (deterministic joint config for reproducible IK)
-   → return_to_start_position(source_robot, speed=0.5)
+3. Source robot returns to start at reduced speed (object held — prevents pendulum oscillation)
+   → return_to_start_position(source_robot, speed=0.3)
 
-4. Source robot moves to HANDOFF_PRESENTATION_POSITION
-   → move_to_coordinate(source_robot, x=HANDOFF_X, y=HANDOFF_Y, z=HANDOFF_Z)
+4. Source robot moves to HANDOFF_PRESENTATION_POSITION at reduced speed (object held)
+   → move_to_coordinate(source_robot, x=HANDOFF_X, y=HANDOFF_Y, z=HANDOFF_Z, speed=0.3)
+   NOTE: step 5 MUST be in a later parallel_group than step 4. Do NOT place them in the same group.
 
-5. Source robot locks wrist (deterministic joint 5/6 — prevents pose variance across runs)
-   → adjust_end_effector_orientation(source_robot, pitch=0, yaw=0, roll=0)
+5. Source robot rotates wrist so held object's long axis becomes vertical (Y) for presentation
+   → adjust_end_effector_orientation(source_robot, pitch=0, yaw=0, roll=90)
+   NOTE: this step MUST wait for step 4 to complete. Executing while arm is moving causes IK conflict.
 
 6a. Source robot signals ready (parallel with 6b)
    → signal(source_robot, "r1_at_handoff")
@@ -747,7 +752,8 @@ or receive_handoff ops exist. Each step gets its own Unity ACK via SequenceExecu
 - Do NOT use orient_gripper_for_handoff_receive — it was removed; receive_handoff is the replacement
 - Do NOT skip step 3 — return_to_start is required for deterministic IK convergence
 - Do NOT skip step 4 — source MUST move to the presentation position before receiver approaches
-- Do NOT skip step 5 — adjust_end_effector_orientation locks wrist (joint 5/6 variance otherwise)
+- Do NOT skip step 5 — adjust_end_effector_orientation(roll=90) rotates object long axis to Y and locks wrist
+- Do NOT place step 5 in the same parallel_group as step 4 — IK conflicts with active ROS trajectory → 60s timeout
 - Do NOT skip step 10 — source robot must return to start after releasing
 
 **Example LLM Usage:**
@@ -757,9 +763,9 @@ LLM generates:
 ```
 detect_object_stereo("Robot1", color="red")
 grasp_object("Robot1", object_id="RedBar")
-return_to_start_position("Robot1", speed=0.5)
-move_to_coordinate("Robot1", x=HANDOFF_X, y=HANDOFF_Y, z=HANDOFF_Z)
-adjust_end_effector_orientation("Robot1", pitch=0, yaw=0, roll=0)
+return_to_start_position("Robot1", speed=0.3)
+move_to_coordinate("Robot1", x=HANDOFF_X, y=HANDOFF_Y, z=HANDOFF_Z, speed=0.3)
+adjust_end_effector_orientation("Robot1", pitch=0, yaw=0, roll=90)
 signal("Robot1", "r1_at_handoff")          # parallel
 wait_for_signal("Robot2", "r1_at_handoff") # parallel
 detect_object_stereo("Robot2", color="red")

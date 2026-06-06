@@ -234,43 +234,43 @@ def test_b11_offline_captures_negotiation_rounds(monkeypatch):
 # Task 5: B10 RAG ablation always returns paired conditions (parse-only, no _send)
 
 
-def test_b10_returns_paired_ablation_conditions():
-    """B11 RAG ablation is parse-only — returns both enabled and disabled conditions."""
+def test_b10_returns_ablation_condition():
+    """B11 RAG ablation is parse-only — returns single condition matching cfg.use_rag."""
     from benchmarks.Runner import BenchmarkRunner
     from benchmarks.Config import BenchmarkConfig
 
     runner = BenchmarkRunner()
-    cfg = BenchmarkConfig(dry_run=False, execution_mode="offline", task_count=1)
+    cfg = BenchmarkConfig(
+        dry_run=False, execution_mode="offline", task_count=1, use_rag=True
+    )
     result = runner.run(11, cfg)
     assert result.ablation is not None
-    assert result.ablation_baseline is not None
+    assert result.ablation_baseline is None
     assert result.ablation.condition == "enabled"
-    assert result.ablation_baseline.condition == "disabled"
     assert result.ablation.ops_executed > 0
-    assert result.ablation_baseline.ops_executed > 0
+
+    cfg_no_rag = BenchmarkConfig(
+        dry_run=False, execution_mode="offline", task_count=1, use_rag=False
+    )
+    result_no_rag = runner.run(11, cfg_no_rag)
+    assert result_no_rag.ablation is not None
+    assert result_no_rag.ablation.condition == "disabled"
 
 
-# Task 6: live B11 dispatches to _send
+# Task 6: B11 is always parse-only, never dispatches to _send
 
 
-def test_b11_live_dispatches_to_send(monkeypatch):
-    """execution_mode='live' for B11 should call _send for each task."""
+def test_b11_is_always_parse_only():
+    """B11 is parse-only — accuracy metric is returned regardless of execution_mode."""
     from benchmarks.Runner import BenchmarkRunner
-    from benchmarks.Config import DualRobotConfig
-
-    calls = []
-
-    def patched_send(payload, robot_id, cfg, flags=None):
-        calls.append(payload)
-        return {"success": True, "ops_executed": 3, "ops_succeeded": 3, "results": []}
+    from benchmarks.Config import BenchmarkConfig
 
     runner = BenchmarkRunner()
-    runner._send = patched_send
-    cfg = DualRobotConfig(execution_mode="live", use_negotiation=True, task_count=1)
+    cfg = BenchmarkConfig(execution_mode="offline", use_rag=True)
     result = runner.run(11, cfg)
-    assert len(calls) >= 1
     assert result.ablation is not None
     assert result.ablation.condition == "enabled"
+    assert 0.0 <= result.success_rate <= 1.0
 
 
 def test_benchmark_result_has_ablation_baseline_field():
@@ -308,44 +308,48 @@ def test_benchmark_result_has_ablation_baseline_field():
 
 
 def test_b10_tasks_are_drawn_from_b1_to_b5():
+    # B11 was redesigned to use ambiguous collaborative-op descriptions for RAG
+    # discrimination instead of B1–B5 verbatim strings.  Verify task and
+    # ground-truth lists are consistent and non-empty.
     from ACRLPython.benchmarks.cases import B11RagAblation
-    from ACRLPython.benchmarks.cases.B1NavigateToObject import get_task as b1
-    from ACRLPython.benchmarks.cases.B2SequentialNavigation import get_task as b2
-    from ACRLPython.benchmarks.cases.B3NavigateAndLift import get_task as b3
-    from ACRLPython.benchmarks.cases.B4PickAndPlace import get_task as b4
-    from ACRLPython.benchmarks.cases.B5PoseAwareGrasp import get_task as b5
     from benchmarks.Config import BenchmarkConfig
 
     tasks = B11RagAblation.get_tasks(BenchmarkConfig())
-    assert b1() in tasks
-    assert b2() in tasks
-    assert b3() in tasks
-    assert b4() in tasks
-    assert b5() in tasks
+    ground_truth = B11RagAblation.get_ground_truth(BenchmarkConfig())
+    assert len(tasks) == len(B11RagAblation.TASKS)
+    assert len(ground_truth) == len(tasks)
+    assert all(isinstance(t, str) and t for t in tasks)
+    assert all(isinstance(gt, str) and gt for gt in ground_truth)
 
 
-def test_b12_tasks_include_b6_and_b7():
+def test_b12_tasks_have_ambiguous_roles():
     from ACRLPython.benchmarks.cases import B13NegotiationAblation
-    from ACRLPython.benchmarks.cases.B6RobotHandoff import get_task as b6
-    from ACRLPython.benchmarks.cases.B7DualRobotReorient import get_task as b7
     from benchmarks.Config import DualRobotConfig
 
     tasks = B13NegotiationAblation.get_tasks(DualRobotConfig())
-    assert b6() in tasks
-    assert b7() in tasks
+    assert len(tasks) >= 3
+    # All tasks must omit explicit per-robot role assignment so negotiation
+    # is actually exercised. Neither "Robot1" nor "Robot2" should appear as
+    # the sole actor at the start of any task.
+    for task in tasks:
+        assert not (
+            task.startswith("Robot1") and "Robot2" not in task.split(".")[0]
+        ), f"Task has explicit single-robot assignment, not useful for negotiation ablation: {task!r}"
 
 
 def test_b14_tasks_include_b3_b4_b5():
+    # B15 uses its own task strings (hardcoded Robot1 prefix).  B3/B5 strings
+    # match verbatim; B4 uses Robot2 so only the scenario content overlaps.
     from ACRLPython.benchmarks.cases import B15VGNAblation
     from ACRLPython.benchmarks.cases.B3NavigateAndLift import get_task as b3
-    from ACRLPython.benchmarks.cases.B4PickAndPlace import get_task as b4
     from ACRLPython.benchmarks.cases.B5PoseAwareGrasp import get_task as b5
     from benchmarks.Config import BenchmarkConfig
 
     tasks = B15VGNAblation.get_tasks(BenchmarkConfig())
     assert b3() in tasks
-    assert b4() in tasks
     assert b5() in tasks
+    # B4 pick-and-place scenario covered with Robot1
+    assert any("magenta" in t for t in tasks)
 
 
 def test_b15_tasks_include_b1_and_b2():
@@ -408,7 +412,9 @@ def test_b5_task_specifies_target_object():
     from benchmarks.cases.B5PoseAwareGrasp import get_task
 
     task = get_task()
-    assert "cube" in task.lower() or "object" in task.lower(), "B5 must name a target object"
+    assert (
+        "cube" in task.lower() or "object" in task.lower()
+    ), "B5 must name a target object"
 
 
 def test_b6_task_names_both_robots_and_transfer():
@@ -421,8 +427,8 @@ def test_b6_task_names_both_robots_and_transfer():
     ), "B6 must specify transfer action"
 
 
-def test_b10_rag_ablation_has_delta_and_paired_conditions():
-    """B11 RAG ablation enabled condition must report hallucination_delta >= 0."""
+def test_b10_rag_ablation_reports_accuracy():
+    """B11 RAG ablation must report operation selection accuracy (success_rate) against ground truth."""
     from benchmarks.Runner import BenchmarkRunner
     from benchmarks.Config import BenchmarkConfig
 
@@ -431,30 +437,20 @@ def test_b10_rag_ablation_has_delta_and_paired_conditions():
     result = runner.run(11, cfg)
 
     assert result.ablation is not None
-    assert result.ablation_baseline is not None
+    assert result.ablation_baseline is None
     assert result.ablation.condition == "enabled"
-    assert result.ablation_baseline.condition == "disabled"
-    assert (
-        result.ablation.hallucination_delta >= 0
-    ), "RAG enabled must not produce MORE hallucinations than disabled"
+    assert 0.0 <= result.ablation.success_rate <= 1.0
+    assert result.ablation.ops_executed == 8  # one per ground-truth task
 
 
-def test_b11_reflexion_offline_produces_paired_conditions_with_delta():
-    """B11 offline must produce both conditions with condition_delta field set."""
-    from benchmarks.Runner import BenchmarkRunner
-    from benchmarks.Config import BenchmarkConfig
+def test_b11_ground_truth_list_matches_tasks():
+    """B11 ground truth list must have same length as tasks list."""
+    from benchmarks.cases.B11RagAblation import get_tasks, get_ground_truth
 
-    runner = BenchmarkRunner()
-    cfg = BenchmarkConfig(
-        dry_run=True, execution_mode="offline", reflexion_enabled=True
-    )
-    result = runner.run(11, cfg)
-
-    assert result.ablation is not None
-    assert result.ablation_baseline is not None
-    assert result.ablation.condition == "enabled"
-    assert result.ablation_baseline.condition == "disabled"
-    assert isinstance(result.ablation.condition_delta, float)
+    tasks = get_tasks()
+    gt = get_ground_truth()
+    assert len(tasks) == len(gt)
+    assert all(isinstance(op, str) and op for op in gt)
 
 
 def test_b12_negotiation_offline_produces_paired_conditions_with_delta():

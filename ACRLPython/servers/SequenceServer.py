@@ -194,6 +194,16 @@ class SequenceQueryHandler(SingletonBase):
                 )
                 exec_result["negotiated"] = True
                 exec_result["original_command"] = command_text
+                exec_result["parsed_commands"] = negotiated
+                try:
+                    from core.Imports import get_negotiation_hub
+
+                    _hub = get_negotiation_hub()
+                    exec_result["negotiation_rounds"] = (
+                        _hub.get_last_round_count() if _hub else 0
+                    )
+                except Exception:
+                    exec_result["negotiation_rounds"] = 0
                 return exec_result
 
         # Parse the command

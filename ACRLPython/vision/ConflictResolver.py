@@ -27,7 +27,6 @@ class VisionConflictResolver:
         self._claims: Dict[str, Dict[str, float]] = {}
 
     def claim_object(self, robot_id: str, object_id: str) -> None:
-        """Register claim for object by robot."""
         now = time.time()
         if object_id not in self._claims:
             self._claims[object_id] = {}
@@ -41,7 +40,6 @@ class VisionConflictResolver:
         robot_position: Optional[Tuple[float, float, float]] = None,
         object_position: Optional[Tuple[float, float, float]] = None,
     ) -> bool:
-        """Determine if robot gets access to claimed object."""
         self._prune_expired_claims(object_id)
 
         claims = self._claims.get(object_id, {})
@@ -99,7 +97,6 @@ class VisionConflictResolver:
         all_robot_positions: Dict[str, Tuple[float, float, float]],
         object_position: Tuple[float, float, float],
     ) -> bool:
-        """Resolve conflict using positions of all active robots."""
         self._prune_expired_claims(object_id)
 
         claims = self._claims.get(object_id, {})
@@ -139,7 +136,6 @@ class VisionConflictResolver:
         return True
 
     def release_claim(self, robot_id: str, object_id: str) -> None:
-        """Release robot's claim on object."""
         if object_id in self._claims and robot_id in self._claims[object_id]:
             del self._claims[object_id][robot_id]
             if not self._claims[object_id]:
@@ -147,7 +143,6 @@ class VisionConflictResolver:
             logger.debug(f"Claim released: {robot_id} -> {object_id}")
 
     def _prune_expired_claims(self, object_id: str) -> None:
-        """Remove claims older than OBJECT_CLAIM_TIMEOUT seconds."""
         if object_id not in self._claims:
             return
 
@@ -165,6 +160,5 @@ class VisionConflictResolver:
             del self._claims[object_id]
 
     def get_active_claims(self, object_id: str) -> Dict[str, float]:
-        """Get all active (non-expired) claims for object."""
         self._prune_expired_claims(object_id)
         return dict(self._claims.get(object_id, {}))

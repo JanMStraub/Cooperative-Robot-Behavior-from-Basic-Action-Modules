@@ -51,6 +51,9 @@ class AblationMetrics:
     # Improvement over baseline (enabled - disabled); positive = feature helps
     condition_delta: float = 0.0  # success_rate_enabled - success_rate_disabled
     hallucination_delta: int = 0  # hallucinated_ops_disabled - hallucinated_ops_enabled
+    # Grasp-specific metrics (populated by B15)
+    grasp_sr: float = 0.0
+    avg_grasp_duration_ms: float = 0.0
 
 
 @dataclasses.dataclass
@@ -80,6 +83,7 @@ class BenchmarkResult:
     parsed_plan: List[str] = dataclasses.field(default_factory=list)
     per_op_stats: dict = dataclasses.field(default_factory=dict)
     execution_mode: str = "offline"
+    task_breakdown: List[dict] = dataclasses.field(default_factory=list)
 
 
 def make_run_id() -> str:

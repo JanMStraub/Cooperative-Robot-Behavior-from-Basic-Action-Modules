@@ -16,12 +16,10 @@ except ImportError:
     CV2_AVAILABLE = False
 
 try:
-    from .YOLODetector import YOLODetector
     from .ObjectTracker import ObjectTracker
     from .DetectionDataModels import DetectionObject, DetectionResult
     from .StereoConfig import CameraConfig
 except ImportError:
-    from vision.YOLODetector import YOLODetector
     from vision.ObjectTracker import ObjectTracker
     from vision.DetectionDataModels import DetectionObject, DetectionResult
     from vision.StereoConfig import CameraConfig

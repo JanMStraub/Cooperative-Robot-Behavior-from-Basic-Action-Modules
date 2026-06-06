@@ -185,7 +185,6 @@ class WorldStateServer(TCPServerBase):
             return None
 
     def get_all_robot_ids(self) -> List[str]:
-        """Get all known robot IDs (thread-safe)."""
         with self._state_lock:
             if not self._latest_state:
                 return []
@@ -194,7 +193,6 @@ class WorldStateServer(TCPServerBase):
             return [robot.get("robot_id") for robot in robots if "robot_id" in robot]
 
     def get_all_object_ids(self) -> List[str]:
-        """Get all known object IDs (thread-safe)."""
         with self._state_lock:
             if not self._latest_state:
                 return []

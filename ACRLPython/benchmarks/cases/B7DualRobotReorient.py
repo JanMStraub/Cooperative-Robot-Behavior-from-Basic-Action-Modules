@@ -3,12 +3,19 @@
 
 from __future__ import annotations
 
+EXPECTED_OP_CHAIN: list[str] = [
+    "detect_object_stereo",
+    "move_to_coordinate",
+    "grasp_object",
+    "move_to_coordinate",
+    "grasp_object",
+    "move_to_coordinate",
+    "move_to_coordinate",
+]
+
 
 def get_task() -> str:
     """
     Return natural language task description for B7.
-
     """
-    return (
-        "Robot1 and Robot2 cooperatively handle the red cube. First, Robot2 grasps the right side of the cube. After Robot2 is in position, Robot1 grasps the cube from the left side Once Robot1 has secured the cube, both robots simultaneously lift it to y=0.15."
-    )
+    return "Robot1 and Robot2 cooperatively handle the red cube. First, Robot1 grasps the right side of the cube. After Robot1 is in position, Robot2 grasps the cube from the left side. Once Robot2 has secured the cube, both robots simultaneously lift it to y=0.15."

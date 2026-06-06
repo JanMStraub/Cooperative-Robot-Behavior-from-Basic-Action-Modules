@@ -137,15 +137,18 @@ class TestCommandParserLLM:
     def test_parse_simple_move_command(
         self, command_parser, mock_lm_studio_response, mock_registry
     ):
-        with patch("requests.post", return_value=mock_lm_studio_response):
-            with patch.object(command_parser, "registry", mock_registry):
-                result = command_parser.parse(
-                    "move to (0.3, 0.2, 0.1)", robot_id="Robot1"
-                )
+        with patch.object(
+            command_parser._session, "post", return_value=mock_lm_studio_response
+        ):
+            with patch("orchestrators.CommandParser.USE_MOTION_LAYER", False):
+                with patch.object(command_parser, "registry", mock_registry):
+                    result = command_parser.parse(
+                        "move to (0.3, 0.2, 0.1)", robot_id="Robot1"
+                    )
 
-                assert result["success"] is True
-                assert len(result["commands"]) >= 1
-                assert result["commands"][0]["operation"] == "move_to_coordinate"
+                    assert result["success"] is True
+                    assert len(result["commands"]) >= 1
+                    assert result["commands"][0]["operation"] == "move_to_coordinate"
 
     def test_parse_gripper_command(self, command_parser, mock_registry):
         llm_response = Mock(spec=requests.Response)
@@ -174,13 +177,14 @@ class TestCommandParserLLM:
             }
         )
 
-        with patch("requests.post", return_value=llm_response):
-            with patch.object(command_parser, "registry", mock_registry):
-                result = command_parser.parse("open the gripper", robot_id="Robot1")
+        with patch.object(command_parser._session, "post", return_value=llm_response):
+            with patch("orchestrators.CommandParser.USE_MOTION_LAYER", False):
+                with patch.object(command_parser, "registry", mock_registry):
+                    result = command_parser.parse("open the gripper", robot_id="Robot1")
 
-                assert result["success"] is True
-                assert result["commands"][0]["operation"] == "control_gripper"
-                assert result["commands"][0]["params"]["open_gripper"] is True
+                    assert result["success"] is True
+                    assert result["commands"][0]["operation"] == "control_gripper"
+                    assert result["commands"][0]["params"]["open_gripper"] is True
 
     def test_parse_detection_command(self, command_parser, mock_registry):
         llm_response = Mock(spec=requests.Response)
@@ -210,9 +214,8 @@ class TestCommandParserLLM:
             }
         )
 
-        with patch(
-            "orchestrators.CommandParser.requests.post", return_value=llm_response
-        ):
+        # CommandParser uses self._session.post (requests.Session), not requests.post
+        with patch.object(command_parser._session, "post", return_value=llm_response):
             with patch("orchestrators.CommandParser.USE_MOTION_LAYER", False):
                 with patch.object(command_parser, "registry", mock_registry):
                     result = command_parser.parse(
@@ -226,16 +229,19 @@ class TestCommandParserLLM:
     def test_parse_compound_command(
         self, command_parser, mock_lm_studio_response, mock_registry
     ):
-        with patch("requests.post", return_value=mock_lm_studio_response):
-            with patch.object(command_parser, "registry", mock_registry):
-                result = command_parser.parse(
-                    "move to (0.3, 0.2, 0.1) and close gripper", robot_id="Robot1"
-                )
+        with patch.object(
+            command_parser._session, "post", return_value=mock_lm_studio_response
+        ):
+            with patch("orchestrators.CommandParser.USE_MOTION_LAYER", False):
+                with patch.object(command_parser, "registry", mock_registry):
+                    result = command_parser.parse(
+                        "move to (0.3, 0.2, 0.1) and close gripper", robot_id="Robot1"
+                    )
 
-                assert result["success"] is True
-                assert len(result["commands"]) >= 2
-                assert result["commands"][0]["operation"] == "move_to_coordinate"
-                assert result["commands"][1]["operation"] == "control_gripper"
+                    assert result["success"] is True
+                    assert len(result["commands"]) >= 2
+                    assert result["commands"][0]["operation"] == "move_to_coordinate"
+                    assert result["commands"][1]["operation"] == "control_gripper"
 
     def test_parse_with_variable_substitution(self, command_parser, mock_registry):
         """Test parsing command with variable substitution ($target)."""
@@ -286,18 +292,20 @@ class TestCommandParserLLM:
 
     def test_parse_with_llm_unavailable_fallback(self, command_parser, mock_registry):
         """Test fallback to regex when LLM is unavailable."""
-        with patch(
-            "requests.post",
+        with patch.object(
+            command_parser._session,
+            "post",
             side_effect=requests.exceptions.ConnectionError("LM Studio not available"),
         ):
-            with patch.object(command_parser, "registry", mock_registry):
-                result = command_parser.parse(
-                    "move to (0.3, 0.2, 0.1)", robot_id="Robot1"
-                )
+            with patch("orchestrators.CommandParser.USE_MOTION_LAYER", False):
+                with patch.object(command_parser, "registry", mock_registry):
+                    result = command_parser.parse(
+                        "move to (0.3, 0.2, 0.1)", robot_id="Robot1"
+                    )
 
-                # Should fallback to regex and still succeed
-                assert result["success"] is True
-                assert result["commands"][0]["operation"] == "move_to_coordinate"
+                    # Should fallback to regex and still succeed
+                    assert result["success"] is True
+                    assert result["commands"][0]["operation"] == "move_to_coordinate"
 
 
 # Test Class: Regex Fallback
@@ -445,30 +453,34 @@ class TestCommandParserErrors:
 
     def test_llm_timeout_handling(self, command_parser, mock_registry):
         """Test handling LLM request timeout."""
-        with patch(
-            "requests.post", side_effect=requests.exceptions.Timeout("Request timeout")
+        with patch.object(
+            command_parser._session,
+            "post",
+            side_effect=requests.exceptions.Timeout("Request timeout"),
         ):
-            with patch.object(command_parser, "registry", mock_registry):
-                result = command_parser.parse(
-                    "move somewhere", robot_id="Robot1", use_llm=True
-                )
+            with patch("orchestrators.CommandParser.USE_MOTION_LAYER", False):
+                with patch.object(command_parser, "registry", mock_registry):
+                    result = command_parser.parse(
+                        "move somewhere", robot_id="Robot1", use_llm=True
+                    )
 
-                # Should fallback to regex or return error
-                assert "error" in result or result["success"] is True
+                    # Should fallback to regex or return error
+                    assert "error" in result or result["success"] is True
 
     def test_llm_error_response(self, command_parser, mock_registry):
         """Test handling LLM error response (non-200 status)."""
         error_response = Mock(spec=requests.Response)
         error_response.status_code = 500
 
-        with patch("requests.post", return_value=error_response):
-            with patch.object(command_parser, "registry", mock_registry):
-                result = command_parser.parse(
-                    "move to position", robot_id="Robot1", use_llm=True
-                )
+        with patch.object(command_parser._session, "post", return_value=error_response):
+            with patch("orchestrators.CommandParser.USE_MOTION_LAYER", False):
+                with patch.object(command_parser, "registry", mock_registry):
+                    result = command_parser.parse(
+                        "move to position", robot_id="Robot1", use_llm=True
+                    )
 
-                # Should fallback to regex or return error
-                assert "error" in result or result["success"] is True
+                    # Should fallback to regex or return error
+                    assert "error" in result or result["success"] is True
 
     def test_malformed_llm_json_response(self, command_parser, mock_registry):
         """Test handling malformed JSON from LLM."""
@@ -482,14 +494,15 @@ class TestCommandParserErrors:
             }
         )
 
-        with patch("requests.post", return_value=bad_response):
-            with patch.object(command_parser, "registry", mock_registry):
-                result = command_parser.parse(
-                    "move to position", robot_id="Robot1", use_llm=True
-                )
+        with patch.object(command_parser._session, "post", return_value=bad_response):
+            with patch("orchestrators.CommandParser.USE_MOTION_LAYER", False):
+                with patch.object(command_parser, "registry", mock_registry):
+                    result = command_parser.parse(
+                        "move to position", robot_id="Robot1", use_llm=True
+                    )
 
-                # Should fallback to regex or return error
-                assert "error" in result or result["success"] is True
+                    # Should fallback to regex or return error
+                    assert "error" in result or result["success"] is True
 
 
 # Test Class: Variable Handling
@@ -726,6 +739,67 @@ class TestVariableSubstitution:
 
             # Should handle invalid syntax
             assert result is not None
+
+
+class TestExpandArrayOperations:
+    """Unit tests for _expand_array_operations covering all LLM output forms."""
+
+    def test_form_d_ops_key(self, command_parser):
+        """Form D: operation is string list + sub-ops under 'ops' key."""
+        cmds = [
+            {
+                "operation": ["signal", "wait_for_signal"],
+                "parallel_group": 6,
+                "ops": [
+                    {"operation": "signal", "params": {"event_name": "r1_at_handoff"}},
+                    {
+                        "operation": "wait_for_signal",
+                        "params": {"robot_id": "Robot2", "event_name": "r1_at_handoff"},
+                    },
+                ],
+            }
+        ]
+        result = command_parser._expand_array_operations(cmds)
+        assert len(result) == 2
+        assert result[0]["operation"] == "signal"
+        assert result[0]["params"]["event_name"] == "r1_at_handoff"
+        assert result[0]["parallel_group"] == 6
+        assert result[1]["operation"] == "wait_for_signal"
+        assert result[1]["params"]["event_name"] == "r1_at_handoff"
+        assert result[1]["params"]["robot_id"] == "Robot2"
+
+    def test_form_c_operations_key(self, command_parser):
+        """Form C: sub-ops under 'operations' key, no 'operation' field."""
+        cmds = [
+            {
+                "parallel_group": 6,
+                "operations": [
+                    {"operation": "signal", "params": {"event_name": "ev"}},
+                    {"operation": "wait_for_signal", "params": {"event_name": "ev"}},
+                ],
+            }
+        ]
+        result = command_parser._expand_array_operations(cmds)
+        assert len(result) == 2
+        assert result[0]["operation"] == "signal"
+        assert result[1]["operation"] == "wait_for_signal"
+
+    def test_form_a_nested_sub_op_dicts_as_params(self, command_parser):
+        """Form A guard: params list contains sub-op dicts instead of plain params."""
+        cmds = [
+            {
+                "operation": ["signal", "wait_for_signal"],
+                "parallel_group": 6,
+                "params": [
+                    {"operation": "signal", "params": {"event_name": "ev"}},
+                    {"operation": "wait_for_signal", "params": {"event_name": "ev"}},
+                ],
+            }
+        ]
+        result = command_parser._expand_array_operations(cmds)
+        assert len(result) == 2
+        assert result[0]["params"].get("event_name") == "ev"
+        assert result[1]["params"].get("event_name") == "ev"
 
 
 # Test Class: Complex Command Chains

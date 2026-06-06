@@ -191,6 +191,38 @@ def detect_object_stereo(
     if color == "None":  # LLM sometimes passes string "None"
         color = None
 
+    # If the robot is already holding an object matching the requested color,
+    # vision will fail to find it (it's in the gripper). Return WorldState position directly.
+    if robot_id and color:
+        try:
+            from core.Imports import get_world_state as _gws
+
+            _ws = _gws()
+            _held = [
+                obj
+                for obj in _ws.get_all_objects()
+                if obj.grasped_by == robot_id and color_matches(obj.color, color)
+            ]
+            if _held:
+                obj = _held[0]
+                logger.info(
+                    f"Robot {robot_id} already holds {obj.color} object — skipping vision detection"
+                )
+                return OperationResult.success_result(
+                    {
+                        "x": obj.position[0],
+                        "y": obj.position[1],
+                        "z": obj.position[2],
+                        "color": obj.color,
+                        "confidence": obj.confidence,
+                        "camera_id": camera_id,
+                        "selection": selection,
+                        "source": "held_object",
+                    }
+                )
+        except Exception:
+            pass  # WorldState unavailable — fall through to normal detection
+
     try:
         storage = get_unified_image_storage()
         broadcaster = get_command_broadcaster()

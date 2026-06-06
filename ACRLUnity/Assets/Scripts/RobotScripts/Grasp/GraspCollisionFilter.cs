@@ -11,15 +11,6 @@ namespace Robotics.Grasp
     public class GraspCollisionFilter
     {
         private readonly GraspConfig _config;
-        private readonly string[] _ignoredObjectNames =
-        {
-            "BottomPanel",
-            "Workdesk",
-            "Table",
-            "Floor",
-            "Ground",
-            "Plane",
-        };
 
         private readonly string _logPrefix = "[GRASP_COLLISION_FILTER]";
 
@@ -46,7 +37,7 @@ namespace Robotics.Grasp
                 {
                     candidate.collisionValidated = true;
                 }
-                UnityEngine.Debug.Log(
+                Debug.Log(
                     $"{_logPrefix} Collision checking disabled, accepting all {candidates.Count} candidates"
                 );
                 return candidates;
@@ -85,7 +76,7 @@ namespace Robotics.Grasp
                 }
             }
 
-            UnityEngine.Debug.Log(
+            Debug.Log(
                 $"{_logPrefix} Validated {validCandidates.Count}/{candidates.Count} candidates (rejected {rejectedCount} due to collisions: Top={rejectedTopCount}, Side={rejectedSideCount}, Front={rejectedFrontCount})"
             );
 
@@ -193,42 +184,13 @@ namespace Robotics.Grasp
                     }
                 }
 
-                UnityEngine.Debug.Log(
+                Debug.Log(
                     $"{_logPrefix} Retreat collision detected: hit '{hit.collider.gameObject.name}' (layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at distance {hit.distance:F3}m"
                 );
                 return false;
             }
 
             return true;
-        }
-
-        /// <summary>
-        /// Check if an object should be ignored during collision checking.
-        /// Ignores workspace surfaces (tables, floors, etc.) that objects rest on.
-        /// </summary>
-        /// <param name="obj">Object to check</param>
-        /// <returns>True if object should be ignored</returns>
-        private bool ShouldIgnoreObject(GameObject obj)
-        {
-            string objName = obj.name;
-
-            foreach (string ignoredName in _ignoredObjectNames)
-            {
-                if (objName.Equals(ignoredName, System.StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            foreach (string ignoredName in _ignoredObjectNames)
-            {
-                if (objName.IndexOf(ignoredName, System.StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private Vector3[] GenerateWaypoints(Vector3 start, Vector3 end, int count)
@@ -243,14 +205,6 @@ namespace Robotics.Grasp
             }
 
             return waypoints;
-        }
-
-        public bool IsCollisionFree(GraspCandidate candidate, GameObject targetObject = null)
-        {
-            if (!_config.enableCollisionChecking)
-                return true;
-
-            return CheckApproachPath(candidate, targetObject);
         }
 
         /// <summary>
@@ -288,25 +242,6 @@ namespace Robotics.Grasp
             Gizmos.DrawWireSphere(candidate.graspPosition, _config.collisionCheckRadius * 1.5f);
             Gizmos.color = Color.cyan;
             Gizmos.DrawWireSphere(candidate.retreatPosition, _config.collisionCheckRadius * 1.5f);
-        }
-
-        /// <summary>
-        /// Check multiple candidates in batch and return collision status for each.
-        /// Useful for analysis and debugging.
-        /// </summary>
-        /// <param name="candidates">Candidates to check</param>
-        /// <param name="targetObject">Target object to exclude</param>
-        /// <returns>Array of collision-free flags (parallel to input)</returns>
-        public bool[] BatchCheck(List<GraspCandidate> candidates, GameObject targetObject = null)
-        {
-            bool[] results = new bool[candidates.Count];
-
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                results[i] = CheckApproachPath(candidates[i], targetObject);
-            }
-
-            return results;
         }
     }
 }

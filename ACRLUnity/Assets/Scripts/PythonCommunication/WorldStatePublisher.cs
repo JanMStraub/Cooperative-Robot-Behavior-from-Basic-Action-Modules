@@ -27,6 +27,10 @@ namespace PythonCommunication
         public PositionData target_position;
         public RotationData target_rotation;
         public string gripper_state; // "open", "closed", "unknown"
+        public bool is_holding_object; // true when GripperContactSensor confirms both-finger contact
+        public string held_object_id; // GameObject name of grasped object, null if not holding
+        public bool gripper_has_contact; // true when contact sensor detects stable both-finger contact on any object
+        public float gripper_contact_force; // estimated grasp force from contact sensor moving average (N)
         public bool is_moving;
         public bool is_initialized;
         public float[] joint_angles;
@@ -79,20 +83,7 @@ namespace PythonCommunication
         public float confidence;
     }
 
-    /// <summary>
-    /// Periodically publishes robot and object states to Python's WorldState system.
-    ///
-    /// This component enables spatial reasoning operations on the Python side by providing:
-    /// - Robot positions and targets
-    /// - Gripper states
-    /// - Movement status
-    /// - Detected object positions
-    ///
-    /// Usage:
-    /// 1. Attach to a GameObject in your scene
-    /// 2. Configure update rate (default 2Hz - every 0.5s)
-    /// 3. Optionally track specific objects in the scene
-    /// </summary>
+    /// <summary>Periodically publishes robot and object states to Python's WorldState system.</summary>
     public class WorldStatePublisher : MonoBehaviour
     {
         public static WorldStatePublisher Instance { get; private set; }
@@ -137,10 +128,8 @@ namespace PythonCommunication
         private float _updateInterval;
         private float _timeSinceLastUpdate = 0f;
 
-        // Helper variable
         private const string _logPrefix = "[WORLD_STATE_PUBLISHER]";
 
-        // Cache detected objects from vision system
         private Dictionary<string, ObjectStateData> _detectedObjects =
             new Dictionary<string, ObjectStateData>();
 
@@ -192,9 +181,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Periodic update - publish world state at configured rate
-        /// </summary>
         private void Update()
         {
             if (!_enablePublishing)
@@ -234,11 +220,8 @@ namespace PythonCommunication
                     timestamp = Time.time,
                 };
 
-                // Convert to JSON and send via dedicated WorldStateClient
                 string json = JsonUtility.ToJson(update);
 
-                // Use dedicated WorldStateClient (port 5014) instead of ResultsClient (port 5010)
-                // This prevents unsolicited broadcasts from interfering with command request/response correlation
                 if (WorldStateClient.Instance != null)
                 {
                     bool sent = WorldStateClient.Instance.PublishWorldState(json);
@@ -275,9 +258,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Gather current state of all robots into the supplied list (cleared by caller).
-        /// </summary>
         private void GatherRobotStates(List<RobotStateData> robotStates)
         {
             foreach (var kvp in _robotManager.RobotInstances)
@@ -289,7 +269,6 @@ namespace PythonCommunication
                 if (controller == null)
                     continue;
 
-                // Gather robot state
                 Vector3 position =
                     controller.endEffectorBase != null
                         ? controller.endEffectorBase.position
@@ -314,13 +293,29 @@ namespace PythonCommunication
                     isMoving = true;
                 }
 
-                // Get gripper state
+                // Get gripper state and held-object ground truth
                 string gripperState = "unknown";
+                bool isHoldingObject = false;
+                string heldObjectId = null;
+                bool gripperHasContact = false;
+                float gripperContactForce = 0f;
                 var gripperController =
                     robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
                 if (gripperController != null)
                 {
                     gripperState = gripperController.targetPosition > 0.9f ? "open" : "closed";
+                    isHoldingObject = gripperController.IsHoldingObject;
+                    heldObjectId =
+                        gripperController.GraspedObject != null
+                            ? gripperController.GraspedObject.name
+                            : null;
+                    var contactSensor =
+                        robotInstance.robotGameObject.GetComponentInChildren<GripperContactSensor>();
+                    if (contactSensor != null)
+                    {
+                        gripperHasContact = contactSensor.HasAnyStableContact();
+                        gripperContactForce = contactSensor.EstimateGraspForce();
+                    }
                 }
 
                 // Get joint angles into pre-allocated cache (grows if robot has more than 6 joints)
@@ -356,6 +351,10 @@ namespace PythonCommunication
                         ? new RotationData(targetRotation.Value)
                         : null,
                     gripper_state = gripperState,
+                    is_holding_object = isHoldingObject,
+                    held_object_id = heldObjectId,
+                    gripper_has_contact = gripperHasContact,
+                    gripper_contact_force = gripperContactForce,
                     is_moving = isMoving,
                     is_initialized = true,
                     joint_angles = jointAngles,
@@ -403,7 +402,7 @@ namespace PythonCommunication
             // Add tracked GameObjects from scene
             foreach (var obj in _trackedObjects)
             {
-                if (obj == null)
+                if (obj == null || !obj.activeInHierarchy)
                     continue;
 
                 // Infer dimensions from collider local size (object frame, unaffected by rotation).
@@ -497,116 +496,6 @@ namespace PythonCommunication
             if (name.IndexOf("cylinder", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "cylinder";
             return "unknown";
-        }
-
-        /// <summary>
-        /// Register a detected object from vision system
-        /// </summary>
-        /// <param name="objectId">Unique object identifier</param>
-        /// <param name="position">Object position in world coordinates</param>
-        /// <param name="color">Object color</param>
-        /// <param name="objectType">Object type</param>
-        /// <param name="confidence">Detection confidence (0-1)</param>
-        /// <param name="rotation">Optional object rotation (null if unknown)</param>
-        /// <param name="dimensions">Optional object size (x=width, y=height, z=depth) in meters</param>
-        public void RegisterDetectedObject(
-            string objectId,
-            Vector3 position,
-            string color = "unknown",
-            string objectType = "cube",
-            float confidence = 1.0f,
-            Quaternion? rotation = null,
-            Vector3? dimensions = null
-        )
-        {
-            var objectState = new ObjectStateData
-            {
-                object_id = objectId,
-                position = new PositionData(position),
-                dimensions = dimensions.HasValue ? new PositionData(dimensions.Value) : null,
-                rotation = rotation.HasValue ? new RotationData(rotation.Value) : null,
-                color = color,
-                object_type = objectType,
-                confidence = confidence,
-            };
-
-            _detectedObjects[objectId] = objectState;
-
-            if (_verboseLogging)
-            {
-                Debug.Log(
-                    $"{_logPrefix} Registered detected object: {objectId} at ({position.x:F3}, {position.y:F3}, {position.z:F3})"
-                );
-            }
-        }
-
-        /// <summary>
-        /// Clear detected objects cache
-        /// </summary>
-        public void ClearDetectedObjects()
-        {
-            _detectedObjects.Clear();
-            if (_verboseLogging)
-            {
-                Debug.Log($"{_logPrefix} Cleared detected objects cache");
-            }
-        }
-
-        /// <summary>
-        /// Add GameObject to tracked objects list
-        /// </summary>
-        public void AddTrackedObject(GameObject obj)
-        {
-            if (obj != null && !_trackedObjects.Contains(obj))
-            {
-                _trackedObjects.Add(obj);
-                if (_verboseLogging)
-                {
-                    Debug.Log($"{_logPrefix} Added tracked object: {obj.name}");
-                }
-            }
-        }
-
-        /// <summary>
-        /// Remove GameObject from tracked objects list
-        /// </summary>
-        public void RemoveTrackedObject(GameObject obj)
-        {
-            if (_trackedObjects.Remove(obj))
-            {
-                if (_verboseLogging)
-                {
-                    Debug.Log($"{_logPrefix} Removed tracked object: {obj.name}");
-                }
-            }
-        }
-
-        /// <summary>
-        /// Force immediate world state publish (outside normal update cycle)
-        /// </summary>
-        public void PublishNow()
-        {
-            if (_enablePublishing)
-            {
-                PublishWorldState();
-            }
-        }
-
-        /// <summary>
-        /// Enable or disable publishing
-        /// </summary>
-        public void SetPublishingEnabled(bool enabled)
-        {
-            _enablePublishing = enabled;
-            Debug.Log($"{_logPrefix} Publishing {(enabled ? "enabled" : "disabled")}");
-        }
-
-        /// <summary>
-        /// Get publishing statistics
-        /// </summary>
-        public (int updatesSent, float lastUpdateTime) GetStats()
-        {
-            return (_updatesSent, _lastUpdateTime);
         }
     }
 }

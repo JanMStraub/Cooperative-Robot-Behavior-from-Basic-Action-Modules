@@ -34,7 +34,6 @@ import struct
 import sys
 import threading
 
-# ── Protocol V2 constants ──────────────────────────────────────────────────────
 SEQUENCE_QUERY = 0x08
 RESULT_TYPE = 0x02
 DIRECT_EXEC_PREFIX = "EXEC:"
@@ -51,9 +50,6 @@ DEFAULT_TIMEOUT = 120
 HANDOFF_X = -0.05
 HANDOFF_Y = 0.35
 HANDOFF_Z = 0.0
-
-
-# ── Wire format ────────────────────────────────────────────────────────────────
 
 
 def build_message(
@@ -131,9 +127,6 @@ def send_ops(
     )
 
 
-# ── Handoff sequence ───────────────────────────────────────────────────────────
-
-
 def run_handoff(
     object_id: str,
     grasper_id: str,
@@ -155,7 +148,6 @@ def run_handoff(
     results: dict = {}
     req = 1  # monotonically increasing request_id
 
-    # ── Step 1: Grasp ─────────────────────────────────────────────────────────
     if not receive_only:
         send_ops(
             [
@@ -178,7 +170,6 @@ def run_handoff(
         if not results.get("grasp", {}).get("success", False):
             return False
 
-    # ── Step 2: Return to start (deterministic joint config) ──────────────────
     if not receive_only:
         print()
         send_ops(
@@ -202,7 +193,6 @@ def run_handoff(
         if not results.get("return_start", {}).get("success", False):
             return False
 
-    # ── Step 3: Move to handoff presentation position ─────────────────────────
     if not receive_only:
         print()
         send_ops(
@@ -231,7 +221,6 @@ def run_handoff(
         if not results.get("move_present", {}).get("success", False):
             return False
 
-    # ── Step 4: Lock wrist orientation (deterministic joint 5/6 at presentation pos) ──
     if not receive_only:
         print()
         send_ops(
@@ -260,7 +249,6 @@ def run_handoff(
         if not results.get("orient_wrist", {}).get("success", False):
             print("  [WARN] orient_wrist failed — continuing anyway")
 
-    # ── Steps 5a/5b: Signal (R1) + Wait (R2) in parallel ─────────────────────
     if not grasp_only and not receive_only:
         print()
         signal_req = req
@@ -330,7 +318,6 @@ def run_handoff(
         if not wait_out.get("wait_signal", {}).get("success", False):
             return False
 
-    # ── Step 6: Receiver detects object at presentation position ──────────────
     if not grasp_only:
         print()
         send_ops(
@@ -358,9 +345,6 @@ def run_handoff(
         if not results.get("detect", {}).get("success", False):
             print("  [WARN] detect_object_stereo failed — continuing anyway")
 
-    # ── Steps 7a/7b: receive_handoff (Robot2) + wait_and_release (Robot1) parallel ─
-    # receive_handoff emits r2_gripped immediately after closing the gripper.
-    # Robot1 waits on that signal and releases — minimises dual-gripper hold time.
     if not grasp_only:
         print()
         receive_req = req
@@ -439,7 +423,6 @@ def run_handoff(
         if not results.get("receive", {}).get("success", False):
             return False
 
-    # ── Step 8: Grasper returns home ─────────────────────────────────────────
     if not grasp_only and not receive_only:
         print()
         send_ops(
@@ -467,9 +450,6 @@ def run_handoff(
     return all(
         r.get("success", False) for k, r in results.items() if k not in optional_steps
     )
-
-
-# ── CLI ────────────────────────────────────────────────────────────────────────
 
 
 def main():

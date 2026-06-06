@@ -4,8 +4,6 @@ using System.Diagnostics;
 using Configuration;
 using NUnit.Framework;
 using Robotics;
-using Robotics.Grasp;
-using Simulation;
 using Tests.EditMode;
 using UnityEngine;
 using UnityEngine.TestTools;

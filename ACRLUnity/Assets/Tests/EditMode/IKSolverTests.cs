@@ -1,4 +1,3 @@
-using MathNet.Numerics.LinearAlgebra;
 using NUnit.Framework;
 using Robotics;
 using UnityEngine;

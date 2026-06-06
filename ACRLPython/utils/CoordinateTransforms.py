@@ -149,7 +149,6 @@ def _build_np_transform_cache() -> Dict[str, Dict]:
         ros_y = -rotated_x
         ros_z = rotated_y
     Combined into a 3×3 matrix applied after translation.
-
     """
     cache = {}
     for robot_id, transform in ROBOT_BASE_TRANSFORMS.items():
@@ -269,7 +268,6 @@ def add_robot_transform(
     Register a new robot base transform.
 
     This allows dynamic robot configurations beyond the default Robot1/Robot2.
-
     """
     ROBOT_BASE_TRANSFORMS[robot_id] = {
         "position": position,

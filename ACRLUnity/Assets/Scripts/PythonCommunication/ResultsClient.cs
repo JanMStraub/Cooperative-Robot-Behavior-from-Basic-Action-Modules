@@ -1,5 +1,4 @@
 using System;
-using System.Text;
 using Core;
 using PythonCommunication.Core;
 using UnityEngine;
@@ -56,8 +55,13 @@ namespace PythonCommunication
         /// </summary>
         protected override GenericResult ReceiveResponse()
         {
-            string json = ReadJsonMessage(MessageType.RESULT, UnityProtocol.MAX_IMAGE_SIZE, out uint requestId);
-            if (json == null) return null;
+            string json = ReadJsonMessage(
+                MessageType.RESULT,
+                UnityProtocol.MAX_IMAGE_SIZE,
+                out uint requestId
+            );
+            if (json == null)
+                return null;
             return new GenericResult { rawJson = json, request_id = requestId };
         }
 

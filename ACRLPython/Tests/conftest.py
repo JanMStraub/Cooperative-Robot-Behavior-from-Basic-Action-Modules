@@ -23,7 +23,6 @@ def _reset_singleton(module_path: str, class_name: str) -> None:
 
     Silent on ImportError or AttributeError so it is safe to call even when
     the module has not been imported yet or the class name has changed.
-
     """
     try:
         mod = importlib.import_module(module_path)
@@ -660,7 +659,6 @@ def thread_barrier():
     Synchronization barrier for concurrent tests
 
     Ensures all threads start simultaneously to test race conditions.
-
     """
     import threading
 

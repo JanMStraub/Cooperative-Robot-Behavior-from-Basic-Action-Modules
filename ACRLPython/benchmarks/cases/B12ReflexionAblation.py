@@ -13,7 +13,6 @@ def get_tasks(config=None) -> List[str]:
     Tasks are designed to stress IK reachability and precision so that initial
     attempts are likely to fail, giving reflexion retries a chance to recover.
     Covers NAVIGATION, MANIPULATION, and PERCEPTION eligible categories.
-
     """
     # Boundary coords stress IK reachability; low y risks table collision;
     # "nearest object" is ambiguous, forcing perception retry on first miss.

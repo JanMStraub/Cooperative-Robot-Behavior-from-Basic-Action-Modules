@@ -33,9 +33,16 @@ def mock_deps():
         patch("core.Imports.get_world_state", return_value=ws),
         patch("config.ROS.ROS_ENABLED", False),
         patch("config.ROS.DEFAULT_CONTROL_MODE", "unity"),
-        patch("operations.SpatialPredicates.target_within_reach", return_value=(True, "ok")),
-        patch("operations.MoveOperations.move_to_coordinate", return_value=move_result) as mock_move,
-        patch("operations.GripperOperations.control_gripper", return_value=gripper_result) as mock_grip,
+        patch(
+            "operations.SpatialPredicates.target_within_reach",
+            return_value=(True, "ok"),
+        ),
+        patch(
+            "operations.MoveOperations.move_to_coordinate", return_value=move_result
+        ) as mock_move,
+        patch(
+            "operations.GripperOperations.control_gripper", return_value=gripper_result
+        ) as mock_grip,
         patch("operations.MoveOperations._tcp_wait_for_not_moving"),
     ):
         yield {"ws": ws, "move": mock_move, "grip": mock_grip}
@@ -65,7 +72,8 @@ class TestHandoffGeometry:
 
         assert result.success is True
         close_calls = [
-            c for c in mock_deps["grip"].call_args_list
+            c
+            for c in mock_deps["grip"].call_args_list
             if c.kwargs.get("open_gripper", c[1].get("open_gripper")) is False
         ]
         assert close_calls, "Gripper never closed"
@@ -75,11 +83,12 @@ class TestHandoffGeometry:
         from operations.grasp._handoff import receive_handoff
 
         with patch(
-            "operations.SpatialPredicates.target_within_reach", return_value=(True, "ok")
+            "operations.SpatialPredicates.target_within_reach",
+            return_value=(True, "ok"),
         ) as mock_reach:
             receive_handoff("Robot2", "red_bar", "Robot1")
             reach_x = mock_reach.call_args[0][1]
             # near_face for robot2 (approach_sign=+1): 0.0 + 0.02 = 0.02
-            assert reach_x == pytest.approx(0.02, abs=1e-6), (
-                f"Reach check should use near_face_x (0.02), got {reach_x}"
-            )
+            assert reach_x == pytest.approx(
+                0.02, abs=1e-6
+            ), f"Reach check should use near_face_x (0.02), got {reach_x}"

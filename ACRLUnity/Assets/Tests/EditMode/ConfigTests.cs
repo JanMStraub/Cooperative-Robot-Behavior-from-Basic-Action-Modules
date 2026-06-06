@@ -1,6 +1,5 @@
 using Configuration;
 using NUnit.Framework;
-using Robotics.Grasp;
 using UnityEngine;
 
 namespace Tests.EditMode

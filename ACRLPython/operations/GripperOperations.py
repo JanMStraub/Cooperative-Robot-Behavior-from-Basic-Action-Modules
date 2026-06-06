@@ -455,7 +455,7 @@ def place_object(
 
         effective_y = y
         resolution_note = "explicit_coords"
-        if on_top_of:
+        if on_top_of and isinstance(on_top_of, str):
             effective_y, resolution_note = _resolve_placement_y(
                 on_top_of, placed_object_height, fallback_y=y
             )

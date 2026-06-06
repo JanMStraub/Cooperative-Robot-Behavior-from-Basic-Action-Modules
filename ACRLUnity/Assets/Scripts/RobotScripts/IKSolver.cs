@@ -24,16 +24,10 @@ namespace Robotics
         private readonly int[] _luPiv = new int[6];
 
         private int _iterationCount;
-        public int IterationCount => _iterationCount;
 
         public void ResetIterationCount()
         {
             _iterationCount = 0;
-        }
-
-        public void SetIterationCount(int count)
-        {
-            _iterationCount = count;
         }
 
         public IKSolver(int jointCount, float dampingFactor)

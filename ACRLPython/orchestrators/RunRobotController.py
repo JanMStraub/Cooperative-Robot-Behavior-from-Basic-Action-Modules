@@ -694,6 +694,7 @@ def main():
         # Abort any in-flight sequence so operation threads unblock sooner.
         try:
             from orchestrators.SequenceExecutor import get_sequence_executor
+
             get_sequence_executor().abort()
         except Exception:
             pass

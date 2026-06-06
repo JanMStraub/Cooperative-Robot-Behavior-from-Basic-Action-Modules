@@ -62,6 +62,12 @@ REFLEXION_ENABLED = os.environ.get("REFLEXION_ENABLED", "true").lower() in (
 )
 REFLEXION_MAX_RETRIES = int(os.environ.get("REFLEXION_MAX_RETRIES", "2"))
 
+# Minimum contact force (N) to accept as a confirmed grasp when gripper_has_contact=False.
+# After Unity attaches the object, parent-child collision disables force callbacks, so
+# gripper_has_contact and gripper_contact_force both read 0. Set to 0.0 to pass on any
+# force reading; raise for real-robot deployments where force feedback is reliable.
+GRASP_VERIFY_MIN_FORCE = float(os.environ.get("GRASP_VERIFY_MIN_FORCE", "0.0"))
+
 # Intermediate motion layer (RT-H style): when True, CommandParser sends the
 # command to the LLM twice — Stage 1 decomposes to motion strings, Stage 2
 # maps those to operations. Disabled by default to preserve existing behaviour.
@@ -81,7 +87,7 @@ LMSTUDIO_BASE_URL = (
 )
 
 DEFAULT_LMSTUDIO_MODEL = os.environ.get(
-    "DEFAULT_LMSTUDIO_MODEL", "mistralai/ministral-3-14b-reasoning"
+    "DEFAULT_LMSTUDIO_MODEL", "mistralai/magistral-small-2509"
 )
 DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.1"))
 
@@ -89,11 +95,13 @@ DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.1"))
 # LM Studio exposes this as `budget_tokens` inside the `thinking` block.
 # Set to 0 to disable thinking entirely (fastest); increase for harder tasks.
 # Has no effect on non-reasoning models.
-LLM_THINKING_BUDGET = int(os.environ.get("LLM_THINKING_BUDGET", "4096"))
+LLM_THINKING_BUDGET = int(os.environ.get("LLM_THINKING_BUDGET", "8192"))
 
 # Set to True to enable thinking for reasoning models (e.g. ministral-3-14b-reasoning).
-# Requires max_tokens to be large enough to cover both thinking + actual response.
 LLM_THINKING_ENABLED = os.environ.get("LLM_THINKING_ENABLED", "true").lower() == "true"
+
+# Maximum tokens for LLM responses. Must be large enough to cover thinking budget + JSON response.
+LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "16384"))
 
 # ============================================================================
 # VGN (Volumetric Grasp Network) — Local Mac Inference

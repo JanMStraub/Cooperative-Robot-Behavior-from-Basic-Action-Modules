@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using NUnit.Framework;
 using PythonCommunication;
-using Tests.EditMode;
 using UnityEngine;
 using UnityEngine.TestTools;
 

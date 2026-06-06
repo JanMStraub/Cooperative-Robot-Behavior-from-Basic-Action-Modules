@@ -87,31 +87,58 @@ def receive_handoff(
                 f"receive_handoff: robot state unavailable, using base position {receiver_pos}"
             )
 
+        # Use live WorldState object position (50 Hz from Unity) for X/Z/Y.
+        # EE position is NOT used for X/Z: Robot1's EE is at its grasp point, which
+        # may be at an object face rather than the center, causing center_x to be offset
+        # by lx/2 and the insertion to overshoot. EE is still read for Y correction only
+        # (to detect the "object floats in air but detection returned table-level Y" case).
+        source_ee_pos = None
+        try:
+            source_state = (
+                world_state.get_robot_state(source_robot_id) if world_state else None
+            )
+            if source_state is not None and source_state.position is not None:
+                source_ee_pos = source_state.position
+                logger.info(
+                    f"receive_handoff: source {source_robot_id} EE at "
+                    f"({source_ee_pos[0]:.3f}, {source_ee_pos[1]:.3f}, {source_ee_pos[2]:.3f})"
+                    " — used for Y correction only"
+                )
+        except Exception as _src_e:
+            logger.warning(f"receive_handoff: could not read source EE — {_src_e}")
+
+        ref_x = object_position[0]
+        ref_z = object_position[2]
+        ref_y = object_position[1]
+        logger.info(
+            f"receive_handoff: initial ref from detected position "
+            f"({ref_x:.3f}, {ref_y:.3f}, {ref_z:.3f})"
+        )
+
         # Robot1 presents object sideways; Robot2 approaches along X to the near face.
         # object_dimensions are BoxCollider local-frame (size * lossyScale).
         lx = object_dimensions[0]
-        approach_sign = 1.0 if receiver_pos[0] > object_position[0] else -1.0
-        near_face_x = object_position[0] + approach_sign * lx * 0.5
-        # ap_x = near_face_x: used for reach check and ROS pre-waypoint anchor.
-        # center_x = object center: final move/insertion target for both paths.
-        # Keeping ap_x at the near face avoids MoveIt detecting the primary endpoint
-        # inside the object collision mesh and re-routing out-of-plane.
+        approach_sign = 1.0 if receiver_pos[0] > ref_x else -1.0
+        near_face_x = ref_x + approach_sign * lx * 0.5
+        # ap_x = near_face_x: approach target for reach check, pre-waypoint, and gripper close.
+        # With roll=90° (jaws vertical in Y), no X insertion needed — jaws straddle at the face.
         ap_x = near_face_x
-        center_x = object_position[0]
         obj_height = object_dimensions[1] if len(object_dimensions) > 1 else 0.02
         logger.info(
             f"receive_handoff: object_dimensions={object_dimensions}, obj_height={obj_height:.4f}m"
         )
-        # Grip below center (40% height, min 4cm) so receiver clears source robot's fingers.
-        # Clamp to 3cm above desk surface — for small objects near the table the unclamped
-        # value can be so low that MoveIt's Cartesian planner fails (joints at limits),
-        # silently falling back to an orientation-unlocked plan and producing a Z-face grasp.
+        # TCP at object bottom-face Y so the open jaws bracket the object symmetrically.
+        # offset = obj_height/2 places the TCP at the bottom face; the upper jaw
+        # (at TCP + jaw_half_gap) only needs jaw_half_gap > obj_height/2 to clear the top.
+        # The old max(height*0.4, 4cm) formula always clipped to 4cm for sub-10cm objects,
+        # putting the upper jaw inside the object for any gripper with < 11cm total opening.
         _Y_FLOOR_CLEARANCE = 0.03
-        ap_y = max(object_position[1] - max(obj_height * 0.4, 0.04), _Y_FLOOR_CLEARANCE)
-        ap_z = object_position[2]
+        ap_y = max(ref_y - obj_height * 0.5, _Y_FLOOR_CLEARANCE)
+        ap_z = ref_z
         logger.info(
             f"receive_handoff: approach_position=({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
-            f" (floor clearance {_Y_FLOOR_CLEARANCE}m)"
+            f" (floor clearance {_Y_FLOOR_CLEARANCE}m, "
+            f"source={'EE' if source_ee_pos is not None else 'detection'})"
         )
 
         # Validate reachability before wasting time on MoveIt planning calls.
@@ -140,6 +167,12 @@ def receive_handoff(
         logger.info(
             "receive_handoff: using robot-local yaw=0° (base rotation handles world facing)"
         )
+
+        # Guarantee maximum jaw opening before approach — avoids a partially-closed gripper
+        # (from a prior failed attempt) causing the jaw tips to contact the object face.
+        from ..GripperOperations import control_gripper as _open_gripper
+
+        _open_gripper(robot_id=robot_id, open_gripper=True, request_id=request_id)
 
         from ..MoveOperations import move_to_coordinate
 
@@ -210,6 +243,55 @@ def receive_handoff(
                         f"receive_handoff: hover pre-waypoint also failed ({(hover_result or {}).get('error', 'no response')}) — proceeding to final position"
                     )
 
+            # Re-read object position and source EE after pre-waypoint completes.
+            # By now (~8s elapsed) Robot1 has settled at its handoff position.
+            # Use live WorldState object position for X/Z (50 Hz from Unity = accurate).
+            # EE is read only for Y correction: when the object is held in the air,
+            # stereo detection may return table-level Y. If EE is >10cm above detected Y,
+            # use EE-derived object-center Y instead.
+            try:
+                _src2 = (
+                    world_state.get_robot_state(source_robot_id)
+                    if world_state
+                    else None
+                )
+                _obj2 = (
+                    world_state.get_object_position(object_id) if world_state else None
+                )
+                if _obj2 is not None:
+                    _nr_x = _obj2[0]
+                    _nr_z = _obj2[2]
+                    _det_y2 = _obj2[1]
+                else:
+                    _nr_x = object_position[0]
+                    _nr_z = object_position[2]
+                    _det_y2 = object_position[1]
+                if _src2 is not None and _src2.position is not None:
+                    _ee2 = _src2.position
+                    if _ee2[1] - _det_y2 > 0.10:
+                        _nr_y = _ee2[1] - obj_height / 2
+                        logger.info(
+                            f"receive_handoff: detected Y={_det_y2:.3f}m is "
+                            f"{_ee2[1] - _det_y2:.3f}m below EE — "
+                            f"using EE-derived Y={_nr_y:.3f}m"
+                        )
+                    else:
+                        _nr_y = _det_y2
+                else:
+                    _nr_y = _det_y2
+                ap_x = _nr_x + approach_sign * lx * 0.5
+                ap_y = max(_nr_y - obj_height * 0.5, _Y_FLOOR_CLEARANCE)
+                ap_z = _nr_z
+                logger.info(
+                    f"receive_handoff: refreshed approach from settled WorldState "
+                    f"obj=({_nr_x:.3f}, {_det_y2:.3f}, {_nr_z:.3f}) → "
+                    f"approach=({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
+                )
+            except Exception as _ee2_err:
+                logger.warning(
+                    f"receive_handoff: position re-read failed ({_ee2_err}) — using initial coords"
+                )
+
             # Locked-orientation Cartesian needs more start-state margin than free-space.
             _time.sleep(0.2)
 
@@ -246,6 +328,10 @@ def receive_handoff(
                     "error", "No response from ROS bridge"
                 )
 
+            # Approach stops at near_face_x. With roll=90° (jaws vertical in Y),
+            # the jaws straddle the object in Y — no X insertion needed.
+            # Inserting to center_x pushed the object away.
+
         else:
             # Disable ProximityGuard so the receiver can approach past the EE_STOP_THRESHOLD
             # (0.25m). Without this, the guard freezes both robots before the gripper reaches
@@ -256,16 +342,21 @@ def receive_handoff(
 
                 _broadcaster = get_command_broadcaster()
                 _broadcaster.send_command(
-                    {"command_type": "set_proximity_guard", "parameters": {"enabled": False}},
+                    {
+                        "command_type": "set_proximity_guard",
+                        "parameters": {"enabled": False},
+                    },
                     request_id,
                 )
                 logger.info("receive_handoff: ProximityGuard disabled for approach")
             except Exception as _pg_err:
-                logger.warning(f"receive_handoff: could not disable ProximityGuard — {_pg_err}")
+                logger.warning(
+                    f"receive_handoff: could not disable ProximityGuard — {_pg_err}"
+                )
 
             _move = move_to_coordinate(
                 robot_id=robot_id,
-                x=center_x,
+                x=ap_x,
                 y=ap_y,
                 z=ap_z,
                 request_id=request_id,
@@ -317,9 +408,33 @@ def receive_handoff(
                 ["Check gripper state", "Verify object is within gripper reach"],
             )
 
-        # Signal source robot to release before the contact-verification sleep so Robot1
-        # starts opening its gripper while Robot2 verifies the grip. Emitting after the
-        # sleep would leave both FixedJoints active for 0.5s → dual-grip physics jerk.
+        # Destroy source robot's FixedJoint immediately after closing ours.
+        # The dual-FixedJoint window is now only the round-trip of these two commands
+        # (~ms) rather than the seconds it takes for the group-9 release_object to run.
+        # Without this, two conflicting rigid constraints on the same body produce an
+        # impulse that snaps the receiving robot's arm back uncontrollably.
+        import time as _t_rel
+
+        from ..GripperOperations import control_gripper as _release_source_gripper
+
+        try:
+            _rel = _release_source_gripper(
+                robot_id=source_robot_id,
+                open_gripper=True,
+                request_id=request_id,
+            )
+            if _rel.success:
+                logger.info(
+                    f"receive_handoff: source {source_robot_id} released — "
+                    "dual-FixedJoint window closed"
+                )
+            else:
+                logger.warning(f"receive_handoff: source release failed ({_rel.error})")
+        except Exception as _rel_err:
+            logger.warning(
+                f"receive_handoff: could not release source gripper — {_rel_err}"
+            )
+
         if release_signal:
             try:
                 from ..SyncOperations import EventBus
@@ -338,7 +453,10 @@ def receive_handoff(
                 from .._imports import get_command_broadcaster as _gcb
 
                 _gcb().send_command(
-                    {"command_type": "set_proximity_guard", "parameters": {"enabled": True}},
+                    {
+                        "command_type": "set_proximity_guard",
+                        "parameters": {"enabled": True},
+                    },
                     request_id,
                 )
                 logger.info("receive_handoff: ProximityGuard re-enabled")
@@ -382,10 +500,15 @@ RECEIVE_HANDOFF_OPERATION = BasicOperation(
     ),
     long_description="""
         High-level operation that handles the complete receive side of a robot-to-robot
-        handoff.  Equivalent to grasp_object for the receiving robot.
+        handoff. Equivalent to grasp_object for the receiving robot.
+
+        Trigger phrases: "take the object from Robot1", "accept the handoff", "receive
+        what Robot1 is offering", "take the object that the other robot is holding",
+        "grab it from Robot1", "pick it up from Robot1", "Robot1 is passing the object",
+        "collect from partner", "take the offered object".
 
         Autonomously derives approach position (object centre ± half-width + clearance)
-        and gripper orientation from WorldState.  No hardcoded coordinates required.
+        and gripper orientation from WorldState. No hardcoded coordinates required.
 
         Internal sequence:
           1. Fetch object position + dimensions from WorldState.

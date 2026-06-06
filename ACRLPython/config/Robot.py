@@ -183,6 +183,11 @@ STATIC_COLLISION_RADIUS = float(
 PROXIMITY_EE_STOP_THRESHOLD = float(
     os.environ.get("PROXIMITY_EE_STOP_THRESHOLD", "0.25")
 )  # meters
+
+# Minimum upward Y component of VGN approach direction for top-down grasp selection.
+# Candidates below this threshold are deprioritized; fallback picks the most-top-down
+# candidate. Lower values accept more oblique approaches.
+VGN_MIN_Y_APPROACH = float(os.environ.get("VGN_MIN_Y_APPROACH", "0.15"))
 MAX_ROBOT_REACH = float(
     os.environ.get("MAX_ROBOT_REACH", "0.64")
 )  # meters (AR4 kinematic limit)

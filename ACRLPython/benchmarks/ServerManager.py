@@ -51,7 +51,6 @@ class ServerManager:
     ) -> None:
         """
         Configure server manager.
-
         """
         self._startup_timeout = startup_timeout
         self._poll_interval = poll_interval
@@ -128,7 +127,6 @@ class ServerManager:
     def _wait_for_ports(self) -> bool:
         """
         Poll _READINESS_PORTS until all open or timeout.
-
         """
         deadline = time.monotonic() + self._startup_timeout
         while time.monotonic() < deadline:

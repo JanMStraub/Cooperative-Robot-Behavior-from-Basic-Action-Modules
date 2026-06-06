@@ -17,8 +17,6 @@ def get_hardware_interface(env: str = "sim") -> "RobotHardwareInterface":
     On the first call the correct adapter is instantiated and cached.
     Subsequent calls always return the same instance regardless of the env
     argument, so env only matters on the very first call (set by RunRobotController).
-
-
     """
     global _instance
     if _instance is None:

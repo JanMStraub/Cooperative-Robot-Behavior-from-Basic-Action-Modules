@@ -1,4 +1,3 @@
-# Kinematics solver configuration for AR4 mk3
 /**:
   ros__parameters:
     arm:

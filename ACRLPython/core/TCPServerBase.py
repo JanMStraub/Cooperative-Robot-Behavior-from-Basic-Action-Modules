@@ -435,7 +435,7 @@ class TCPServerBase(ABC):
                 self._record_bytes_sent(client, len(data))
                 success_count += 1
             except Exception as e:
-                self._logger.warning(f"Failed to send to client: {e}")
+                self._logger.debug(f"Failed to send to client: {e}")
                 disconnected.append(client)
 
         if disconnected:

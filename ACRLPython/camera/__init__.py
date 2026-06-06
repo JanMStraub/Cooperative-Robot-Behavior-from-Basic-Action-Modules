@@ -16,8 +16,6 @@ def get_camera_provider(env: str = "sim") -> "CameraProvider":
 
     On the first call the correct adapter is instantiated and cached.
     Subsequent calls always return the same instance.
-
-
     """
     global _instance
     if _instance is None:

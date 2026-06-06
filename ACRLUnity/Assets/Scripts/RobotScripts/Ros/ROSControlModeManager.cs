@@ -10,13 +10,8 @@ namespace Robotics
     /// </summary>
     public enum ControlMode
     {
-        /// <summary>Unity-native IK via RobotController (default, existing behavior).</summary>
         Unity,
-
-        /// <summary>ROS MoveIt controls motion via trajectory topics. Unity IK is disabled.</summary>
         ROS,
-
-        /// <summary>ROS has priority when executing a trajectory; falls back to Unity IK otherwise.</summary>
         Hybrid,
     }
 
@@ -87,16 +82,9 @@ namespace Robotics
 
         public ControlMode CurrentMode => _currentMode;
 
-        /// <summary>
-        /// Whether a ROS trajectory is currently being executed.
-        /// </summary>
         public bool IsROSTrajectoryActive =>
             _trajectorySubscriber != null && _trajectorySubscriber.IsExecutingTrajectory;
 
-        /// <summary>
-        /// Whether Unity IK should be active based on current mode and state.
-        /// In Hybrid mode, Unity IK is active only when ROS is not executing a trajectory.
-        /// </summary>
         public bool ShouldUnityIKBeActive
         {
             get
@@ -113,7 +101,6 @@ namespace Robotics
 
         private void Start()
         {
-            // Auto-find components if not assigned
             if (_robotController == null)
                 _robotController = GetComponent<RobotController>();
 
@@ -133,7 +120,6 @@ namespace Robotics
                 return;
             }
 
-            // Apply initial mode
             SetControlMode(_initialMode);
 
             string robotId = _robotController.robotId;
@@ -142,7 +128,6 @@ namespace Robotics
 
         private void Update()
         {
-            // In Hybrid mode, dynamically toggle IsManuallyDriven based on ROS activity
             if (_currentMode == ControlMode.Hybrid && _robotController != null)
             {
                 bool rosActive = IsROSTrajectoryActive;
@@ -172,21 +157,18 @@ namespace Robotics
             switch (mode)
             {
                 case ControlMode.Unity:
-                    // Unity IK active, ROS subscribers disabled
                     if (_robotController != null)
                         _robotController.IsManuallyDriven = false;
                     SetROSSubscribersEnabled(false);
                     break;
 
                 case ControlMode.ROS:
-                    // Unity IK disabled, ROS subscribers active
                     if (_robotController != null)
                         _robotController.IsManuallyDriven = true;
                     SetROSSubscribersEnabled(true);
                     break;
 
                 case ControlMode.Hybrid:
-                    // Both available; ROS takes priority when executing trajectory
                     if (_robotController != null)
                         _robotController.IsManuallyDriven = IsROSTrajectoryActive;
                     SetROSSubscribersEnabled(true);

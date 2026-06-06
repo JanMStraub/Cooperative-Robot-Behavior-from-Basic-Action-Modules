@@ -421,11 +421,16 @@ class VGNClient:
             )
             masked_points = pts_rh[mask]
         if masked_points.shape[0] < _MIN_POINTS:
+            if object_dimensions is None:
+                logger.warning(
+                    f"[VGN] Only {masked_points.shape[0]} points after masking "
+                    f"(need ≥ {_MIN_POINTS}) — aborting (no dims for box synthesis)"
+                )
+                return None
             logger.warning(
-                f"[VGN] Only {masked_points.shape[0]} points after masking "
-                f"(need ≥ {_MIN_POINTS}) — aborting"
+                f"[VGN] Only {masked_points.shape[0]} real points after masking "
+                f"(need ≥ {_MIN_POINTS}) — proceeding to box synthesis"
             )
-            return None
 
         logger.info(
             f"[VGN] Masked point cloud: {masked_points.shape[0]} / {pts_rh.shape[0]} points"

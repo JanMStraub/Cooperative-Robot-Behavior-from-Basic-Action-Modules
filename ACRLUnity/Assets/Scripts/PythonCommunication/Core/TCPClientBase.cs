@@ -82,8 +82,6 @@ namespace PythonCommunication.Core
             }
         }
 
-        public string ConnectionInfo => $"{_serverHost}:{_serverPort}";
-
         protected virtual void Awake()
         {
             // Capture Unity main thread context for safe callback marshalling
@@ -433,7 +431,11 @@ namespace PythonCommunication.Core
         /// <param name="maxJsonLength">Maximum allowed JSON body size in bytes.</param>
         /// <param name="requestId">Set to the request ID decoded from the header.</param>
         /// <returns>UTF-8 decoded JSON body, or <c>null</c> if no data was available.</returns>
-        protected string ReadJsonMessage(MessageType expectedType, int maxJsonLength, out uint requestId)
+        protected string ReadJsonMessage(
+            MessageType expectedType,
+            int maxJsonLength,
+            out uint requestId
+        )
         {
             requestId = 0;
 
@@ -450,7 +452,9 @@ namespace PythonCommunication.Core
             if (type != expectedType)
             {
                 Debug.LogError($"[TCPClientBase] Expected {expectedType}, got {type}");
-                throw new System.IO.IOException($"Protocol violation: Expected {expectedType}, got {type}");
+                throw new System.IO.IOException(
+                    $"Protocol violation: Expected {expectedType}, got {type}"
+                );
             }
 
             byte[] lenBytes = new byte[4];

@@ -19,6 +19,21 @@ KG_OBJECTS = (
 )
 KG_ROBOT_NEARBY = "Robot2"
 
+# Operations that semantically take object IDs as params — used by Runner to
+# detect wrong-object references when KG context is enabled.
+KG_AWARE_OPS: frozenset = frozenset(
+    {
+        "grasp_object",
+        "detect_object_stereo",
+        "pick_object_at_coordinate",
+        "move_relative_to_object",
+        "receive_handoff",
+        "place_object",
+        "place_for_partner",
+        "place_between_objects",
+    }
+)
+
 
 def get_tasks(config=None) -> List[str]:
     """
@@ -27,7 +42,6 @@ def get_tasks(config=None) -> List[str]:
     With KG enabled, _get_spatial_context() injects reachability data, so the
     LLM should reference the exact object IDs from KG_OBJECTS. Without it,
     the LLM has only the command text and may hallucinate object identifiers.
-
     """
 
     return [
@@ -45,7 +59,6 @@ def populate_synthetic_kg(robot_id: str) -> None:
 
     Adds all KG_OBJECTS as reachable ObjectNodes spread across the workspace,
     and adds KG_ROBOT_NEARBY as a RobotNode 0.5m away.
-
     """
     from knowledge_graph._singleton import get_knowledge_graph
 
@@ -63,6 +76,8 @@ def populate_synthetic_kg(robot_id: str) -> None:
         (0.0, 0.0, 0.0),
     ]
 
+    kg.add_node(robot_id, node_type="robot", position=(0.0, 0.0, 0.0))
+
     for obj_id, pos in zip(KG_OBJECTS, positions):
         color = obj_id.split("_")[0]
         kg.add_node(obj_id, node_type="object", color=color, position=pos)
@@ -77,7 +92,7 @@ def populate_synthetic_kg(robot_id: str) -> None:
     kg.add_edge(robot_id, KG_ROBOT_NEARBY, "NEAR", distance=0.5)
 
 
-def clear_synthetic_kg() -> None:
+def clear_synthetic_kg(robot_id: str) -> None:
     """Remove synthetic nodes added by populate_synthetic_kg."""
     from knowledge_graph._singleton import get_knowledge_graph
 
@@ -85,3 +100,4 @@ def clear_synthetic_kg() -> None:
     for obj_id in KG_OBJECTS:
         kg.remove_node(obj_id)
     kg.remove_node(KG_ROBOT_NEARBY)
+    kg.remove_node(robot_id)

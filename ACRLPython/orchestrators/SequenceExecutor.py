@@ -18,13 +18,21 @@ try:
     from ..operations.Verification import OperationVerifier
     from ..operations.CoordinationVerifier import CoordinationVerifier
     from ..core.Imports import get_world_state
-    from ..config.Servers import REFLEXION_ENABLED, REFLEXION_MAX_RETRIES
+    from ..config.Servers import (
+        REFLEXION_ENABLED,
+        REFLEXION_MAX_RETRIES,
+        GRASP_VERIFY_MIN_FORCE,
+    )
 except ImportError:
     from operations.Base import OperationCategory
     from operations.Verification import OperationVerifier
     from operations.CoordinationVerifier import CoordinationVerifier
     from core.Imports import get_world_state
-    from config.Servers import REFLEXION_ENABLED, REFLEXION_MAX_RETRIES
+    from config.Servers import (
+        REFLEXION_ENABLED,
+        REFLEXION_MAX_RETRIES,
+        GRASP_VERIFY_MIN_FORCE,
+    )
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -149,6 +157,65 @@ class SequenceExecutor:
 
         self.outcome_tracker: Optional[Any] = None
 
+    def _verify_grasp_held(self, robot_id: str) -> bool:
+        """
+        Check WorldState to confirm the robot is actually holding an object
+        after a grasp_object step reported success.
+
+        Returns True if holding is confirmed or WorldState data is stale/unavailable
+        (skip verification rather than false-failing offline/dry-run). Returns False
+        only when WorldState has fresh Unity data and is_holding_object is False.
+        """
+        try:
+            ws = get_world_state()
+            if ws is None:
+                return True
+            # Poll until gripper_has_contact=True (sensor settled) or deadline.
+            # GripperContactSensor needs ~100ms min contact duration + 5-frame average
+            # at 60Hz (~83ms) before it reports contact, so the first fresh WorldState
+            # update after gripper close often arrives before the sensor has confirmed.
+            verify_start = time.time()
+            deadline = verify_start + 1.5
+            poll_interval = 0.05
+            robot_state = None
+            while time.time() < deadline:
+                robot_state = ws.get_robot_state(robot_id)
+                if (
+                    robot_state is not None
+                    and robot_state.timestamp >= verify_start
+                    and robot_state.gripper_has_contact
+                ):
+                    break
+                time.sleep(poll_interval)
+
+            if robot_state is None:
+                robot_state = ws.get_robot_state(robot_id)
+            if robot_state is None:
+                return True
+            # Only reject when WorldState is fresh (updated within 2s from Unity)
+            age = time.time() - robot_state.timestamp
+            if age > 2.0:
+                return True
+            force = robot_state.gripper_contact_force
+            contact_confirmed = (
+                robot_state.gripper_has_contact or force >= GRASP_VERIFY_MIN_FORCE
+            )
+            if not contact_confirmed:
+                logger.warning(
+                    f"[grasp verify] {robot_id} reported grasp success but "
+                    f"gripper_has_contact=False and force={force:.2f}N < {GRASP_VERIFY_MIN_FORCE}N "
+                    f"(state age={age:.2f}s)"
+                )
+                return False
+            logger.debug(
+                f"[grasp verify] {robot_id} confirmed "
+                f"(gripper_has_contact={robot_state.gripper_has_contact}, force={force:.2f}N)"
+            )
+            return True
+        except Exception as e:
+            logger.debug(f"[grasp verify] skipped: {e}")
+            return True
+
     @property
     def _var_resolver(self):
         """Lazily create VariableResolver so __new__-based tests work without calling __init__."""
@@ -190,6 +257,7 @@ class SequenceExecutor:
         self._abort_flag = False
         try:
             from core.Imports import clear_sequence_abort
+
             clear_sequence_abort()
         except ImportError:
             pass
@@ -207,6 +275,11 @@ class SequenceExecutor:
 
         # Clear variables for new sequence (clear in-place to preserve VariableResolver's shared reference)
         self._variables.clear()
+
+        # Infer missing capture_var values from downstream $var references.
+        # When the LLM omits capture_var on a perception op but a later command
+        # references $somevar, we backfill capture_var so the variable is stored.
+        commands = self._infer_capture_vars(commands)
 
         start_time = time.time()
         results = []
@@ -322,6 +395,61 @@ class SequenceExecutor:
                 }
                 results.append(result_entry)
 
+                # After grasp_object reports success, verify the robot is actually
+                # holding the object via WorldState ground truth from Unity.
+                # Skipped in dry-run/offline (WorldState has no fresh Unity data).
+                if cmd_result["success"] and operation == "grasp_object":
+                    robot_id_for_check = params.get("robot_id", "")
+                    if robot_id_for_check:
+                        if not self._verify_grasp_held(robot_id_for_check):
+                            cmd_result = {
+                                "success": False,
+                                "error": (
+                                    "Grasp reported success but object not detected "
+                                    "between gripper jaws (WorldState is_holding_object=False)"
+                                ),
+                                "error_code": "GRASP_NOT_CONFIRMED",
+                            }
+                            result_entry["success"] = False
+                            result_entry["error"] = cmd_result["error"]
+                            result_entry["error_code"] = cmd_result["error_code"]
+
+                            # Open gripper so it's ready for the next attempt.
+                            logger.info(
+                                "[grasp verify] opening gripper after failed grasp for %s",
+                                robot_id_for_check,
+                            )
+                            self._execute_single_command(
+                                "control_gripper",
+                                {"robot_id": robot_id_for_check, "action": "open"},
+                                timeout,
+                            )
+
+                            # Mark the object stale so the next detect_object_stereo
+                            # does a fresh scan (failed grasp may have displaced it).
+                            _object_id_failed = params.get("object_id", "")
+                            try:
+                                _ws_inv = get_world_state()
+                                if _ws_inv is not None and _object_id_failed:
+                                    with _ws_inv._lock:
+                                        _canonical = _ws_inv.resolve_canonical_id(
+                                            _object_id_failed
+                                        )
+                                        _key = _canonical or _object_id_failed
+                                        if _key in _ws_inv._objects:
+                                            _ws_inv._objects[_key].stale = True
+                                            _ws_inv._objects[_key].confidence = 0.0
+                            except Exception:
+                                pass
+                            try:
+                                from operations.SharedVisionState import (
+                                    get_shared_vision_state,
+                                )
+
+                                get_shared_vision_state().clear()
+                            except Exception:
+                                pass
+
                 if cmd_result["success"]:
                     completed += 1
                     self._notify_progress(i, len(commands), operation, "completed")
@@ -373,9 +501,69 @@ class SequenceExecutor:
                     ):
                         error_msg = cmd_result.get("error", "Unknown error")
                         recovery = cmd_result.get("recovery_suggestions", [])
-                        hint = f"Previous attempt failed: {error_msg}."
+                        hint = f"Operation '{operation}' failed: {error_msg}."
                         if recovery:
                             hint += " Suggestions: " + "; ".join(recovery)
+                        if i > 0:
+                            completed_ops = [
+                                commands[j].get("operation", "?") for j in range(i)
+                            ]
+                            hint += (
+                                f" Already completed: {', '.join(completed_ops)}."
+                                f" Retry only the failed '{operation}' operation."
+                            )
+                        # Tell the LLM which variables were captured so it uses correct names.
+                        if self._variables:
+                            var_descs = []
+                            for vname, vval in self._variables.items():
+                                if isinstance(vval, dict) and "color" in vval:
+                                    var_descs.append(
+                                        f"${vname} (color='{vval['color']}')"
+                                    )
+                                else:
+                                    var_descs.append(f"${vname}")
+                            hint += f" Captured variables: {', '.join(var_descs)}."
+
+                        # Inject WorldState context: held objects are inside the gripper and
+                        # invisible to cameras — the LLM must not try to re-detect them.
+                        # For perception failures also hint that returning to start clears occlusion.
+                        try:
+                            _ws_ctx = get_world_state()
+                            if _ws_ctx is not None:
+                                _held_info = [
+                                    f"{_rid} holds '{_rs.held_object_id}'"
+                                    for _rid, _rs in _ws_ctx._robot_states.items()
+                                    if _rs.is_holding_object and _rs.held_object_id
+                                ]
+                                if _held_info:
+                                    hint += (
+                                        f" Currently held objects: {', '.join(_held_info)}"
+                                        " — held objects are inside the gripper and NOT"
+                                        " visible to cameras; use their WorldState position,"
+                                        " do not re-detect them."
+                                    )
+                                if _op_category == OperationCategory.PERCEPTION:
+                                    hint += (
+                                        " The robot arm may be occluding the target."
+                                        " Consider return_to_start_position first to clear"
+                                        " the camera view, then retry detection."
+                                    )
+                        except Exception:
+                            pass
+
+                        # Inject pre-computed safe waypoint from CoordinationVerifier so
+                        # the LLM gets an actionable coordinate rather than generic advice.
+                        # cmd_result stores verification details under "verification_details";
+                        # wrap it so _extract_waypoint_from_verification finds the right key.
+                        _wp = _extract_waypoint_from_verification(
+                            {"details": cmd_result.get("verification_details", {})}
+                        )
+                        if _wp is not None:
+                            hint += (
+                                f" Safe waypoint suggestion: move to"
+                                f" x={_wp[0]:.3f}, y={_wp[1]:.3f}, z={_wp[2]:.3f}"
+                                " (avoids the detected collision)."
+                            )
 
                         try:
                             from ..orchestrators.CommandParser import get_command_parser
@@ -405,8 +593,16 @@ class SequenceExecutor:
                                 )
                                 continue
 
-                            # Re-resolve variables for the retried command(s)
-                            retry_cmd = retry_parse["commands"][0]
+                            # Pick the command that matches the failed operation; fall back to last.
+                            retry_cmds = retry_parse["commands"]
+                            retry_cmd = next(
+                                (
+                                    c
+                                    for c in retry_cmds
+                                    if c.get("operation") == operation
+                                ),
+                                retry_cmds[-1],
+                            )
                             retry_op = retry_cmd.get("operation", operation)
                             retry_params = self._resolve_variables(
                                 retry_cmd.get("params", params)
@@ -414,6 +610,27 @@ class SequenceExecutor:
                             retry_params = self._auto_inject_parameters(
                                 retry_op, retry_params
                             )
+
+                            # Guard: skip retry if any param is still an unresolved $var
+                            # (the Reflexion re-parse may produce commands that reference
+                            # variables not yet captured, e.g. object_id="$target.color"
+                            # when detect_object_stereo hasn't run yet).
+                            _retry_unresolved = [
+                                f"{_k}={_v}"
+                                for _k, _v in retry_params.items()
+                                if isinstance(_v, str)
+                                and _v.startswith("$")
+                                and _v.lstrip("$").split(".")[0] not in self._variables
+                            ]
+                            if _retry_unresolved:
+                                logger.warning(
+                                    "Reflexion retry %d/%d (%s): unresolved variable(s) %s — skipping",
+                                    retry_n,
+                                    REFLEXION_MAX_RETRIES,
+                                    retry_op,
+                                    ", ".join(_retry_unresolved),
+                                )
+                                continue
 
                             # Re-inject camera_id for perception ops — SequenceServer
                             # normally does this but is bypassed in the Reflexion path.
@@ -424,6 +641,25 @@ class SequenceExecutor:
                                     "camera_id"
                                 ):
                                     retry_params["camera_id"] = _original_camera_id
+
+                            # For perception retries, return to start first so the robot arm
+                            # no longer occludes the target object in the camera view.
+                            if _op_category == OperationCategory.PERCEPTION:
+                                _ret_robot_id = retry_params.get(
+                                    "robot_id"
+                                ) or params.get("robot_id", "")
+                                if _ret_robot_id:
+                                    logger.info(
+                                        "Reflexion: returning %s to start before perception retry %d"
+                                        " to clear robot-arm occlusion",
+                                        _ret_robot_id,
+                                        retry_n,
+                                    )
+                                    self._execute_single_command(
+                                        "return_to_start_position",
+                                        {"robot_id": _ret_robot_id},
+                                        timeout,
+                                    )
 
                             retry_start = time.time()
                             retry_result = self._execute_single_command(
@@ -464,9 +700,45 @@ class SequenceExecutor:
                             else:
                                 error_msg = retry_result.get("error", "Unknown error")
                                 recovery = retry_result.get("recovery_suggestions", [])
-                                hint = f"Retry {retry_n} failed: {error_msg}."
+                                hint = f"Operation '{retry_op}' retry {retry_n} failed: {error_msg}."
                                 if recovery:
                                     hint += " Suggestions: " + "; ".join(recovery)
+                                hint += (
+                                    f" Retry only the failed '{retry_op}' operation."
+                                )
+                                if self._variables:
+                                    var_descs = []
+                                    for vname, vval in self._variables.items():
+                                        if isinstance(vval, dict) and "color" in vval:
+                                            var_descs.append(
+                                                f"${vname} (color='{vval['color']}')"
+                                            )
+                                        else:
+                                            var_descs.append(f"${vname}")
+                                    hint += (
+                                        f" Captured variables: {', '.join(var_descs)}."
+                                    )
+                                try:
+                                    _ws_ctx2 = get_world_state()
+                                    if _ws_ctx2 is not None:
+                                        _held_info2 = [
+                                            f"{_rid} holds '{_rs.held_object_id}'"
+                                            for _rid, _rs in _ws_ctx2._robot_states.items()
+                                            if _rs.is_holding_object
+                                            and _rs.held_object_id
+                                        ]
+                                        if _held_info2:
+                                            hint += (
+                                                f" Currently held objects: {', '.join(_held_info2)}"
+                                                " — NOT visible to cameras."
+                                            )
+                                        if _op_category == OperationCategory.PERCEPTION:
+                                            hint += (
+                                                " Robot arm may still occlude target;"
+                                                " return_to_start_position before detection."
+                                            )
+                                except Exception:
+                                    pass
                                 logger.warning(
                                     f"Reflexion retry {retry_n} failed: {error_msg}"
                                 )
@@ -544,6 +816,44 @@ class SequenceExecutor:
             pass  # Broadcasting is best-effort; never fail a sequence over it
 
         return result
+
+    def _infer_capture_vars(
+        self, commands: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Backfill missing capture_var on perception ops when downstream commands reference $var.
+
+        For each perception op without capture_var, looks ahead for the nearest $var reference
+        and sets capture_var to that name. This handles reused variable names (e.g. two
+        consecutive detect→move pairs both using $target) correctly: each detection updates
+        the variable before its paired move uses it.
+        """
+        commands = [dict(cmd) for cmd in commands]  # shallow copy so we can mutate
+
+        for i, cmd in enumerate(commands):
+            if cmd.get("capture_var"):
+                continue
+            op = cmd.get("operation", "")
+            op_def = self.registry.get_operation_by_name(op) if self.registry else None
+            if op_def is None or op_def.category != OperationCategory.PERCEPTION:
+                continue
+
+            # Look ahead for the nearest downstream $var reference
+            for later_cmd in commands[i + 1 :]:
+                for v in later_cmd.get("params", {}).values():
+                    if isinstance(v, str) and v.startswith("$"):
+                        var_name = v.lstrip("$").split(".")[0]
+                        cmd["capture_var"] = var_name
+                        logger.debug(
+                            "Inferred capture_var='%s' for %s (cmd %d) from downstream reference",
+                            var_name,
+                            op,
+                            i + 1,
+                        )
+                        break
+                if cmd.get("capture_var"):
+                    break
+
+        return commands
 
     def _execute_parallel_groups(
         self, commands: List[Dict[str, Any]], timeout: float
@@ -659,6 +969,7 @@ class SequenceExecutor:
                     # reset_simulation fires.
                     try:
                         from core.Imports import signal_sequence_abort
+
                         signal_sequence_abort()
                     except ImportError:
                         pass
@@ -898,14 +1209,17 @@ class SequenceExecutor:
                 _result = {"success": True, "result": op_result.result, "error": None}
                 return _result
 
-            # Skip completion waiting for operations that executed via ROS
-            # (no Unity command with outer request_id was sent).
+            # Skip completion waiting for operations that self-managed completion
+            # (ROS path blocks internally; tcp_executed means _tcp_wait_for_not_moving
+            # already handled the wait — Unity's completion signal is unreliable for
+            # orientation commands when the robot is holding an object).
             if op_result.result and op_result.result.get("status") in (
                 "ros_executed",
                 "ros_command_sent",
                 "ros_executed_with_grasp_planning",
                 "vgn_ros_executed",
                 "handoff_received",
+                "tcp_executed",
             ):
                 logger.debug(
                     f"Skipping completion wait for ROS-executed operation: {operation}"
@@ -1119,7 +1433,11 @@ class SequenceExecutor:
         if robot_id and self.coordination_verifier:
             logger.debug(f"Checking multi-robot coordination safety")
             coord_result = self.coordination_verifier.verify_multi_robot_safety(
-                robot_id, op_def.category, params, self.world_state
+                robot_id,
+                op_def.category,
+                params,
+                self.world_state,
+                operation_name=op_def.name,
             )
             details["coordination_check"] = coord_result.to_dict()
 

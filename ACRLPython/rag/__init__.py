@@ -75,9 +75,32 @@ class RAGSystem:
 
     def _try_load_index(self):
         """Try to load existing index from disk."""
+        # TF-IDF vocabularies are not persisted, so a cached index built under
+        # LM Studio embeddings (or a prior TF-IDF session) will produce garbage
+        # similarities against a freshly fitted vectorizer.  Skip the cache and
+        # let the caller trigger a rebuild via index_operations().
+        if not self.embedding_generator.is_using_lm_studio():
+            logger.info(
+                "TF-IDF fallback active — skipping cached index (vocabulary mismatch risk)"
+            )
+            return
+
         if os.path.exists(RAG_VECTOR_STORE_PATH):
             try:
-                self.vector_store = _VectorStore.load()
+                store = _VectorStore.load()
+                expected_dim = self.embedding_generator.get_embedding_dimension()
+                if (
+                    store.embedding_dimension is not None
+                    and store.embedding_dimension != expected_dim
+                ):
+                    logger.warning(
+                        f"Cached index dim={store.embedding_dimension} != embedder dim={expected_dim} — discarding stale index"
+                    )
+                    import os as _os
+
+                    _os.remove(RAG_VECTOR_STORE_PATH)
+                    return
+                self.vector_store = store
                 self.query_engine = _QueryEngine(
                     vector_store=self.vector_store,
                     embedding_generator=self.embedding_generator,
@@ -87,8 +110,6 @@ class RAGSystem:
                 logger.warning(f"Failed to load index: {e}")
                 self.vector_store = None
                 self.query_engine = None
-        else:
-            pass
 
     def index_operations(self, rebuild: bool = False) -> bool:
         """Build or rebuild the operation index."""

@@ -13,6 +13,7 @@ from config.Servers import (
     DEFAULT_LMSTUDIO_MODEL,
     LLM_THINKING_BUDGET,
     LLM_THINKING_ENABLED,
+    LLM_MAX_TOKENS,
     SYSTEM_PROMPT_BASE,
 )
 from core.LLMUtils import extract_json as _extract_json_util
@@ -287,8 +288,8 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
         wb = WORKSPACE_REGIONS.get(self.workspace, {})
         sz = WORKSPACE_REGIONS.get("shared_zone", {})
         context = (
-            f"Robot: {self.robot_id} | Base: {self.base_position} | Reach: {self.max_reach}m"
-            f"Workspace: {self.workspace} x=[{wb.get('x_min')},{wb.get('x_max')}] z=[{wb.get('z_min')},{wb.get('z_max')}]"
+            f"Robot: {self.robot_id} | Base: {self.base_position} | Reach: {self.max_reach}m\n"
+            f"Workspace: {self.workspace} x=[{wb.get('x_min')},{wb.get('x_max')}] z=[{wb.get('z_min')},{wb.get('z_max')}]\n"
             f"Shared zone (both robots): x=[{sz.get('x_min')},{sz.get('x_max')}] -> objects here are reachable by either robot"
         )
 
@@ -333,7 +334,7 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
                     {"role": "user", "content": user_prompt},
                 ],
                 "temperature": self.temperature,
-                "max_tokens": 8192,  # Must cover thinking budget + actual JSON response
+                "max_tokens": LLM_MAX_TOKENS,
                 **(
                     {
                         "thinking": {

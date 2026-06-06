@@ -7,11 +7,7 @@ using UnityEngine;
 
 namespace Robotics
 {
-    /// <summary>
-    /// Publishes robot joint states to ROS 2 as sensor_msgs/JointState messages.
-    /// Reads positions, velocities, and efforts from ArticulationBody joints and publishes
-    /// at a configurable rate (default 50Hz) on the /joint_states topic.
-    /// </summary>
+    /// <summary>Publishes ArticulationBody joint states to ROS 2 at a configurable rate.</summary>
     public class ROSJointStatePublisher : MonoBehaviour
     {
         [Header("ROS Configuration")]
@@ -43,7 +39,6 @@ namespace Robotics
         private JointStateMsg _jointStateMsg;
         private string _resolvedTopicName;
 
-        // Reusable timestamp to avoid allocating DateTime/TimeSpan/TimeMsg at 50Hz
         private readonly TimeMsg _rosTimestamp = new TimeMsg();
         private static readonly System.DateTime _unixEpoch = new System.DateTime(
             1970,
@@ -101,7 +96,6 @@ namespace Robotics
 
             InitializeMessage(jointCount);
 
-            // Resolve topic name with robot ID - ensure per-robot namespacing
             _resolvedTopicName = ResolveTopicName(_topicName, _robotController.robotId);
 
             _ros.RegisterPublisher<JointStateMsg>(_resolvedTopicName);
@@ -113,9 +107,6 @@ namespace Robotics
             );
         }
 
-        /// <summary>
-        /// Pre-allocate the JointState message with joint names to avoid GC.
-        /// </summary>
         private void InitializeMessage(int jointCount)
         {
             _jointStateMsg = new JointStateMsg
@@ -164,11 +155,9 @@ namespace Robotics
             if (joints == null || joints.Length == 0)
                 return;
 
-            // Update header timestamp in-place (no allocation)
             UpdateRosTimestamp();
             _jointStateMsg.header.stamp = _rosTimestamp;
 
-            // Read arm joint data
             int armCount = Mathf.Min(joints.Length, ArmJointNames.Length);
             for (int i = 0; i < armCount; i++)
             {
@@ -186,7 +175,6 @@ namespace Robotics
                     joint.jointForce.dofCount > 0 ? joint.jointForce[0] : 0.0;
             }
 
-            // Read gripper joint data
             if (_includeGripperJoints && _gripperController != null)
             {
                 int offset = ArmJointNames.Length;
@@ -217,13 +205,7 @@ namespace Robotics
             _ros.Publish(_resolvedTopicName, _jointStateMsg);
         }
 
-        /// <summary>
-        /// Update the reusable ROS timestamp in-place from system clock (Unix epoch time).
-        /// CRITICAL: Must use system time, NOT Unity simulation time,
-        /// for compatibility with ROS 2 time synchronization.
-        /// Mutates _rosTimestamp instead of allocating a new TimeMsg every call,
-        /// eliminating 3 short-lived heap allocations per publish at 50Hz.
-        /// </summary>
+        // Must use system time, not Unity simulation time, for ROS 2 time sync compatibility.
         private void UpdateRosTimestamp()
         {
             double t = (System.DateTime.UtcNow - _unixEpoch).TotalSeconds;
@@ -232,18 +214,11 @@ namespace Robotics
             _rosTimestamp.nanosec = (uint)((t - sec) * 1e9);
         }
 
-        /// <summary>
-        /// Resolve topic name, ensuring it includes the robot ID namespace.
-        /// Handles both new format (/{robot_id}/topic) and legacy format (/topic).
-        /// </summary>
         private static string ResolveTopicName(string topicTemplate, string robotId)
         {
-            // If template contains placeholder, replace it
             if (topicTemplate.Contains("{robot_id}"))
                 return topicTemplate.Replace("{robot_id}", robotId);
 
-            // Legacy topic without placeholder - prepend robot ID namespace
-            // e.g., "/joint_states" -> "/Robot1/joint_states"
             if (topicTemplate.StartsWith("/"))
                 return $"/{robotId}{topicTemplate}";
 
@@ -254,12 +229,6 @@ namespace Robotics
         {
             IsPublishing = enable;
             Debug.Log($"{_logPrefix} Publishing {(enable ? "enabled" : "disabled")}");
-        }
-
-        public void SetPublishRate(float hz)
-        {
-            _publishRate = Mathf.Clamp(hz, 1f, 100f);
-            _publishInterval = 1f / _publishRate;
         }
     }
 }

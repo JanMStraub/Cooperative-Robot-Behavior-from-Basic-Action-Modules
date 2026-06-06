@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 """Bidirectional command and results server (port 5007). Sends commands to Unity, receives completion callbacks."""
 
 import itertools

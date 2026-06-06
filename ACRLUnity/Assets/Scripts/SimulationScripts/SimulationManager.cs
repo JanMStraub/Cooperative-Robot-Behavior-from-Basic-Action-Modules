@@ -376,20 +376,6 @@ namespace Simulation
             _robotTargetReached[robotId] = reached;
         }
 
-        public ControlMode? GetROSControlMode(string robotId)
-        {
-            if (_rosControlModeManagers.TryGetValue(robotId, out var manager))
-                return manager.CurrentMode;
-            return null;
-        }
-
-        public bool IsRobotROSControlled(string robotId)
-        {
-            if (_rosControlModeManagers.TryGetValue(robotId, out var manager))
-                return !manager.ShouldUnityIKBeActive;
-            return false;
-        }
-
         private void OnDestroy()
         {
             if (Instance == this)

@@ -82,11 +82,9 @@ namespace Robotics
         public bool _closeGripperAfterReach = false;
 
         [SerializeField]
-        [Tooltip("Automatically attach the target object to the gripper when grasped")]
         private bool _attachObjectOnGrasp = true;
 
         [SerializeField]
-        [Tooltip("Delay in seconds before closing gripper after reaching target")]
         private float _gripperCloseDelay = 0.2f;
 
         [Header("Fallback Motion Control")]
@@ -268,9 +266,6 @@ namespace Robotics
             );
         }
 
-        /// <summary>
-        /// Loads a ScriptableObject from Resources, creating a default instance if not found.
-        /// </summary>
         private static T LoadOrCreate<T>(string resourcePath)
             where T : ScriptableObject
         {
@@ -294,10 +289,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Sets the target-reached state and notifies SimulationManager. When transitioning to true,
-        /// fires gripper close (if configured) or OnTargetReached.
-        /// </summary>
         public void SetTargetReached(bool setting)
         {
             if (_hasReachedTarget != setting)
@@ -656,6 +647,8 @@ namespace Robotics
             if (options.Equals(default(GraspOptions)))
                 options = GraspOptions.Default;
 
+            options.attachObjectOnGrasp = _attachObjectOnGrasp;
+
             GripperController holdingGripper = FindGripperHoldingObject(target);
             if (holdingGripper != null && holdingGripper != _gripperController)
             {
@@ -764,6 +757,8 @@ namespace Robotics
 
             if (options.Equals(default(GraspOptions)))
                 options = GraspOptions.Default;
+
+            options.attachObjectOnGrasp = _attachObjectOnGrasp;
 
             if (_graspPipeline == null)
             {
@@ -900,15 +895,8 @@ namespace Robotics
 
         public bool HasTarget => _targetTransform != null;
         public bool TargetReached => _hasReachedTarget;
+
         public GameObject GetTargetObject() => _targetObject;
-
-        public void SetMovingTargetTracking(bool enable) => _enableMovingTargetTracking = enable;
-
-        public void SetTargetMovementThreshold(float threshold)
-        {
-            _targetMovementThreshold = Mathf.Max(0.001f, threshold);
-            _sqrTargetMovementThreshold = _targetMovementThreshold * _targetMovementThreshold;
-        }
 
         public void ReleaseGrasp()
         {
@@ -983,8 +971,6 @@ namespace Robotics
                     + $"({endEffectorBase.position}) — IK quiesced"
             );
         }
-
-        public bool IsTargetTrackingEnabled() => _enableMovingTargetTracking;
 
         public Vector3 GetCurrentEndEffectorPosition() =>
             endEffectorBase == null ? Vector3.zero : endEffectorBase.position;

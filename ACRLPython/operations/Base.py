@@ -57,7 +57,15 @@ class OperationParameter:
             value = None
         if self.valid_values and value is not None:
             check_value = value.lower() if isinstance(value, str) else value
-            check_valid = [v.lower() if isinstance(v, str) else v for v in self.valid_values]
+            # LLMs sometimes append object-type suffixes (e.g. "red_cube" → "red")
+            if isinstance(check_value, str):
+                for suffix in ("_cube", "_block", "_object", "_ball", "_cylinder"):
+                    if check_value.endswith(suffix):
+                        check_value = check_value[: -len(suffix)]
+                        break
+            check_valid = [
+                v.lower() if isinstance(v, str) else v for v in self.valid_values
+            ]
             if check_value not in check_valid:
                 valid_str = ", ".join([f"'{v}'" for v in self.valid_values])
                 return (
@@ -107,7 +115,7 @@ class OperationResult:
 
     @staticmethod
     def error_result(
-        error_code: str, message: str, recovery_suggestions: List[str]
+        error_code: str, message: str, recovery_suggestions: Optional[List[str]] = None
     ) -> "OperationResult":
         return OperationResult(
             success=False,
@@ -115,7 +123,7 @@ class OperationResult:
             error={
                 "code": error_code,
                 "message": message,
-                "recovery_suggestions": recovery_suggestions,
+                "recovery_suggestions": recovery_suggestions or [],
             },
         )
 
@@ -186,18 +194,18 @@ class BasicOperation:
 
     # Natural language descriptions for RAG retrieval
     description: str
-    long_description: str
     usage_examples: List[str]
 
     # Technical specifications
     parameters: List[OperationParameter]
-    preconditions: List[str]
-    postconditions: List[str]
 
     # Metadata for LLM decision making
-    average_duration_ms: float
-    success_rate: float
-    failure_modes: List[str]
+    average_duration_ms: float = 0.0
+    long_description: str = ""
+    preconditions: List[str] = field(default_factory=list)
+    postconditions: List[str] = field(default_factory=list)
+    success_rate: float = 1.0
+    failure_modes: List[str] = field(default_factory=list)
 
     # Rich relationship metadata
     relationships: Optional[OperationRelationship] = None
@@ -236,6 +244,15 @@ class BasicOperation:
             return validation_error
 
         try:
+            import inspect
+
+            sig = inspect.signature(self.implementation)
+            accepted = set(sig.parameters)
+            has_var_keyword = any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            )
+            if not has_var_keyword:
+                kwargs = {k: v for k, v in kwargs.items() if k in accepted}
             result = self.implementation(**kwargs)
 
             # Convert dict result to OperationResult if needed
@@ -269,6 +286,20 @@ class BasicOperation:
         """Validate parameters. Returns error OperationResult or None if valid."""
         for param in self.parameters:
             value = kwargs.get(param.name)
+            # Normalise object-type suffixes before validation so the cleaned
+            # value reaches the implementation (e.g. "red_cube" → "red").
+            if param.valid_values and isinstance(value, str):
+                stripped = value.lower()
+                for suffix in ("_cube", "_block", "_object", "_ball", "_cylinder"):
+                    if stripped.endswith(suffix):
+                        stripped = stripped[: -len(suffix)]
+                        break
+                stripped_valid = [
+                    v.lower() if isinstance(v, str) else v for v in param.valid_values
+                ]
+                if stripped in stripped_valid and value.lower() != stripped:
+                    kwargs[param.name] = stripped
+                    value = stripped
             is_valid, error_msg = param.validate(value)
 
             if not is_valid:

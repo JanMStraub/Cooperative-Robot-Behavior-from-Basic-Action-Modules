@@ -20,18 +20,6 @@ namespace Simulation
         private const string _containerName = "TF Frames";
 
         /// <summary>
-        /// Automatically creates a TFFrameOrganizer instance when any scene loads.
-        /// Runs after scene objects are ready (AfterSceneLoad) so ROSConnection
-        /// is already initialized by ROSConnectionInitializer.Awake().
-        /// </summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Bootstrap()
-        {
-            var go = new GameObject("TFFrameOrganizer");
-            go.AddComponent<TFFrameOrganizer>();
-        }
-
-        /// <summary>
         /// Creates the container and subscribes to the TFSystem stream listener.
         /// notifyAllStreamsNow is true so frames created before this script starts
         /// (e.g. by earlier ROSConnection subscribers) are also organized.

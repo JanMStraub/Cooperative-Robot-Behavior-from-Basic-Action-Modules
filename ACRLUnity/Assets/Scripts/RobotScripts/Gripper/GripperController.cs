@@ -74,7 +74,9 @@ namespace Robotics
         public float maxForce = 300f; // Increased from 200 to maintain grip under object weight/inertia
 
         [Header("Attachment Safety")]
-        [Tooltip("Maximum distance (meters) between attachment point and object center for the link to form. Objects farther away are ignored.")]
+        [Tooltip(
+            "Maximum distance (meters) between attachment point and object center for the link to form. Objects farther away are ignored."
+        )]
         [Range(0.01f, 0.3f)]
         public float maxAttachRadius = 0.08f;
 
@@ -109,6 +111,9 @@ namespace Robotics
         private bool _detachInFixedUpdate = false;
         private GameObject _objectToMonitorAfterDetach;
         private const string _logPrefix = "[GRIPPER_CONTROLLER]";
+
+        // Non-alloc buffer for OverlapSphere used during release
+        private static readonly Collider[] _releaseOverlapBuffer = new Collider[16];
 
         public event System.Action OnGripperActionComplete;
 
@@ -188,12 +193,17 @@ namespace Robotics
                 _detachInFixedUpdate = true;
             }
 
-            // Stop closure when both fingers contact the target — prevents force-through on lightweight objects.
+            // Stop closure when both fingers contact an object — prevents drive-vs-contact oscillation.
+            // Uses targeted check when a target object is registered, generic check otherwise
+            // (e.g. when _attachObjectOnGrasp is disabled and SetTargetObject was never called).
             bool isContactStop =
                 isClosing
                 && contactSensor != null
-                && _targetObjectToGrasp != null
-                && contactSensor.BothFingersContact(_targetObjectToGrasp);
+                && (
+                    _targetObjectToGrasp != null
+                        ? contactSensor.BothFingersContact(_targetObjectToGrasp)
+                        : contactSensor.HasAnyBothFingersContact()
+                );
 
             if (!isAtGoal && !isStalled && !isContactStop)
             {
@@ -306,14 +316,28 @@ namespace Robotics
         /// <summary>
         /// Open the grippers. Detachment of any held object is deferred until the
         /// gripper has opened enough to avoid trapping the object between the fingers.
+        /// For purely physics-held objects (no kinematic attachment), collision between
+        /// the gripper and any nearby objects is briefly suppressed so the object falls
+        /// freely instead of resting on the palm structure.
         /// </summary>
         public void OpenGrippers()
         {
             if (_isHoldingObject)
             {
-                _detachmentPending = true;
-                _objectToMonitorAfterDetach = _graspedObject;
+                // Detach immediately so the object is released before the gripper begins
+                // to open. Deferring to physical-position threshold risks OnGripperActionComplete
+                // firing before DetachObject() runs (race condition that leaves the object
+                // kinematically attached and ascending with the arm).
+                var toMonitor = _graspedObject;
+                DetachObject();
+                StartCoroutine(MonitorObjectPosition(toMonitor));
+                // _isHoldingObject is now false → SuppressGripperCollisionOnRelease fires below
             }
+
+            // Suppress gripper↔object collision briefly so physics-held objects
+            // (non-kinematic, no attachment) cannot rest on the palm after the fingers open.
+            if (!_isHoldingObject && attachmentPoint != null)
+                StartCoroutine(SuppressGripperCollisionOnRelease());
 
             // Check if already at target position (fully open)
             if (Mathf.Abs(targetPosition - 1f) < 0.0001f && !IsMoving)
@@ -328,6 +352,64 @@ namespace Robotics
             }
 
             SetGripperPosition(1f);
+        }
+
+        /// <summary>
+        /// Temporarily ignore collision between all gripper colliders and any non-gripper
+        /// Rigidbody within maxAttachRadius of the attachment point, then restore after a
+        /// short delay. Prevents physics-held objects from resting on the palm after release.
+        /// </summary>
+        private System.Collections.IEnumerator SuppressGripperCollisionOnRelease(
+            float duration = 0.5f
+        )
+        {
+            if (attachmentPoint == null)
+                yield break;
+
+            Collider[] gripperColliders = GetComponentsInChildren<Collider>();
+
+            // Collect nearby non-gripper colliders
+            int count = Physics.OverlapSphereNonAlloc(
+                attachmentPoint.position,
+                maxAttachRadius * 1.5f,
+                _releaseOverlapBuffer
+            );
+
+            var targets = new System.Collections.Generic.List<Collider>(count);
+            for (int i = 0; i < count; i++)
+            {
+                Collider c = _releaseOverlapBuffer[i];
+                if (c == null)
+                    continue;
+                // Skip gripper's own colliders
+                if (c.transform.IsChildOf(transform))
+                    continue;
+                // Only affect objects with a Rigidbody
+                if (c.attachedRigidbody == null || c.attachedRigidbody.isKinematic)
+                    continue;
+                targets.Add(c);
+            }
+
+            if (targets.Count == 0)
+                yield break;
+
+            // Disable collision
+            foreach (Collider gc in gripperColliders)
+            foreach (Collider tc in targets)
+                if (gc != null && tc != null)
+                    Physics.IgnoreCollision(gc, tc, true);
+
+            Debug.Log(
+                $"{_logPrefix} Suppressing gripper collision with {targets.Count} object(s) for {duration}s"
+            );
+
+            yield return new WaitForSeconds(duration);
+
+            // Restore collision
+            foreach (Collider gc in gripperColliders)
+            foreach (Collider tc in targets)
+                if (gc != null && tc != null)
+                    Physics.IgnoreCollision(gc, tc, false);
         }
 
         /// <summary>
@@ -607,11 +689,6 @@ namespace Robotics
             _graspedObjectOriginalParent = null;
             _isHoldingObject = false;
         }
-
-        /// <summary>
-        /// Release the currently held object (alias for DetachObject).
-        /// </summary>
-        public void ReleaseObject() => DetachObject();
 
         /// <summary>
         /// Executes the deferred detachment: detaches the object and starts monitoring.

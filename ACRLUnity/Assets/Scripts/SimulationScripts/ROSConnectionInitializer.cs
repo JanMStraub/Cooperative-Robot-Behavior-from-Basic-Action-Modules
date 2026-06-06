@@ -24,9 +24,7 @@ namespace Simulation
         private int _rosPort = CommunicationConstants.ROS_TCP_ENDPOINT_PORT;
 
         [Header("Connection Management")]
-        [Tooltip(
-            "Attempt to connect on start. Mirrors AUTO_CONNECT_ROS in ACRLPython/config/ROS.py (default: true)"
-        )]
+        [Tooltip("Attempt to connect on start")]
         [SerializeField]
         private bool _connectOnStart = true;
 
@@ -47,20 +45,11 @@ namespace Simulation
         private Coroutine _healthCheckCoroutine;
         private const string _logPrefix = "[ROS_CONNECTION_INITIALIZER]";
 
-        /// <summary>
-        /// Whether the ROS connection is currently active.
-        /// Requires a connection thread to be running AND no connection errors
-        /// (HasConnectionError starts false, so without the thread check,
-        /// publishers would queue messages before Connect() is even called).
-        /// </summary>
+        // HasConnectionThread check prevents publishers from queueing before Connect() is called (HasConnectionError starts false).
         public bool IsConnected =>
             _rosConnection != null
             && _rosConnection.HasConnectionThread
             && !_rosConnection.HasConnectionError;
-
-        public string ROSHost => _rosHost;
-
-        public int ROSPort => _rosPort;
 
         private void Awake()
         {
@@ -69,10 +58,7 @@ namespace Simulation
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
 
-                // Configure ROSConnection early in Awake so settings are ready
-                // before other scripts call GetOrCreateInstance() in Start().
-                // Disable auto-connect so we can delay the connection until
-                // Docker ROS services are fully started.
+                // Configure in Awake so settings are ready before other scripts call GetOrCreateInstance() in Start().
                 _rosConnection = ROSConnection.GetOrCreateInstance();
                 _rosConnection.RosIPAddress = _rosHost;
                 _rosConnection.RosPort = _rosPort;
@@ -102,11 +88,7 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Delay connection to give ros_tcp_endpoint time to fully start.
-        /// ROSConnection has built-in retry logic, but the first failed attempt
-        /// produces noisy stack traces — a short delay avoids most of them.
-        /// </summary>
+        // Short delay lets ros_tcp_endpoint fully start; avoids noisy stack traces on the first failed attempt.
         private IEnumerator DelayedConnect()
         {
             yield return new WaitForSeconds(2f);
@@ -141,9 +123,6 @@ namespace Simulation
             {
                 yield return wait;
 
-                // Only reconnect if we had a connection before but lost it.
-                // _rosConnection is set once in Awake and never cleared, so checking
-                // for null here would never trigger. Check HasConnectionError instead.
                 if (
                     _autoReconnect
                     && _rosConnection != null
@@ -158,20 +137,6 @@ namespace Simulation
                     InitializeConnection();
                 }
             }
-        }
-
-        public void Reconnect(string host, int port)
-        {
-            _rosHost = host;
-            _rosPort = port;
-
-            if (_healthCheckCoroutine != null)
-            {
-                StopCoroutine(_healthCheckCoroutine);
-                _healthCheckCoroutine = null;
-            }
-
-            InitializeConnection();
         }
 
         private void OnDestroy()

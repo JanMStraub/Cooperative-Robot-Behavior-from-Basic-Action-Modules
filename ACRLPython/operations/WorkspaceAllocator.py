@@ -121,20 +121,17 @@ class WorkspaceAllocator:
             return True
 
     def get_owner(self, region: str) -> Optional[str]:
-        """Get the robot that owns a workspace region."""
         with self._lock:
             self._cleanup_stale()
             allocation = self._allocations.get(region)
             return allocation.robot_id if allocation else None
 
     def get_free_regions(self) -> list:
-        """Return list of region names currently unallocated."""
         with self._lock:
             self._cleanup_stale()
             return [r for r, alloc in self._allocations.items() if alloc is None]
 
     def set_timeout(self, timeout: float):
-        """Set workspace allocation timeout in seconds."""
         with self._lock:
             self._timeout = timeout
             logger.info(f"Set workspace timeout to {self._timeout}s")

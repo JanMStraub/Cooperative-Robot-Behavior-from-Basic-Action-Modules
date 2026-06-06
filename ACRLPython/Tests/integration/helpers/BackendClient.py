@@ -50,7 +50,6 @@ def reset_simulation(timeout: float = 20.0) -> Dict[str, Any]:
 
     Resets all robots to start positions, releases grasped objects, and
     restores all dynamic scene objects to their initial positions.
-
     """
     import random
 
@@ -71,7 +70,6 @@ def backend_available() -> bool:
     We probe port 5007 as a proxy for Unity being connected — that port is
     only active once Unity has registered with the backend.  Port 5008 is
     the SequenceServer that tests actually send commands to.
-
     """
     return port_open(5007) and port_open(5008)
 

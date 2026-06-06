@@ -65,9 +65,6 @@ namespace Configuration
         [Range(1.0f, 5.0f)]
         public float retreatDistanceFactor = 2.0f;
 
-        [Tooltip("Direction for retreat motion (typically upward)")]
-        public Vector3 retreatDirection = Vector3.up;
-
         [Header("Gripper Settings")]
         [Tooltip("Gripper geometry for validation")]
         public GripperGeometry gripperGeometry = GripperGeometry.Default();

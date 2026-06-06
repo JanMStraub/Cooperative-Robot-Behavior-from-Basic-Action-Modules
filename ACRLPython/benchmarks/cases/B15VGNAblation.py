@@ -5,18 +5,20 @@ from __future__ import annotations
 
 from typing import List
 
-from benchmarks.cases.B3NavigateAndLift import get_task as _b3
-from benchmarks.cases.B4PickAndPlace import get_task as _b4
-from benchmarks.cases.B5PoseAwareGrasp import get_task as _b5
-
 
 def get_tasks(config=None) -> List[str]:
     """
-    Return the B3–B5 grasp tasks for VGN vs geometric-fallback ablation.
+    Return grasp tasks for VGN vs geometric-fallback ablation.
 
     With VGN enabled, grasp_object calls VGNClient (TSDF+VGN inference,
     6-DOF poses). With VGN disabled, grasp_object uses the geometric
-    top-down fallback. Using the same tasks as B3–B5 ties the ablation
-    directly to the main benchmark grasp scenarios.
+    top-down fallback. Tasks mirror B3–B6 scenarios but use cfg.robot_id
+    so the ablation is repeatable with either robot.
     """
-    return [_b3(), _b4(), _b5()]
+
+    return [
+        f"Robot1: Grasp the blue cube, and lift it to y=0.2.",
+        f"Robot1: Grasp magenta cube, and place it in field H.",
+        f"Robot1: Grasp the yellow cube.",
+        f"Robot1 grasps the red cube and hands it to Robot2.",
+    ]

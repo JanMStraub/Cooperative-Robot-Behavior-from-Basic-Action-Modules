@@ -12,7 +12,7 @@ The goal of this project is to have two AR4 robot arms positioned facing each ot
 - Damped least-squares inverse kinematics (6-DOF control)
 - Multi-robot coordination via signal/wait primitives and collaborative operations
 - Unified Python Backend: Single entry point (RunRobotController) orchestrates all servers
-- Operations System: 24 registered operations including atomic actions, perception, and sync primitives
+- Operations System: 29 registered operations including atomic actions, perception, sync primitives, and bimanual cooperative ops
 - AutoRT System: Autonomous task generation with LLM-based planning and human-in-the-loop approval
 - Knowledge Graph: Dynamic relation tracking for tracking complex topological environment states
 - ROS 2 & Docker Integration: Physical robot control capabilities via `ROSMotionClient` and containerized ROS deployments
@@ -158,11 +158,11 @@ The goal of this project is to have two AR4 robot arms positioned facing each ot
 
 **LLM-Driven Control Systems**:
 
-- **Operations System**: 24 registered operations organized by complexity
-  - **Atomic** (7): `control_gripper`, `release_object`, `check_robot_status`, `signal`, `wait_for_signal`, `wait`, `reset_simulation`
+- **Operations System**: 29 registered operations organized by complexity
+  - **Atomic** (8): `control_gripper`, `release_object`, `check_robot_status`, `signal`, `wait_for_signal`, `wait`, `reset_simulation`, `yield_workspace`
   - **Basic** (6): `move_to_coordinate`, `adjust_end_effector_orientation`, `return_to_start_position`, `generate_point_cloud`, `detect_field`, `detect_all_fields`
-  - **Intermediate** (7): `pick_object_at_coordinate`, `place_object`, `place_between_objects`, `detect_object_stereo`, `analyze_scene`, `move_relative_to_object`, `detect_other_robot`
-  - **Complex** (4): `grasp_object`, `mirror_movement_of_other_robot`, `receive_handoff`, `stabilize_object`
+  - **Intermediate** (9): `pick_object_at_coordinate`, `place_object`, `place_between_objects`, `detect_object_stereo`, `analyze_scene`, `move_relative_to_object`, `detect_other_robot`, `check_partner_status`, `place_for_partner`
+  - **Complex** (6): `grasp_object`, `mirror_movement_of_other_robot`, `receive_handoff`, `stabilize_object`, `synchronized_grasp`, `joint_transport`
   - Variable passing: `detect -> $target`, then `move to $target`
 - **AutoRT System**: Autonomous task generation with LLM planning and human approval workflow
 - **Integrated RAG System**: Semantic search using LM Studio embeddings for natural language command parsing
@@ -242,9 +242,9 @@ Auto-Cooperative-Robot-Learning/
 │   │   ├── RunAutoRT.py                 # Standalone AutoRT entry point
 │   │   ├── CommandParser.py             # LLM/regex command parser
 │   │   └── SequenceExecutor.py          # Sequential operation executor
-│   ├── operations/                      # 24 registered operations (Atomic/Basic/Intermediate/Complex)
+│   ├── operations/                      # 29 registered operations (Atomic/Basic/Intermediate/Complex)
 │   │   ├── Base.py                      # Core operation classes
-│   │   ├── Registry.py                  # Operation registry (24 ops)
+│   │   ├── Registry.py                  # Operation registry (29 ops)
 │   │   ├── MoveOperations.py            # Navigation primitives
 │   │   ├── GripperOperations.py         # Gripper control
 │   │   ├── DetectionOperations.py       # Object detection + point cloud
@@ -335,7 +335,7 @@ source acrl/bin/activate
 # Run all benchmarks with the live Unity simulation
 python -m benchmarks.run --all --live
 
-# Run single benchmark (1-14)
+# Run single benchmark (1-16)
 python -m benchmarks.run --benchmark 3
 
 # Dry-run (no hardware required)
@@ -349,15 +349,17 @@ Benchmark cases:
 - **B3**: Navigate and lift (approach-aware grasp)
 - **B4**: Pick and place
 - **B5**: Pose-aware grasp (oriented top-down)
-- **B6**: Dual-robot synchronized lift
+- **B6**: Robot handoff (one robot hands object to the other)
 - **B7**: Dual-robot reorient with sync barriers
 - **B8**: Heterogeneous chain (cycles B1/B3/B4 sub-tasks)
-- **B9**: RAG ablation
-- **B10**: Reflexion ablation
-- **B11**: Negotiation ablation
-- **B12**: Knowledge Graph ablation
-- **B13**: VGN ablation
-- **B14**: ROS ablation
+- **B9**: Impossible task (parse-only; validates graceful failure)
+- **B10**: Parallel independent (dual-robot concurrent tasks)
+- **B11**: RAG ablation
+- **B12**: Reflexion ablation
+- **B13**: Negotiation ablation
+- **B14**: Knowledge Graph ablation (parse-only)
+- **B15**: VGN ablation
+- **B16**: ROS ablation
 
 **For Autonomous Task Generation (AutoRT)**:
 
@@ -372,23 +374,23 @@ Benchmark cases:
    - Click "Execute" to approve or "Reject" to discard
    - Optional: Enable "Start Loop" for continuous autonomous operatio
 
-**Available Operations** (24 total, organized by complexity):
+**Available Operations** (29 total, organized by complexity):
 
-**Atomic** (7):
+**Atomic** (8):
 
-- `control_gripper`, `release_object`, `check_robot_status`, `signal`, `wait_for_signal`, `wait`, `reset_simulation`
+- `control_gripper`, `release_object`, `check_robot_status`, `signal`, `wait_for_signal`, `wait`, `reset_simulation`, `yield_workspace`
 
 **Basic** (6):
 
 - `move_to_coordinate`, `adjust_end_effector_orientation`, `return_to_start_position`, `generate_point_cloud`, `detect_field`, `detect_all_fields`
 
-**Intermediate** (7):
+**Intermediate** (9):
 
-- `pick_object_at_coordinate`, `place_object`, `place_between_objects`, `detect_object_stereo`, `analyze_scene`, `move_relative_to_object`, `detect_other_robot`
+- `pick_object_at_coordinate`, `place_object`, `place_between_objects`, `detect_object_stereo`, `analyze_scene`, `move_relative_to_object`, `detect_other_robot`, `check_partner_status`, `place_for_partner`
 
-**Complex** (4):
+**Complex** (6):
 
-- `grasp_object`, `mirror_movement_of_other_robot`, `receive_handoff`, `stabilize_object`
+- `grasp_object`, `mirror_movement_of_other_robot`, `receive_handoff`, `stabilize_object`, `synchronized_grasp`, `joint_transport`
 
 ## License
 

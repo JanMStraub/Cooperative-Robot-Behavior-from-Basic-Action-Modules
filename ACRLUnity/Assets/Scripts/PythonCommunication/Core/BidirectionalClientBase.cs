@@ -269,28 +269,6 @@ namespace PythonCommunication.Core
             return true;
         }
 
-        public int PendingRequestCount
-        {
-            get
-            {
-                lock (_pendingLock)
-                {
-                    return _pendingRequests.Count;
-                }
-            }
-        }
-
-        public int QueuedResponseCount
-        {
-            get
-            {
-                lock (_queueLock)
-                {
-                    return _responseQueue.Count;
-                }
-            }
-        }
-
         /// <summary>
         /// Read a 4-byte big-endian integer from stream.
         /// </summary>
@@ -326,22 +304,6 @@ namespace PythonCommunication.Core
             ReadExactly(_stream, buffer, (int)length);
 
             return Encoding.UTF8.GetString(buffer);
-        }
-
-        protected string ReadJsonString()
-        {
-            return ReadString();
-        }
-
-        /// <summary>
-        /// Write a 4-byte big-endian integer to buffer at offset.
-        /// </summary>
-        protected void WriteUInt32BE(byte[] buffer, int offset, uint value)
-        {
-            byte[] bytes = BitConverter.GetBytes(value);
-            if (BitConverter.IsLittleEndian)
-                Array.Reverse(bytes);
-            Array.Copy(bytes, 0, buffer, offset, 4);
         }
     }
 }

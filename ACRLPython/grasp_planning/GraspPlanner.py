@@ -47,7 +47,9 @@ class GraspPlanner:
             saved_state = self._save_approach_state()
             # Map directional top-down variants to "top" for geometric planning
             _approach_for_filter = (
-                "top" if preferred_approach in ("left_side", "right_side") else preferred_approach
+                "top"
+                if preferred_approach in ("left_side", "right_side")
+                else preferred_approach
             )
             self._filter_approaches(_approach_for_filter)
 

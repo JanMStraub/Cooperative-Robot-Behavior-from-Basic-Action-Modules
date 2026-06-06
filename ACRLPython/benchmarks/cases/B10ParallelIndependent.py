@@ -3,6 +3,17 @@
 
 from __future__ import annotations
 
+EXPECTED_OP_CHAIN: list[str] = [
+    "detect_object_stereo",
+    "detect_object_stereo",
+    "grasp_object",
+    "grasp_object",
+    "detect_field",
+    "detect_field",
+    "place_object",
+    "place_object",
+]
+
 
 def get_task() -> str:
     """

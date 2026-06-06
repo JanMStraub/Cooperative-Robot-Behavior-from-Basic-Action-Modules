@@ -30,7 +30,6 @@ class BenchmarkFeatureFlags:
     def to_json(self) -> str:
         """
         Serialise to compact JSON string; returns empty string when all fields are None.
-
         """
         d = {k: v for k, v in self.__dict__.items() if v is not None}
         return json.dumps(d, separators=(",", ":")) if d else ""
@@ -39,8 +38,6 @@ class BenchmarkFeatureFlags:
     def from_json(cls, text: str) -> "BenchmarkFeatureFlags":
         """
         Deserialise from JSON string produced by to_json().
-
-
         """
         if not text:
             return cls()
@@ -55,8 +52,6 @@ class BenchmarkFeatureFlags:
 
         Translates BenchmarkConfig field names to BenchmarkFeatureFlags field names.
         Only includes fields that are explicitly present in the snapshot.
-
-
         """
         mapping = {
             "use_rag": "use_rag",

@@ -297,93 +297,6 @@ namespace Robotics.Grasp
             return best;
         }
 
-        public GraspPlanningResult PlanGraspWithDiagnostics(
-            GameObject targetObject,
-            Vector3 gripperPosition,
-            GraspOptions? options = null
-        )
-        {
-            var result = new GraspPlanningResult();
-            var stopwatch = Stopwatch.StartNew();
-
-            result.generatedCandidates = _generator.GenerateCandidates(
-                targetObject,
-                gripperPosition
-            );
-            result.generatedCount = result.generatedCandidates.Count;
-
-            if (result.generatedCount == 0)
-            {
-                result.success = false;
-                result.failureReason = "No candidates generated";
-                return result;
-            }
-
-            result.ikValidCandidates = _ikFilter.FilterCandidates(
-                result.generatedCandidates,
-                gripperPosition
-            );
-            result.ikValidCount = result.ikValidCandidates.Count;
-
-            if (result.ikValidCount == 0)
-            {
-                result.success = false;
-                result.failureReason = "No IK-valid candidates";
-                return result;
-            }
-
-            result.collisionFreeCandidates = _collisionFilter.FilterCandidates(
-                result.ikValidCandidates,
-                targetObject
-            );
-            result.collisionFreeCount = result.collisionFreeCandidates.Count;
-
-            if (result.collisionFreeCount == 0)
-            {
-                result.success = false;
-                result.failureReason = "No collision-free candidates";
-                return result;
-            }
-
-            Vector3 objectSize = GraspUtilities.GetObjectSize(targetObject);
-            Quaternion currentGripperRotation =
-                _endEffector != null ? _endEffector.rotation : Quaternion.identity;
-            result.rankedCandidates = _scorer.ScoreAndRank(
-                result.collisionFreeCandidates,
-                objectSize,
-                gripperPosition,
-                currentGripperRotation
-            );
-
-            stopwatch.Stop();
-            result.elapsedMs = (float)stopwatch.Elapsed.TotalMilliseconds;
-            result.success = true;
-            result.bestCandidate = result.rankedCandidates[0];
-
-            return result;
-        }
-
-        public List<GraspCandidate> PlanMultipleGrasps(
-            GameObject targetObject,
-            Vector3 gripperPosition,
-            int count,
-            GraspOptions? options = null
-        )
-        {
-            var bestCandidate = PlanGrasp(targetObject, gripperPosition, options);
-
-            if (bestCandidate == null)
-                return new List<GraspCandidate>();
-
-            // Re-run pipeline with diagnostics to get all ranked candidates
-            var result = PlanGraspWithDiagnostics(targetObject, gripperPosition, options);
-
-            if (!result.success)
-                return new List<GraspCandidate> { bestCandidate };
-
-            return _scorer.GetTopN(result.rankedCandidates, count);
-        }
-
         /// <summary>
         /// Compute adaptive candidate count based on time budget and task complexity.
         /// </summary>
@@ -490,17 +403,5 @@ namespace Robotics.Grasp
         public int collisionFreeCount;
 
         public GraspCandidate bestCandidate;
-
-        public string GetSummary()
-        {
-            if (!success)
-                return $"Failed: {failureReason}";
-
-            return $"Success in {elapsedMs:F1}ms: "
-                + $"{generatedCount} generated → "
-                + $"{ikValidCount} IK-valid → "
-                + $"{collisionFreeCount} collision-free. "
-                + $"Best score: {bestCandidate.totalScore:F2}";
-        }
     }
 }

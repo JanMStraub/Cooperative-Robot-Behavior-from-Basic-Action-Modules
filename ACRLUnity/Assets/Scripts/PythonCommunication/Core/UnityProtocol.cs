@@ -41,11 +41,7 @@ namespace PythonCommunication.Core
 
         private const string _logPrefix = "[UNITY_PROTOCOL]";
 
-        /// <summary>
-        /// Write a 4-byte little-endian integer directly into <paramref name="buffer"/> at
-        /// <paramref name="offset"/>, then advance offset by 4.
-        /// Zero-allocation alternative to BitConverter.GetBytes(int).
-        /// </summary>
+        // Zero-allocation alternative to BitConverter.GetBytes(int).
         private static void WriteInt32LE(byte[] buffer, ref int offset, int value)
         {
             buffer[offset] = (byte)(value);
@@ -55,12 +51,6 @@ namespace PythonCommunication.Core
             offset += INT_SIZE;
         }
 
-        /// <summary>
-        /// Encode message header (type + request_id).
-        /// </summary>
-        /// <param name="messageType">Message type from MessageType enum</param>
-        /// <param name="requestId">Unsigned 32-bit request ID for correlation</param>
-        /// <returns>5-byte header</returns>
         private static byte[] EncodeHeader(MessageType messageType, uint requestId)
         {
             byte[] header = new byte[HEADER_SIZE];
@@ -73,14 +63,6 @@ namespace PythonCommunication.Core
             return header;
         }
 
-        /// <summary>
-        /// Decode message header from data.
-        /// </summary>
-        /// <param name="data">Byte array containing header</param>
-        /// <param name="offset">Starting offset (default 0)</param>
-        /// <param name="messageType">Decoded message type</param>
-        /// <param name="requestId">Decoded request ID</param>
-        /// <returns>New offset after header</returns>
         public static int DecodeHeader(
             byte[] data,
             int offset,
@@ -115,15 +97,7 @@ namespace PythonCommunication.Core
             return offset;
         }
 
-        /// <summary>
-        /// Encode an image message for sending to Python ImageServer.
-        /// Format: [type:1][request_id:4][camera_id_len:4][camera_id:N][prompt_len:4][prompt:N][image_len:4][image_data:N]
-        /// </summary>
-        /// <param name="cameraId">Camera identifier</param>
-        /// <param name="prompt">LLM prompt (can be empty)</param>
-        /// <param name="imageBytes">Encoded image data (PNG/JPG)</param>
-        /// <param name="requestId">Request ID for correlation (default 0)</param>
-        /// <returns>Encoded message bytes</returns>
+        /// <summary>Format: [type:1][request_id:4][camera_id_len:4][camera_id:N][prompt_len:4][prompt:N][image_len:4][image_data:N]</summary>
         public static byte[] EncodeImageMessage(
             string cameraId,
             string prompt,
@@ -184,19 +158,7 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        /// <summary>
-        /// Encode stereo image pair message for Python stereo detection server (Protocol V2).
-        /// Format: [type:1][request_id:4][pair_id_len:4][pair_id:N][cam_L_id_len:4][cam_L_id:N]
-        /// [cam_R_id_len:4][cam_R_id:N][prompt_len:4][prompt:N][img_L_len:4][img_L:N][img_R_len:4][img_R:N]
-        /// </summary>
-        /// <param name="cameraPairId">Camera pair identifier</param>
-        /// <param name="cameraLeftId">Left camera identifier</param>
-        /// <param name="cameraRightId">Right camera identifier</param>
-        /// <param name="prompt">LLM prompt (can be empty)</param>
-        /// <param name="leftImageBytes">Encoded left image data (PNG/JPG)</param>
-        /// <param name="rightImageBytes">Encoded right image data (PNG/JPG)</param>
-        /// <param name="requestId">Request ID for correlation (default 0)</param>
-        /// <returns>Encoded message bytes</returns>
+        /// <summary>Format: [type:1][request_id:4][pair_id_len:4][pair_id:N][cam_L_id_len:4][cam_L_id:N][cam_R_id_len:4][cam_R_id:N][prompt_len:4][prompt:N][img_L_len:4][img_L:N][img_R_len:4][img_R:N]</summary>
         public static byte[] EncodeStereoImageMessage(
             string cameraPairId,
             string cameraLeftId,
@@ -305,11 +267,6 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        /// <param name="data">Raw message bytes</param>
-        /// <param name="requestId">Decoded request ID</param>
-        /// <param name="cameraId">Decoded camera ID</param>
-        /// <param name="prompt">Decoded prompt</param>
-        /// <param name="imageBytes">Decoded image data</param>
         public static void DecodeImageMessage(
             byte[] data,
             out uint requestId,
@@ -341,13 +298,7 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(data, offset, imageBytes, 0, imageLen);
         }
 
-        /// <summary>
-        /// Decode a result message received from Python CommandServer or SequenceServer.
-        /// Format: [type:1][request_id:4][json_len:4][json_data:N]
-        /// </summary>
-        /// <param name="data">Raw message bytes</param>
-        /// <param name="requestId">Decoded request ID for correlation</param>
-        /// <returns>JSON string</returns>
+        /// <summary>Format: [type:1][request_id:4][json_len:4][json_data:N]</summary>
         public static string DecodeResultMessage(byte[] data, out uint requestId)
         {
             if (data == null)
@@ -385,13 +336,6 @@ namespace PythonCommunication.Core
             return Encoding.UTF8.GetString(data, offset, jsonLength);
         }
 
-        /// <summary>
-        /// Encode a result message for sending to Python (used for testing).
-        /// Format: [type:1][request_id:4][json_len:4][json_data:N]
-        /// </summary>
-        /// <param name="json">JSON string to encode</param>
-        /// <param name="requestId">Request ID for correlation (default 0)</param>
-        /// <returns>Encoded message bytes</returns>
         public static byte[] EncodeResultMessage(string json, uint requestId = 0)
         {
             if (string.IsNullOrEmpty(json))
@@ -422,15 +366,7 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        /// <summary>
-        /// Encode a RAG query message for sending to Python SequenceServer (integrated RAG).
-        /// Format: [type:1][request_id:4][query_len:4][query_text:N][top_k:4][filters_json_len:4][filters_json:N]
-        /// </summary>
-        /// <param name="query">Natural language query text</param>
-        /// <param name="topK">Number of results to return (1-100)</param>
-        /// <param name="filtersJson">Optional filters JSON (can be null or empty)</param>
-        /// <param name="requestId">Request ID for correlation (default 0)</param>
-        /// <returns>Encoded message bytes</returns>
+        /// <summary>Format: [type:1][request_id:4][query_len:4][query_text:N][top_k:4][filters_json_len:4][filters_json:N]</summary>
         public static byte[] EncodeRagQuery(
             string query,
             int topK = 5,
@@ -510,13 +446,7 @@ namespace PythonCommunication.Core
             filtersJson = Encoding.UTF8.GetString(data, offset, filtersLen);
         }
 
-        /// <summary>
-        /// Decode a RAG response message received from Python SequenceServer (integrated RAG).
-        /// Format: [type:1][request_id:4][json_len:4][operation_context_json:N]
-        /// </summary>
-        /// <param name="data">Raw message bytes</param>
-        /// <param name="requestId">Decoded request ID for correlation</param>
-        /// <returns>JSON string with operation context</returns>
+        /// <summary>Format: [type:1][request_id:4][json_len:4][operation_context_json:N]</summary>
         public static string DecodeRagResponse(byte[] data, out uint requestId)
         {
             if (data == null)
@@ -573,14 +503,7 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        /// <summary>
-        /// Encode a status query message for sending to Python CommandServer.
-        /// Format: [type:1][request_id:4][robot_id_len:4][robot_id:N][detailed:1]
-        /// </summary>
-        /// <param name="robotId">Robot identifier (e.g., "Robot1", "AR4_Robot")</param>
-        /// <param name="detailed">If true, request detailed joint information</param>
-        /// <param name="requestId">Request ID for correlation (default 0)</param>
-        /// <returns>Encoded message bytes</returns>
+        /// <summary>Format: [type:1][request_id:4][robot_id_len:4][robot_id:N][detailed:1]</summary>
         public static byte[] EncodeStatusQuery(
             string robotId,
             bool detailed = false,
@@ -636,13 +559,7 @@ namespace PythonCommunication.Core
             detailed = data[offset] != 0;
         }
 
-        /// <summary>
-        /// Decode a status response message received from Python CommandServer or sent by WorldStatePublisher.
-        /// Format: [type:1][request_id:4][json_len:4][robot_status_json:N]
-        /// </summary>
-        /// <param name="data">Raw message bytes</param>
-        /// <param name="requestId">Decoded request ID for correlation</param>
-        /// <returns>JSON string with robot status</returns>
+        /// <summary>Format: [type:1][request_id:4][json_len:4][robot_status_json:N]</summary>
         public static string DecodeStatusResponse(byte[] data, out uint requestId)
         {
             if (data == null)
@@ -675,13 +592,6 @@ namespace PythonCommunication.Core
             return Encoding.UTF8.GetString(data, offset, jsonLength);
         }
 
-        /// <summary>
-        /// Encode a status response message for sending to Python (Unity → Python status response).
-        /// Format: [type:1][request_id:4][json_len:4][robot_status_json:N]
-        /// </summary>
-        /// <param name="statusJson">JSON string containing robot status</param>
-        /// <param name="requestId">Request ID for correlation (must match query request ID)</param>
-        /// <returns>Encoded message bytes</returns>
         public static byte[] EncodeStatusResponse(string statusJson, uint requestId)
         {
             if (string.IsNullOrEmpty(statusJson))
@@ -705,14 +615,7 @@ namespace PythonCommunication.Core
             return message;
         }
 
-        /// <summary>
-        /// Encode an AutoRT command message for sending to Python SequenceServer.
-        /// Format: [type:1][request_id:4][cmd_type_len:4][cmd_type:N][params_json_len:4][params_json:N]
-        /// </summary>
-        /// <param name="commandType">Command type ("generate", "start_loop", "stop_loop", "execute_task", "get_status")</param>
-        /// <param name="paramsJson">Parameters JSON string (can be null or empty for "{}")</param>
-        /// <param name="requestId">Request ID for correlation (default 0)</param>
-        /// <returns>Encoded message bytes</returns>
+        /// <summary>Format: [type:1][request_id:4][cmd_type_len:4][cmd_type:N][params_json_len:4][params_json:N]</summary>
         public static byte[] EncodeAutoRTCommand(
             string commandType,
             string paramsJson = null,
@@ -793,13 +696,7 @@ namespace PythonCommunication.Core
             paramsJson = Encoding.UTF8.GetString(data, offset, paramsLen);
         }
 
-        /// <summary>
-        /// Decode an AutoRT response message received from Python SequenceServer.
-        /// Format: [type:1][request_id:4][json_len:4][json:N]
-        /// </summary>
-        /// <param name="data">Raw message bytes</param>
-        /// <param name="requestId">Decoded request ID for correlation</param>
-        /// <returns>JSON string with response data (success, tasks[], loop_running, error)</returns>
+        /// <summary>Format: [type:1][request_id:4][json_len:4][json:N]</summary>
         public static string DecodeAutoRTResponse(byte[] data, out uint requestId)
         {
             if (data == null)
@@ -862,9 +759,6 @@ namespace PythonCommunication.Core
             return imageBytes.Length > 0 && imageBytes.Length <= MAX_IMAGE_SIZE;
         }
 
-        /// <summary>
-        /// Peek at the message type without decoding the full message.
-        /// </summary>
         public static MessageType PeekMessageType(byte[] data)
         {
             if (data == null)
@@ -880,9 +774,6 @@ namespace PythonCommunication.Core
             return (MessageType)data[0];
         }
 
-        /// <summary>
-        /// Peek at the request ID without decoding the full message.
-        /// </summary>
         public static uint PeekRequestId(byte[] data)
         {
             if (data == null)

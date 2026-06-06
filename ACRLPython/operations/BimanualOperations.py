@@ -11,7 +11,11 @@ import logging
 import math
 from typing import Optional
 
-from ._imports import get_command_broadcaster as _get_command_broadcaster
+from ._imports import (
+    get_command_broadcaster as _get_command_broadcaster,
+    get_world_state as _get_world_state,
+)
+from .ROSDispatcher import execute_with_ros_fallback
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -24,9 +28,16 @@ from .Base import (
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# synchronized_grasp
-# ---------------------------------------------------------------------------
+def _require_str(val, code, label):
+    if not val or not isinstance(val, str):
+        return OperationResult.error_result(code, f"{label} must be a non-empty string")
+    return None
+
+
+def _field(state, key, default=None):
+    if isinstance(state, dict):
+        return state.get(key, default)
+    return getattr(state, key, default)
 
 
 def synchronized_grasp(
@@ -40,111 +51,145 @@ def synchronized_grasp(
 ) -> OperationResult:
     """Both robots simultaneously approach and grasp the same large object from opposite sides."""
     try:
-        if not robot_id or not isinstance(robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_ROBOT_ID",
-                "Robot ID must be a non-empty string",
-                ["Provide a valid robot ID"],
-            )
-
-        if not partner_robot_id or not isinstance(partner_robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_PARTNER_ROBOT_ID",
-                "Partner robot ID must be a non-empty string",
-                ["Provide a valid partner robot ID"],
-            )
-
+        err = _require_str(robot_id, "INVALID_ROBOT_ID", "robot_id")
+        if err:
+            return err
+        err = _require_str(
+            partner_robot_id, "INVALID_PARTNER_ROBOT_ID", "partner_robot_id"
+        )
+        if err:
+            return err
         if robot_id == partner_robot_id:
             return OperationResult.error_result(
                 "INVALID_PARTNER_ROBOT_ID",
-                f"Partner robot ID must differ from robot_id, got: '{partner_robot_id}'",
-                ["Provide a different robot ID for the partner"],
+                f"partner_robot_id must differ from robot_id, got: '{partner_robot_id}'",
             )
+        err = _require_str(object_id, "INVALID_OBJECT_ID", "object_id")
+        if err:
+            return err
 
-        if not object_id or not isinstance(object_id, str):
-            return OperationResult.error_result(
-                "INVALID_OBJECT_ID",
-                "Object ID must be a non-empty string",
-                ["Provide a valid object ID"],
-            )
-
+        if approach_axis == "auto":
+            approach_axis = "x"
         if approach_axis not in ("x", "z"):
             return OperationResult.error_result(
                 "INVALID_APPROACH_AXIS",
-                f"Approach axis must be 'x' or 'z', got: '{approach_axis}'",
-                ["Use 'x' for left/right approach or 'z' for front/back approach"],
+                f"approach_axis must be 'x', 'z', or 'auto', got: '{approach_axis}'",
             )
 
         if not (3000 <= timeout_ms <= 60000):
             return OperationResult.error_result(
                 "INVALID_TIMEOUT",
-                f"Timeout must be in range [3000, 60000]ms, got: {timeout_ms}",
-                ["Use a timeout between 3000ms (3s) and 60000ms (60s)"],
+                f"timeout_ms must be in [3000, 60000], got: {timeout_ms}",
             )
 
-        _use_ros = use_ros
-        if _use_ros is None:
+        def _ros_path() -> Optional[OperationResult]:
             try:
-                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
-
-                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+                from ros2.ROSBridge import ROSBridge
             except ImportError:
-                _use_ros = False
+                return None
 
-        if _use_ros:
+            bridge = ROSBridge.get_instance()
+            if not bridge.is_connected and not bridge.connect():
+                return None
+
+            ws = _get_world_state()
+            obj_pos = ws.get_object_position(object_id) if ws else None
+            if not obj_pos:
+                logger.debug(
+                    "synchronized_grasp ROS: object position unknown, falling back to TCP"
+                )
+                return None
+
+            ox, oy, oz = obj_pos
+            OFFSET = 0.15
+            if approach_axis == "x":
+                r1_pos = {"x": ox - OFFSET, "y": oy, "z": oz}
+                r2_pos = {"x": ox + OFFSET, "y": oy, "z": oz}
+            else:
+                r1_pos = {"x": ox, "y": oy, "z": oz - OFFSET}
+                r2_pos = {"x": ox, "y": oy, "z": oz + OFFSET}
+
             logger.info(
-                "Bimanual operation not yet supported via ROS — using Unity direct control"
-            )
-            _use_ros = False
-
-        command = {
-            "command_type": "synchronized_grasp",
-            "robot_id": robot_id,
-            "parameters": {
-                "partner_robot_id": partner_robot_id,
-                "object_id": object_id,
-                "approach_axis": approach_axis,
-                "timeout_ms": timeout_ms,
-            },
-            "request_id": request_id,
-            "timestamp": time.time(),
-        }
-
-        logger.info(
-            f"Sending synchronized_grasp command: {robot_id} + {partner_robot_id} -> {object_id} "
-            f"(axis={approach_axis}, timeout={timeout_ms}ms)"
-        )
-
-        success = _get_command_broadcaster().send_command(command, request_id)
-
-        if not success:
-            return OperationResult.error_result(
-                "COMMUNICATION_FAILED",
-                "Failed to send command to Unity",
-                ["Ensure Unity is running"],
+                f"synchronized_grasp ROS: {robot_id} -> {r1_pos}, {partner_robot_id} -> {r2_pos}"
             )
 
-        logger.info(
-            f"Successfully initiated synchronized_grasp for {robot_id} + {partner_robot_id}"
-        )
+            r1 = bridge.plan_and_execute(
+                position=r1_pos, robot_id=robot_id, coordinate_space="unity_world"
+            )
+            if not (r1 and r1.get("success")):
+                return None
 
-        return OperationResult.success_result(
-            {
+            r2 = bridge.plan_and_execute(
+                position=r2_pos,
+                robot_id=partner_robot_id,
+                coordinate_space="unity_world",
+            )
+            if not (r2 and r2.get("success")):
+                return OperationResult.error_result(
+                    "ROS_PARTNER_APPROACH_FAILED",
+                    f"ROS approach succeeded for {robot_id} but failed for {partner_robot_id}",
+                    ["Check partner robot reachability", "Use TCP mode instead"],
+                )
+
+            bridge.control_gripper(0.0, robot_id=robot_id)
+            bridge.control_gripper(0.0, robot_id=partner_robot_id)
+
+            return OperationResult.success_result(
+                {
+                    "robot_id": robot_id,
+                    "partner_robot_id": partner_robot_id,
+                    "object_id": object_id,
+                    "approach_axis": approach_axis,
+                    "status": "synchronized_grasp_complete",
+                    "mode": "ros",
+                    "timestamp": time.time(),
+                }
+            )
+
+        def _tcp_path() -> OperationResult:
+            command = {
+                "command_type": "synchronized_grasp",
                 "robot_id": robot_id,
-                "partner_robot_id": partner_robot_id,
-                "object_id": object_id,
-                "approach_axis": approach_axis,
-                "status": "synchronized_grasp_complete",
+                "parameters": {
+                    "partner_robot_id": partner_robot_id,
+                    "object_id": object_id,
+                    "approach_axis": approach_axis,
+                    "timeout_ms": timeout_ms,
+                },
+                "request_id": request_id,
                 "timestamp": time.time(),
             }
-        )
+
+            logger.info(
+                f"Sending synchronized_grasp command: {robot_id} + {partner_robot_id} -> {object_id} "
+                f"(axis={approach_axis}, timeout={timeout_ms}ms)"
+            )
+
+            success = _get_command_broadcaster().send_command(command, request_id)
+            if not success:
+                return OperationResult.error_result(
+                    "COMMUNICATION_FAILED",
+                    "Failed to send command to Unity",
+                    ["Ensure Unity is running"],
+                )
+
+            return OperationResult.success_result(
+                {
+                    "robot_id": robot_id,
+                    "partner_robot_id": partner_robot_id,
+                    "object_id": object_id,
+                    "approach_axis": approach_axis,
+                    "status": "synchronized_grasp_complete",
+                    "timestamp": time.time(),
+                }
+            )
+
+        return execute_with_ros_fallback(_ros_path, _tcp_path, use_ros)
 
     except Exception as e:
         logger.error(f"Unexpected error in synchronized_grasp: {e}", exc_info=True)
         return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            ["Check logs"],
+            "UNEXPECTED_ERROR", f"synchronized_grasp failed: {e}"
         )
 
 
@@ -155,21 +200,34 @@ def create_synchronized_grasp_operation() -> BasicOperation:
         category=OperationCategory.MANIPULATION,
         complexity=OperationComplexity.COMPLEX,
         description="Both robots simultaneously approach and grasp the same large object from opposite sides (bimanual grasping)",
-        long_description="""
-            Commands both robots to coordinate a simultaneous approach and grasp of a single
-            large object from opposite sides along the specified axis.
-
-            Requires:
-            - Both robots to be idle and positioned within reach of the object
-            - Coordination timing so neither robot collides with the other during approach
-            - Gripper contact confirmation from both robots before declaring success
-
-            Suitable for objects too large or unstable for a single-arm grasp.
-        """,
+        long_description=(
+            "Coordinates both robots to approach and grasp a single large object simultaneously "
+            "from opposite sides — one robot takes the left side, the other the right. "
+            "Supports ROS (MoveIt) and Unity TCP paths. "
+            "Follow with joint_transport to move the object, then release_object on both robots."
+        ),
         usage_examples=[
-            "synchronized_grasp('Robot1', 'Robot2', 'LargeBox')",
-            "synchronized_grasp('Robot1', 'Robot2', 'LargeBox', approach_axis='z')",
-            "Bimanual grasp: both robots approach from opposite X sides",
+            "synchronized_grasp('Robot1', 'Robot2', 'red_cube')  # both robots grasp red cube from left/right",
+            "synchronized_grasp('Robot1', 'Robot2', 'LargeBox', approach_axis='z')  # front/back approach",
+            "# Robot1 grasps left side, Robot2 grasps right side of the cube:",
+            "synchronized_grasp('Robot1', 'Robot2', '$target.color')",
+            "# After this, use joint_transport to lift and move the object together",
+        ],
+        preconditions=[
+            "robot_is_initialized(robot_id)",
+            "robot_is_initialized(partner_robot_id)",
+            "robot_is_idle(robot_id)",
+            "robot_is_idle(partner_robot_id)",
+        ],
+        postconditions=[
+            "both_robots_grasping(object_id)",
+        ],
+        success_rate=0.78,
+        failure_modes=[
+            "One robot fails to reach approach position",
+            "Gripper contact not confirmed",
+            "Object moves during approach",
+            "Timeout waiting for both robots",
         ],
         parameters=[
             OperationParameter(
@@ -193,9 +251,9 @@ def create_synchronized_grasp_operation() -> BasicOperation:
             OperationParameter(
                 name="approach_axis",
                 type="str",
-                description="Axis along which robots approach from opposite sides ('x' or 'z')",
+                description="Axis along which robots approach from opposite sides ('x', 'z', or 'auto'). 'auto' resolves to 'x' (default robot layout).",
                 required=False,
-                default="x",
+                default="auto",
                 valid_range=None,
             ),
             OperationParameter(
@@ -207,52 +265,21 @@ def create_synchronized_grasp_operation() -> BasicOperation:
                 valid_range=(3000, 60000),
             ),
         ],
-        preconditions=[
-            "robot_is_initialized(robot_id)",
-            "robot_is_initialized(partner_robot_id)",
-            "robot_is_idle(robot_id)",
-            "robot_is_idle(partner_robot_id)",
-        ],
-        postconditions=[
-            "both_robots_grasping(object_id)",
-        ],
         average_duration_ms=8000.0,
-        success_rate=78.0,
-        failure_modes=[
-            "One robot fails to reach approach position",
-            "Gripper contact not confirmed",
-            "Object moves during approach",
-            "Timeout waiting for both robots",
-        ],
         relationships=OperationRelationship(
             operation_id="collaborative_synchronized_grasp_001",
             required_operations=["coordination_check_partner_001"],
-            required_reasons={
-                "coordination_check_partner_001": "Verify partner is idle before starting synchronized bimanual grasp"
-            },
             commonly_paired_with=[
                 "collaborative_joint_transport_001",
                 "sync_signal_001",
                 "coordination_check_partner_001",
             ],
-            pairing_reasons={
-                "collaborative_joint_transport_001": "After synchronized grasp, transport object together",
-                "sync_signal_001": "Signal partners after grasp completes",
-                "coordination_check_partner_001": "Check partner availability before bimanual task",
-            },
-            typical_before=["collaborative_joint_transport_001"],
-            typical_after=["coordination_check_partner_001"],
         ),
         implementation=synchronized_grasp,
     )
 
 
 SYNCHRONIZED_GRASP_OPERATION = create_synchronized_grasp_operation()
-
-
-# ---------------------------------------------------------------------------
-# joint_transport
-# ---------------------------------------------------------------------------
 
 
 def joint_transport(
@@ -268,25 +295,18 @@ def joint_transport(
 ) -> OperationResult:
     """Both robots (already grasping the same object) move it together to a target position."""
     try:
-        if not robot_id or not isinstance(robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_ROBOT_ID",
-                "Robot ID must be a non-empty string",
-                ["Provide a valid robot ID"],
-            )
-
-        if not partner_robot_id or not isinstance(partner_robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_PARTNER_ROBOT_ID",
-                "Partner robot ID must be a non-empty string",
-                ["Provide a valid partner robot ID"],
-            )
-
+        err = _require_str(robot_id, "INVALID_ROBOT_ID", "robot_id")
+        if err:
+            return err
+        err = _require_str(
+            partner_robot_id, "INVALID_PARTNER_ROBOT_ID", "partner_robot_id"
+        )
+        if err:
+            return err
         if robot_id == partner_robot_id:
             return OperationResult.error_result(
                 "INVALID_PARTNER_ROBOT_ID",
-                f"Partner robot ID must differ from robot_id, got: '{partner_robot_id}'",
-                ["Provide a different robot ID for the partner"],
+                f"partner_robot_id must differ from robot_id, got: '{partner_robot_id}'",
             )
 
         for name, val in (
@@ -298,45 +318,33 @@ def joint_transport(
                 return OperationResult.error_result(
                     f"INVALID_{name.upper()}",
                     f"{name} must be a finite float, got: {val!r}",
-                    [f"Provide a valid finite number for {name}"],
                 )
 
         if not (0.0 <= lift_height <= 0.3):
             return OperationResult.error_result(
                 "INVALID_LIFT_HEIGHT",
-                f"Lift height must be in range [0.0, 0.3]m, got: {lift_height}",
-                ["Use a lift height between 0.0m and 0.3m"],
+                f"lift_height must be in [0.0, 0.3]m, got: {lift_height}",
             )
 
         if not (5000 <= timeout_ms <= 120000):
             return OperationResult.error_result(
                 "INVALID_TIMEOUT",
-                f"Timeout must be in range [5000, 120000]ms, got: {timeout_ms}",
-                ["Use a timeout between 5000ms (5s) and 120000ms (120s)"],
+                f"timeout_ms must be in [5000, 120000], got: {timeout_ms}",
             )
 
-        # Precondition check: both robots must have closed grippers
         try:
-            try:
-                from .WorldState import WorldState
-            except ImportError:
-                from operations.WorldState import WorldState  # type: ignore[no-redef]
+            from .WorldState import WorldState
 
             ws = WorldState()
             r1_state = ws.get_robot_state(robot_id)
             r2_state = ws.get_robot_state(partner_robot_id)
 
-            def _gripper(s):
-                if s is None:
-                    return "unknown"
-                return (
-                    s.get("gripper_state", "unknown")
-                    if isinstance(s, dict)
-                    else getattr(s, "gripper_state", "unknown")
-                )
-
-            r1_gripper = _gripper(r1_state)
-            r2_gripper = _gripper(r2_state)
+            r1_gripper = (
+                _field(r1_state, "gripper_state", "unknown") if r1_state else "unknown"
+            )
+            r2_gripper = (
+                _field(r2_state, "gripper_state", "unknown") if r2_state else "unknown"
+            )
 
             if r1_gripper != "closed" or r2_gripper != "closed":
                 return OperationResult.error_result(
@@ -349,71 +357,138 @@ def joint_transport(
         except Exception as e:
             logger.debug(f"WorldState precondition check skipped: {e}")
 
-        _use_ros = use_ros
-        if _use_ros is None:
+        def _ros_path() -> Optional[OperationResult]:
             try:
-                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
-
-                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+                from ros2.ROSBridge import ROSBridge
             except ImportError:
-                _use_ros = False
+                return None
 
-        if _use_ros:
+            bridge = ROSBridge.get_instance()
+            if not bridge.is_connected and not bridge.connect():
+                return None
+
+            r1_cur = bridge.get_ee_pose(robot_id=robot_id)
+            r2_cur = bridge.get_ee_pose(robot_id=partner_robot_id)
+            if not (r1_cur and r2_cur):
+                return None
+
             logger.info(
-                "Bimanual operation not yet supported via ROS — using Unity direct control"
-            )
-            _use_ros = False
-
-        command = {
-            "command_type": "joint_transport",
-            "robot_id": robot_id,
-            "parameters": {
-                "partner_robot_id": partner_robot_id,
-                "target_x": target_x,
-                "target_y": target_y,
-                "target_z": target_z,
-                "lift_height": lift_height,
-                "timeout_ms": timeout_ms,
-            },
-            "request_id": request_id,
-            "timestamp": time.time(),
-        }
-
-        logger.info(
-            f"Sending joint_transport command: {robot_id} + {partner_robot_id} -> "
-            f"({target_x:.3f}, {target_y:.3f}, {target_z:.3f}), lift={lift_height}m, timeout={timeout_ms}ms"
-        )
-
-        success = _get_command_broadcaster().send_command(command, request_id)
-
-        if not success:
-            return OperationResult.error_result(
-                "COMMUNICATION_FAILED",
-                "Failed to send command to Unity",
-                ["Ensure Unity is running"],
+                f"joint_transport ROS: lift {lift_height}m then move to "
+                f"({target_x:.3f}, {target_y:.3f}, {target_z:.3f})"
             )
 
-        logger.info(
-            f"Successfully initiated joint_transport for {robot_id} + {partner_robot_id}"
-        )
+            lift1 = bridge.plan_cartesian_move(
+                position={
+                    "x": r1_cur["position"]["x"],
+                    "y": r1_cur["position"]["y"] + lift_height,
+                    "z": r1_cur["position"]["z"],
+                },
+                robot_id=robot_id,
+            )
+            if not (lift1 and lift1.get("success")):
+                return None
 
-        return OperationResult.success_result(
-            {
+            lift2 = bridge.plan_cartesian_move(
+                position={
+                    "x": r2_cur["position"]["x"],
+                    "y": r2_cur["position"]["y"] + lift_height,
+                    "z": r2_cur["position"]["z"],
+                },
+                robot_id=partner_robot_id,
+            )
+            if not (lift2 and lift2.get("success")):
+                return OperationResult.error_result(
+                    "ROS_PARTNER_LIFT_FAILED",
+                    f"Lift succeeded for {robot_id} but failed for {partner_robot_id}",
+                    [
+                        "Check partner robot reachability",
+                        "Reduce lift_height",
+                        "Use TCP mode",
+                    ],
+                )
+
+            target = {"x": target_x, "y": target_y + lift_height, "z": target_z}
+
+            mv1 = bridge.plan_and_execute(
+                position=target, robot_id=robot_id, coordinate_space="unity_world"
+            )
+            if not (mv1 and mv1.get("success")):
+                return OperationResult.error_result(
+                    "ROS_TRANSPORT_R1_FAILED",
+                    f"Transport failed for {robot_id} after lift phase",
+                    ["Verify target reachability", "Use TCP mode"],
+                )
+
+            mv2 = bridge.plan_and_execute(
+                position=target,
+                robot_id=partner_robot_id,
+                coordinate_space="unity_world",
+            )
+            if not (mv2 and mv2.get("success")):
+                return OperationResult.error_result(
+                    "ROS_TRANSPORT_R2_FAILED",
+                    f"Transport failed for {partner_robot_id} after {robot_id} reached target",
+                    ["Verify target reachability", "Use TCP mode"],
+                )
+
+            return OperationResult.success_result(
+                {
+                    "robot_id": robot_id,
+                    "partner_robot_id": partner_robot_id,
+                    "target_position": {"x": target_x, "y": target_y, "z": target_z},
+                    "lift_height": lift_height,
+                    "status": "joint_transport_complete",
+                    "mode": "ros",
+                    "timestamp": time.time(),
+                }
+            )
+
+        def _tcp_path() -> OperationResult:
+            command = {
+                "command_type": "joint_transport",
                 "robot_id": robot_id,
-                "partner_robot_id": partner_robot_id,
-                "target_position": {"x": target_x, "y": target_y, "z": target_z},
-                "lift_height": lift_height,
-                "status": "joint_transport_complete",
+                "parameters": {
+                    "partner_robot_id": partner_robot_id,
+                    "target_x": target_x,
+                    "target_y": target_y,
+                    "target_z": target_z,
+                    "lift_height": lift_height,
+                    "timeout_ms": timeout_ms,
+                },
+                "request_id": request_id,
                 "timestamp": time.time(),
             }
-        )
+
+            logger.info(
+                f"Sending joint_transport command: {robot_id} + {partner_robot_id} -> "
+                f"({target_x:.3f}, {target_y:.3f}, {target_z:.3f}), lift={lift_height}m, timeout={timeout_ms}ms"
+            )
+
+            success = _get_command_broadcaster().send_command(command, request_id)
+            if not success:
+                return OperationResult.error_result(
+                    "COMMUNICATION_FAILED",
+                    "Failed to send command to Unity",
+                    ["Ensure Unity is running"],
+                )
+
+            return OperationResult.success_result(
+                {
+                    "robot_id": robot_id,
+                    "partner_robot_id": partner_robot_id,
+                    "target_position": {"x": target_x, "y": target_y, "z": target_z},
+                    "lift_height": lift_height,
+                    "status": "joint_transport_complete",
+                    "timestamp": time.time(),
+                }
+            )
+
+        return execute_with_ros_fallback(_ros_path, _tcp_path, use_ros)
 
     except Exception as e:
         logger.error(f"Unexpected error in joint_transport: {e}", exc_info=True)
         return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            ["Check logs"],
+            "UNEXPECTED_ERROR", f"joint_transport failed: {e}"
         )
 
 
@@ -424,23 +499,37 @@ def create_joint_transport_operation() -> BasicOperation:
         category=OperationCategory.MANIPULATION,
         complexity=OperationComplexity.COMPLEX,
         description="Both robots cooperatively transport a jointly-grasped object to a target position (rigid cooperative transport)",
-        long_description="""
-            Commands both robots to move a jointly-held object in a coordinated fashion
-            to the specified target position. Both robots lift the object by lift_height
-            before translating to minimise surface friction and collision risk.
-
-            Requires:
-            - Both robots already grasping the object (gripper_state == 'closed')
-            - Target position reachable by both robots simultaneously
-            - Synchronised velocity profiles to avoid tearing the object
-
-            Typical usage follows synchronized_grasp; afterwards both robots release
-            via control_gripper / release_object.
-        """,
+        long_description=(
+            "Moves a jointly-held object to a target position. Both robots must already be "
+            "grasping it (synchronized_grasp first). Lifts by lift_height before translating "
+            "to reduce surface friction. Supports ROS and TCP paths. "
+            "Release with release_object on both robots when done."
+        ),
         usage_examples=[
+            "# After synchronized_grasp, lift both to y=0.15:",
             "joint_transport('Robot1', 'Robot2', 0.0, 0.15, 0.3)",
+            "# Lift higher before moving:",
             "joint_transport('Robot1', 'Robot2', -0.1, 0.2, 0.1, lift_height=0.1)",
-            "Cooperative carry: both arms move large tray to target",
+            "# Full cooperative sequence: grasp → transport → release",
+            "# 1. synchronized_grasp('Robot1', 'Robot2', 'red_cube')",
+            "# 2. joint_transport('Robot1', 'Robot2', 0.0, 0.15, 0.0)",
+            "# 3. release_object('Robot1') + release_object('Robot2')",
+        ],
+        preconditions=[
+            "robot_is_initialized(robot_id)",
+            "robot_is_initialized(partner_robot_id)",
+            "gripper_state(robot_id) == 'closed'",
+            "gripper_state(partner_robot_id) == 'closed'",
+        ],
+        postconditions=[
+            "object_at_target_position(target_x, target_y, target_z)",
+        ],
+        success_rate=0.72,
+        failure_modes=[
+            "One robot loses grasp during transport",
+            "Target position unreachable for one robot",
+            "Collision during transport",
+            "Timeout",
         ],
         parameters=[
             OperationParameter(
@@ -490,41 +579,15 @@ def create_joint_transport_operation() -> BasicOperation:
                 valid_range=(5000, 120000),
             ),
         ],
-        preconditions=[
-            "robot_is_initialized(robot_id)",
-            "robot_is_initialized(partner_robot_id)",
-            "gripper_state(robot_id) == 'closed'",
-            "gripper_state(partner_robot_id) == 'closed'",
-        ],
-        postconditions=[
-            "object_at_target_position(target_x, target_y, target_z)",
-        ],
         average_duration_ms=12000.0,
-        success_rate=72.0,
-        failure_modes=[
-            "One robot loses grasp during transport",
-            "Target position unreachable for one robot",
-            "Collision during transport",
-            "Timeout",
-        ],
         relationships=OperationRelationship(
             operation_id="collaborative_joint_transport_001",
             required_operations=["collaborative_synchronized_grasp_001"],
-            required_reasons={
-                "collaborative_synchronized_grasp_001": "Both robots must be grasping the object before joint transport"
-            },
             commonly_paired_with=[
                 "collaborative_synchronized_grasp_001",
                 "manipulation_release_object_001",
                 "sync_signal_001",
             ],
-            pairing_reasons={
-                "collaborative_synchronized_grasp_001": "Grasp object together before transporting",
-                "manipulation_release_object_001": "Release after transport completes",
-                "sync_signal_001": "Signal transport complete to coordinate release",
-            },
-            typical_before=["manipulation_release_object_001"],
-            typical_after=["collaborative_synchronized_grasp_001"],
         ),
         implementation=joint_transport,
     )

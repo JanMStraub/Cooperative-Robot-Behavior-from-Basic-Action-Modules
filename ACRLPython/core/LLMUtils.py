@@ -59,13 +59,16 @@ def extract_json(content: str) -> Optional[Dict]:
     except json.JSONDecodeError as e:
         logger.debug(f"Direct JSON parse failed: {e}")
 
-    json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
+    # Also try unclosed markdown block (truncated LLM response has no closing ```)
+    _open_fence = re.search(r"```(?:json)?\s*\n?(.*)", content, re.DOTALL)
+    _closed_fence = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
+    json_match = _closed_fence or _open_fence
     if json_match:
         json_str = json_match.group(1).strip()
         try:
             return json.loads(json_str)
         except json.JSONDecodeError as e:
-            logger.warning(
+            logger.debug(
                 f"Markdown JSON parse failed: {e}. "
                 f"Content length: {len(json_str)}, preview: {json_str[:200]}"
             )
@@ -75,15 +78,18 @@ def extract_json(content: str) -> Optional[Dict]:
             return json.loads(json_str_clean)
         except json.JSONDecodeError:
             pass
-        # Stage 2b-pre: wrap entire block in array brackets — handles comma-separated
-        # multi-object responses like: { "operation": "a", ... }, { "operation": "b", ... }
-        try:
-            wrapped = "[" + json_str + "]"
-            _result = json.loads(wrapped)
-            if isinstance(_result, list) and all(isinstance(x, dict) for x in _result):
-                return {"commands": _result}
-        except json.JSONDecodeError:
-            pass
+        # Stage 2b-pre: wrap entire block in array brackets — handles multi-object
+        # responses with or without commas between objects.
+        # LLMs often emit JSONL-style (no commas): {...}\n{...}\n{...}
+        for _candidate in (json_str, re.sub(r"\}\s*\{", "},{", json_str)):
+            try:
+                _result = json.loads("[" + _candidate + "]")
+                if isinstance(_result, list) and all(
+                    isinstance(x, dict) for x in _result
+                ):
+                    return {"commands": _result}
+            except json.JSONDecodeError:
+                pass
         # Stage 2b: JSONL fallback — model emitted newline-delimited JSON objects
         # Wrap into {"commands": [...]} so downstream parser can handle it
         lines = [l.strip() for l in json_str.splitlines() if l.strip().startswith("{")]
@@ -119,20 +125,20 @@ def extract_json(content: str) -> Optional[Dict]:
 
     # Stage 3b-pre: array-wrap attempt for bare multi-line multi-object content.
     # Finds the first { and last } in content and wraps in [...].
+    # Also tries comma-insertion to handle JSONL-style output without commas.
     _first_brace = content.find("{")
     _last_brace = content.rfind("}")
     if _first_brace != -1 and _last_brace > _first_brace:
-        try:
-            _candidate = content[_first_brace : _last_brace + 1]
-            _result = json.loads("[" + _candidate + "]")
-            if (
-                isinstance(_result, list)
-                and len(_result) > 1
-                and all(isinstance(x, dict) for x in _result)
-            ):
-                return {"commands": _result}
-        except json.JSONDecodeError:
-            pass
+        _candidate = content[_first_brace : _last_brace + 1]
+        for _c in (_candidate, re.sub(r"\}\s*\{", "},{", _candidate)):
+            try:
+                _result = json.loads("[" + _c + "]")
+                if isinstance(_result, list) and all(
+                    isinstance(x, dict) for x in _result
+                ):
+                    return {"commands": _result}
+            except json.JSONDecodeError:
+                pass
 
     bare_lines = [l.strip() for l in content.splitlines() if l.strip().startswith("{")]
     if len(bare_lines) > 1:

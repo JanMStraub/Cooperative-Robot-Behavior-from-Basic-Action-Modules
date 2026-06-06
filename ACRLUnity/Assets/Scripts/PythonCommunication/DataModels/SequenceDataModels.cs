@@ -21,10 +21,6 @@ namespace PythonCommunication
 
         public List<CommandResult> results;
 
-        public List<ParsedCommand> parsed_commands;
-
-        public string original_command;
-
         public float total_duration_ms;
 
         public string error;
@@ -42,21 +38,8 @@ namespace PythonCommunication
 
         public bool success;
 
-        public object result;
-
         public string error;
 
         public float duration_ms;
-    }
-
-    /// <summary>
-    /// A parsed command from natural language.
-    /// </summary>
-    [Serializable]
-    public class ParsedCommand
-    {
-        public string operation;
-
-        public Dictionary<string, object> @params;
     }
 }

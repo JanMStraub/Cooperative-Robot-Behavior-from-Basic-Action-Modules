@@ -114,10 +114,6 @@ namespace Robotics.Grasp
             return maxDimension < maxWidth && minDimension > fingerPadWidth * 0.1f;
         }
 
-        /// <summary>
-        /// Get default AR4 gripper geometry.
-        /// </summary>
-        /// <returns>Default gripper geometry</returns>
         public static GripperGeometry Default()
         {
             return new GripperGeometry

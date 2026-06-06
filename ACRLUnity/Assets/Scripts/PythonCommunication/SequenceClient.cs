@@ -7,10 +7,7 @@ using UnityEngine;
 
 namespace PythonCommunication
 {
-    /// <summary>
-    /// TCP client for sending multi-command sequences to Python.
-    /// Refactored to use BidirectionalClientBase for robustness and Protocol V2 compliance.
-    /// </summary>
+    /// <summary>TCP client for sending multi-command sequences to Python.</summary>
     public class SequenceClient : BidirectionalClientBase<SequenceResult>
     {
         public static SequenceClient Instance { get; private set; }
@@ -30,34 +27,19 @@ namespace PythonCommunication
         [SerializeField]
         private bool _autoExecuteResult = true;
 
-        // Recent sequence results
         private SequenceResult _lastResult;
         private List<string> _recentCommands = new List<string>();
 
         protected override string LogPrefix => "[SEQUENCE_CLIENT]";
 
-        /// <summary>
-        /// Current prompt text (for Editor access)
-        /// </summary>
         public string Prompt
         {
             get => _prompt;
             set => _prompt = value;
         }
 
-        /// <summary>
-        /// Last sequence result
-        /// </summary>
         public SequenceResult LastResult => _lastResult;
-
-        /// <summary>
-        /// List of recent commands sent
-        /// </summary>
         public List<string> RecentCommands => _recentCommands;
-
-        /// <summary>
-        /// Event fired when a sequence result is received
-        /// </summary>
         public event Action<SequenceResult> OnSequenceResultReceived;
 
         protected override void Awake()
@@ -73,29 +55,6 @@ namespace PythonCommunication
             else
             {
                 Destroy(gameObject);
-            }
-        }
-
-        /// <summary>
-        /// Send the current prompt as a sequence command.
-        /// Called from the Inspector UI.
-        /// </summary>
-        public void SendSequence()
-        {
-            if (string.IsNullOrEmpty(_prompt))
-            {
-                Debug.LogWarning($"{LogPrefix} Prompt is empty");
-                return;
-            }
-
-            bool success = ExecuteSequence(_prompt);
-
-            if (success)
-            {
-                // Add to recent commands
-                _recentCommands.Insert(0, _prompt);
-                if (_recentCommands.Count > 10)
-                    _recentCommands.RemoveAt(_recentCommands.Count - 1);
             }
         }
 
@@ -151,16 +110,6 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Execute a move command followed by a gripper action.
-        /// </summary>
-        public bool MoveAndGrip(float x, float y, float z, bool closeGripper)
-        {
-            string gripperAction = closeGripper ? "close the gripper" : "open the gripper";
-            string command = $"move to ({x}, {y}, {z}) and {gripperAction}";
-            return ExecuteSequence(command);
-        }
-
-        /// <summary>
         /// Execute a pick operation: move to position, close gripper, move up.
         /// </summary>
         public bool Pick(float x, float y, float z, float liftHeight = 0.1f)
@@ -189,9 +138,20 @@ namespace PythonCommunication
         /// </summary>
         protected override SequenceResult ReceiveResponse()
         {
-            string json = ReadJsonMessage(MessageType.RESULT, CommunicationConstants.MAX_JSON_LENGTH, out uint requestId);
-            if (json == null) return null;
-            if (JsonParser.TryParseWithLogging<SequenceResult>(json, out SequenceResult result, LogPrefix))
+            string json = ReadJsonMessage(
+                MessageType.RESULT,
+                CommunicationConstants.MAX_JSON_LENGTH,
+                out uint requestId
+            );
+            if (json == null)
+                return null;
+            if (
+                JsonParser.TryParseWithLogging<SequenceResult>(
+                    json,
+                    out SequenceResult result,
+                    LogPrefix
+                )
+            )
             {
                 result.request_id = requestId;
                 return result;

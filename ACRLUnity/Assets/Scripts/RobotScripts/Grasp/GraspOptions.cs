@@ -9,6 +9,7 @@ namespace Robotics
         public bool useGraspPlanning;
         public bool openGripperOnSet;
         public bool closeGripperOnReach;
+        public bool attachObjectOnGrasp;
         public GraspApproach? approach;
 
         public bool useAdvancedPlanning;
@@ -25,6 +26,7 @@ namespace Robotics
                 useGraspPlanning = true,
                 openGripperOnSet = true,
                 closeGripperOnReach = true,
+                attachObjectOnGrasp = true,
                 approach = null,
                 useAdvancedPlanning = false,
                 graspConfig = null,
@@ -57,6 +59,7 @@ namespace Robotics
                 useGraspPlanning = true,
                 openGripperOnSet = true,
                 closeGripperOnReach = true,
+                attachObjectOnGrasp = true,
                 approach = null, // Auto-determine
                 useAdvancedPlanning = true,
                 graspConfig = null, // Use default config

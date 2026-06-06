@@ -49,13 +49,11 @@ class GraspScorer:
     - Antipodal quality: Quality of opposing contact points
 
     All scores are normalized to [0, 1] range.
-
     """
 
     def __init__(self, config: Optional[GraspConfig] = None):
         """
         Initialize scorer with configuration.
-
         """
         self.config = config or GraspConfig.create_default()
 
@@ -71,8 +69,6 @@ class GraspScorer:
 
         Pre-computes object_size array and ideal pre-grasp distance once to
         avoid redundant conversions and calculations inside _score_candidate.
-
-
         """
         # Pre-compute shared values used by every candidate scoring call
         obj_size_array = np.array(object_size)
@@ -114,7 +110,6 @@ class GraspScorer:
         Compute scores for a single candidate.
 
         Updates candidate's score fields in-place.
-
         """
         if obj_size_array is None:
             obj_size_array = np.array(object_size)
@@ -157,8 +152,6 @@ class GraspScorer:
 
         Higher score for positions closer to current gripper (easier to reach).
         If IK validation was performed, use validation quality instead.
-
-
         """
         # If IK was validated by MoveIt, use that score
         if candidate.ik_validated:
@@ -178,8 +171,6 @@ class GraspScorer:
         Compute approach preference score.
 
         Uses configured preference weights for each approach type.
-
-
         """
         weight = self.config.get_approach_weight(candidate.approach_type)
 
@@ -194,8 +185,6 @@ class GraspScorer:
 
         Penalizes deviations from target depth using Gaussian distribution.
         Object-size-aware scoring.
-
-
         """
         avg_object_size = np.mean(object_size)
         target_depth = self.config.target_grasp_depth * avg_object_size
@@ -220,8 +209,6 @@ class GraspScorer:
 
         Higher for grasps aligned with object center and gravity.
         Enhanced with center-of-mass alignment, contact area, and edge avoidance.
-
-
         """
         score = 1.0
 
@@ -268,8 +255,6 @@ class GraspScorer:
         Estimate contact area between gripper and object.
 
         Larger contact areas provide more stable grasps.
-
-
         """
         approach_dir = np.array(candidate.approach_direction)
         abs_approach = np.abs(approach_dir)
@@ -300,8 +285,6 @@ class GraspScorer:
         Compute edge avoidance score.
 
         Penalizes grasps near object edges for better stability.
-
-
         """
         grasp_pos = np.array(candidate.grasp_position)
         contact_pos = np.array(candidate.contact_point_estimate)
@@ -330,8 +313,6 @@ class GraspScorer:
 
         Prevents "180-degree flip" scenarios by penalizing large rotations
         from current gripper orientation.
-
-
         """
         delta_angle = quaternion_angle(
             current_gripper_rotation, candidate.grasp_rotation
@@ -353,8 +334,6 @@ class GraspScorer:
     def _calculate_pre_grasp_distance(self, obj_size: np.ndarray) -> float:
         """
         Calculate ideal pre-grasp distance from object size.
-
-
         """
         avg_size = np.mean(obj_size)
         distance = avg_size * self.config.pre_grasp_distance_factor
@@ -371,8 +350,6 @@ class GraspScorer:
     ) -> List[GraspCandidate]:
         """
         Filter candidates below a minimum score threshold.
-
-
         """
         filtered = [c for c in candidates if c.total_score >= min_score]
         logger.debug(
@@ -386,8 +363,6 @@ class GraspScorer:
     ) -> List[GraspCandidate]:
         """
         Get top N candidates from scored list.
-
-
         """
         return candidates[:count]
 
@@ -397,7 +372,6 @@ class GraspScorer:
 
         Useful for comparing candidates across different scenarios.
         Modifies candidates in-place.
-
         """
         if not candidates:
             return

@@ -27,6 +27,7 @@ try:
         PRE_GRASP_HOVER_OFFSET,
         PREGRASP_ACCELERATION_SCALING,
         PREGRASP_VELOCITY_SCALING,
+        VGN_MIN_Y_APPROACH,
     )
 except ImportError:
     from config.Robot import (  # type: ignore[no-redef]
@@ -37,6 +38,7 @@ except ImportError:
         PRE_GRASP_HOVER_OFFSET,
         PREGRASP_ACCELERATION_SCALING,
         PREGRASP_VELOCITY_SCALING,
+        VGN_MIN_Y_APPROACH,
     )
 
 try:
@@ -580,11 +582,10 @@ def _grasp_via_vgn_with_ros(
             )
     else:
         # Default: top-down — prefer upward Y approach to avoid table collisions.
-        _MIN_Y_APPROACH = 0.2
         top_down_candidates = [
             g
             for g in world_grasps
-            if g.get("approach_direction", [0, 0, 0])[1] >= _MIN_Y_APPROACH
+            if g.get("approach_direction", [0, 0, 0])[1] >= VGN_MIN_Y_APPROACH
         ]
         if top_down_candidates:
             top = max(top_down_candidates, key=lambda g: g.get("score", 0.0))
@@ -598,7 +599,7 @@ def _grasp_via_vgn_with_ros(
                 world_grasps, key=lambda g: g.get("approach_direction", [0, 0, 0])[1]
             )
             logger.warning(
-                f"[VGN+ROS] No grasp with Y_approach >= {_MIN_Y_APPROACH} — "
+                f"[VGN+ROS] No grasp with Y_approach >= {VGN_MIN_Y_APPROACH} — "
                 f"using most-top-down candidate (Y_approach={top['approach_direction'][1]:.2f})"
             )
     pos = top["position"]
@@ -796,8 +797,10 @@ def _grasp_via_vgn_with_ros(
         )
         return None
 
-    # Settle pause: 50Hz publisher → 0.15s = 7 ticks.
-    time.sleep(0.15)
+    # Settle pause: arm needs ~0.4s after OMPL trajectory to damp PD oscillation below 1°/s;
+    # 0.15s was too short — residual motion caused ROSMotionClient to plan the Cartesian
+    # descent from a still-moving start state, shifting the first waypoint and inducing rotation.
+    time.sleep(0.4)
 
     logger.info(f"[VGN+ROS] Cartesian descent for {robot_id}: {grasp_pos}")
     descent_result = bridge.plan_cartesian_descent(

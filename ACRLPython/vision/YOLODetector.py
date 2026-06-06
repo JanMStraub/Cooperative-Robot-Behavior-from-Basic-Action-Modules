@@ -60,9 +60,9 @@ except ImportError:
 
 try:
     try:
-        from .StereoConfig import CameraConfig, DEFAULT_CAMERA_CONFIG
+        from .StereoConfig import DEFAULT_CAMERA_CONFIG
     except ImportError:
-        from vision.StereoConfig import CameraConfig, DEFAULT_CAMERA_CONFIG
+        from vision.StereoConfig import DEFAULT_CAMERA_CONFIG
 
     try:
         from .DepthEstimator import (

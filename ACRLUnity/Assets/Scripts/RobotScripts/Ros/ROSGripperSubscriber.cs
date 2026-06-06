@@ -7,12 +7,7 @@ using UnityEngine;
 
 namespace Robotics
 {
-    /// <summary>
-    /// Subscribes to ROS 2 gripper commands and bridges them to the existing GripperController.
-    /// Receives JointState messages on /gripper/command with position field controlling
-    /// the normalized gripper opening (0=closed, 1=open).
-    /// Publishes gripper feedback state on /gripper/state.
-    /// </summary>
+    /// <summary>Bridges ROS 2 gripper commands to GripperController and publishes gripper state feedback.</summary>
     public class ROSGripperSubscriber : MonoBehaviour
     {
         [Header("ROS Configuration")]
@@ -43,10 +38,7 @@ namespace Robotics
         private string _resolvedCommandTopic;
         private string _resolvedStateTopic;
 
-        // Pre-allocated buffer for OverlapSphere to avoid per-call Collider[] allocation
         private readonly Collider[] _overlapBuffer = new Collider[32];
-
-        // Reusable timestamp to avoid DateTime/TimeSpan/TimeMsg allocations at 10Hz
         private readonly TimeMsg _rosTimestamp = new TimeMsg();
         private static readonly System.DateTime _unixEpoch = new System.DateTime(
             1970,
@@ -82,7 +74,6 @@ namespace Robotics
             _statePublishInterval = 1f / _statePublishRate;
             _timeSinceLastStatePublish = 0f;
 
-            // Initialize state feedback message
             _stateMsg = new JointStateMsg
             {
                 header = new HeaderMsg(),
@@ -92,7 +83,6 @@ namespace Robotics
                 effort = new double[2],
             };
 
-            // Resolve topic names with robot ID - ensure per-robot namespacing
             string robotId = _robotController != null ? _robotController.robotId : "unknown";
             _resolvedCommandTopic = ResolveTopicName(_commandTopic, robotId);
             _resolvedStateTopic = ResolveTopicName(_stateTopic, robotId);
@@ -108,17 +98,7 @@ namespace Robotics
             );
         }
 
-        /// <summary>
-        /// Handle incoming gripper command from ROS.
-        /// Position[0] = gripper jaw position in meters (0=closed, 0.014=fully open).
-        /// This matches ROSMotionClient.control_gripper() which sends raw meter values.
-        /// Effort[0] = optional max force limit.
-        ///
-        /// When closing (position &lt; 0.002m, i.e. ~2mm = effectively closed), automatically
-        /// finds and sets the nearest graspable object so GripperController.AttachObject
-        /// fires on close completion. This mirrors what RobotController.ExecuteThreeWaypointGrasp
-        /// does for the Unity IK path; without it the gripper closes but never captures the object.
-        /// </summary>
+        // position[0] in meters (0=closed, 0.014=fully open). On close (<0.002m), arms attachment to nearest Target-tagged object.
         private void OnGripperCommandReceived(JointStateMsg msg)
         {
             if (!IsActive || _gripperController == null)
@@ -126,15 +106,11 @@ namespace Robotics
 
             if (msg.position != null && msg.position.Length > 0)
             {
-                // Value is in meters (0=closed, 0.014=fully open) — clamp to valid jaw range.
                 float positionMeters = Mathf.Clamp((float)msg.position[0], 0f, 0.014f);
 
                 Debug.Log($"{_logPrefix} Gripper command received: position={positionMeters:F4}m");
 
-                // When closing, arm the attachment by finding the nearest Target-tagged object
-                // within the gripper's reach so GripperController.AttachObject fires.
-                // Threshold of 0.002m (~2mm) treats near-zero positions as a close command.
-                if (positionMeters < 0.002f)
+                if (positionMeters < 0.002f) // ~2mm threshold = close command
                 {
                     GameObject nearestTarget = FindNearestGraspableObject();
                     if (nearestTarget != null)
@@ -154,9 +130,7 @@ namespace Robotics
                 }
                 else
                 {
-                    // Opening: use OpenGrippers() so _detachmentPending is set and the held
-                    // object is properly released. SetGripperPosition() alone only moves the
-                    // fingers without triggering the deferred-detach state machine.
+                    // OpenGrippers() sets _detachmentPending; SetGripperPosition() alone skips the deferred-detach state machine.
                     _gripperController.OpenGrippers();
                 }
             }
@@ -179,28 +153,14 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Find the nearest graspable GameObject within gripper reach.
-        ///
-        /// Two search passes are performed:
-        ///   1. Free objects — Physics.OverlapSphere for "Target"-tagged colliders that
-        ///      are not currently held by any gripper.  This is the common grasp case.
-        ///   2. Held objects — scan all GripperControllers for objects they are holding
-        ///      that are within reach.  This covers the handoff case where the object's
-        ///      "Target" tag has been cleared by AttachObject (GripperController strips
-        ///      it so RobotManager stops tracking the moving object as an IK target),
-        ///      meaning pass 1 would find nothing even though the object is right there.
-        ///
-        /// Falls back to the attachment point or transform if fingers are unavailable.
-        /// </summary>
+        // Two passes: (1) free Target-tagged objects via OverlapSphere, (2) objects held by another gripper
+        // (handoff case — AttachObject clears the "Target" tag so pass 1 misses them).
         private GameObject FindNearestGraspableObject()
         {
-            // Prefer finger positions — they sit closer to the grasped object than
-            // the attachment point (ee_link / gripper_focus) which is above them.
+            // Finger tips sit closer to the object than ee_link/gripper_focus.
             Vector3 searchOrigin;
             if (_gripperController.leftGripper != null)
             {
-                // Average of both finger positions gives the centre of the gripper mouth
                 Vector3 left = _gripperController.leftGripper.transform.position;
                 Vector3 right =
                     _gripperController.rightGripper != null
@@ -217,13 +177,9 @@ namespace Robotics
                 searchOrigin = _gripperController.transform.position;
             }
 
-            // 10cm radius: finger tips are ~5cm below ee_link, cube half-height ~3cm,
-            // so worst-case cube centre is ~8cm from ee_link. 10cm is tight enough to
-            // exclude adjacent cubes in dense scenes while still reliably catching the
-            // target object that the gripper has descended onto.
+            // 10cm: finger tips ~5cm below ee_link, cube half-height ~3cm → worst-case 8cm. Tight enough to exclude adjacent cubes.
             const float searchRadius = 0.10f;
 
-            // --- Pass 1: free Target-tagged objects ---
             int hitCount = Physics.OverlapSphereNonAlloc(
                 searchOrigin,
                 searchRadius,
@@ -249,18 +205,13 @@ namespace Robotics
                 }
             }
 
-            // --- Pass 2: objects held by another gripper (handoff scenario) ---
-            // AttachObject clears the "Target" tag from the held object to prevent
-            // IK drift, so pass 1 will miss it.  We scan all GripperControllers to
-            // find held objects within reach of this gripper.
-            if (nearest == null)
+            if (nearest == null) // Pass 2: handoff — scan other grippers for held objects
             {
                 GripperController[] allGrippers = FindObjectsByType<GripperController>(
                     FindObjectsSortMode.None
                 );
                 foreach (var other in allGrippers)
                 {
-                    // Skip ourselves — we're looking for objects held by a *different* robot.
                     if (other == _gripperController)
                         continue;
 
@@ -328,8 +279,6 @@ namespace Robotics
 
         private void PublishGripperState()
         {
-            // Update reusable timestamp in-place — avoids DateTime/TimeSpan/TimeMsg
-            // allocations on every 10Hz publish call.
             double t = (System.DateTime.UtcNow - _unixEpoch).TotalSeconds;
             int sec = (int)t;
             _rosTimestamp.sec = sec;
@@ -337,7 +286,6 @@ namespace Robotics
 
             _stateMsg.header.stamp = _rosTimestamp;
 
-            // Read actual joint positions from ArticulationBody
             if (_gripperController.leftGripper != null)
             {
                 var lg = _gripperController.leftGripper;
@@ -357,16 +305,11 @@ namespace Robotics
             _ros.Publish(_resolvedStateTopic, _stateMsg);
         }
 
-        /// <summary>
-        /// Resolve topic name, ensuring it includes the robot ID namespace.
-        /// Handles both new format (/{robot_id}/topic) and legacy format (/topic).
-        /// </summary>
         private static string ResolveTopicName(string topicTemplate, string robotId)
         {
             if (topicTemplate.Contains("{robot_id}"))
                 return topicTemplate.Replace("{robot_id}", robotId);
 
-            // Legacy topic without placeholder - prepend robot ID namespace
             if (topicTemplate.StartsWith("/"))
                 return $"/{robotId}{topicTemplate}";
 

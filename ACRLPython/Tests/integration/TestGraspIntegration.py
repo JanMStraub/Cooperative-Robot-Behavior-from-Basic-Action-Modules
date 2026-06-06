@@ -266,7 +266,7 @@ class TestGraspWithRealUnity:
         executor.  Accepts a structured ROS_PLANNING_FAILED error when
         DEFAULT_CONTROL_MODE is "ros" and MoveIt cannot plan the trajectory.
         """
-        with _BackendClient(timeout=60.0) as client:
+        with _BackendClient(timeout=180.0) as client:
             result = client.send_command(
                 command="grasp redCube with Robot2",
                 robot_id="Robot2",

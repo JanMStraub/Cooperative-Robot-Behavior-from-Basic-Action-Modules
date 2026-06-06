@@ -36,7 +36,6 @@ def is_unity_available() -> bool:
 
     We probe via raw sockets so the check works from any process, regardless of
     whether the backend singleton is initialised in this process.
-
     """
     return backend_available()
 

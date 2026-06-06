@@ -116,7 +116,6 @@ namespace Robotics
         private GameObject _targetObject;
 
         private const string _logPrefix = "[SIMPLE_ROBOT_CONTROLLER]";
-        private const float SqrEpsilon = 1e-6f;
 
         public event System.Action OnTargetReached;
 
@@ -587,14 +586,6 @@ namespace Robotics
             SetTarget(target.transform.position, target.transform.rotation);
         }
 
-        public void SetTarget(Transform target)
-        {
-            if (target == null)
-                return;
-
-            SetTarget(target.position, target.rotation);
-        }
-
         private void SetTargetReached(bool reached)
         {
             if (_hasReachedTarget != reached)
@@ -634,24 +625,12 @@ namespace Robotics
             OnTargetReached?.Invoke();
         }
 
-        public void ReleaseObject()
-        {
-            _gripperController?.ReleaseObject();
-        }
-
-        public bool IsHoldingObject => _gripperController?.IsHoldingObject ?? false;
-
         /// <summary>
         /// Manually open the gripper. Automatically detaches any held object.
         /// </summary>
         public void OpenGripper()
         {
             _gripperController?.OpenGrippers();
-        }
-
-        public void CloseGripper()
-        {
-            _gripperController?.CloseGrippers();
         }
 
         public void ClearTarget()
@@ -673,29 +652,6 @@ namespace Robotics
         public Vector3? GetCurrentTarget()
         {
             return _hasTarget ? _targetPosition : null;
-        }
-
-        public Quaternion? GetCurrentTargetRotation()
-        {
-            return _hasTarget ? _targetRotation : null;
-        }
-
-        public void ResetJointTargets()
-        {
-            for (int i = 0; i < robotJoints.Length; i++)
-            {
-                var drive = robotJoints[i].xDrive;
-                drive.target = 0;
-                robotJoints[i].xDrive = drive;
-                robotJoints[i].jointPosition = new ArticulationReducedSpace(0f);
-                robotJoints[i].jointVelocity = new ArticulationReducedSpace(0f);
-                robotJoints[i].jointForce = new ArticulationReducedSpace(0f);
-            }
-        }
-
-        public bool IsToleranceReached()
-        {
-            return _distanceToTarget < _ikConfig.convergenceThreshold;
         }
 
         private void DrawDebugVisualization()

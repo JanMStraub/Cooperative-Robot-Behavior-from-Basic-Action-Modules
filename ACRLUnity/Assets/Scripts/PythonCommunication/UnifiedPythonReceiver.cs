@@ -8,8 +8,6 @@ namespace PythonCommunication
     /// Unified receiver for all Python result communication.
     /// Routes all results through CommandServer (port 5010).
     /// Handles LLM results and robot commands.
-    ///
-    /// This is now a lightweight manager that uses ResultsClient for all networking.
     /// </summary>
     public class UnifiedPythonReceiver : MonoBehaviour
     {
@@ -158,16 +156,5 @@ namespace PythonCommunication
 
             return _client.SendCompletion(completionJson, requestId);
         }
-
-        public void SetVerboseLogging(bool verbose)
-        {
-            _verboseLogging = verbose;
-            if (_client != null)
-            {
-                _client.SetVerboseLogging(verbose);
-            }
-        }
-
-        public bool IsConnected => _client != null && _client.IsConnected;
     }
 }

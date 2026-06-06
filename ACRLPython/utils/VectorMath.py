@@ -15,8 +15,6 @@ from typing import Tuple
 def vector_normalize(vec: np.ndarray) -> np.ndarray:
     """
     Normalize a vector to unit length.
-
-
     """
     norm = np.linalg.norm(vec)
 
@@ -29,8 +27,6 @@ def vector_normalize(vec: np.ndarray) -> np.ndarray:
 def vector_dot(v1: np.ndarray, v2: np.ndarray) -> float:
     """
     Calculate dot product of two vectors.
-
-
     """
     return float(np.dot(v1, v2))
 
@@ -38,8 +34,6 @@ def vector_dot(v1: np.ndarray, v2: np.ndarray) -> float:
 def vector_cross(v1: np.ndarray, v2: np.ndarray) -> np.ndarray:
     """
     Calculate cross product of two 3D vectors.
-
-
     """
     return np.cross(v1, v2)
 
@@ -47,8 +41,6 @@ def vector_cross(v1: np.ndarray, v2: np.ndarray) -> np.ndarray:
 def vector_distance(p1: np.ndarray, p2: np.ndarray) -> float:
     """
     Calculate Euclidean distance between two points.
-
-
     """
     return float(np.linalg.norm(p2 - p1))
 
@@ -56,8 +48,6 @@ def vector_distance(p1: np.ndarray, p2: np.ndarray) -> float:
 def vector_angle(v1: np.ndarray, v2: np.ndarray) -> float:
     """
     Calculate angle between two vectors in degrees.
-
-
     """
     # Normalize vectors
     v1_norm = vector_normalize(v1)
@@ -83,8 +73,6 @@ def vector_angle(v1: np.ndarray, v2: np.ndarray) -> float:
 def vector_project(v: np.ndarray, onto: np.ndarray) -> np.ndarray:
     """
     Project vector v onto vector 'onto'.
-
-
     """
     onto_norm = vector_normalize(onto)
     projection_length = np.dot(v, onto_norm)
@@ -96,8 +84,6 @@ def vector_reject(v: np.ndarray, from_direction: np.ndarray) -> np.ndarray:
     Reject (remove) component of v along from_direction.
 
     Returns the component of v perpendicular to from_direction.
-
-
     """
     projection = vector_project(v, from_direction)
     return v - projection
@@ -106,8 +92,6 @@ def vector_reject(v: np.ndarray, from_direction: np.ndarray) -> np.ndarray:
 def vector_lerp(v1: np.ndarray, v2: np.ndarray, t: float) -> np.ndarray:
     """
     Linear interpolation between two vectors.
-
-
     """
     t = np.clip(t, 0.0, 1.0)
     return v1 + (v2 - v1) * t
@@ -118,8 +102,6 @@ def vector_slerp(v1: np.ndarray, v2: np.ndarray, t: float) -> np.ndarray:
     Spherical linear interpolation between two vectors.
 
     Maintains constant magnitude during interpolation, unlike lerp.
-
-
     """
     t = np.clip(t, 0.0, 1.0)
 
@@ -160,8 +142,6 @@ def vector_slerp(v1: np.ndarray, v2: np.ndarray, t: float) -> np.ndarray:
 def vector_clamp_magnitude(v: np.ndarray, max_magnitude: float) -> np.ndarray:
     """
     Clamp vector magnitude to maximum value.
-
-
     """
     magnitude = np.linalg.norm(v)
 
@@ -178,8 +158,6 @@ def vectors_orthonormal_basis(
     Generate an orthonormal basis from a forward vector.
 
     Creates right and up vectors perpendicular to forward.
-
-
     """
     forward_norm = vector_normalize(forward)
 

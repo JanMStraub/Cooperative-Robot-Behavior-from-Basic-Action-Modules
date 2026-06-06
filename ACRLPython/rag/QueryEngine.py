@@ -68,6 +68,17 @@ class QueryEngine:
         if self._world_state and robot_id:
             results = self._apply_world_constraints(results, robot_id, query)
 
+        # Deduplicate by name — operations indexed as both operation and workflow
+        # can appear twice; keep the higher-ranked (first) occurrence.
+        seen_names: set = set()
+        deduped = []
+        for r in results:
+            name = r.get("metadata", {}).get("name", r["operation_id"])
+            if name not in seen_names:
+                seen_names.add(name)
+                deduped.append(r)
+        results = deduped
+
         if include_full_operation:
             for result in results:
                 op_id = result["operation_id"]

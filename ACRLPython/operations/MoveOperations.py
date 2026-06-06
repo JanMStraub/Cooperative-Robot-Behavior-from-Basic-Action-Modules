@@ -19,6 +19,7 @@ from .Validators import (
     validate_xyz,
     validate_speed,
     validate_approach_offset,
+    validate_not_near_base,
 )
 from .ROSDispatcher import execute_with_ros_fallback
 
@@ -51,6 +52,8 @@ def move_to_coordinate(
         if err := validate_speed(speed):
             return err
         if err := validate_approach_offset(approach_offset):
+            return err
+        if err := validate_not_near_base(x, y, z):
             return err
 
         actual_x = x

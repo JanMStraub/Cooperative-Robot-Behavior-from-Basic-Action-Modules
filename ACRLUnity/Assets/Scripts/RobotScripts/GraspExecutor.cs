@@ -87,16 +87,13 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Waits for the robot to reach the target (with timeout), then waits for end-effector
-        /// velocity to drop below the given threshold. Invokes onTimeout if the timeout expires
-        /// before the target is reached.
-        /// </summary>
+        // After reaching target, additionally waits for EE velocity to drop below threshold before returning.
         private IEnumerator WaitForGraspPhase(
             Func<bool> hasReachedTarget,
             float timeoutSeconds,
             float velocityThreshold,
-            System.Action onTimeout = null)
+            System.Action onTimeout = null
+        )
         {
             yield return _owner.StartCoroutine(
                 WaitForTargetWithTimeout(hasReachedTarget, timeoutSeconds)
@@ -139,7 +136,6 @@ namespace Robotics
             _fireOnTargetReached();
         }
 
-        /// <summary>Two-waypoint grasp: pre-grasp → grasp position.</summary>
         public IEnumerator ExecuteTwoWaypointGrasp(
             GraspCandidate candidate,
             GameObject targetObject,
@@ -189,7 +185,8 @@ namespace Robotics
                 yield return new WaitUntil(() =>
                     _getEndEffectorVelocityMagnitude() < VelocityThresholdPreGripperClose
                 );
-                _gripperController.SetTargetObject(targetObject);
+                if (options.attachObjectOnGrasp)
+                    _gripperController.SetTargetObject(targetObject);
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
                 yield return new WaitWhile(() => _gripperController.IsMoving);
 
@@ -204,7 +201,6 @@ namespace Robotics
             _fireOnTargetReached();
         }
 
-        /// <summary>Three-waypoint grasp: pre-grasp → grasp → optional retreat.</summary>
         public IEnumerator ExecuteThreeWaypointGrasp(
             GraspCandidate candidate,
             GameObject targetObject,
@@ -254,7 +250,8 @@ namespace Robotics
                 yield return new WaitUntil(() =>
                     _getEndEffectorVelocityMagnitude() < VelocityThresholdPreGripperClose
                 );
-                _gripperController.SetTargetObject(targetObject);
+                if (options.attachObjectOnGrasp)
+                    _gripperController.SetTargetObject(targetObject);
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
                 yield return new WaitWhile(() => _gripperController.IsMoving);
 
@@ -289,7 +286,6 @@ namespace Robotics
             _fireOnTargetReached();
         }
 
-        /// <summary>Handoff grasp: take object from another robot's gripper.</summary>
         public IEnumerator ExecuteHandoffGrasp(
             GameObject targetObject,
             GraspOptions options,
@@ -323,8 +319,11 @@ namespace Robotics
                     hasReachedTarget,
                     graspTimeout,
                     VelocityThresholdPreGripperClose,
-                    onTimeout: () => {
-                        Debug.LogWarning($"{_logPrefix} {_robotId} failed to reach handoff position");
+                    onTimeout: () =>
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} {_robotId} failed to reach handoff position"
+                        );
                         _setActiveCoroutine(null);
                     }
                 )
@@ -332,7 +331,8 @@ namespace Robotics
 
             if (options.closeGripperOnReach && _gripperController != null)
             {
-                _gripperController.SetTargetObject(targetObject);
+                if (options.attachObjectOnGrasp)
+                    _gripperController.SetTargetObject(targetObject);
                 _gripperController.CloseGrippers();
                 yield return new WaitWhile(() => _gripperController.IsMoving);
 
@@ -347,7 +347,6 @@ namespace Robotics
             _fireOnTargetReached();
         }
 
-        /// <summary>Fallback grasp via SimpleRobotController IK when planning fails.</summary>
         public IEnumerator ExecuteSimplifiedGrasp(
             GraspCandidate candidate,
             GameObject targetObject,
@@ -355,9 +354,7 @@ namespace Robotics
             Func<bool> hasReachedTarget = null
         )
         {
-            Debug.Log(
-                $"{_logPrefix} {_robotId} executing SIMPLIFIED grasp using SimpleRobotController backup IK (fallback mode)"
-            );
+            Debug.Log($"{_logPrefix} {_robotId} executing simplified grasp (fallback)");
 
             if (_simpleRobotController == null)
             {
@@ -405,7 +402,8 @@ namespace Robotics
 
             if (options.closeGripperOnReach && _gripperController != null)
             {
-                _gripperController.SetTargetObject(targetObject);
+                if (options.attachObjectOnGrasp)
+                    _gripperController.SetTargetObject(targetObject);
                 _gripperController.CloseGrippers();
                 yield return new WaitWhile(() => _gripperController.IsMoving);
 

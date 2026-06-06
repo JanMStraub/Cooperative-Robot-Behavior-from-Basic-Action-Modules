@@ -177,42 +177,9 @@ namespace Core
         public const float RECONNECT_INTERVAL = 2f;
 
         /// <summary>
-        /// Thread join timeout when stopping receive threads (milliseconds)
-        /// </summary>
-        public const int THREAD_JOIN_TIMEOUT_MS = 1000;
-
-        /// <summary>
         /// ROS TCP endpoint port (ros_tcp_endpoint bridge between Unity and ROS 2)
         /// </summary>
         public const int ROS_TCP_ENDPOINT_PORT = 10000;
-    }
-
-    public static class AutoRTConstants
-    {
-        /// <summary>
-        /// Default number of task candidates to generate
-        /// </summary>
-        public const int DEFAULT_MAX_TASK_CANDIDATES = 5;
-
-        /// <summary>
-        /// Default loop delay between task generations (seconds)
-        /// </summary>
-        public const float DEFAULT_LOOP_DELAY_SECONDS = 5f;
-
-        /// <summary>
-        /// Maximum number of tasks to display in inspector UI
-        /// </summary>
-        public const int MAX_DISPLAY_TASKS = 10;
-
-        /// <summary>
-        /// Task expiration time (seconds) - old tasks auto-removed
-        /// </summary>
-        public const float TASK_EXPIRATION_SECONDS = 300f; // 5 minutes
-
-        /// <summary>
-        /// UI refresh rate for continuous loop mode (seconds)
-        /// </summary>
-        public const float UI_REFRESH_RATE = 0.5f;
     }
 
     /// <summary>
@@ -229,9 +196,6 @@ namespace Core
 
         /// <summary>Link-to-link stop threshold (meters). Tighter than EE since link positions are less precise.</summary>
         public const float LINK_STOP_THRESHOLD = 0.15f;
-
-        /// <summary>Link-to-link resume threshold (meters).</summary>
-        public const float LINK_RESUME_THRESHOLD = 0.22f;
 
         /// <summary>Joint indices (0-based) checked for link-to-link proximity. Joints 2-5 are most collision-prone on AR4.</summary>
         public static readonly int[] MONITORED_LINK_INDICES = { 2, 3, 4, 5 };

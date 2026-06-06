@@ -78,16 +78,6 @@ namespace Robotics.Grasp
         }
 
         /// <summary>
-        /// Recalibrate kinematic structure after robot base has moved.
-        /// Call this if the robot is mounted on a mobile base or linear rail.
-        /// This updates the cached joint positions, rotations, and axes relative to ikReferenceFrame.
-        /// </summary>
-        public void RecalibrateKinematics()
-        {
-            CacheKinematicStructure();
-        }
-
-        /// <summary>
         /// Cache kinematic structure by temporarily resetting robot to zero configuration.
         /// This ensures accurate geometric offsets for FK computation.
         /// </summary>

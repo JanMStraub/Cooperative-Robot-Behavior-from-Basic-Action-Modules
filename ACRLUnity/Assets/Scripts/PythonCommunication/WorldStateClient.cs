@@ -9,13 +9,6 @@ namespace PythonCommunication
     /// Dedicated TCP client for broadcasting world state updates to Python.
     /// Separates world state streaming from command/response traffic to prevent
     /// message correlation conflicts on port 5010.
-    ///
-    /// Architecture:
-    /// - Port 5010 (ResultsClient): Strict request/response pattern for commands
-    /// - Port 5014 (WorldStateClient): One-way broadcast stream for world state
-    ///
-    /// This separation ensures unsolicited world state updates don't interfere
-    /// with command request/response correlation in Protocol V2.
     /// </summary>
     public class WorldStateClient : TCPClientBase
     {

@@ -380,7 +380,11 @@ class ROSMotionServer:
 
         # Create publisher if not already created for this robot.
         # Shared mode: single /planning_scene topic; per-robot mode: /{robot_id}/planning_scene.
-        _scene_topic = "/planning_scene" if SHARED_PLANNING_SCENE else f"/{robot_id}/planning_scene"
+        _scene_topic = (
+            "/planning_scene"
+            if SHARED_PLANNING_SCENE
+            else f"/{robot_id}/planning_scene"
+        )
         if robot_id not in self._planning_scene_pubs:
             self._planning_scene_pubs[robot_id] = self._node.create_publisher(
                 PlanningScene, _scene_topic, 10
@@ -931,7 +935,9 @@ class ROSMotionServer:
         goal.request.max_acceleration_scaling_factor = acc_scaling
 
         # Set workspace bounds so OMPL knows the planning volume
-        goal.request.workspace_parameters.header.frame_id = self._get_base_link(robot_id)
+        goal.request.workspace_parameters.header.frame_id = self._get_base_link(
+            robot_id
+        )
         goal.request.workspace_parameters.min_corner = Vector3(x=-1.0, y=-1.0, z=-1.0)
         goal.request.workspace_parameters.max_corner = Vector3(x=1.0, y=1.0, z=1.0)
 
@@ -1102,6 +1108,37 @@ class ROSMotionServer:
                 f"[HOVER] {robot_id} joint_4 path constraint: "
                 f"current={_j4_current:.3f} rad ({_j4_current * 57.296:.1f}°), "
                 f"window=[{_j4_path_lower:.3f}, {_j4_path_upper:.3f}]"
+            )
+
+        # lock_shoulder_joints: pin joint_1/2/3 within ±shoulder_lock_window_rad of their
+        # current values so OMPL cannot swing the shoulder/elbow to achieve an orientation
+        # change. Only wrist joints (4/5/6) are then free, producing a smooth in-place rotation.
+        lock_shoulder = request.get("lock_shoulder_joints", False)
+        shoulder_window = request.get("shoulder_lock_window_rad", 0.2)  # ±11.5° default
+        if lock_shoulder and joint_state is not None and JointConstraint is not None:
+            for _sj in ("joint_1", "joint_2", "joint_3"):
+                if _sj not in joint_state.name:
+                    continue
+                _sj_idx = list(joint_state.name).index(_sj)
+                _sj_current = joint_state.position[_sj_idx]
+                _sj_lower, _sj_upper = ARM_JOINT_LIMITS.get(_sj, (-3.14159, 3.14159))
+                _sj_win_lo = min(shoulder_window, _sj_current - _sj_lower)
+                _sj_win_hi = min(shoulder_window, _sj_upper - _sj_current)
+                _sjc = JointConstraint()
+                _sjc.joint_name = self._get_joint_name(robot_id, _sj)
+                _sjc.position = _sj_current
+                _sjc.tolerance_below = max(0.01, _sj_win_lo)
+                _sjc.tolerance_above = max(0.01, _sj_win_hi)
+                _sjc.weight = 1.0
+                if (
+                    not hasattr(goal.request, "path_constraints")
+                    or goal.request.path_constraints is None
+                ):
+                    goal.request.path_constraints = Constraints()
+                goal.request.path_constraints.joint_constraints.append(_sjc)
+            logger.info(
+                f"[ORIENT] {robot_id} shoulder joints locked at current values "
+                f"(window=±{shoulder_window * 57.296:.1f}°)"
             )
 
         return goal
@@ -1379,7 +1416,8 @@ class ROSMotionServer:
         # Derive which keys are the ±π joints from the provided dict — handles
         # both unprefixed ("joint_4") and prefixed ("robot1_joint_4") names.
         FULL_ROTATION_JOINTS = {
-            name for name in joint_names_to_limits
+            name
+            for name in joint_names_to_limits
             if name.endswith("joint_4") or name.endswith("joint_6")
         }
         prev_positions = None
@@ -1477,7 +1515,11 @@ class ROSMotionServer:
         # Normalize all joint angles into their physical limit range before publishing.
         # Prevents MoveIt ±π boundary crossings from causing Unity to spin 360°.
         _pfx = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
-        _limits = {_pfx + k: v for k, v in ARM_JOINT_LIMITS.items()} if _pfx else ARM_JOINT_LIMITS
+        _limits = (
+            {_pfx + k: v for k, v in ARM_JOINT_LIMITS.items()}
+            if _pfx
+            else ARM_JOINT_LIMITS
+        )
         self._normalize_trajectory_angles(trajectory, _limits)
 
         trajectory_pub.publish(trajectory)
@@ -1715,8 +1757,14 @@ class ROSMotionServer:
     def _plan_orientation_change(self, request, robot_id):
         """Plan and publish a trajectory for orientation change at current position.
 
-        Gets current end-effector position via FK, then plans to same position with
-        new orientation converted from RPY to quaternion.
+        Uses GetCartesianPath with SLERP-interpolated orientation waypoints so the
+        IK solver steps through the rotation incrementally at the fixed EE position.
+        This prevents OMPL from choosing a joint-space path that swings the arm
+        (the old _plan_and_publish approach had no Cartesian path constraint, so OMPL
+        could arc widely through joint space even though only wrist rotation was needed).
+
+        Falls back to _plan_and_publish (OMPL) if the Cartesian client is unavailable
+        or if GetCartesianPath returns < 95% fraction.
 
         Args:
             request: Request dict with orientation (roll, pitch, yaw in degrees).
@@ -1728,14 +1776,12 @@ class ROSMotionServer:
         import math
 
         orientation = request.get("orientation", {})
-        planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
 
-        # Convert RPY degrees to quaternion
+        # Convert RPY degrees to target quaternion (in base_link frame)
         roll = math.radians(orientation.get("roll", 0.0))
         pitch = math.radians(orientation.get("pitch", 0.0))
         yaw = math.radians(orientation.get("yaw", 0.0))
 
-        # RPY to quaternion conversion
         cy = math.cos(yaw * 0.5)
         sy = math.sin(yaw * 0.5)
         cp = math.cos(pitch * 0.5)
@@ -1743,12 +1789,12 @@ class ROSMotionServer:
         cr = math.cos(roll * 0.5)
         sr = math.sin(roll * 0.5)
 
-        qw = cr * cp * cy + sr * sp * sy
-        qx = sr * cp * cy - cr * sp * sy
-        qy = cr * sp * cy + sr * cp * sy
-        qz = cr * cp * sy - sr * sp * cy
+        tqw = cr * cp * cy + sr * sp * sy
+        tqx = sr * cp * cy - cr * sp * sy
+        tqy = cr * sp * cy + sr * cp * sy
+        tqz = cr * cp * sy - sr * sp * cy
 
-        # Get current Cartesian EE position via FK to maintain it during orientation change
+        # Get current EE pose (position + orientation) via FK
         fk_result = self._compute_fk(robot_id)
         if not fk_result.get("success"):
             logger.error(
@@ -1760,16 +1806,192 @@ class ROSMotionServer:
                 "robot_id": robot_id,
             }
 
-        # Use plan_and_execute with current FK position and new orientation.
-        # coordinate_space="base_link" prevents _build_move_group_goal from applying
-        # the unity_world -> base_link transform to a position that is already in base_link.
-        orient_request = {
-            "position": fk_result["position"],
-            "orientation": {"x": qx, "y": qy, "z": qz, "w": qw},
-            "planning_time": planning_time,
+        pos = fk_result["position"]
+        cur_ori = fk_result["orientation"]
+        cqx, cqy, cqz, cqw = cur_ori["x"], cur_ori["y"], cur_ori["z"], cur_ori["w"]
+
+        # SLERP from current to target orientation.
+        # Ensure same quaternion hemisphere (shortest arc).
+        dot = cqx * tqx + cqy * tqy + cqz * tqz + cqw * tqw
+        if dot < 0.0:
+            tqx, tqy, tqz, tqw = -tqx, -tqy, -tqz, -tqw
+            dot = -dot
+        dot = min(1.0, abs(dot))
+
+        # Angle between current and target rotation (in radians, 0..π)
+        angle_rad = math.acos(dot) * 2.0
+        angle_deg = math.degrees(angle_rad)
+
+        # One waypoint per 5° of rotation, minimum 3 so there's always at least a
+        # start-state + mid + end even for tiny adjustments.
+        n_waypoints = max(3, int(angle_deg / 5.0) + 1)
+
+        logger.info(
+            f"[ORIENT] {robot_id} orientation change {angle_deg:.1f}° → {n_waypoints} SLERP waypoints"
+        )
+
+        # Build SLERP waypoints at the fixed EE position
+        waypoints = []
+        for i in range(1, n_waypoints + 1):
+            t = i / n_waypoints
+            if dot > 0.9995:
+                # Nearly identical — linear interpolation + renormalize
+                ix = cqx + t * (tqx - cqx)
+                iy = cqy + t * (tqy - cqy)
+                iz = cqz + t * (tqz - cqz)
+                iw = cqw + t * (tqw - cqw)
+                n = math.sqrt(ix * ix + iy * iy + iz * iz + iw * iw)
+                ix, iy, iz, iw = ix / n, iy / n, iz / n, iw / n
+            else:
+                theta_0 = math.acos(dot)
+                sin_theta_0 = math.sin(theta_0)
+                s0 = math.sin((1.0 - t) * theta_0) / sin_theta_0
+                s1 = math.sin(t * theta_0) / sin_theta_0
+                ix = s0 * cqx + s1 * tqx
+                iy = s0 * cqy + s1 * tqy
+                iz = s0 * cqz + s1 * tqz
+                iw = s0 * cqw + s1 * tqw
+
+            wp = Pose()
+            wp.position = Point(x=pos["x"], y=pos["y"], z=pos["z"])
+            wp.orientation = Quaternion(x=ix, y=iy, z=iz, w=iw)
+            waypoints.append(wp)
+
+        # Shoulder-locked OMPL request used whenever GetCartesianPath is unavailable
+        # or returns a low fraction. Locks joint_1/2/3 at current values so OMPL can
+        # only use wrist joints — prevents the arm from swinging through space.
+        _ompl_fallback_request = {
+            "position": pos,
+            "orientation": {"x": tqx, "y": tqy, "z": tqz, "w": tqw},
             "coordinate_space": "base_link",
+            "lock_shoulder_joints": True,
+            "max_velocity_scaling": 0.4,
+            "max_acceleration_scaling": 0.3,
         }
-        return self._plan_and_publish(orient_request, robot_id)
+
+        # Use GetCartesianPath with the SLERP waypoints so IK is solved
+        # incrementally — no large joint swings possible between adjacent steps.
+        cartesian_client = self._cartesian_path_clients.get(robot_id)
+        if cartesian_client is None or not cartesian_client.wait_for_service(
+            timeout_sec=5.0
+        ):
+            logger.warning(
+                f"{robot_id}: Cartesian client unavailable for orientation change — falling back to shoulder-locked OMPL"
+            )
+            return self._plan_and_publish(_ompl_fallback_request, robot_id)
+
+        vel_scaling = request.get("max_velocity_scaling", 0.4)
+        acc_scaling = request.get("max_acceleration_scaling", 0.3)
+
+        with self._joint_states_lock:
+            joint_state = self._current_joint_states.get(robot_id)
+
+        req = GetCartesianPath.Request()
+        req.header.frame_id = self._get_base_link(robot_id)
+        req.group_name = self._get_planning_group(robot_id)
+        req.link_name = self._get_ee_link(robot_id)
+        req.waypoints = waypoints
+        req.max_step = 0.01
+        req.jump_threshold = 2.0
+        req.avoid_collisions = True
+
+        if _CARTESIAN_HAS_SCALING:
+            req.max_velocity_scaling_factor = vel_scaling
+            req.max_acceleration_scaling_factor = acc_scaling
+
+        if joint_state is not None:
+            _jprefix = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
+            filtered_js = JointState()
+            filtered_js.header = joint_state.header
+            for name, (lower, upper) in ARM_JOINT_LIMITS.items():
+                if name in joint_state.name:
+                    idx = list(joint_state.name).index(name)
+                    raw = joint_state.position[idx]
+                    clamped = max(lower, min(upper, raw))
+                    filtered_js.name.append(_jprefix + name)
+                    filtered_js.position.append(clamped)
+            start_state = RobotState()
+            start_state.is_diff = True
+            start_state.joint_state = filtered_js
+            req.start_state = start_state
+
+        future = cartesian_client.call_async(req)
+        deadline = time.time() + 15.0
+        while not future.done() and time.time() < deadline:
+            time.sleep(0.05)
+
+        if not future.done() or future.result() is None:
+            logger.warning(
+                f"{robot_id}: Cartesian orientation planning timed out — falling back to shoulder-locked OMPL"
+            )
+            return self._plan_and_publish(_ompl_fallback_request, robot_id)
+
+        response = future.result()
+        fraction = response.fraction
+
+        if fraction < 0.95:
+            logger.warning(
+                f"{robot_id}: Cartesian orientation path only {fraction * 100:.0f}% complete — falling back to shoulder-locked OMPL"
+            )
+            return self._plan_and_publish(_ompl_fallback_request, robot_id)
+
+        trajectory = response.solution.joint_trajectory
+        if not trajectory.points:
+            logger.warning(
+                f"{robot_id}: Cartesian orientation path returned empty trajectory — falling back to shoulder-locked OMPL"
+            )
+            return self._plan_and_publish(_ompl_fallback_request, robot_id)
+
+        logger.info(
+            f"[ORIENT] {robot_id}: Cartesian orientation path {fraction * 100:.0f}% complete, "
+            f"{len(trajectory.points)} points"
+        )
+
+        if not _CARTESIAN_HAS_SCALING:
+            trajectory = self._apply_time_parameterization(
+                trajectory, vel_scaling, acc_scaling, robot_id
+            )
+
+        _pfx = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
+        _limits = (
+            {_pfx + k: v for k, v in ARM_JOINT_LIMITS.items()}
+            if _pfx
+            else ARM_JOINT_LIMITS
+        )
+        self._normalize_trajectory_angles(trajectory, _limits)
+
+        trajectory_pub = self._trajectory_pubs[robot_id]
+        self._trajectory_feedback_event[robot_id].clear()
+        self._trajectory_feedback[robot_id] = None
+        trajectory_pub.publish(trajectory)
+
+        if trajectory.points:
+            last_pt = trajectory.points[-1]
+            traj_duration = (
+                last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
+            )
+        else:
+            traj_duration = 5.0
+        execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
+
+        feedback_status = self._wait_for_trajectory_completion(
+            robot_id, timeout=execution_timeout
+        )
+        if feedback_status == "completed_with_timeout":
+            logger.warning(
+                f"{robot_id}: Orientation trajectory arm did not fully settle — "
+                f"waiting {self.SETTLE_WAIT_AFTER_TIMEOUT}s"
+            )
+            time.sleep(self.SETTLE_WAIT_AFTER_TIMEOUT)
+
+        success = feedback_status in ("completed", "completed_with_timeout")
+        return {
+            "success": success,
+            "robot_id": robot_id,
+            "trajectory_points": len(trajectory.points),
+            "cartesian_fraction": fraction,
+            "status": feedback_status,
+        }
 
     def _apply_time_parameterization(
         self, trajectory, vel_scaling, acc_scaling, robot_id
@@ -1971,8 +2193,8 @@ class ROSMotionServer:
         req.group_name = self._get_planning_group(robot_id)
         req.link_name = self._get_ee_link(robot_id)
         req.waypoints = [target_pose.pose]
-        req.max_step = 0.10  # 10cm maximum interpolation step — reduces waypoints for short descents (5cm → 150 pts, 10cm → ~75 pts)
-        req.jump_threshold = 0.0  # Disable jump detection; non-zero values prematurely terminate descent at workspace edges
+        req.max_step = 0.01  # 1cm interpolation step — forces ~10 Cartesian waypoints per 10cm descent so the path is truly straight; larger values under-sample and cause joint-space interpolation which looks like gripper rotation
+        req.jump_threshold = 2.0  # Catch IK solution flips (>~115° per segment) while allowing normal smooth motion; 0.0 let 180° wrist flips through silently
         req.avoid_collisions = avoid_collisions
 
         # Fetch current joint state early — needed for both start_state and path constraints.
@@ -2099,24 +2321,21 @@ class ROSMotionServer:
 
         if fraction < 0.95:
             if fraction < 0.50:
-                # Very low completion means the goal itself is likely in collision
-                # or kinematically unreachable — don't waste time retrying with
-                # free-space planning (OMPL will also fail with "Unable to sample
-                # any valid states for goal tree").
-                logger.error(
-                    f"{robot_id}: Cartesian path only {fraction * 100:.0f}% complete — "
-                    "goal likely unreachable or in collision, skipping free-space fallback"
+                # Very low fraction is typically caused by path constraints
+                # (orientation lock + joint windows) over-constraining the IK
+                # solver near the workspace boundary, not by the goal being
+                # truly unreachable. Fall through to free-space OMPL which
+                # plans in joint space without Cartesian path constraints.
+                logger.warning(
+                    f"{robot_id}: Cartesian path {fraction * 100:.0f}% complete — "
+                    "path constraints may over-constrain IK near workspace boundary; "
+                    "retrying with free-space planner"
                 )
-                return {
-                    "success": False,
-                    "error": f"Cartesian descent failed ({fraction * 100:.0f}% complete) — goal unreachable",
-                    "robot_id": robot_id,
-                }
-
-            logger.warning(
-                f"{robot_id}: Cartesian path only {fraction * 100:.0f}% complete — "
-                "falling back to free-space plan"
-            )
+            else:
+                logger.warning(
+                    f"{robot_id}: Cartesian path only {fraction * 100:.0f}% complete — "
+                    "falling back to free-space plan"
+                )
             # Fall back to free-space planning if Cartesian path is mostly blocked
             return self._plan_and_publish(request, robot_id)
 
@@ -2172,7 +2391,11 @@ class ROSMotionServer:
 
         # Enforce shortest-path continuity before publishing.
         _pfx = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
-        _limits = {_pfx + k: v for k, v in ARM_JOINT_LIMITS.items()} if _pfx else ARM_JOINT_LIMITS
+        _limits = (
+            {_pfx + k: v for k, v in ARM_JOINT_LIMITS.items()}
+            if _pfx
+            else ARM_JOINT_LIMITS
+        )
         self._normalize_trajectory_angles(trajectory, _limits)
 
         # Publish and wait for completion (same as _plan_and_publish)
@@ -2240,7 +2463,9 @@ class ROSMotionServer:
         goal.planning_options.plan_only = True
 
         # Set workspace bounds
-        goal.request.workspace_parameters.header.frame_id = self._get_base_link(robot_id)
+        goal.request.workspace_parameters.header.frame_id = self._get_base_link(
+            robot_id
+        )
         goal.request.workspace_parameters.min_corner = Vector3(x=-1.0, y=-1.0, z=-1.0)
         goal.request.workspace_parameters.max_corner = Vector3(x=1.0, y=1.0, z=1.0)
 
@@ -2336,7 +2561,11 @@ class ROSMotionServer:
 
         # Enforce shortest-path continuity before publishing (same as _plan_and_publish)
         _pfx = f"{robot_id.lower()}_" if SHARED_PLANNING_SCENE else ""
-        _limits = {_pfx + k: v for k, v in ARM_JOINT_LIMITS.items()} if _pfx else ARM_JOINT_LIMITS
+        _limits = (
+            {_pfx + k: v for k, v in ARM_JOINT_LIMITS.items()}
+            if _pfx
+            else ARM_JOINT_LIMITS
+        )
         self._normalize_trajectory_angles(trajectory, _limits)
 
         # Publish trajectory to Unity and wait for completion (same as _plan_and_publish)
@@ -2455,7 +2684,9 @@ class ROSMotionServer:
                 )
 
                 # Set target pose
-                ik_request.ik_request.pose_stamped.header.frame_id = self._get_base_link(robot_id)
+                ik_request.ik_request.pose_stamped.header.frame_id = (
+                    self._get_base_link(robot_id)
+                )
                 ik_request.ik_request.pose_stamped.pose.position = Point(
                     x=local_position.get("x", 0.0),
                     y=local_position.get("y", 0.0),

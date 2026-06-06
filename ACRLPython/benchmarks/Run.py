@@ -8,7 +8,7 @@ Usage:
     python -m benchmarks.run --all
     python -m benchmarks.run --benchmark 8 --task-count 20 --dry-run
     python -m benchmarks.run --all --output-dir ./results/
-    python -m benchmarks.run --benchmark 1 --reflexion
+    python -m benchmarks.run --benchmark 1 --no-reflexion
 """
 
 from __future__ import annotations
@@ -22,7 +22,11 @@ from .Reporter import print_summary, write_json
 from .Runner import BenchmarkRunner
 
 _DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 10, 13}  # B10=Parallel, B13=Negotiation
-_PARSE_ONLY_BENCHMARKS = {9, 11, 14}  # no server required: B9=Impossible, B11=RAG, B14=KG
+_PARSE_ONLY_BENCHMARKS = {
+    9,
+    11,
+    14,
+}  # no server required: B9=Impossible, B11=RAG, B14=KG
 _REQUIRED_PORTS = (5007, 5008)
 
 
@@ -58,7 +62,9 @@ def _parse_benchmark_arg(value: str) -> list[int]:
         except ValueError:
             raise argparse.ArgumentTypeError(f"Invalid benchmark range: {value!r}")
         if lo < 1 or hi > 16 or lo > hi:
-            raise argparse.ArgumentTypeError(f"Range must be within 1–16 and lo ≤ hi, got {value!r}")
+            raise argparse.ArgumentTypeError(
+                f"Range must be within 1–16 and lo ≤ hi, got {value!r}"
+            )
         return list(range(lo, hi + 1))
     try:
         n = int(value)
@@ -72,17 +78,15 @@ def _parse_benchmark_arg(value: str) -> list[int]:
 def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig:
     """
     Instantiate the appropriate config type for a given benchmark.
-
-
     """
     live = not args.dry_run and benchmark_id not in _PARSE_ONLY_BENCHMARKS
     kwargs = dict(
-        dry_run=args.dry_run,
+        dry_run=args.dry_run or benchmark_id in _PARSE_ONLY_BENCHMARKS,
         task_count=args.task_count,
-        reflexion=args.reflexion,
+        reflexion=not args.no_reflexion,
         check_completion=live,
         use_rag=not args.no_rag,
-        reflexion_enabled=args.reflexion,
+        reflexion_enabled=not args.no_reflexion,
         use_knowledge_graph=not args.no_kg,
         use_vgn=not args.no_vgn,
         use_ros_movement=not args.no_ros,
@@ -100,8 +104,6 @@ def _run_benchmarks(
 ) -> int:
     """
     Execute the requested benchmarks and write results.
-
-
     """
     exit_code = 0
     for bid in benchmark_ids:
@@ -144,9 +146,9 @@ def main() -> None:
         help="Run B12/B13 ablations against live SequenceServer instead of dry-run mocks",
     )
     parser.add_argument(
-        "--reflexion",
+        "--no-reflexion",
         action="store_true",
-        help="Enable Reflexion LLM retry on operation failure (live mode only)",
+        help="Disable Reflexion LLM retry on operation failure (B12 ablation: disabled condition)",
     )
     parser.add_argument(
         "--no-rag",

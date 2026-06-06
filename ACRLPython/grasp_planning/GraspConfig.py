@@ -17,7 +17,6 @@ from .GraspCandidate import GripperGeometry
 class GraspApproachSettings:
     """
     Settings for a specific grasp approach type.
-
     """
 
     approach_type: str  # "top", "front", "side"
@@ -32,7 +31,6 @@ class GraspConfig:
 
     Controls candidate generation, filtering, scoring, and execution.
     All distances are in meters, angles in degrees.
-
     """
 
     # Candidate generation
@@ -94,8 +92,6 @@ class GraspConfig:
     def get_approach_weight(self, approach: str) -> float:
         """
         Get preference weight for a specific approach type.
-
-
         """
         for settings in self.enabled_approaches:
             if settings.approach_type == approach:
@@ -105,8 +101,6 @@ class GraspConfig:
     def is_approach_enabled(self, approach: str) -> bool:
         """
         Check if a specific approach type is enabled.
-
-
         """
         for settings in self.enabled_approaches:
             if settings.approach_type == approach:
@@ -117,7 +111,6 @@ class GraspConfig:
     def create_default() -> "GraspConfig":
         """
         Create default AR4 grasp configuration.
-
         """
         return GraspConfig()
 
@@ -125,7 +118,6 @@ class GraspConfig:
     def create_fast() -> "GraspConfig":
         """
         Create fast grasp configuration with reduced candidates.
-
         """
         config = GraspConfig()
         config.candidates_per_approach = 4
@@ -137,7 +129,6 @@ class GraspConfig:
     def create_precise() -> "GraspConfig":
         """
         Create precise grasp configuration with more candidates.
-
         """
         config = GraspConfig()
         config.candidates_per_approach = 12

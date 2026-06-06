@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using PythonCommunication;
 using Robotics;
-using Simulation;
 using Tests.EditMode;
 using UnityEngine;
 using UnityEngine.TestTools;

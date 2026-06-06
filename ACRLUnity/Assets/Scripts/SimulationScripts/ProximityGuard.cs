@@ -152,7 +152,6 @@ namespace Simulation
                 if (_verboseLogging)
                     Debug.Log($"{LOG} Unfroze {r.robotId} — separation restored");
             }
-            // In hysteresis band: maintain current state unchanged.
         }
 
         /// <summary>

@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 
 
 def _get_kg():
@@ -38,7 +37,6 @@ def cmd_stats(args) -> None:
 
 def cmd_dump(args) -> None:
     kg = _get_kg()
-    from knowledge_graph.Core import KnowledgeGraph
 
     with kg._lock:
         nodes = {nid: dict(attrs) for nid, attrs in kg._graph.nodes(data=True)}
@@ -136,7 +134,7 @@ def cmd_b12(args) -> None:
         kg.save_png(out, title="B12 Synthetic Knowledge Graph")
         print(f"Saved: {out}")
     finally:
-        clear_synthetic_kg()
+        clear_synthetic_kg("Robot1")
         kg_cfg.KNOWLEDGE_GRAPH_ENABLED = prev
 
 

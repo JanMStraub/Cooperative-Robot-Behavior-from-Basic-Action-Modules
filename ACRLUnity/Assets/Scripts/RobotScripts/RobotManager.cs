@@ -357,15 +357,6 @@ namespace Robotics
             return _robotInstances.ContainsKey(robotId);
         }
 
-        public void UnregisterRobot(string robotId)
-        {
-            if (_robotInstances.Remove(robotId))
-            {
-                _usedRobotIds.Remove(robotId);
-                Debug.Log($"{_logPrefix} Robot {robotId} unregistered");
-            }
-        }
-
         private void ApplyProfileToRobot(string robotId)
         {
             if (!_robotInstances.TryGetValue(robotId, out RobotInstance robot))

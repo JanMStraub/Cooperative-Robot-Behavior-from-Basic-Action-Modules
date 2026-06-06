@@ -28,12 +28,10 @@ def clear_sequence_abort() -> None:
 
 
 def is_sequence_aborted() -> bool:
-    """Return True if the current sequence has been cancelled."""
     return _sequence_abort_event.is_set()
 
 
 def get_command_broadcaster():
-    """Get the CommandBroadcaster singleton instance."""
     try:
         from servers.CommandServer import get_command_broadcaster as _get_cb
 
@@ -60,7 +58,6 @@ def get_unified_image_storage():
 
 
 def get_global_registry():
-    """Get the global OperationRegistry singleton instance."""
     try:
         from operations.Registry import get_global_registry as _get_registry
 
@@ -70,7 +67,6 @@ def get_global_registry():
 
 
 def get_world_state():
-    """Get the WorldState singleton instance."""
     try:
         from operations.WorldState import get_world_state as _get_ws
 
@@ -157,7 +153,6 @@ def get_hardware_interface(env: str = "sim"):
 
 
 def get_camera_provider(env: str = "sim"):
-    """Get the CameraProvider singleton for the active execution environment."""
     try:
         from camera import get_camera_provider as _get_cam
 
@@ -167,11 +162,6 @@ def get_camera_provider(env: str = "sim"):
 
 
 def get_perception_refresh_daemon():
-    """Get the active PerceptionRefreshLoop instance if one has been started.
-
-    Returns:
-        PerceptionRefreshLoop instance or None if not running.
-    """
     try:
         from operations.PerceptionRefresh import _active_refresh_loop
 

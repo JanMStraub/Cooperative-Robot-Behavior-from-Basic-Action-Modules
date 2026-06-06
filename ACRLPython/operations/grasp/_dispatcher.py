@@ -68,8 +68,21 @@ def grasp_object(
                 ],
             )
 
+        if object_id.startswith("$"):
+            return OperationResult.error_result(
+                "UNRESOLVED_VARIABLE",
+                f"object_id '{object_id}' is an unresolved variable reference — "
+                "run detect_object_stereo before grasp_object to capture the target",
+                [
+                    "Add a detect_object_stereo step before grasp_object",
+                    "Check that capture_var is set on the detection step",
+                ],
+            )
+
         _approach_aliases = {"left": "left_side", "right": "right_side"}
-        preferred_approach = _approach_aliases.get(preferred_approach.lower(), preferred_approach.lower())
+        preferred_approach = _approach_aliases.get(
+            preferred_approach.lower(), preferred_approach.lower()
+        )
         valid_approaches = ["auto", "top", "front", "side", "left_side", "right_side"]
         if preferred_approach not in valid_approaches:
             return OperationResult.error_result(
@@ -81,6 +94,11 @@ def grasp_object(
                 ],
             )
 
+        if (
+            isinstance(custom_approach_vector, (list, tuple))
+            and len(custom_approach_vector) == 0
+        ):
+            custom_approach_vector = None
         if custom_approach_vector is not None:
             if (
                 not isinstance(custom_approach_vector, (list, tuple))
@@ -467,7 +485,16 @@ GRASP_OBJECT_OPERATION = BasicOperation(
             description="Preferred grasp approach: 'top' (default, top-down), 'front', 'side' (any horizontal), 'left_side' (left end of longest object axis), 'right_side' (right end of longest object axis), 'auto'",
             required=False,
             default="top",
-            valid_values=["auto", "top", "front", "side", "left_side", "right_side", "left", "right"],
+            valid_values=[
+                "auto",
+                "top",
+                "front",
+                "side",
+                "left_side",
+                "right_side",
+                "left",
+                "right",
+            ],
         ),
         OperationParameter(
             name="pre_grasp_distance",
@@ -495,7 +522,7 @@ GRASP_OBJECT_OPERATION = BasicOperation(
         OperationParameter(
             name="custom_approach_vector",
             type="list",
-            description="Custom approach direction [x, y, z] (overrides preferred_approach)",
+            description="Custom approach direction [x, y, z] (overrides preferred_approach). OMIT entirely when not needed — do NOT pass an empty list [].",
             required=False,
             default=None,
         ),

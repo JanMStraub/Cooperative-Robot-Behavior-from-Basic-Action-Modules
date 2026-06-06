@@ -29,9 +29,7 @@ import json
 import socket
 import struct
 import sys
-import time
 
-# ── Protocol V2 constants (mirrors core/UnityProtocol.py) ─────────────────────
 SEQUENCE_QUERY = 0x08  # MessageType.SEQUENCE_QUERY
 RESULT_TYPE = 0x02  # MessageType.RESULT
 
@@ -42,9 +40,6 @@ DEFAULT_CAMERA = "TableStereoCamera"
 DEFAULT_TIMEOUT = 120  # grasp + trajectory can take 60–90 s
 
 DIRECT_EXEC_PREFIX = "EXEC:"
-
-
-# ── Wire format ────────────────────────────────────────────────────────────────
 
 
 def build_sequence_message(
@@ -133,9 +128,6 @@ def send(
         return read_response(sock, timeout + 30)  # +30s headroom over per-op timeout
 
 
-# ── Operation builders ─────────────────────────────────────────────────────────
-
-
 def ops_move(args) -> list:
     return [
         {
@@ -203,9 +195,6 @@ def ops_raw(args) -> list:
     if not isinstance(ops, list):
         raise ValueError("--ops must be a JSON array of operation objects")
     return ops
-
-
-# ── CLI ────────────────────────────────────────────────────────────────────────
 
 
 def add_common(p: argparse.ArgumentParser):

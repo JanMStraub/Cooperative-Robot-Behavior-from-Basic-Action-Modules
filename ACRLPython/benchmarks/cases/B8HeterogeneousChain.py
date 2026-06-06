@@ -7,6 +7,15 @@ from typing import List, Tuple
 
 from ..Config import BenchmarkConfig
 
+EXPECTED_OP_CHAIN_PHASE_ABC: list[str] = [
+    "detect_object_stereo",
+    "grasp_object",
+    "detect_field",
+    "place_object",
+    "return_to_start_position",
+]
+EXPECTED_OP_CHAIN_PHASE_D: list[str] = ["detect_all_fields", "detect_object_stereo"]
+
 
 def _phase_a() -> str:
     return "Robot1: Grasp the blue cube and place it on field h, then return to start position."
@@ -30,7 +39,7 @@ def _phase_d() -> str:
 
 def get_sub_tasks(_cfg: BenchmarkConfig, task_count: int) -> List[Tuple[str, str, str]]:
     """
-    Return task_count full cycles; each cycle has 4 sub-tasks (phases A, B, C).
+    Return task_count full cycles; each cycle has 4 sub-tasks (phases A, B, C, D).
     Total sub-tasks returned = task_count * 4.
     """
     result: List[Tuple[str, str, str]] = []

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 """Field detection using YOLO (field_a–field_i classes) with stereo 3D coordinates."""
 
 import time

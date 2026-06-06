@@ -20,7 +20,6 @@ class GripperGeometry:
 
     Used to check if object fits between gripper fingers.
     All dimensions are in meters.
-
     """
 
     max_width: float = 0.08  # 8cm max opening
@@ -33,8 +32,6 @@ class GripperGeometry:
     def can_grasp(self, object_size: Tuple[float, float, float]) -> bool:
         """
         Check if an object of given size can be grasped by this gripper.
-
-
         """
         min_dimension = min(object_size)
         max_dimension = max(object_size)
@@ -54,7 +51,6 @@ class GraspCandidate:
 
     Used in MoveIt2-inspired grasp planning pipeline for multi-criteria evaluation.
     All positions are in world coordinates (meters), rotations are quaternions (x, y, z, w).
-
     """
 
     pre_grasp_position: Tuple[float, float, float]
@@ -85,7 +81,6 @@ class GraspCandidate:
     def is_valid(self) -> bool:
         """
         Check if candidate is valid (both IK and collision validated).
-
         """
         return self.ik_validated and self.collision_validated
 
@@ -102,8 +97,6 @@ class GraspCandidate:
 
         Calculates approach direction and distance automatically.
         Sets retreat position to 10cm beyond pre-grasp along approach direction.
-
-
         """
         # Calculate approach direction (pre-grasp -> grasp)
         pre_grasp_np = np.array(pre_grasp)
@@ -143,7 +136,6 @@ class GraspCandidate:
     def to_dict(self) -> dict:
         """
         Convert to dictionary for JSON serialization.
-
         """
         return {
             "pre_grasp_position": {

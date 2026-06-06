@@ -64,28 +64,5 @@ namespace PythonCommunication.Core
 
             return success;
         }
-
-        /// <summary>
-        /// Parse JSON string into a typed object, throwing exception on failure.
-        /// Use this when parsing failure should halt execution.
-        /// </summary>
-        public static T Parse<T>(string json)
-        {
-            if (!TryParse(json, out T result, out string errorMessage))
-            {
-                throw new JsonParseException(errorMessage);
-            }
-
-            return result;
-        }
-    }
-
-    public class JsonParseException : Exception
-    {
-        public JsonParseException(string message)
-            : base(message) { }
-
-        public JsonParseException(string message, Exception innerException)
-            : base(message, innerException) { }
     }
 }

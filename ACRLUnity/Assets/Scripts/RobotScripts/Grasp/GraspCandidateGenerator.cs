@@ -16,13 +16,6 @@ namespace Robotics.Grasp
 
         private const string _logPrefix = "[GRASP_CANDIDATE_GENERATOR]";
 
-        private static readonly Vector3[] ApproachAxes =
-        {
-            Vector3.up,
-            Vector3.right,
-            Vector3.forward,
-        };
-
         public GraspCandidateGenerator(GraspConfig config, int seed = 0)
         {
             _config = config;

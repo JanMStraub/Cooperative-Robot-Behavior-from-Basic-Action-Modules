@@ -45,9 +45,6 @@ namespace Robotics
         private HashSet<Collider> _leftContacts = new HashSet<Collider>();
         private HashSet<Collider> _rightContacts = new HashSet<Collider>();
 
-        // ⚠️ CRITICAL: Moving average for force to handle Unity physics noise
-        // Unity physics forces can spike to infinity on impact
-        // Must use moving average over multiple frames for stable readings
         private Queue<float> _forceHistory = new Queue<float>();
         private float _currentForceSum = 0f; // Running sum for O(1) average calculation
 
@@ -136,7 +133,6 @@ namespace Robotics
 
         /// <summary>
         /// Estimate grasp force using moving average to handle Unity physics noise.
-        /// ⚠️ CRITICAL: Unity physics forces are noisy and can spike to infinity on impact.
         /// This method averages force over multiple frames for stable readings.
         /// </summary>
         public float EstimateGraspForce()
@@ -211,6 +207,19 @@ namespace Robotics
             _currentForceSum = 0f;
         }
 
+        /// <summary>
+        /// Returns true when any object has stable both-finger contact (meets minContactDuration).
+        /// </summary>
+        public bool HasAnyStableContact()
+        {
+            foreach (var obj in GetContactedObjects())
+            {
+                if (HasContact(obj))
+                    return true;
+            }
+            return false;
+        }
+
         public List<GameObject> GetContactedObjects()
         {
             var objects = new HashSet<GameObject>();
@@ -242,6 +251,27 @@ namespace Robotics
             bool leftTouching = _leftContacts.Any(c => c != null && c.gameObject == targetObject);
             bool rightTouching = _rightContacts.Any(c => c != null && c.gameObject == targetObject);
             return leftTouching && rightTouching;
+        }
+
+        /// <summary>
+        /// Returns true if any object is simultaneously in contact with both fingers.
+        /// Used when no specific target is registered (e.g. attachment disabled).
+        /// Allocation-free: iterates the contact sets directly.
+        /// </summary>
+        public bool HasAnyBothFingersContact()
+        {
+            foreach (Collider lc in _leftContacts)
+            {
+                if (lc == null)
+                    continue;
+                GameObject obj = lc.gameObject;
+                foreach (Collider rc in _rightContacts)
+                {
+                    if (rc != null && rc.gameObject == obj)
+                        return true;
+                }
+            }
+            return false;
         }
 
         // Public methods for trigger forwarding (called by GripperCollisionForwarder)
