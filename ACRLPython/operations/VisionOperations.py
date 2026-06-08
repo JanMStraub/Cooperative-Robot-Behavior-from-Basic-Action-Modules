@@ -57,10 +57,6 @@ def analyze_scene(
             return OperationResult.error_result(
                 "NO_IMAGES",
                 "No stereo images available for analysis",
-                [
-                    "Ensure StereoCameraController is sending images",
-                    "Check camera_id parameter",
-                ],
             )
         _, image, _, _ = stereo_data
 
@@ -86,11 +82,7 @@ def analyze_scene(
 
     except Exception as e:
         logger.error(f"Scene analysis failed: {e}")
-        return OperationResult.error_result(
-            "ANALYSIS_FAILED",
-            str(e),
-            ["Check LM Studio is running", "Verify model is loaded"],
-        )
+        return OperationResult.error_result("ANALYSIS_FAILED", str(e))
 
 
 def create_analyze_scene_operation() -> BasicOperation:
@@ -99,24 +91,12 @@ def create_analyze_scene_operation() -> BasicOperation:
         name="analyze_scene",
         category=OperationCategory.PERCEPTION,
         complexity=OperationComplexity.INTERMEDIATE,
-        description="Analyze the current scene using LLM vision",
-        long_description="""
-            This operation sends a camera image to an LLM (via LM Studio) for
-            vision-based scene understanding.
-
-            The LLM can describe objects, identify spatial relationships,
-            count items, read text, and answer questions about the scene.
-
-            Useful for high-level task planning and verification.
-
-            USE THIS OPERATION WHEN the user says any of:
-            "analyze the scene", "analyze scene", "what do you see",
-            "what objects are in the scene", "describe the scene",
-            "describe the workspace", "what's on the table",
-            "look at the scene", "scan the scene", "inspect the scene",
-            "what can you see", "observe the scene", "survey the workspace".
-            Do NOT substitute detect_object_stereo or move_to_coordinate for this operation.
-        """,
+        description=(
+            "Analyze the current scene using LLM vision. Trigger phrases: "
+            "'analyze the scene', 'what do you see', 'describe the workspace', "
+            "'what's on the table', 'scan the scene'. "
+            "Do NOT substitute detect_object_stereo for this operation."
+        ),
         usage_examples=[
             "Analyze scene: analyze_scene(prompt='Describe what you see')",
             "What objects are in the scene: analyze_scene(prompt='What objects are on the table?')",
@@ -268,28 +248,16 @@ def detect_object_stereo(
                     if hasattr(storage, "get_all_stereo_ids")
                     else []
                 )
-                hints = [
-                    "Unity may not have received the capture request",
-                    f"Check that StereoCameraController '{camera_id}' exists in Unity",
-                    "Ensure PythonCommandHandler is processing 'capture_stereo_images' command",
-                ]
+                msg = f"Timeout waiting for stereo images from {camera_id}"
                 if available:
-                    hints.append(f"Available stereo cameras: {available}")
-                return OperationResult.error_result(
-                    "NO_IMAGES",
-                    f"Timeout waiting for stereo images from {camera_id}",
-                    hints,
-                )
+                    msg += f" (available: {available})"
+                return OperationResult.error_result("NO_IMAGES", msg)
         else:
             stereo_data = storage.get_stereo_pair(camera_id)
             if stereo_data is None:
                 return OperationResult.error_result(
                     "NO_CACHED_IMAGES",
                     f"No cached stereo images available for {camera_id}",
-                    [
-                        "Request fresh capture with request_fresh_capture=True",
-                        "Ensure Unity is sending stereo images",
-                    ],
                 )
 
         imgL, imgR, _ = stereo_data
@@ -424,14 +392,12 @@ def detect_object_stereo(
             return OperationResult.error_result(
                 "DETECTION_ERROR",
                 "Failed to get detection result",
-                ["Internal error: detection_result was not assigned"],
             )
 
         if not detection_result.detections:
             return OperationResult.error_result(
                 "NO_DETECTIONS",
                 "No objects detected in scene",
-                ["Ensure objects are visible", "Check lighting conditions"],
             )
 
         logger.debug(
@@ -457,12 +423,7 @@ def detect_object_stereo(
                 detected_colors = [d.color for d in detection_result.detections]
                 return OperationResult.error_result(
                     "COLOR_NOT_FOUND",
-                    f"No {color} objects detected",
-                    [
-                        f"Looking for {color} objects",
-                        f"Detected colors: {detected_colors}",
-                        "Check color parameter",
-                    ],
+                    f"No {color} objects detected (found: {detected_colors})",
                 )
 
         detections = [d for d in detections if d.confidence >= min_confidence]
@@ -470,7 +431,6 @@ def detect_object_stereo(
             return OperationResult.error_result(
                 "LOW_CONFIDENCE",
                 f"No objects detected above confidence threshold {min_confidence}",
-                ["Lower min_confidence threshold", "Improve lighting conditions"],
             )
 
         if max_distance is not None:
@@ -490,7 +450,6 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "OUT_OF_RANGE",
                     f"No objects detected within {max_distance}m",
-                    ["Increase max_distance", "Move objects closer"],
                 )
 
         if selection == "left":
@@ -499,7 +458,6 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "NO_DEPTH",
                     "No detections have valid world positions",
-                    ["Check stereo calibration", "Objects may be too close/far"],
                 )
             best = min(valid_detections, key=lambda d: cast(tuple, d.world_position)[0])
 
@@ -519,7 +477,6 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "NO_DEPTH",
                     "No detections have valid world positions",
-                    ["Check stereo calibration", "Objects may be too close/far"],
                 )
             best = max(valid_detections, key=lambda d: cast(tuple, d.world_position)[0])
             logger.debug(
@@ -561,14 +518,12 @@ def detect_object_stereo(
             return OperationResult.error_result(
                 "INVALID_SELECTION",
                 f"Invalid selection strategy: {selection}",
-                ["Use 'left', 'right', 'closest', 'first', or 'all'"],
             )
 
         if best.world_position is None:
             return OperationResult.error_result(
                 "NO_DEPTH",
-                f"Could not estimate depth for selected object",
-                ["Object may be too close or too far", "Check stereo calibration"],
+                "Could not estimate depth for selected object",
             )
 
         result = {
@@ -658,11 +613,7 @@ def detect_object_stereo(
 
     except Exception as e:
         logger.error(f"Detection failed: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "DETECTION_FAILED",
-            str(e),
-            ["Check camera connection", "Ensure Python environment is configured"],
-        )
+        return OperationResult.error_result("DETECTION_FAILED", str(e))
 
 
 def create_detect_object_stereo_operation() -> BasicOperation:
@@ -671,24 +622,7 @@ def create_detect_object_stereo_operation() -> BasicOperation:
         name="detect_object_stereo",
         category=OperationCategory.PERCEPTION,
         complexity=OperationComplexity.INTERMEDIATE,
-        description="Unified stereo detection with 3D coordinates, combining all stereo detection capabilities",
-        long_description="""
-            This unified operation combines the functionality of three previous detection operations:
-            - detect_object (color-filtered, fresh capture)
-            - detect_with_depth (all objects, cached images)
-            - calculate_object_coordinates (Unity-side processing)
-
-            It uses stereo cameras to detect colored objects and calculate their 3D world positions
-            using disparity-based depth estimation. Results are transformed to world coordinates
-            that can be used by move_to_coordinate and other navigation operations.
-
-            Key features:
-            - Optional color filtering (red, green, blue, or all)
-            - Fresh capture or cached images
-            - Confidence and distance filtering
-            - Multiple selection strategies (left, closest, first, all)
-            - Camera pose metadata from Unity for accurate world coordinates
-        """,
+        description="Stereo detection with 3D world coordinates — optional color filter, configurable selection strategy",
         usage_examples=[
             "Detect blue cube (default): detect_object_stereo(color='blue')",
             "Detect all objects: detect_object_stereo(color=None)",

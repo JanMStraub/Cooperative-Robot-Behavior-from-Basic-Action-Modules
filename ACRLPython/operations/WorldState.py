@@ -106,17 +106,6 @@ except ImportError:
 
 
 class WorldState(SingletonBase):
-    """
-    Singleton manager for global world state.
-
-    This class tracks:
-    - Robot states with TTL-based caching
-    - Detected objects from vision system
-    - Workspace allocations for multi-robot coordination
-    - In-flight commands for request tracking
-
-    Thread-safe for concurrent access.
-    """
 
     @classmethod
     def get_instance(cls):
@@ -148,17 +137,14 @@ class WorldState(SingletonBase):
     ) -> Optional[Dict[str, Any]]:
         """Get robot status with TTL-based caching."""
         with self._lock:
-            # Check cache first
             if not force_refresh and robot_id in self._robot_cache:
                 cached = self._robot_cache[robot_id]
                 if cached.is_valid():
                     logger.debug(f"Using cached status for {robot_id}")
                     return cached.get()
 
-            # Query Unity for fresh status
             logger.debug(f"Querying Unity for {robot_id} status")
             try:
-                # Generate request ID for tracking
                 request_id = int(time.time() * 1000) % (2**32)
 
                 result = check_robot_status(
@@ -166,9 +152,7 @@ class WorldState(SingletonBase):
                 )
 
                 if result.success:
-                    # Note: This returns query_sent status, not actual robot state
-                    # In a real system, we'd wait for the response from Unity
-                    # For now, cache the acknowledgment
+                    # Returns query_sent acknowledgment; Unity response comes asynchronously
                     status = result.result
                     self._robot_cache[robot_id] = CachedValue(
                         value=status,
@@ -217,13 +201,9 @@ class WorldState(SingletonBase):
                     except Exception as exc:
                         logger.warning(f"FK fallback failed for {robot_id}: {exc}")
 
-        # Fall back to querying status
         status = self.get_robot_status(robot_id)
         if status is None:
             return None
-
-        # Extract position from status (if available)
-        # Note: Actual position extraction depends on Unity response format
         return status.get("position")
 
     def get_robot_position_fresh(
@@ -241,13 +221,10 @@ class WorldState(SingletonBase):
                     )
                     return robot_state.position
 
-        # Force refresh if cached data is stale
         logger.debug(f"Forcing position refresh for {robot_id} (max_age: {max_age}s)")
         status = self.get_robot_status(robot_id, force_refresh=True)
         if status is None:
             return None
-
-        # Extract position from status (if available)
         return status.get("position")
 
     def get_robot_target(self, robot_id: str) -> Optional[Tuple[float, float, float]]:
@@ -628,12 +605,7 @@ class WorldState(SingletonBase):
             return None
 
     def get_object_state(self, object_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get object state as a dictionary (compatibility method).
-
-        Uses the same partial-match fallback as get_object_position so that
-        compound names like "red_cube" resolve to an object stored as "red".
-        """
+        """Get object state as a dictionary (same partial-match fallback as get_object_position)."""
         with self._lock:
             obj = self._objects.get(object_id)
             if obj is None:
@@ -688,23 +660,13 @@ class WorldState(SingletonBase):
     def get_object_position(
         self, object_id: str
     ) -> Optional[Tuple[float, float, float]]:
-        """
-        Get object position.
-
-        Exact key lookup first. Falls back to partial matching so compound names
-        like "red_cube" or "red cube" resolve to an object stored as "red" (as
-        written by VisionOperations which uses just the color as the key).
-        """
+        """Exact key lookup first, then partial match (e.g. "red_cube" → "red" from VisionOperations)."""
         with self._lock:
-            # 1. Exact match
             obj = self._objects.get(object_id)
             if obj:
                 return obj.position
 
-            # 2. Normalise: replace spaces/hyphens with underscores, lowercase
             normalised = object_id.lower().replace(" ", "_").replace("-", "_")
-
-            # 3. Use cached normalized keys for O(1) exact then substring match
             norm_cache = self._get_normalized_keys()
             original_key = norm_cache.get(normalised)
             if original_key is None:
@@ -942,13 +904,7 @@ class WorldState(SingletonBase):
         return None
 
     def get_world_context_string(self, robot_id: str) -> str:
-        """
-        Generate a natural language context string for LLM consumption.
-
-        Returns robot state and annotated object list with spatial relationships.
-        Example: "Robot1 at (-0.3, 0.2, 0.1), gripper open. Objects: RedCube at (0.1, 0.3, 0.0)
-        [reachable, in shared_zone], BlueCube at (0.4, 0.2, 0.1) [not reachable, in right_workspace]."
-        """
+        """Natural language world state for LLM prompts: robot pose + annotated object list."""
         with self._lock:
             robot = self._robot_states.get(robot_id)
             if robot is None or robot.position is None:

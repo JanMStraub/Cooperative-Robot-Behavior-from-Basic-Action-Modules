@@ -196,14 +196,7 @@ class UnityProtocol:
 
         Format: [type:1][request_id:4][camera_id_len:4][camera_id:N][prompt_len:4][prompt:N][image_len:4][image_data:N]
 
-        Args:
-            camera_id: Camera identifier
-            prompt: Prompt for LLM (can be empty)
-            image_bytes: PNG/JPG encoded image data
-            request_id: Request ID for correlation (default 0)
 
-        Returns:
-            Encoded message bytes
 
         Raises:
             ValueError: If data exceeds limits
@@ -244,11 +237,7 @@ class UnityProtocol:
         """
         Decode an image message received from Unity.
 
-        Args:
-            data: Raw message bytes
 
-        Returns:
-            Tuple of (request_id, camera_id, prompt, image_bytes)
 
         Raises:
             ValueError: If message is malformed
@@ -279,12 +268,7 @@ class UnityProtocol:
 
         Format: [type:1][request_id:4][json_len:4][json_data:N]
 
-        Args:
-            result_dict: Dictionary containing result data
-            request_id: Request ID for correlation (default 0)
 
-        Returns:
-            Encoded message bytes
         """
         json_str = json.dumps(result_dict, ensure_ascii=False)
         json_bytes = json_str.encode("utf-8")
@@ -301,11 +285,7 @@ class UnityProtocol:
         """
         Decode a result message (for testing/verification).
 
-        Args:
-            data: Raw message bytes
 
-        Returns:
-            Tuple of (request_id, result_dict)
 
         Raises:
             ValueError: If message is malformed
@@ -405,14 +385,7 @@ class UnityProtocol:
 
         Format: [type:1][request_id:4][query_len:4][query_text:N][top_k:4][filters_json_len:4][filters_json:N]
 
-        Args:
-            query: Natural language query text
-            top_k: Number of results to return (default 5)
-            filters: Optional filters dict (category, complexity, min_score)
-            request_id: Request ID for correlation (default 0)
 
-        Returns:
-            Encoded message bytes
 
         Raises:
             ValueError: If data exceeds limits
@@ -447,11 +420,7 @@ class UnityProtocol:
         """
         Decode a RAG query message from Unity.
 
-        Args:
-            data: Raw message bytes
 
-        Returns:
-            Tuple of (request_id, query_dict) where query_dict contains query, top_k, and filters
 
         Raises:
             ValueError: If message is malformed
@@ -488,12 +457,7 @@ class UnityProtocol:
 
         Format: [type:1][request_id:4][json_len:4][operation_context_json:N]
 
-        Args:
-            operation_context: Dictionary containing operation results
-            request_id: Request ID for correlation (default 0)
 
-        Returns:
-            Encoded message bytes
         """
         json_str = json.dumps(operation_context, ensure_ascii=False)
         json_bytes = json_str.encode("utf-8")
@@ -512,11 +476,7 @@ class UnityProtocol:
         """
         Decode a RAG response message (for testing/verification).
 
-        Args:
-            data: Raw message bytes
 
-        Returns:
-            Tuple of (request_id, operation_context_dict)
 
         Raises:
             ValueError: If message is malformed
@@ -559,13 +519,7 @@ class UnityProtocol:
 
         Format: [type:1][request_id:4][robot_id_len:4][robot_id:N][detailed:1]
 
-        Args:
-            robot_id: Robot identifier (e.g., "Robot1", "AR4_Robot")
-            detailed: If True, return detailed joint information
-            request_id: Request ID for correlation (default 0)
 
-        Returns:
-            Encoded message bytes
 
         Raises:
             ValueError: If data exceeds limits
@@ -594,11 +548,7 @@ class UnityProtocol:
         """
         Decode a status query message from Unity.
 
-        Args:
-            data: Raw message bytes
 
-        Returns:
-            Tuple of (request_id, query_dict) where query_dict contains robot_id and detailed flag
 
         Raises:
             ValueError: If message is malformed
@@ -630,12 +580,7 @@ class UnityProtocol:
 
         Format: [type:1][request_id:4][json_len:4][robot_status_json:N]
 
-        Args:
-            robot_status: Dictionary containing robot status data
-            request_id: Request ID for correlation (default 0)
 
-        Returns:
-            Encoded message bytes
         """
         json_str = json.dumps(robot_status, ensure_ascii=False)
         json_bytes = json_str.encode("utf-8")
@@ -654,11 +599,7 @@ class UnityProtocol:
         """
         Decode a status response message (for testing/verification).
 
-        Args:
-            data: Raw message bytes
 
-        Returns:
-            Tuple of (request_id, robot_status_dict)
 
         Raises:
             ValueError: If message is malformed
@@ -703,13 +644,7 @@ class UnityProtocol:
 
         Format: [type:1][request_id:4][cmd_type_len:4][cmd_type:N][params_json_len:4][params_json:N]
 
-        Args:
-            command_type: Command type ("generate", "start_loop", "stop_loop", "execute_task", "get_status")
-            params: Parameters dictionary (robot_ids, num_tasks, task_id, etc.)
-            request_id: Request ID for correlation (default 0)
 
-        Returns:
-            Encoded message bytes
 
         Raises:
             ValueError: If data exceeds limits
@@ -743,11 +678,7 @@ class UnityProtocol:
         """
         Decode an AutoRT command message from Unity.
 
-        Args:
-            data: Raw message bytes
 
-        Returns:
-            Tuple of (request_id, command_type, params_dict)
 
         Raises:
             ValueError: If message is malformed
@@ -776,12 +707,7 @@ class UnityProtocol:
 
         Format: [type:1][request_id:4][json_len:4][json:N]
 
-        Args:
-            response_data: Dictionary containing response data (success, tasks[], loop_running, error)
-            request_id: Request ID for correlation (default 0)
 
-        Returns:
-            Encoded message bytes
         """
         json_str = json.dumps(response_data, ensure_ascii=False)
         json_bytes = json_str.encode("utf-8")
@@ -800,11 +726,7 @@ class UnityProtocol:
         """
         Decode an AutoRT response message (for testing/verification).
 
-        Args:
-            data: Raw message bytes
 
-        Returns:
-            Tuple of (request_id, response_dict)
 
         Raises:
             ValueError: If message is malformed

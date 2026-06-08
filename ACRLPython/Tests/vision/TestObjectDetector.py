@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Unit tests for ObjectDetector.py
 
@@ -23,10 +22,8 @@ from config.Vision import (
 
 
 class TestDetectionObject:
-    """Test DetectionObject class"""
 
     def test_detection_object_initialization(self):
-        """Test creating a DetectionObject"""
         det = DetectionObject(
             object_id=0, color="red", bbox=(100, 200, 50, 60), confidence=0.95
         )
@@ -41,7 +38,6 @@ class TestDetectionObject:
         assert det.world_position is None
 
     def test_detection_object_center_calculation(self):
-        """Test that center point is calculated correctly"""
         det = DetectionObject(
             object_id=0, color="red", bbox=(100, 200, 50, 60), confidence=0.95
         )
@@ -51,7 +47,6 @@ class TestDetectionObject:
         assert det.center_y == 230  # 200 + 60/2
 
     def test_detection_object_with_world_position(self):
-        """Test DetectionObject with 3D world position"""
         det = DetectionObject(
             object_id=1,
             color="blue",
@@ -66,7 +61,6 @@ class TestDetectionObject:
         assert det.world_position[2] == 1.0
 
     def test_detection_object_to_dict(self):
-        """Test converting DetectionObject to dictionary"""
         det = DetectionObject(
             object_id=0, color="red", bbox=(100, 200, 50, 60), confidence=0.95
         )
@@ -85,7 +79,6 @@ class TestDetectionObject:
         assert "world_position" not in result
 
     def test_detection_object_to_dict_with_world_position(self):
-        """Test to_dict includes world position when available"""
         det = DetectionObject(
             object_id=0,
             color="red",
@@ -103,10 +96,8 @@ class TestDetectionObject:
 
 
 class TestDetectionResult:
-    """Test DetectionResult class"""
 
     def test_detection_result_initialization(self):
-        """Test creating a DetectionResult"""
         det1 = DetectionObject(0, "red", (100, 200, 50, 60), 0.95)
         det2 = DetectionObject(1, "blue", (300, 400, 40, 50), 0.87)
 
@@ -124,7 +115,6 @@ class TestDetectionResult:
         assert result.timestamp is not None
 
     def test_detection_result_empty_detections(self):
-        """Test DetectionResult with no detections"""
         result = DetectionResult(
             camera_id="TestCamera", image_width=640, image_height=480, detections=[]
         )
@@ -132,7 +122,6 @@ class TestDetectionResult:
         assert len(result.detections) == 0
 
     def test_detection_result_to_dict(self):
-        """Test converting DetectionResult to dictionary"""
         det = DetectionObject(0, "red", (100, 200, 50, 60), 0.95)
         result = DetectionResult(
             camera_id="TestCamera", image_width=640, image_height=480, detections=[det]
@@ -149,10 +138,8 @@ class TestDetectionResult:
 
 
 class TestCubeDetectorInitialization:
-    """Test CubeDetector initialization"""
 
     def test_cube_detector_initialization(self):
-        """Test that CubeDetector initializes with correct settings"""
         detector = CubeDetector()
 
         # Check color ranges are set
@@ -170,10 +157,8 @@ class TestCubeDetectorInitialization:
 
 
 class TestCubeDetectorDetection:
-    """Test cube detection functionality"""
 
     def test_detect_cubes_empty_image(self):
-        """Test detection on empty/None image"""
         detector = CubeDetector()
 
         # Create an empty (black) image instead of None
@@ -187,7 +172,6 @@ class TestCubeDetectorDetection:
         assert len(result.detections) == 0
 
     def test_detect_cubes_black_image(self):
-        """Test detection on black image with no cubes"""
         detector = CubeDetector()
         image = np.zeros((480, 640, 3), dtype=np.uint8)
 
@@ -199,7 +183,6 @@ class TestCubeDetectorDetection:
         assert len(result.detections) == 0
 
     def test_detect_cubes_red_cube(self, sample_red_cube_image, disable_yolo_detection):
-        """Test detection of red cube using HSV color detection"""
         detector = CubeDetector()
 
         result = detector.detect_objects(sample_red_cube_image, camera_id="test")
@@ -220,7 +203,6 @@ class TestCubeDetectorDetection:
     def test_detect_cubes_blue_cube(
         self, sample_blue_cube_image, disable_yolo_detection
     ):
-        """Test detection of blue cube using HSV color detection"""
         detector = CubeDetector()
 
         result = detector.detect_objects(sample_blue_cube_image, camera_id="test")
@@ -239,7 +221,6 @@ class TestCubeDetectorDetection:
         assert det.bbox_h > 0
 
     def test_detect_cubes_assigns_unique_ids(self):
-        """Test that detected cubes get unique IDs"""
         detector = CubeDetector()
 
         # Create image with two distinct red regions
@@ -255,7 +236,6 @@ class TestCubeDetectorDetection:
             assert len(ids) == len(set(ids))
 
     def test_detect_color_filtering_by_area(self):
-        """Test that detections are filtered by area"""
         detector = CubeDetector()
 
         # Create very small red region (should be filtered out)
@@ -270,7 +250,6 @@ class TestCubeDetectorDetection:
         assert len(result.detections) == 0
 
     def test_detect_color_filtering_by_aspect_ratio(self):
-        """Test that detections are filtered by aspect ratio"""
         detector = CubeDetector()
 
         # Create very elongated red region (bad aspect ratio)
@@ -286,7 +265,6 @@ class TestCubeDetectorDetection:
         assert len(result.detections) < 5
 
     def test_confidence_calculation(self):
-        """Test that confidence is calculated and within range"""
         detector = CubeDetector()
         image = np.zeros((480, 640, 3), dtype=np.uint8)
         # Create well-defined red square
@@ -303,12 +281,10 @@ class TestCubeDetectorDetection:
 
 
 class TestCubeDetectorDebug:
-    """Test debug functionality"""
 
     @patch("config.Vision.ENABLE_DEBUG_IMAGES", True)
     @patch("cv2.imwrite")
     def test_save_debug_image(self, mock_imwrite, sample_red_cube_image, tmp_path):
-        """Test that debug images are saved when enabled"""
         detector = CubeDetector()
         detector.enable_debug = True
         detector.debug_dir = tmp_path
@@ -324,11 +300,9 @@ class TestCubeDetectorDebug:
 
 
 class TestCubeDetectorStereo:
-    """Test stereo detection functionality"""
 
     @patch("vision.ObjectDetector.STEREO_AVAILABLE", False)
     def test_detect_cubes_stereo_unavailable(self):
-        """Test stereo detection when stereo dependencies not available"""
         detector = CubeDetector()
         imgL = np.zeros((480, 640, 3), dtype=np.uint8)
         imgR = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -339,7 +313,6 @@ class TestCubeDetectorStereo:
         assert len(result.detections) == 0
 
     def test_detect_cubes_stereo_none_images(self):
-        """Test stereo detection with None images"""
         detector = CubeDetector()
 
         # Create minimal empty images instead of None
@@ -351,7 +324,6 @@ class TestCubeDetectorStereo:
         assert len(result.detections) == 0
 
     def test_detect_cubes_stereo_mismatched_sizes(self):
-        """Test stereo detection with mismatched image sizes"""
         detector = CubeDetector()
         imgL = np.zeros((480, 640, 3), dtype=np.uint8)
         imgR = np.zeros((240, 320, 3), dtype=np.uint8)  # Different size
@@ -363,7 +335,6 @@ class TestCubeDetectorStereo:
     @patch("vision.ObjectDetector.STEREO_AVAILABLE", True)
     @patch("vision.ObjectDetector.estimate_object_world_position_from_disparity")
     def test_detect_cubes_stereo_with_depth(self, mock_estimate, sample_stereo_pair):
-        """Test stereo detection with depth estimation"""
         # Mock world position estimation
         mock_estimate.return_value = (0.5, 0.2, 1.0)
 

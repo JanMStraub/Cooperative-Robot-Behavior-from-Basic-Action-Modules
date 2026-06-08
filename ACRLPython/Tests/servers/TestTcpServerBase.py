@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Unit tests for core/TCPServerBase.py
 
@@ -16,10 +15,8 @@ from core.TCPServerBase import TCPServerBase, ServerConfig, ConnectionState, Cli
 
 
 class TestServerConfig:
-    """Test ServerConfig dataclass"""
 
     def test_default_config(self):
-        """Test ServerConfig with default values"""
         config = ServerConfig()
 
         assert config.host is not None
@@ -29,7 +26,6 @@ class TestServerConfig:
         assert config.socket_timeout > 0
 
     def test_custom_config(self):
-        """Test ServerConfig with custom values"""
         config = ServerConfig(
             host="192.168.1.1",
             port=8888,
@@ -46,7 +42,6 @@ class TestServerConfig:
 
 
 class MockTCPServer(TCPServerBase):
-    """Concrete implementation of TCPServerBase for testing"""
 
     def __init__(self, config):
         super().__init__(config)
@@ -54,7 +49,6 @@ class MockTCPServer(TCPServerBase):
         self.handle_client_called = False
 
     def _handle_message(self, client, address):
-        """Mock implementation that tracks calls"""
         self.handle_client_called = True
         self.handled_clients.append(address)
         # Simulate some work; stop after one call to prevent looping
@@ -62,10 +56,8 @@ class MockTCPServer(TCPServerBase):
 
 
 class TestTCPServerBaseInitialization:
-    """Test server initialization"""
 
     def test_server_initialization(self, server_config):
-        """Test that server initializes correctly"""
         server = MockTCPServer(server_config)
 
         assert server._config == server_config
@@ -76,22 +68,18 @@ class TestTCPServerBaseInitialization:
         assert server._accept_thread is None
 
     def test_is_running_initially_false(self, server_config):
-        """Test that server is not running initially"""
         server = MockTCPServer(server_config)
         assert server.is_running() is False
 
     def test_get_client_count_initially_zero(self, server_config):
-        """Test that client count is initially zero"""
         server = MockTCPServer(server_config)
         assert server.get_client_count() == 0
 
 
 class TestTCPServerBaseLifecycle:
-    """Test server start/stop lifecycle"""
 
     @patch("socket.socket")
     def test_server_start(self, mock_socket_class, server_config):
-        """Test starting the server"""
         mock_socket = MagicMock()
         mock_socket_class.return_value = mock_socket
 
@@ -117,7 +105,6 @@ class TestTCPServerBaseLifecycle:
 
     @patch("socket.socket")
     def test_server_start_already_running(self, mock_socket_class, server_config):
-        """Test that starting an already running server is safe"""
         mock_socket = MagicMock()
         mock_socket_class.return_value = mock_socket
 
@@ -135,7 +122,6 @@ class TestTCPServerBaseLifecycle:
 
     @patch("socket.socket")
     def test_server_stop(self, mock_socket_class, server_config):
-        """Test stopping the server"""
         mock_socket = MagicMock()
         mock_socket_class.return_value = mock_socket
 
@@ -152,7 +138,6 @@ class TestTCPServerBaseLifecycle:
         mock_socket.close.assert_called()
 
     def test_server_stop_not_running(self, server_config):
-        """Test stopping a server that's not running"""
         server = MockTCPServer(server_config)
 
         # Should not raise exception
@@ -161,11 +146,9 @@ class TestTCPServerBaseLifecycle:
 
 
 class TestTCPServerBaseClientHandling:
-    """Test client connection handling"""
 
     @patch("socket.socket")
     def test_client_tracking(self, mock_socket_class, server_config):
-        """Test that connected clients are tracked"""
         mock_server_socket = MagicMock()
         mock_client_socket = MagicMock()
 
@@ -194,7 +177,6 @@ class TestTCPServerBaseClientHandling:
         server.stop()
 
     def test_broadcast_to_all_clients_no_clients(self, server_config):
-        """Test broadcasting when no clients are connected"""
         server = MockTCPServer(server_config)
 
         result = server.broadcast_to_all_clients(b"test_data")
@@ -205,7 +187,6 @@ class TestTCPServerBaseClientHandling:
     def test_broadcast_to_all_clients_with_clients(
         self, mock_socket_class, server_config
     ):
-        """Test broadcasting to connected clients"""
         mock_client1 = MagicMock()
         mock_client2 = MagicMock()
 
@@ -240,7 +221,6 @@ class TestTCPServerBaseClientHandling:
 
     @patch("socket.socket")
     def test_broadcast_removes_failed_clients(self, mock_socket_class, server_config):
-        """Test that failed clients are removed during broadcast"""
         mock_client1 = MagicMock()
         mock_client2 = MagicMock()
 
@@ -281,10 +261,8 @@ class TestTCPServerBaseClientHandling:
 
 
 class TestTCPServerBaseThreadManagement:
-    """Test thread management functionality"""
 
     def test_cleanup_completed_threads(self, server_config):
-        """Test cleaning up completed threads"""
         server = MockTCPServer(server_config)
 
         # Create some mock threads
@@ -305,7 +283,6 @@ class TestTCPServerBaseThreadManagement:
 
     @patch("socket.socket")
     def test_max_client_threads_enforced(self, mock_socket_class, server_config):
-        """Test that max client thread limit is enforced"""
         # Set very low limit for testing
         test_config = ServerConfig(
             host="127.0.0.1", port=9999, max_client_threads=1, socket_timeout=0.1
@@ -338,11 +315,9 @@ class TestTCPServerBaseThreadManagement:
 
 
 class TestTCPServerBaseErrorHandling:
-    """Test error handling"""
 
     @patch("socket.socket")
     def test_start_bind_failure(self, mock_socket_class, server_config):
-        """Test handling of bind failure during start"""
         mock_socket = MagicMock()
         mock_socket.bind.side_effect = OSError("Address already in use")
         mock_socket_class.return_value = mock_socket
@@ -359,7 +334,6 @@ class TestTCPServerBaseErrorHandling:
         assert mock_socket.close.called or server._server_socket is None
 
     def test_remove_client_not_in_list(self, server_config):
-        """Test removing a client that's not in the list"""
         server = MockTCPServer(server_config)
         mock_client = Mock()
 
@@ -370,7 +344,6 @@ class TestTCPServerBaseErrorHandling:
     def test_handle_client_wrapper_exception_handling(
         self, mock_socket_class, server_config
     ):
-        """Test that exceptions in client handler are caught"""
 
         # Create a server that raises in _handle_message
         class FailingServer(TCPServerBase):
@@ -388,10 +361,8 @@ class TestTCPServerBaseErrorHandling:
 
 
 class TestTCPServerBaseConcurrency:
-    """Test concurrent access and thread safety"""
 
     def test_client_list_thread_safety(self, server_config):
-        """Test that client list is thread-safe"""
         server = MockTCPServer(server_config)
 
         def add_clients():

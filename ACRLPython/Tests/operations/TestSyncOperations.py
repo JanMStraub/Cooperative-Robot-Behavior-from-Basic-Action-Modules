@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Unit and Integration Tests for SyncOperations.py
 
@@ -23,16 +22,13 @@ from operations.SyncOperations import (
 
 
 class TestEventBusCore:
-    """Test EventBus singleton and basic event operations"""
 
     def test_singleton_pattern(self, cleanup_event_bus):
-        """Test EventBus follows singleton pattern"""
         bus1 = EventBus()
         bus2 = EventBus()
         assert bus1 is bus2
 
     def test_singleton_thread_safe_initialization(self, cleanup_event_bus):
-        """Test EventBus singleton is thread-safe during initialization"""
         # Reset singleton
         EventBus._instance = None
 
@@ -60,7 +56,6 @@ class TestEventBusCore:
         assert all(inst is instances[0] for inst in instances)
 
     def test_reset_clears_all_events(self, event_bus):
-        """Test reset() clears all events and waiter counts"""
         event_bus.signal("event1")
         event_bus.signal("event2")
 
@@ -74,7 +69,6 @@ class TestEventBusCore:
         assert event_bus.get_waiter_count("event2") == 0
 
     def test_signal_creates_event(self, event_bus):
-        """Test signal() creates event if it doesn't exist"""
         event_name = "test_event"
 
         assert event_name not in event_bus._events
@@ -85,7 +79,6 @@ class TestEventBusCore:
         assert event_bus._is_signaled(event_name)
 
     def test_wait_for_signal_blocks_until_signaled(self, event_bus, async_executor):
-        """Test wait_for_signal() blocks until signal is received"""
         event_name = "blocking_event"
         wait_result = {}
 
@@ -113,7 +106,6 @@ class TestEventBusCore:
         assert wait_result["elapsed_ms"] < 500
 
     def test_wait_for_signal_times_out(self, event_bus):
-        """Test wait_for_signal() times out when signal not received"""
         event_name = "timeout_event"
 
         start = time.time()
@@ -125,7 +117,6 @@ class TestEventBusCore:
         assert 400 <= elapsed_ms <= 600
 
     def test_auto_clear_when_all_waiters_done(self, event_bus):
-        """Test event auto-clears when all waiters have received it"""
         event_name = "auto_clear_event"
         wait_results = []
 
@@ -158,7 +149,6 @@ class TestEventBusCore:
         assert event_bus.get_waiter_count(event_name) == 0
 
     def test_manual_clear_event(self, event_bus):
-        """Test manual clear_event() clears event flag"""
         event_name = "manual_clear"
 
         event_bus.signal(event_name)
@@ -168,7 +158,6 @@ class TestEventBusCore:
         assert not event_bus._is_signaled(event_name)
 
     def test_signal_nonexistent_event_creates_it(self, event_bus):
-        """Test signaling non-existent event creates it"""
         event_name = "new_event"
 
         assert event_name not in event_bus._events
@@ -180,7 +169,6 @@ class TestEventBusCore:
         assert event_bus.get_waiter_count(event_name) == 0
 
     def test_wait_on_already_signaled_event(self, event_bus):
-        """Test wait_for_signal() returns immediately if event already signaled"""
         event_name = "already_signaled"
 
         # Signal first
@@ -200,12 +188,10 @@ class TestEventBusCore:
 
 
 class TestEventBusThreadSafety:
-    """Test EventBus thread safety and race conditions"""
 
     def test_concurrent_signals_different_events(
         self, event_bus, thread_error_collector
     ):
-        """Test multiple threads signaling different events simultaneously"""
         errors, add_error = thread_error_collector
         num_threads = 20
 
@@ -230,7 +216,6 @@ class TestEventBusThreadSafety:
         assert all(event_bus._is_signaled(f"event_{i}") for i in range(num_threads))
 
     def test_concurrent_signals_same_event(self, event_bus, thread_error_collector):
-        """Test multiple threads signaling the same event simultaneously"""
         errors, add_error = thread_error_collector
         event_name = "shared_event"
         num_threads = 20
@@ -252,7 +237,6 @@ class TestEventBusThreadSafety:
         assert event_bus._is_signaled(event_name)
 
     def test_multiple_waiters_same_event(self, event_bus):
-        """Test multiple threads waiting on the same event"""
         event_name = "multi_waiter_event"
         wait_results = []
 
@@ -280,7 +264,6 @@ class TestEventBusThreadSafety:
         assert all(r is True for r in wait_results)
 
     def test_waiters_across_different_events(self, event_bus):
-        """Test waiters on different events don't interfere"""
         results = {"event1": [], "event2": []}
 
         def waiter(event_name):
@@ -325,7 +308,6 @@ class TestEventBusThreadSafety:
         assert all(r is True for r in results["event2"])
 
     def test_signal_before_wait(self, event_bus):
-        """Test signal sent before wait starts"""
         event_name = "signal_first"
 
         # Signal first
@@ -337,7 +319,6 @@ class TestEventBusThreadSafety:
         assert result is True
 
     def test_signal_during_wait(self, event_bus, async_executor):
-        """Test signal sent while wait is in progress"""
         event_name = "signal_during"
         wait_result = {}
 
@@ -365,7 +346,6 @@ class TestEventBusThreadSafety:
         assert wait_result["elapsed_ms"] < 500
 
     def test_signal_after_timeout(self, event_bus, async_executor):
-        """Test signal sent after wait has timed out"""
         event_name = "signal_after_timeout"
         wait_result = {}
 
@@ -389,7 +369,6 @@ class TestEventBusThreadSafety:
         assert event_bus._is_signaled(event_name)
 
     def test_rapid_signal_wait_cycles(self, event_bus):
-        """Test rapid signal/wait cycles (stress test)"""
         event_name = "rapid_cycle"
         num_cycles = 50
         errors = []
@@ -413,7 +392,6 @@ class TestEventBusThreadSafety:
         assert len(errors) == 0
 
     def test_waiter_count_accuracy_under_load(self, event_bus):
-        """Test waiter count tracking is accurate under concurrent load"""
         event_name = "count_test"
         num_waiters = 20
 
@@ -442,7 +420,6 @@ class TestEventBusThreadSafety:
         assert event_bus.get_waiter_count(event_name) == 0
 
     def test_auto_clear_with_concurrent_waiters(self, event_bus):
-        """Test auto-clear works correctly with concurrent waiters"""
         event_name = "concurrent_auto_clear"
         wait_results = []
 
@@ -472,7 +449,6 @@ class TestEventBusThreadSafety:
         assert event_bus.get_waiter_count(event_name) == 0
 
     def test_waiter_decrement_on_timeout(self, event_bus):
-        """Test waiter count decrements correctly on timeout"""
         event_name = "timeout_decrement"
 
         def waiter():
@@ -500,10 +476,8 @@ class TestEventBusThreadSafety:
 
 
 class TestSignalOperation:
-    """Test signal() operation"""
 
     def test_signal_success(self, cleanup_event_bus):
-        """Test signal operation succeeds"""
         result = _execute_signal("test_event")
 
         assert result.success is True
@@ -511,7 +485,6 @@ class TestSignalOperation:
         assert result.result is not None and "signaled_at" in result.result
 
     def test_signal_returns_timestamp(self, cleanup_event_bus):
-        """Test signal operation returns timestamp"""
         before = time.time()
         result = _execute_signal("timestamp_event")
         after = time.time()
@@ -523,7 +496,6 @@ class TestSignalOperation:
         )
 
     def test_signal_invalid_event_name(self, cleanup_event_bus):
-        """Test signal with various event name types"""
         # Empty string should still work (EventBus creates it)
         result = _execute_signal("")
         assert result.success is True
@@ -538,14 +510,12 @@ class TestSignalOperation:
         )
 
     def test_signal_empty_string(self, cleanup_event_bus):
-        """Test signal with empty string event name"""
         result = _execute_signal("")
 
         # Should succeed (EventBus allows it)
         assert result.success is True
 
     def test_signal_exception_handling(self, cleanup_event_bus):
-        """Test signal handles exceptions gracefully"""
         # Pass integer - Python converts to string, EventBus accepts it
         result = _execute_signal(12345)  # type: ignore[arg-type]
 
@@ -561,10 +531,8 @@ class TestSignalOperation:
 
 
 class TestWaitForSignalOperation:
-    """Test wait_for_signal() operation"""
 
     def test_wait_receives_signal(self, cleanup_event_bus, async_executor):
-        """Test wait_for_signal operation receives signal"""
         event_name = "receive_test"
         wait_result = {}
 
@@ -587,7 +555,6 @@ class TestWaitForSignalOperation:
         assert wait_result["result"].result["elapsed_ms"] < 1000
 
     def test_wait_timeout(self, cleanup_event_bus):
-        """Test wait_for_signal times out correctly"""
         event_name = "timeout_test"
 
         result = _execute_wait_for_signal(event_name, timeout_ms=500)
@@ -600,7 +567,6 @@ class TestWaitForSignalOperation:
     def test_wait_elapsed_time_tracking(
         self, cleanup_event_bus, async_executor, timing_helper
     ):
-        """Test wait_for_signal tracks elapsed time accurately"""
         event_name = "elapsed_test"
         wait_result = {}
 
@@ -624,7 +590,6 @@ class TestWaitForSignalOperation:
         )
 
     def test_wait_default_timeout(self, cleanup_event_bus):
-        """Test wait_for_signal uses default timeout (30 seconds)"""
         # We'll test this times out, but with shorter timeout for test speed
         event_name = "default_timeout"
 
@@ -636,7 +601,6 @@ class TestWaitForSignalOperation:
         assert WAIT_FOR_SIGNAL_OPERATION.parameters[1].default == 30000
 
     def test_wait_custom_timeout(self, cleanup_event_bus):
-        """Test wait_for_signal with custom timeout"""
         event_name = "custom_timeout"
 
         start = time.time()
@@ -649,7 +613,6 @@ class TestWaitForSignalOperation:
         assert 250 <= elapsed_ms <= 400  # ~300ms ±20%
 
     def test_wait_invalid_timeout(self, cleanup_event_bus):
-        """Test wait_for_signal with invalid timeout values"""
         event_name = "invalid_timeout"
 
         # Negative timeout - Python will handle this (Event.wait allows it)
@@ -661,7 +624,6 @@ class TestWaitForSignalOperation:
         )
 
     def test_wait_negative_timeout(self, cleanup_event_bus):
-        """Test wait_for_signal with negative timeout"""
         event_name = "negative_timeout"
 
         result = _execute_wait_for_signal(event_name, timeout_ms=-1)
@@ -672,7 +634,6 @@ class TestWaitForSignalOperation:
         )
 
     def test_wait_zero_timeout(self, cleanup_event_bus):
-        """Test wait_for_signal with zero timeout"""
         event_name = "zero_timeout"
 
         result = _execute_wait_for_signal(event_name, timeout_ms=0)
@@ -683,7 +644,6 @@ class TestWaitForSignalOperation:
         )
 
     def test_wait_recovery_suggestions_on_timeout(self, cleanup_event_bus):
-        """Test wait_for_signal provides recovery suggestions on timeout"""
         event_name = "recovery_test"
 
         result = _execute_wait_for_signal(event_name, timeout_ms=200)
@@ -704,10 +664,8 @@ class TestWaitForSignalOperation:
 
 
 class TestWaitOperation:
-    """Test wait() operation"""
 
     def test_wait_basic(self):
-        """Test basic wait operation"""
         duration_ms = 200
 
         start = time.time()
@@ -720,7 +678,6 @@ class TestWaitOperation:
         assert 180 <= elapsed_ms <= 250  # ~200ms ±15%
 
     def test_wait_accuracy(self, timing_helper):
-        """Test wait operation timing accuracy"""
         test_durations = [100, 500, 1000]
 
         for duration_ms in test_durations:
@@ -735,7 +692,6 @@ class TestWaitOperation:
             assert timing_helper(actual_ms, requested_ms, tolerance_percent=15)
 
     def test_wait_zero_duration(self):
-        """Test wait with zero duration"""
         result = _execute_wait(0)
 
         assert result.success is True
@@ -744,7 +700,6 @@ class TestWaitOperation:
         assert result.result["actual_ms"] < 10  # Should be nearly instant
 
     def test_wait_negative_duration(self):
-        """Test wait with negative duration"""
         result = _execute_wait(-100)
 
         assert result.success is False
@@ -753,7 +708,6 @@ class TestWaitOperation:
         assert "-100" in result.error["message"]
 
     def test_wait_large_duration(self):
-        """Test wait with large duration (within valid range)"""
         # Test max valid duration (60 seconds = 60000ms)
         # But use shorter duration for test speed
         duration_ms = 2000
@@ -766,7 +720,6 @@ class TestWaitOperation:
         assert 1800 <= elapsed_ms <= 2200  # ~2000ms ±10%
 
     def test_wait_exception_handling(self):
-        """Test wait handles exceptions gracefully"""
         # Pass invalid type
         result = _execute_wait("invalid")  # type: ignore[arg-type]
 
@@ -779,10 +732,8 @@ class TestWaitOperation:
 
 
 class TestSyncIntegrationBasic:
-    """Basic integration scenarios with real EventBus"""
 
     def test_simple_signal_wait_flow(self, cleanup_event_bus):
-        """Test simple signal → wait pattern"""
         event_name = "simple_flow"
 
         # Signal
@@ -798,7 +749,6 @@ class TestSyncIntegrationBasic:
         assert wait_result.result["received"] is True
 
     def test_two_robot_handoff_pattern(self, cleanup_event_bus):
-        """Test two-robot handoff using signal/wait"""
         results = {"robot1": [], "robot2": []}
 
         def robot1():
@@ -851,7 +801,6 @@ class TestSyncIntegrationBasic:
         assert "gripped" in results["robot2"]
 
     def test_multiple_sync_points_sequence(self, cleanup_event_bus):
-        """Test sequence with multiple synchronization points"""
         sequence = []
 
         def robot1():
@@ -885,7 +834,6 @@ class TestSyncIntegrationBasic:
         assert sequence.index("r1_step3") < sequence.index("r2_step4")
 
     def test_mixed_wait_and_wait_for_signal(self, cleanup_event_bus):
-        """Test mixing wait (time-based) and wait_for_signal (event-based)"""
         results = []
 
         def robot():
@@ -917,10 +865,8 @@ class TestSyncIntegrationBasic:
 
 
 class TestSyncIntegrationMultiRobot:
-    """Multi-robot coordination scenarios"""
 
     def test_two_robots_parallel_with_sync(self, cleanup_event_bus):
-        """Test two robots running parallel operations with sync points"""
         results = {"robot1": [], "robot2": []}
 
         def robot1():
@@ -948,7 +894,6 @@ class TestSyncIntegrationMultiRobot:
         assert len(results["robot2"]) == 2
 
     def test_three_robots_sequential_handoff(self, cleanup_event_bus):
-        """Test sequential handoff across 3 robots"""
         sequence = []
 
         def robot1():
@@ -979,7 +924,6 @@ class TestSyncIntegrationMultiRobot:
         assert sequence == ["r1_grip", "r2_grip", "r3_grip"]
 
     def test_broadcast_signal_to_multiple_waiters(self, cleanup_event_bus):
-        """Test single signal broadcasts to multiple waiting robots"""
         results = []
 
         def robot_waiter(robot_id):
@@ -1006,7 +950,6 @@ class TestSyncIntegrationMultiRobot:
         assert len(results) == 5
 
     def test_chain_coordination_robot1_robot2_robot3(self, cleanup_event_bus):
-        """Test chain coordination pattern"""
         chain = []
 
         def robot1():
@@ -1050,10 +993,8 @@ class TestSyncIntegrationMultiRobot:
 
 
 class TestSyncWithSequenceExecutor:
-    """Integration with SequenceExecutor"""
 
     def test_sequence_with_sync_primitives(self, cleanup_event_bus):
-        """Test SequenceExecutor executes sync operations in sequence"""
         from orchestrators.SequenceExecutor import SequenceExecutor
 
         executor = SequenceExecutor(check_completion=False)
@@ -1074,7 +1015,6 @@ class TestSyncWithSequenceExecutor:
         assert all(r["success"] for r in result["results"])
 
     def test_parallel_group_with_signals(self, cleanup_event_bus):
-        """Test parallel execution groups with signal synchronization"""
         from orchestrators.SequenceExecutor import SequenceExecutor
 
         executor = SequenceExecutor(check_completion=False)
@@ -1109,7 +1049,6 @@ class TestSyncWithSequenceExecutor:
         assert result["completed_commands"] == 4
 
     def test_abort_during_wait_for_signal(self, cleanup_event_bus):
-        """Test aborting sequence during wait_for_signal"""
         from orchestrators.SequenceExecutor import SequenceExecutor
 
         executor = SequenceExecutor(check_completion=False)
@@ -1150,7 +1089,6 @@ class TestSyncWithSequenceExecutor:
             assert "error" in result_holder or len(result_holder) == 0
 
     def test_timeout_propagation(self, cleanup_event_bus):
-        """Test timeout in wait_for_signal propagates correctly"""
         from orchestrators.SequenceExecutor import SequenceExecutor
 
         executor = SequenceExecutor(check_completion=False)

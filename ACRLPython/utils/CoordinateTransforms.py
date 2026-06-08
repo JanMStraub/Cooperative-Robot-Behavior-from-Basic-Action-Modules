@@ -35,8 +35,6 @@ def world_to_robot_frame(
     2. Apply robot's Y-rotation (for Robot2's 180° facing direction)
     3. Convert Unity axes to ROS axes (Y-up left-handed -> Z-up right-handed)
 
-
-
     Raises:
         ValueError: If robot_id is not configured
     """
@@ -98,7 +96,6 @@ def robot_to_world_frame(
             f"Available: {list(ROBOT_BASE_TRANSFORMS.keys())}"
         )
 
-    # Get robot base transform
     transform = ROBOT_BASE_TRANSFORMS[robot_id]
     base_x, base_y, base_z = transform["position"]
     y_rotation_deg = transform["y_rotation"]

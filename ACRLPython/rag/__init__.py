@@ -47,12 +47,6 @@ class RAGSystem:
         """
         Initialize the RAG system.
 
-        Args:
-            lm_studio_url: LM Studio base URL (default from config)
-            embedding_model: Embedding model name (default from config)
-            registry: Operation registry (default: global registry)
-            auto_load_index: Automatically load cached index if available
-
         Example:
             >>> rag = RAGSystem()
             Connected to LM Studio at http://localhost:1234/v1

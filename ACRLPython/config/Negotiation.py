@@ -18,11 +18,11 @@ NEGOTIATION_ENABLED = os.environ.get("NEGOTIATION_ENABLED", "false").lower() in 
 )
 
 MAX_NEGOTIATION_ROUNDS = int(os.environ.get("MAX_NEGOTIATION_ROUNDS", "3"))
-NEGOTIATION_TIMEOUT = float(os.environ.get("NEGOTIATION_TIMEOUT", "120.0"))  # seconds
+NEGOTIATION_TIMEOUT = float(os.environ.get("NEGOTIATION_TIMEOUT", "300.0"))  # seconds
 
 AGENT_LLM_TIMEOUT = float(
-    os.environ.get("AGENT_LLM_TIMEOUT", "60.0")
-)  # seconds per LLM call (proposal phase is the heaviest; 60s gives headroom)
+    os.environ.get("AGENT_LLM_TIMEOUT", "90.0")
+)  # seconds per LLM call (proposal phase is the heaviest; 90s for slow local models)
 NEGOTIATION_TEMPERATURE = float(os.environ.get("NEGOTIATION_TEMPERATURE", "0.3"))
 
 # If any of these appear in the task text, negotiation is suppressed even when

@@ -64,10 +64,6 @@ def detect_other_robot(
             return OperationResult.error_result(
                 "TARGET_ROBOT_NOT_FOUND",
                 f"Target robot '{target_robot_id}' not found in world state",
-                [
-                    "Verify target robot is active in Unity",
-                    "Check WorldStatePublisher is sending data",
-                ],
             )
 
         detector_state = world_state.get_robot_state(robot_id)
@@ -75,7 +71,6 @@ def detect_other_robot(
             return OperationResult.error_result(
                 "DETECTOR_ROBOT_NOT_FOUND",
                 f"Detecting robot '{robot_id}' not found in world state",
-                ["Verify robot is active"],
             )
 
         import math
@@ -91,7 +86,6 @@ def detect_other_robot(
             return OperationResult.error_result(
                 "POSITION_DATA_MISSING",
                 "Robot position data missing",
-                ["Ensure WorldStatePublisher is active"],
             )
 
         dx, dy, dz = tuple(a - b for a, b in zip(_xyz(detector_pos), _xyz(target_pos)))
@@ -200,7 +194,6 @@ def mirror_movement_of_other_robot(
             return OperationResult.error_result(
                 "COMMUNICATION_FAILED",
                 "Failed to send command to Unity",
-                ["Ensure Unity is running"],
             )
 
         logger.info(f"Successfully activated mirroring for {robot_id}")
@@ -231,12 +224,6 @@ def create_detect_other_robot_operation() -> BasicOperation:
         category=OperationCategory.PERCEPTION,
         complexity=OperationComplexity.INTERMEDIATE,
         description="Detect and locate another robot in shared workspace",
-        long_description="""
-            This operation uses vision and WorldState to detect another robot
-            in the workspace, providing spatial awareness for coordination tasks.
-
-            Returns robot position and distance for coordination planning.
-        """,
         usage_examples=[
             "detect_other_robot('Robot1', 'Robot2')",
             "Check distance before coordination: if distance < 0.3, coordinate movements",
@@ -297,14 +284,6 @@ def create_mirror_movement_operation() -> BasicOperation:
         category=OperationCategory.NAVIGATION,
         complexity=OperationComplexity.COMPLEX,
         description="Mirror the movements of another robot for a configurable duration",
-        long_description="""
-            Activates Unity's mirroring coroutine: one robot copies/reflects the
-            movements of another in real-time for the specified duration.
-
-            Unity executes the tracking loop internally. Use duration_ms to control
-            how long the mirroring runs (default 10s). Useful for synchronized tasks,
-            demonstration, or coordinated bimanual manipulation.
-        """,
         usage_examples=[
             "mirror_movement_of_other_robot('Robot2', 'Robot1', 'x', duration_ms=10000)",
             "mirror_movement_of_other_robot('Robot2', 'Robot1', 'none', duration_ms=5000)",
@@ -409,10 +388,6 @@ def check_partner_status(
             return OperationResult.error_result(
                 "PARTNER_NOT_FOUND",
                 f"Partner robot '{partner_robot_id}' not found in world state",
-                [
-                    "Verify partner robot is active in Unity",
-                    "Check WorldStatePublisher is sending data",
-                ],
             )
 
         gripper_state = _field(partner_state, "gripper_state", "unknown")
@@ -474,18 +449,11 @@ def create_check_partner_status_operation() -> BasicOperation:
         name="check_partner_status",
         category=OperationCategory.COORDINATION,
         complexity=OperationComplexity.INTERMEDIATE,
-        description="Query a partner robot's full state (gripper, motion, position) before planning a joint task",
-        long_description="""
-            Check whether a partner robot is ready, idle, or holding an object before
-            starting a collaborative or joint task.
-
-            Trigger phrases: "check if partner is ready", "is Robot2 ready", "verify partner
-            before starting", "check whether your partner robot is ready", "make sure other
-            robot is available", "confirm partner status", "is the other robot free".
-
-            Returns gripper state, motion state, position, and whether the robot is holding
-            an object. Use the result to decide whether to proceed or wait.
-        """,
+        description=(
+            "Query a partner robot's full state (gripper, motion, position) before planning a joint task. "
+            "Trigger phrases: 'check if partner is ready', 'is Robot2 ready', 'verify partner before starting', "
+            "'confirm partner status', 'is the other robot free'."
+        ),
         usage_examples=[
             "check_partner_status('Robot1', 'Robot2')",
             "if result['status'] == 'idle': proceed with joint task",

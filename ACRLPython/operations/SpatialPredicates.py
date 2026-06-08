@@ -67,6 +67,19 @@ def target_within_reach(
                 f"Target at ({x:.3f}, {y:.3f}, {z:.3f}) is {distance:.3f}m from robot base, exceeds max reach {max_reach}m",
             )
 
+        # XZ-plane proximity check: targets directly above/below the robot base
+        # are in the near-singularity column where IK cannot find a solution —
+        # the arm cannot reach positions along its own vertical axis.
+        _BASE_COLUMN_RADIUS = 0.12
+        xz_dist = math.sqrt(dx * dx + dz * dz)
+        if xz_dist < _BASE_COLUMN_RADIUS:
+            return (
+                False,
+                f"Target ({x:.3f}, {y:.3f}, {z:.3f}) is in near-singularity column above "
+                f"{robot_id} base (XZ distance {xz_dist:.3f}m < {_BASE_COLUMN_RADIUS}m) — "
+                f"move the target away from x={base_pos[0]:.3f}, z={base_pos[2]:.3f}",
+            )
+
         return True, ""
 
     except Exception as e:

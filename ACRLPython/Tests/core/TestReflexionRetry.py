@@ -1,10 +1,5 @@
-#!/usr/bin/env python3
-"""Tests for Reflexion retry loop (Improvement 1)"""
-
 import pytest
 from unittest.mock import Mock, MagicMock, patch, call
-
-# _PromptBuilder hint injection
 
 
 class TestPromptBuilderHint:
@@ -35,9 +30,6 @@ class TestPromptBuilderHint:
         # Core sections still present in both
         assert "=== ROBOT WORKSPACE BOUNDARIES ===" in prompt_no_hint
         assert "=== ROBOT WORKSPACE BOUNDARIES ===" in prompt_with_hint
-
-
-# CommandParser.parse_with_hint()
 
 
 class TestParseWithHint:
@@ -98,9 +90,6 @@ class TestParseWithHint:
         )
         assert result["success"] is False
         assert "error" in result
-
-
-# SequenceExecutor Reflexion retry loop
 
 
 class TestSequenceExecutorReflexion:

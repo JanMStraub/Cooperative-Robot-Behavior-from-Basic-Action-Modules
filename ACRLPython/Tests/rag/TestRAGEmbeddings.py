@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Test Cases for RAG Embeddings
-==============================
-
-Tests for the embedding generation module.
-"""
-
 import pytest
 import numpy as np
 from unittest.mock import Mock, patch
@@ -14,11 +6,9 @@ from config.Rag import RAG_TFIDF_MAX_FEATURES, RAG_EMBEDDING_DIMENSION
 
 
 class TestEmbeddingGenerator:
-    """Test embedding generator with LM Studio and TF-IDF fallback"""
 
     @patch("rag.Embeddings.OpenAI")
     def test_initialization_with_lm_studio(self, mock_openai):
-        """Test initialization successfully connects to LM Studio"""
         # Mock successful LM Studio connection
         mock_client = Mock()
         mock_response = Mock()
@@ -33,7 +23,6 @@ class TestEmbeddingGenerator:
 
     @patch("rag.Embeddings.OpenAI")
     def test_initialization_fallback_to_tfidf(self, mock_openai):
-        """Test fallback to TF-IDF when LM Studio unavailable"""
         # Mock LM Studio connection failure
         mock_openai.side_effect = Exception("Connection failed")
 
@@ -44,7 +33,6 @@ class TestEmbeddingGenerator:
 
     @patch("rag.Embeddings.OpenAI")
     def test_generate_single_embedding_lm_studio(self, mock_openai):
-        """Test generating single embedding via LM Studio"""
         # Mock LM Studio
         mock_client = Mock()
         mock_response = Mock()
@@ -61,7 +49,6 @@ class TestEmbeddingGenerator:
         assert embedding[0] == pytest.approx(0.1, rel=1e-3)
 
     def test_generate_embeddings_tfidf(self):
-        """Test generating embeddings with TF-IDF fallback"""
         # Force TF-IDF by mocking failed LM Studio connection
         with patch("rag.Embeddings.OpenAI") as mock_openai:
             mock_openai.side_effect = Exception("No LM Studio")
@@ -76,7 +63,6 @@ class TestEmbeddingGenerator:
 
     @patch("rag.Embeddings.OpenAI")
     def test_batch_embedding_generation(self, mock_openai):
-        """Test batch embedding generation"""
         # Mock LM Studio batch response
         mock_client = Mock()
         mock_response = Mock()
@@ -96,7 +82,6 @@ class TestEmbeddingGenerator:
         assert all(isinstance(e, np.ndarray) for e in embeddings)
 
     def test_empty_text_list(self):
-        """Test handling of empty text list"""
         with patch("rag.Embeddings.OpenAI") as mock_openai:
             mock_openai.side_effect = Exception("No LM Studio")
 
@@ -107,7 +92,6 @@ class TestEmbeddingGenerator:
 
     @patch("rag.Embeddings.OpenAI")
     def test_get_embedding_dimension(self, mock_openai):
-        """Test getting embedding dimension"""
         mock_client = Mock()
         mock_response = Mock()
         mock_response.data = [Mock(embedding=[0.1] * 768)]
@@ -120,7 +104,6 @@ class TestEmbeddingGenerator:
         assert dim == RAG_EMBEDDING_DIMENSION
 
     def test_is_using_lm_studio(self):
-        """Test checking if using LM Studio or TF-IDF"""
         with patch("rag.Embeddings.OpenAI") as mock_openai:
             # Test with LM Studio
             mock_client = Mock()
@@ -133,7 +116,6 @@ class TestEmbeddingGenerator:
             assert generator.is_using_lm_studio() is True
 
     def test_repr(self):
-        """Test string representation"""
         with patch("rag.Embeddings.OpenAI") as mock_openai:
             mock_openai.side_effect = Exception("No LM Studio")
 

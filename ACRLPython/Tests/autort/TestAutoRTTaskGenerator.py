@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""
-Test AutoRT Task Generator
-
-Tests for LLM-based task generation with JSON parsing and validation.
-"""
-
 import pytest
 import json
 from unittest.mock import Mock, MagicMock, patch
@@ -18,7 +11,6 @@ from operations.Base import (
 
 @pytest.fixture
 def mock_config():
-    """Mock AutoRT config"""
     config = Mock()
     config.LM_STUDIO_URL = "http://localhost:1234/v1"
     config.TASK_GENERATION_MODEL = "test-model"
@@ -34,23 +26,20 @@ def _make_param(
     valid_range=None,
     default=None,
 ):
-    """Helper to create a properly configured parameter mock."""
     p = Mock()
     p.name = param_name
     p.required = required
     p.type = param_type
-    p.valid_values = valid_values  # None or a list
-    p.valid_range = valid_range  # None or a tuple
+    p.valid_values = valid_values
+    p.valid_range = valid_range
     p.default = default
     return p
 
 
 @pytest.fixture
 def mock_registry():
-    """Mock operation registry with sample operations"""
     registry = Mock()
 
-    # Create sample operations with properly configured parameter mocks
     wait_op = Mock(spec=BasicOperation)
     wait_op.name = "wait"
     wait_op.description = "Wait for specified seconds"
@@ -91,7 +80,6 @@ def mock_registry():
 
 @pytest.fixture
 def sample_scene():
-    """Sample scene description for task generation"""
     return SceneDescription(
         timestamp=123456.789,
         objects=[
@@ -117,7 +105,6 @@ def sample_scene():
 
 @pytest.fixture
 def valid_task_json():
-    """Valid task JSON response"""
     return json.dumps(
         [
             {
@@ -143,11 +130,7 @@ def valid_task_json():
     )
 
 
-# Initialization Tests
-
-
 def test_task_generator_init(mock_config, mock_registry):
-    """TaskGenerator initializes with config"""
     with patch("autort.TaskGenerator.get_global_registry", return_value=mock_registry):
         with patch("autort.TaskGenerator.OpenAI"):
             generator = TaskGenerator(mock_config)
@@ -156,11 +139,7 @@ def test_task_generator_init(mock_config, mock_registry):
             assert generator._operations_summary_cache is None
 
 
-# JSON Parsing Tests
-
-
 def test_parse_llm_response_valid_list(mock_config, mock_registry, valid_task_json):
-    """Parse valid JSON array response"""
     with patch("autort.TaskGenerator.get_global_registry", return_value=mock_registry):
         with patch("autort.TaskGenerator.OpenAI"):
             generator = TaskGenerator(mock_config)
@@ -172,7 +151,6 @@ def test_parse_llm_response_valid_list(mock_config, mock_registry, valid_task_js
 
 
 def test_parse_llm_response_single_dict(mock_config, mock_registry):
-    """Parse single dict (non-array) response"""
     single_task = json.dumps(
         {
             "task_id": "task_001",
@@ -198,7 +176,6 @@ def test_parse_llm_response_single_dict(mock_config, mock_registry):
 def test_parse_llm_response_strips_markdown(
     mock_config, mock_registry, valid_task_json
 ):
-    """Parse JSON with markdown code blocks"""
     markdown_wrapped = f"```json\n{valid_task_json}\n```"
 
     with patch("autort.TaskGenerator.get_global_registry", return_value=mock_registry):
@@ -211,7 +188,6 @@ def test_parse_llm_response_strips_markdown(
 
 
 def test_parse_llm_response_invalid_json(mock_config, mock_registry):
-    """Parse invalid JSON raises JSONDecodeError"""
     invalid_json = '{"task_id": "broken" "missing_comma"}'
 
     with patch("autort.TaskGenerator.get_global_registry", return_value=mock_registry):
@@ -223,7 +199,6 @@ def test_parse_llm_response_invalid_json(mock_config, mock_registry):
 
 
 def test_parse_llm_response_invalid_schema(mock_config, mock_registry):
-    """Parse JSON with invalid schema raises ValidationError"""
     invalid_schema = json.dumps(
         [
             {
@@ -245,11 +220,7 @@ def test_parse_llm_response_invalid_schema(mock_config, mock_registry):
                 generator._parse_llm_response(invalid_schema)
 
 
-# Operation Validation Tests
-
-
 def test_validate_operations_valid(mock_config, mock_registry):
-    """Validate task with valid operation types"""
     task = ProposedTask(
         task_id="task_001",
         description="test",
@@ -273,7 +244,6 @@ def test_validate_operations_valid(mock_config, mock_registry):
 
 
 def test_validate_operations_invalid(mock_config, mock_registry):
-    """Validate task with invalid operation type"""
     task = ProposedTask(
         task_id="task_001",
         description="test",
@@ -291,53 +261,38 @@ def test_validate_operations_invalid(mock_config, mock_registry):
             assert generator._validate_operations(task) is False
 
 
-# Operations Summary Tests
-
-
 def test_get_operations_summary_caching(mock_config, mock_registry):
-    """Operations summary is cached after first call"""
     with patch("autort.TaskGenerator.get_global_registry", return_value=mock_registry):
         with patch("autort.TaskGenerator.OpenAI"):
             generator = TaskGenerator(mock_config)
 
-            # First call
             summary1 = generator._get_operations_summary()
             assert "wait" in summary1
             assert "move_to_coordinate" in summary1
-
-            # Check cache
             assert generator._operations_summary_cache is not None
 
-            # Second call should use cache
             summary2 = generator._get_operations_summary()
             assert summary1 == summary2
-
-            # Registry should only be called once
             assert mock_registry.get_all_operations.call_count == 1
 
 
 def test_get_operations_summary_format(mock_config, mock_registry):
-    """Operations summary has correct format"""
     with patch("autort.TaskGenerator.get_global_registry", return_value=mock_registry):
         with patch("autort.TaskGenerator.OpenAI"):
             generator = TaskGenerator(mock_config)
             summary = generator._get_operations_summary()
 
-            # Required params include type annotation: - name(param :type) - description
+            # Format: - name(param :type) - description
             assert "wait" in summary
             assert "seconds" in summary
             assert "move_to_coordinate" in summary
             assert "Wait for specified seconds" in summary
-            assert "velocity" in summary  # Optional param appears in summary
-
-
-# Retry Logic Tests
+            assert "velocity" in summary
 
 
 def test_generate_tasks_retry_on_json_error(
     mock_config, mock_registry, sample_scene, valid_task_json
 ):
-    """Retry loop recovers from malformed JSON"""
     mock_client = MagicMock()
 
     # First attempt: malformed JSON
@@ -365,17 +320,14 @@ def test_generate_tasks_retry_on_json_error(
 
             assert len(tasks) == 1
             assert tasks[0].task_id == "task_001"
-            # Should have made 2 LLM calls (1 failed, 1 success)
             assert mock_client.chat.completions.create.call_count == 2
 
 
 def test_generate_tasks_fails_after_max_retries(
     mock_config, mock_registry, sample_scene
 ):
-    """Generate tasks fails after max retries"""
     mock_client = MagicMock()
 
-    # All attempts return malformed JSON
     mock_choice = MagicMock()
     mock_choice.message.content = '{"invalid": "json'
     mock_response = MagicMock()
@@ -390,25 +342,18 @@ def test_generate_tasks_fails_after_max_retries(
                 sample_scene, robot_ids=["Robot1"], num_tasks=1
             )
 
-            # Should return empty list after all retries fail
             assert len(tasks) == 0
-            # Should have made max_retries attempts
             assert (
                 mock_client.chat.completions.create.call_count
                 == mock_config.MAX_JSON_RETRIES
             )
 
 
-# Task Generation Integration Tests
-
-
 def test_generate_tasks_filters_invalid_operations(
     mock_config, mock_registry, sample_scene
 ):
-    """Generate tasks filters out tasks with invalid operations"""
     mock_client = MagicMock()
 
-    # Return mix of valid and invalid operation types
     mixed_json = json.dumps(
         [
             {
@@ -447,7 +392,6 @@ def test_generate_tasks_filters_invalid_operations(
                 sample_scene, robot_ids=["Robot1"], num_tasks=2
             )
 
-            # Should only return valid task
             assert len(tasks) == 1
             assert tasks[0].task_id == "task_valid"
 
@@ -455,7 +399,6 @@ def test_generate_tasks_filters_invalid_operations(
 def test_generate_tasks_collaborative_prompt(
     mock_config, mock_registry, sample_scene, valid_task_json
 ):
-    """Generate tasks includes collaborative patterns in prompt"""
     mock_client = MagicMock()
     mock_choice = MagicMock()
     mock_choice.message.content = valid_task_json
@@ -473,7 +416,6 @@ def test_generate_tasks_collaborative_prompt(
                 include_collaborative=True,
             )
 
-            # Check that prompt included collaborative hints (in user message, index 1)
             call_args = mock_client.chat.completions.create.call_args
             # messages[0] is system, messages[1] is user with the actual task prompt
             user_prompt = call_args[1]["messages"][1]["content"]

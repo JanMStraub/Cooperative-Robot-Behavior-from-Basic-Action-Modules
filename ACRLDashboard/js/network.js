@@ -188,7 +188,6 @@ export class NetworkManager {
                 robot_id: robot_id,
                 command: { type: 'gripper', action: action }
             })
-        }).then(r => r.json()).then(data => console.log(data))
-            .catch(err => console.error('Gripper cmd failed:', err));
+        }).catch(err => console.error('Gripper cmd failed:', err));
     }
 }

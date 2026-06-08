@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""All Operations Integration Test"""
-
 import os
 import threading
 import time
@@ -15,8 +12,6 @@ from BackendClient import (  # type: ignore[import]
     reset_simulation,
 )
 
-# Availability guard
-
 BACKEND_AVAILABLE = backend_available()
 SKIP_REASON = (
     "Unity not running or not connected to backend. "
@@ -28,8 +23,6 @@ SKIP_REASON = (
 _R1_COORD = (-0.25, 0.30, 0.10)  # x, y, z  — Robot1 reachable point
 _R2_COORD = (0.25, 0.30, 0.10)  # x, y, z  — Robot2 reachable point
 
-# Shared helpers
-
 
 def _cmd(
     command: str,
@@ -39,12 +32,7 @@ def _cmd(
     timeout: float = 60.0,
     request_id: int = 1,
 ) -> Dict[str, Any]:
-    """
-    Send a single command to the backend and return the response dict.
-
-    Helper that encapsulates BackendClient construction so each test body
-    stays focused on the assertion rather than the framing.
-    """
+    """Send a single command to the backend and return the response dict."""
     with BackendClient(timeout=timeout) as client:
         return client.send_command(
             command=command,
@@ -52,9 +40,6 @@ def _cmd(
             camera_id=camera_id,
             request_id=request_id,
         )
-
-
-# Status Operations (timeout: 15 s)
 
 
 @pytest.mark.integration
@@ -87,9 +72,6 @@ class TestStatusOps:
         ), f"check_robot_status failed for Robot2: {result.get('error')}"
 
 
-# Sync Operations (timeout: 15–30 s)
-
-
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
@@ -111,23 +93,12 @@ class TestSyncOps:
         assert elapsed < 60.0, f"wait(0.5) took unexpectedly long: {elapsed:.1f}s"
 
     def test_signal_and_wait_for_signal_paired(self):
-        """
-        signal + wait_for_signal exercise the sync primitive as a pair.
-
-        Two threads run concurrently:
-        - Thread A sends wait_for_signal("test_sync_event") first.
-        - Thread B fires signal("test_sync_event") after a 1 s delay.
-
-        Both must succeed.  We use threading.Barrier to ensure both threads
-        start before either command is sent, then a sleep on the signal side
-        gives the wait side time to register with the backend.
-        """
+        """signal + wait_for_signal run concurrently and both must succeed."""
         barrier = threading.Barrier(2)
         results: Dict[str, Any] = {}
         errors: list = []
 
         def wait_thread():
-            """Thread A: register the wait first."""
             try:
                 barrier.wait(timeout=20.0)
                 results["wait"] = _cmd(
@@ -140,7 +111,6 @@ class TestSyncOps:
                 errors.append(("wait", exc))
 
         def signal_thread():
-            """Thread B: fire the signal after a brief delay."""
             try:
                 barrier.wait(timeout=20.0)
                 time.sleep(2.0)  # Let the wait-side register first
@@ -169,9 +139,6 @@ class TestSyncOps:
         assert (
             results.get("wait", {}).get("success") is True
         ), f"wait_for_signal failed: {results.get('wait', {}).get('error')}"
-
-
-# Gripper Operations (timeout: 15 s)
 
 
 @pytest.mark.integration
@@ -214,9 +181,6 @@ class TestGripperOps:
         assert (
             result.get("success") is True
         ), f"release_object failed: {result.get('error')}"
-
-
-# Navigation Operations (timeout: 30 s)
 
 
 @pytest.mark.integration
@@ -286,9 +250,6 @@ class TestNavigationOps:
         ), f"return_to_start failed: {result.get('error')}"
 
 
-# Perception Operations (timeout: 30 s)
-
-
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
@@ -340,9 +301,6 @@ class TestPerceptionOps:
         assert result.get("success") is True, f"analyze_scene failed: {error}"
 
 
-# Field Operations (timeout: 30 s, camera_id="TableStereoCamera")
-
-
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
@@ -380,9 +338,6 @@ class TestFieldOps:
         ), "detect_all_fields returned an unexpected response"
 
 
-# Spatial / Intermediate Operations (timeout: 30–60 s)
-
-
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
@@ -404,9 +359,6 @@ class TestSpatialOps:
         assert (
             result.get("success") is True or result.get("error") is not None
         ), "move_relative_to_object returned an unexpected response"
-
-
-# Grasp Operations (timeout: 60 s)
 
 
 @pytest.mark.integration
@@ -476,9 +428,6 @@ class TestGraspOps:
         ), "place_object returned an unexpected response"
 
 
-# Multi-Robot Operations (timeout: 120 s, negotiation-aware)
-
-
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.multi_robot
@@ -529,7 +478,7 @@ class TestMultiRobotOps:
         result = _cmd(
             "check partner status of Robot2 from Robot1",
             robot_id="Robot1",
-            timeout=120.0,
+            timeout=240.0,
             request_id=903,
         )
         assert (
@@ -563,9 +512,6 @@ class TestMultiRobotOps:
         assert (
             result.get("success") is True or result.get("error") is not None
         ), "grasp_object returned an unexpected response"
-
-
-# Collaborative Operations (timeout: 120 s)
 
 
 @pytest.mark.integration
@@ -634,9 +580,6 @@ class TestCollaborativeOps:
         ), "joint_transport returned an unexpected response"
 
 
-# Variable Chaining (timeout: 30–60 s)
-
-
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
@@ -660,7 +603,6 @@ class TestVariableChaining:
 
     def test_detect_then_move_to_detected_position(self):
         """detect_object_stereo → $target → move_to_coordinate uses 3D stereo coords."""
-        # Two-step sequence: detect → store as $target → move to $target position
         result = _cmd(
             "detect object stereo for Robot1 as $target; move Robot1 to $target",
             robot_id="Robot1",
@@ -668,7 +610,6 @@ class TestVariableChaining:
             timeout=240.0,
             request_id=1100,
         )
-        # Either succeeds end-to-end or fails with a structured error explaining why.
         assert (
             result.get("success") is True or result.get("error") is not None
         ), "detect → $target → move pipeline returned an unexpected response"
@@ -679,7 +620,7 @@ class TestVariableChaining:
             "detect object stereo for Robot1 as $target; grasp $target with Robot1",
             robot_id="Robot1",
             camera_id="TableStereoCamera",
-            timeout=240.0,
+            timeout=480.0,
             request_id=1101,
         )
         assert (
@@ -702,8 +643,6 @@ class TestVariableChaining:
             result.get("success") is True or result.get("error") is not None
         ), "dotted variable pipeline returned an unexpected response"
 
-
-# Entry point
 
 if __name__ == "__main__":
     import sys

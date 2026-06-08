@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""
-Unit tests for AnalyzeImage.py
-
-Tests the LM Studio vision processor and image analysis
-"""
-
 import pytest
 import numpy as np
 import json
@@ -20,11 +13,9 @@ from config.Servers import DEFAULT_LMSTUDIO_MODEL, LMSTUDIO_BASE_URL
 
 
 class TestLMStudioVisionProcessorInitialization:
-    """Test LMStudioVisionProcessor initialization"""
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_initialization_default_model(self, mock_openai_class):
-        """Test initialization with default model"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
         mock_openai_class.return_value = mock_client
@@ -37,7 +28,6 @@ class TestLMStudioVisionProcessorInitialization:
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_initialization_custom_model(self, mock_openai_class):
-        """Test initialization with custom model"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
         mock_openai_class.return_value = mock_client
@@ -48,7 +38,6 @@ class TestLMStudioVisionProcessorInitialization:
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_initialization_custom_base_url(self, mock_openai_class):
-        """Test initialization with custom base URL"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
         mock_openai_class.return_value = mock_client
@@ -62,7 +51,6 @@ class TestLMStudioVisionProcessorInitialization:
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_initialization_connection_error(self, mock_openai_class):
-        """Test initialization handles connection errors"""
         mock_client = MagicMock()
         mock_client.models.list.side_effect = Exception("Connection refused")
         mock_openai_class.return_value = mock_client
@@ -72,11 +60,9 @@ class TestLMStudioVisionProcessorInitialization:
 
 
 class TestLMStudioVisionProcessorEncoding:
-    """Test image encoding functionality"""
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_encode_image_to_bytes(self, mock_openai_class, sample_image):
-        """Test encoding numpy image to PNG bytes"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
         mock_openai_class.return_value = mock_client
@@ -91,33 +77,27 @@ class TestLMStudioVisionProcessorEncoding:
     @patch("vision.AnalyzeImage.cv2.imencode")
     @patch("vision.AnalyzeImage.OpenAI")
     def test_encode_invalid_image_raises(self, mock_openai_class, mock_imencode):
-        """Test encoding invalid image raises ValueError"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
         mock_openai_class.return_value = mock_client
 
-        # Mock cv2.imencode to return failure
         mock_imencode.return_value = (False, None)
 
         processor = LMStudioVisionProcessor()
 
-        # Any image will fail due to mock
-        invalid_image = np.array([[1, 2], [3, 4]])  # Wrong dimensions
+        invalid_image = np.array([[1, 2], [3, 4]])
 
         with pytest.raises(ValueError, match="Failed to encode image"):
             processor.encode_image_to_bytes(invalid_image)
 
 
 class TestLMStudioVisionProcessorSendImages:
-    """Test sending images to LM Studio"""
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_send_single_image(self, mock_openai_class, sample_image):
-        """Test sending a single image for analysis"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
 
-        # Mock the chat completion response
         mock_choice = MagicMock()
         mock_choice.message.content = "I see a gradient image with red and blue colors."
         mock_response = MagicMock()
@@ -142,7 +122,6 @@ class TestLMStudioVisionProcessorSendImages:
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_send_multiple_images(self, mock_openai_class, sample_image):
-        """Test sending multiple images for analysis"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
 
@@ -168,7 +147,6 @@ class TestLMStudioVisionProcessorSendImages:
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_send_images_with_custom_temperature(self, mock_openai_class, sample_image):
-        """Test sending images with custom temperature"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
 
@@ -189,13 +167,11 @@ class TestLMStudioVisionProcessorSendImages:
             temperature=0.5,
         )
 
-        # Verify chat was called with correct temperature
         call_args = mock_client.chat.completions.create.call_args
         assert call_args[1]["temperature"] == 0.5
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_send_images_empty_list_raises(self, mock_openai_class):
-        """Test that sending empty image list raises ValueError"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
         mock_openai_class.return_value = mock_client
@@ -207,7 +183,6 @@ class TestLMStudioVisionProcessorSendImages:
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_send_images_lmstudio_error(self, mock_openai_class, sample_image):
-        """Test handling of LM Studio errors"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
         mock_client.chat.completions.create.side_effect = Exception(
@@ -226,7 +201,6 @@ class TestLMStudioVisionProcessorSendImages:
     def test_send_images_multiple_cameras_adds_context(
         self, mock_openai_class, sample_image
     ):
-        """Test that multiple camera prompt includes camera context"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
 
@@ -246,7 +220,6 @@ class TestLMStudioVisionProcessorSendImages:
             prompt="What do you see?",
         )
 
-        # Full prompt should include camera context
         full_prompt = result["metadata"]["full_prompt"]
         assert "camera1" in full_prompt
         assert "camera2" in full_prompt
@@ -254,11 +227,9 @@ class TestLMStudioVisionProcessorSendImages:
 
 
 class TestGetImagesFromServer:
-    """Test get_images_from_server function"""
 
     @patch("vision.AnalyzeImage.get_unified_image_storage")
     def test_get_images_all_cameras(self, mock_get_storage, sample_image):
-        """Test getting images from all cameras"""
         mock_storage = MagicMock()
         mock_storage.get_all_camera_ids.return_value = ["camera1", "camera2"]
         mock_storage.get_single_image.return_value = sample_image
@@ -275,7 +246,6 @@ class TestGetImagesFromServer:
 
     @patch("vision.AnalyzeImage.get_unified_image_storage")
     def test_get_images_specific_cameras(self, mock_get_storage, sample_image):
-        """Test getting images from specific cameras"""
         mock_storage = MagicMock()
         mock_storage.get_single_image.return_value = sample_image
         mock_storage.get_single_prompt.return_value = "prompt"
@@ -289,7 +259,6 @@ class TestGetImagesFromServer:
 
     @patch("vision.AnalyzeImage.get_unified_image_storage")
     def test_get_images_no_cameras_raises(self, mock_get_storage):
-        """Test that no cameras raises ValueError"""
         mock_storage = MagicMock()
         mock_storage.get_all_camera_ids.return_value = []
         mock_get_storage.return_value = mock_storage
@@ -299,7 +268,6 @@ class TestGetImagesFromServer:
 
     @patch("vision.AnalyzeImage.get_unified_image_storage")
     def test_get_images_missing_camera(self, mock_get_storage):
-        """Test handling of missing camera images"""
         mock_storage = MagicMock()
         mock_storage.get_single_image.return_value = None
         mock_get_storage.return_value = mock_storage
@@ -309,41 +277,32 @@ class TestGetImagesFromServer:
 
 
 class TestSaveResponse:
-    """Test save_response function"""
 
     def test_save_response_default_path(self, llm_result_dict, tmp_path, monkeypatch):
-        """Test saving response with default path"""
-        # Change to temp directory
         monkeypatch.chdir(tmp_path)
 
         save_response(llm_result_dict)
 
-        # Should create a JSON file
         json_files = list(tmp_path.glob("*.json"))
         assert len(json_files) == 1
 
-        # Verify content
         with open(json_files[0], "r") as f:
             saved_data = json.load(f)
             assert saved_data["response"] == llm_result_dict["response"]
 
     def test_save_response_custom_path(self, llm_result_dict, tmp_path):
-        """Test saving response with custom path"""
         output_path = tmp_path / "custom_output"
 
         save_response(llm_result_dict, str(output_path))
 
-        # Should create custom named file
         json_file = tmp_path / "custom_output.json"
         assert json_file.exists()
 
-        # Verify content
         with open(json_file, "r") as f:
             saved_data = json.load(f)
             assert saved_data == llm_result_dict
 
     def test_save_response_unicode_content(self, tmp_path):
-        """Test saving response with unicode characters"""
         result = {
             "response": "I see 日本語 characters 🤖",
             "camera_id": "Camera_日本語",
@@ -355,7 +314,6 @@ class TestSaveResponse:
         json_file = tmp_path / "unicode_test.json"
         assert json_file.exists()
 
-        # Verify unicode is preserved
         with open(json_file, "r", encoding="utf-8") as f:
             saved_data = json.load(f)
             assert saved_data["response"] == result["response"]
@@ -364,11 +322,9 @@ class TestSaveResponse:
 
 
 class TestLMStudioVisionProcessorMetadata:
-    """Test metadata in results"""
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_result_includes_timestamp(self, mock_openai_class, sample_image):
-        """Test that result includes timestamp"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
 
@@ -387,13 +343,11 @@ class TestLMStudioVisionProcessorMetadata:
         )
 
         assert "timestamp" in result["metadata"]
-        # Verify timestamp is valid ISO format
         timestamp = result["metadata"]["timestamp"]
-        datetime.fromisoformat(timestamp)  # Should not raise
+        datetime.fromisoformat(timestamp)
 
     @patch("vision.AnalyzeImage.OpenAI")
     def test_result_includes_duration(self, mock_openai_class, sample_image):
-        """Test that result includes processing duration"""
         mock_client = MagicMock()
         mock_client.models.list.return_value = []
 

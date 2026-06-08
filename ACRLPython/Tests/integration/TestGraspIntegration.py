@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 End-to-end integration tests for grasp planning system.
 
@@ -14,7 +13,6 @@ from operations.GraspOperations import grasp_object
 
 
 def _is_unity_available() -> bool:
-    """Check if Unity backend is reachable on port 5007."""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1.0)
@@ -26,7 +24,6 @@ def _is_unity_available() -> bool:
 
 
 def _is_ros_available() -> bool:
-    """Check if ROS bridge (Docker/MoveIt) is reachable on port 5020."""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1.0)
@@ -47,11 +44,9 @@ _SKIP_REASON_ROS = (
 
 @pytest.mark.integration
 class TestGraspEndToEnd:
-    """End-to-end integration tests for grasp planning."""
 
     @pytest.fixture
     def mock_unity_connection(self):
-        """Mock Unity connection for integration tests."""
         # Disable ROS to ensure tests use mocked Unity connection
         with patch("config.ROS.ROS_ENABLED", False), patch(
             "operations.grasp._dispatcher._get_command_broadcaster"
@@ -164,7 +159,6 @@ class TestGraspEndToEnd:
 
     @pytest.mark.slow
     def test_grasp_request_id_correlation(self, mock_unity_connection):
-        """Test request ID correlation in Protocol V2."""
         request_id = 12345
         mock_unity_connection.send_command.return_value = True
 
@@ -181,7 +175,6 @@ class TestGraspEndToEnd:
 
     @pytest.mark.slow
     def test_grasp_timeout_handling(self, mock_unity_connection):
-        """Test command send in async mode (timeout handled by SequenceExecutor)."""
         mock_unity_connection.send_command.return_value = True
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
@@ -193,7 +186,6 @@ class TestGraspEndToEnd:
 
     @pytest.mark.slow
     def test_grasp_performance_benchmark(self, mock_unity_connection):
-        """Benchmark grasp operation performance."""
         execution_times = []
 
         for i in range(10):
@@ -231,7 +223,6 @@ class TestGraspEndToEnd:
 
 
 def _is_sequence_server_available() -> bool:
-    """Check if the SequenceServer (port 5008) is reachable."""
     from BackendClient import port_open  # type: ignore[import]
 
     return port_open(5008, timeout=1.0)
@@ -297,7 +288,6 @@ class TestGraspWithRealUnity:
 # Performance benchmark configuration
 @pytest.mark.benchmark
 class TestGraspPerformance:
-    """Performance benchmarks for grasp planning."""
 
     @pytest.fixture
     def mock_unity_connection(self):
@@ -321,12 +311,10 @@ class TestGraspPerformance:
 
     @pytest.fixture
     def benchmark_config(self):
-        """Configuration for performance tests."""
         return {"target_time_ms": 200, "acceptable_variance_pct": 20, "sample_size": 50}
 
     @pytest.mark.slow
     def test_pipeline_performance_target(self, mock_unity_connection, benchmark_config):
-        """Verify command send performance (async mode)."""
         execution_times = []
         mock_unity_connection.send_command.return_value = True
 

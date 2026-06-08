@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""
-Test AutoRT Robot Constitution
-
-Tests for two-layer safety system (Semantic LLM + Kinematic Code).
-"""
-
 import pytest
 import json
 from unittest.mock import Mock, MagicMock, patch
@@ -14,7 +7,6 @@ from autort.DataModels import ProposedTask, Operation, SceneDescription
 
 @pytest.fixture
 def mock_config():
-    """Mock AutoRT config"""
     config = Mock()
     config.LM_STUDIO_URL = "http://localhost:1234/v1"
     config.SAFETY_VALIDATION_MODEL = "test-model"
@@ -37,7 +29,6 @@ def mock_config():
 
 @pytest.fixture
 def mock_world_state():
-    """Mock WorldState"""
     world_state = Mock()
     world_state.get_robot_position = Mock(return_value=None)
     return world_state
@@ -45,13 +36,11 @@ def mock_world_state():
 
 @pytest.fixture
 def empty_scene():
-    """Empty scene description"""
     return SceneDescription(timestamp=123456.789, objects=[])
 
 
 @pytest.fixture
 def safe_move_task():
-    """Safe movement task within bounds"""
     return ProposedTask(
         task_id="task_001",
         description="Move to safe position",
@@ -68,17 +57,12 @@ def safe_move_task():
     )
 
 
-# BoundingBox Tests
-
-
 def test_bounding_box_contains_inside():
-    """BoundingBox.contains returns True for point inside"""
     bbox = BoundingBox(min_corner=(-1.0, -1.0, 0.0), max_corner=(1.0, 1.0, 1.5))
     assert bbox.contains((0.0, 0.0, 0.5)) is True
 
 
 def test_bounding_box_contains_outside():
-    """BoundingBox.contains returns False for point outside"""
     bbox = BoundingBox(min_corner=(-1.0, -1.0, 0.0), max_corner=(1.0, 1.0, 1.5))
     assert bbox.contains((2.0, 0.0, 0.5)) is False
     assert bbox.contains((0.0, -2.0, 0.5)) is False
@@ -86,17 +70,12 @@ def test_bounding_box_contains_outside():
 
 
 def test_bounding_box_contains_boundary():
-    """BoundingBox.contains returns True for points on boundary"""
     bbox = BoundingBox(min_corner=(-1.0, -1.0, 0.0), max_corner=(1.0, 1.0, 1.5))
     assert bbox.contains((-1.0, 0.0, 0.5)) is True
     assert bbox.contains((1.0, 0.0, 0.5)) is True
 
 
-# Initialization Tests
-
-
 def test_constitution_init(mock_config):
-    """RobotConstitution initializes with config"""
     with patch("autort.RobotConstitution.get_world_state", return_value=Mock()):
         with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
@@ -106,13 +85,9 @@ def test_constitution_init(mock_config):
             assert constitution.min_robot_separation == 0.2
 
 
-# LAYER 1: Semantic Safety Tests
-
-
 def test_semantic_safety_approves_safe_task(
     mock_config, mock_world_state, safe_move_task
 ):
-    """Semantic safety approves benign task"""
     mock_client = MagicMock()
     mock_choice = MagicMock()
     mock_choice.message.content = json.dumps(
@@ -134,7 +109,6 @@ def test_semantic_safety_approves_safe_task(
 
 
 def test_semantic_safety_rejects_harmful_task(mock_config, mock_world_state):
-    """Semantic safety rejects harmful task"""
     harmful_task = ProposedTask(
         task_id="task_001",
         description="Throw the cube at the camera",
@@ -178,7 +152,6 @@ def test_semantic_safety_rejects_harmful_task(mock_config, mock_world_state):
 def test_semantic_safety_llm_error_rejects(
     mock_config, mock_world_state, safe_move_task
 ):
-    """Semantic safety rejects on LLM error (fail-safe)"""
     mock_client = MagicMock()
     mock_client.chat.completions.create = Mock(
         side_effect=Exception("LLM connection failed")
@@ -197,11 +170,7 @@ def test_semantic_safety_llm_error_rejects(
             assert len(verdict.rejection_reason) > 0
 
 
-# LAYER 2: Kinematic Safety Tests - Workspace Bounds
-
-
 def test_kinematic_rejects_out_of_bounds_x(mock_config, mock_world_state, empty_scene):
-    """Kinematic safety rejects target outside X bounds"""
     task = ProposedTask(
         task_id="task_001",
         description="Move outside bounds",
@@ -229,7 +198,6 @@ def test_kinematic_rejects_out_of_bounds_x(mock_config, mock_world_state, empty_
 
 
 def test_kinematic_rejects_out_of_bounds_z(mock_config, mock_world_state, empty_scene):
-    """Kinematic safety rejects target outside Z bounds"""
     task = ProposedTask(
         task_id="task_001",
         description="Move too high",
@@ -259,7 +227,6 @@ def test_kinematic_rejects_out_of_bounds_z(mock_config, mock_world_state, empty_
 def test_kinematic_approves_within_bounds(
     mock_config, mock_world_state, empty_scene, safe_move_task
 ):
-    """Kinematic safety approves target within bounds"""
     with patch(
         "autort.RobotConstitution.get_world_state", return_value=mock_world_state
     ):
@@ -273,13 +240,9 @@ def test_kinematic_approves_within_bounds(
             assert len(verdict.violations) == 0
 
 
-# LAYER 2: Kinematic Safety Tests - Velocity Limits
-
-
 def test_kinematic_rejects_excessive_velocity(
     mock_config, mock_world_state, empty_scene
 ):
-    """Kinematic safety rejects velocity above limit"""
     task = ProposedTask(
         task_id="task_001",
         description="Move too fast",
@@ -313,7 +276,6 @@ def test_kinematic_rejects_excessive_velocity(
 
 
 def test_kinematic_approves_safe_velocity(mock_config, mock_world_state, empty_scene):
-    """Kinematic safety approves velocity within limit"""
     task = ProposedTask(
         task_id="task_001",
         description="Move at safe speed",
@@ -342,13 +304,9 @@ def test_kinematic_approves_safe_velocity(mock_config, mock_world_state, empty_s
             assert verdict.approved is True
 
 
-# LAYER 2: Kinematic Safety Tests - Force Limits
-
-
 def test_kinematic_rejects_high_gripper_force(
     mock_config, mock_world_state, empty_scene
 ):
-    """Kinematic safety rejects task when gripper force exceeds limit"""
     task = ProposedTask(
         task_id="task_001",
         description="Close gripper with high force",
@@ -377,11 +335,7 @@ def test_kinematic_rejects_high_gripper_force(
             assert any("gripper force" in v.lower() for v in verdict.violations)
 
 
-# LAYER 2: Kinematic Safety Tests - Robot Collision
-
-
 def test_kinematic_rejects_robot_collision_planned(mock_config, empty_scene):
-    """Kinematic safety rejects collision between planned positions"""
     task = ProposedTask(
         task_id="task_001",
         description="Collision task",
@@ -403,7 +357,7 @@ def test_kinematic_rejects_robot_collision_planned(mock_config, empty_scene):
     )
 
     mock_world_state = Mock()
-    mock_world_state.get_robot_position = Mock(return_value=None)  # No live positions
+    mock_world_state.get_robot_position = Mock(return_value=None)
 
     with patch(
         "autort.RobotConstitution.get_world_state", return_value=mock_world_state
@@ -417,7 +371,6 @@ def test_kinematic_rejects_robot_collision_planned(mock_config, empty_scene):
 
 
 def test_kinematic_rejects_collision_with_live_position(mock_config, empty_scene):
-    """Kinematic safety rejects collision between planned target and live position"""
     task = ProposedTask(
         task_id="task_001",
         description="Move near other robot",
@@ -453,7 +406,6 @@ def test_kinematic_rejects_collision_with_live_position(mock_config, empty_scene
 
 
 def test_kinematic_approves_safe_separation(mock_config, empty_scene):
-    """Kinematic safety approves sufficient robot separation"""
     task = ProposedTask(
         task_id="task_001",
         description="Move with safe separation",
@@ -487,11 +439,7 @@ def test_kinematic_approves_safe_separation(mock_config, empty_scene):
             assert verdict.approved is True
 
 
-# Two-Layer Integration Tests
-
-
 def test_evaluate_task_both_layers_approve(mock_config, empty_scene, safe_move_task):
-    """Task passes both safety layers"""
     mock_client = MagicMock()
     mock_choice = MagicMock()
     mock_choice.message.content = json.dumps(
@@ -515,7 +463,6 @@ def test_evaluate_task_both_layers_approve(mock_config, empty_scene, safe_move_t
 
 
 def test_evaluate_task_semantic_rejects(mock_config, empty_scene):
-    """Task rejected by semantic layer (kinematic not checked)"""
     harmful_task = ProposedTask(
         task_id="task_001",
         description="Throw object",
@@ -551,7 +498,6 @@ def test_evaluate_task_semantic_rejects(mock_config, empty_scene):
 
 
 def test_evaluate_task_kinematic_rejects(mock_config, empty_scene):
-    """Task passes semantic but rejected by kinematic"""
     out_of_bounds_task = ProposedTask(
         task_id="task_001",
         description="Move to position",

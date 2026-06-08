@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for DefaultPositionOperation.py"""
-
 import time
 from unittest.mock import Mock
 
@@ -8,8 +5,6 @@ from operations.DefaultPositionOperation import (
     return_to_start_position,
     RETURN_TO_START_POSITION_OPERATION,
 )
-
-# Test Class: return_to_start_position - Basic Functionality
 
 
 class TestReturnToStartPosition:
@@ -20,7 +15,7 @@ class TestReturnToStartPosition:
         assert result.success is True
         assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
-        assert result.result["speed"] == 1.0  # Default speed
+        assert result.result["speed"] == 1.0
         assert result.result["status"] == "command_sent"
         assert "timestamp" in result.result
         patch_command_broadcaster.send_command.assert_called_once()
@@ -123,9 +118,6 @@ class TestReturnToStartPosition:
         assert result.error["code"] == "UNEXPECTED_ERROR"
 
 
-# Test Class: Speed Parameter Validation
-
-
 class TestReturnSpeedValidation:
 
     def test_return_minimum_valid_speed(self, patch_command_broadcaster):
@@ -166,9 +158,6 @@ class TestReturnSpeedValidation:
             assert result.result["speed"] == speed
 
 
-# Test Class: Different Robot IDs
-
-
 class TestReturnDifferentRobots:
 
     def test_return_standard_robot_id(self, patch_command_broadcaster):
@@ -198,9 +187,6 @@ class TestReturnDifferentRobots:
         assert result.success is True
         assert result.result is not None
         assert result.result["robot_id"] == "CustomRobot_123"
-
-
-# Test Class: Operation Definition
 
 
 class TestReturnOperationDefinition:
@@ -255,8 +241,6 @@ class TestReturnOperationDefinition:
 
     def test_return_operation_postconditions(self):
         op = RETURN_TO_START_POSITION_OPERATION
-
-        # Postconditions are empty (side-effects not verifiable as predicates)
         assert isinstance(op.postconditions, list)
 
     def test_return_operation_category(self):
@@ -268,9 +252,6 @@ class TestReturnOperationDefinition:
         op = RETURN_TO_START_POSITION_OPERATION
 
         assert op.complexity.value == "basic"
-
-
-# Test Class: Concurrent Execution
 
 
 class TestReturnConcurrency:
@@ -313,16 +294,11 @@ class TestReturnConcurrency:
         for t in threads:
             t.join()
 
-        # All should succeed (Unity would handle queueing/rejection)
         assert len(results) == 3
         assert all(r.success for r in results)
 
 
-# Test Class: Edge Cases
-
-
 class TestReturnEdgeCases:
-    """Test edge cases for return operation."""
 
     def test_return_with_minimal_parameters(self, patch_command_broadcaster):
         result = return_to_start_position("Robot1")
@@ -330,7 +306,7 @@ class TestReturnEdgeCases:
         assert result.success is True
         assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
-        assert result.result["speed"] == 1.0  # Default
+        assert result.result["speed"] == 1.0
 
     def test_return_with_all_parameters(self, patch_command_broadcaster):
         result = return_to_start_position(
@@ -382,11 +358,7 @@ class TestReturnEdgeCases:
         assert before_time <= timestamp <= after_time
 
 
-# Test Class: Error Messages and Recovery
-
-
 class TestReturnErrorHandling:
-    """Test error messages and recovery suggestions."""
 
     def test_return_invalid_robot_id_has_suggestions(self):
         """Test that invalid robot ID error provides recovery suggestions."""
@@ -448,9 +420,6 @@ class TestReturnErrorHandling:
         assert result.error is not None
         assert result.error["message"]
         assert len(result.error["message"]) > 10
-
-
-# Test Class: Integration with Operation System
 
 
 class TestReturnIntegration:

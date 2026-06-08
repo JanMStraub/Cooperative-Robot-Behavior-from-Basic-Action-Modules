@@ -101,7 +101,7 @@ class SequenceQueryHandler(SingletonBase):
         robot_id: str = "Robot1",
         camera_id: str = DEFAULT_CAMERA_ID,
         auto_execute: bool = True,
-        timeout: float = 60.0,
+        timeout: float = 120.0,
         flags_json: str = "",
     ) -> Dict[str, Any]:
         """
@@ -116,16 +116,7 @@ class SequenceQueryHandler(SingletonBase):
         When flags_json is non-empty, feature overrides are applied for the
         duration of this sequence and restored afterwards via FeatureFlagContext.
 
-        Args:
-            command_text: Natural language command, or "EXEC:<json>" for direct execution.
-            robot_id: Default robot ID
-            camera_id: Camera ID for perception operations (depth detection)
-            auto_execute: Whether to automatically execute parsed operations
-            timeout: Timeout per command in seconds (default 60 s; increase for slow hardware or complex grasp sequences)
-            flags_json: JSON string from BenchmarkFeatureFlags.to_json(); "" = no overrides.
-
-        Returns:
-            Execution result dictionary
+        timeout default of 120 s covers concurrent dual-robot ops where place_object can take ~55 s.
         """
         from benchmarks.FeatureFlags import BenchmarkFeatureFlags
         from servers.FeatureFlagContext import FeatureFlagContext
@@ -142,7 +133,7 @@ class SequenceQueryHandler(SingletonBase):
         robot_id: str = "Robot1",
         camera_id: str = DEFAULT_CAMERA_ID,
         auto_execute: bool = True,
-        timeout: float = 60.0,
+        timeout: float = 120.0,
     ) -> Dict[str, Any]:
         if not self._parser or not self._executor:
             return {"success": False, "error": "SequenceQueryHandler not initialized"}
@@ -185,7 +176,6 @@ class SequenceQueryHandler(SingletonBase):
             return exec_result
 
         # ── Normal path: LLM parsing ───────────────────────────────────────────
-        # Check if negotiation is needed (before parsing)
         if self._executor and auto_execute:
             negotiated = self._executor.negotiate_if_needed(command_text, robot_id)
             if negotiated is not None:
@@ -206,7 +196,6 @@ class SequenceQueryHandler(SingletonBase):
                     exec_result["negotiation_rounds"] = 0
                 return exec_result
 
-        # Parse the command
         parse_result = self._parser.parse(command_text, robot_id)
 
         if not parse_result["success"]:
@@ -242,7 +231,6 @@ class SequenceQueryHandler(SingletonBase):
                     cmd["params"] = {}
                 cmd["params"]["camera_id"] = camera_id
 
-        # If auto_execute is False, just return parsed commands without executing
         if not auto_execute:
             return {
                 "success": True,
@@ -255,12 +243,10 @@ class SequenceQueryHandler(SingletonBase):
                 "total_duration_ms": 0,
             }
 
-        # Execute the sequence
         exec_result = self._executor.execute_sequence(
             commands, timeout_per_command=timeout
         )
 
-        # Add parsed commands to result
         exec_result["parsed_commands"] = commands
         exec_result["original_command"] = command_text
         exec_result["camera_id"] = camera_id
@@ -321,7 +307,6 @@ class SequenceServer(TCPServerBase):
             self._send_error(client, request_id, f"Invalid message type: {msg_type}")
             return
 
-        # Read command length (4 bytes, little-endian)
         cmd_len_bytes = self._recv_exact(client, 4)
         if not cmd_len_bytes:
             raise ConnectionResetError("Connection closed reading command length")
@@ -332,39 +317,34 @@ class SequenceServer(TCPServerBase):
             self._send_error(client, request_id, "Command too long")
             return
 
-        # Read command text
         command_bytes = self._recv_exact(client, cmd_len)
         if not command_bytes:
             raise ConnectionResetError("Connection closed reading command text")
         command_text = command_bytes.decode("utf-8")
 
-        # Read robot_id length (4 bytes, little-endian)
         robot_id_len_bytes = self._recv_exact(client, 4)
         if not robot_id_len_bytes:
             raise ConnectionResetError("Connection closed reading robot_id length")
         robot_id_len = struct.unpack("<I", robot_id_len_bytes)[0]
 
-        # Read robot_id
         robot_id = "Robot1"
         if robot_id_len > 0:
             robot_id_bytes = self._recv_exact(client, robot_id_len)
             if robot_id_bytes:
                 robot_id = robot_id_bytes.decode("utf-8")
 
-        # Read camera_id length (4 bytes, little-endian)
         camera_id_len_bytes = self._recv_exact(client, 4)
         if not camera_id_len_bytes:
             raise ConnectionResetError("Connection closed reading camera_id length")
         camera_id_len = struct.unpack("<I", camera_id_len_bytes)[0]
 
-        # Read camera_id; fall back to configured default when Unity sends length=0
+        # Fall back to configured default when Unity sends length=0
         camera_id = DEFAULT_CAMERA_ID
         if camera_id_len > 0:
             camera_id_bytes = self._recv_exact(client, camera_id_len)
             if camera_id_bytes:
                 camera_id = camera_id_bytes.decode("utf-8")
 
-        # Read auto_execute flag (1 byte)
         auto_execute_bytes = self._recv_exact(client, 1)
         if not auto_execute_bytes:
             raise ConnectionResetError("Connection closed reading auto_execute flag")
@@ -385,7 +365,6 @@ class SequenceServer(TCPServerBase):
             f"Received sequence query (id={request_id}): {command_text} (camera={camera_id}, auto_execute={auto_execute})"
         )
 
-        # Execute the sequence
         handler = SequenceQueryHandler()
         try:
             result = handler.execute_sequence(
@@ -495,10 +474,6 @@ class SequenceServer(TCPServerBase):
         """
         Send response to client.
 
-        Args:
-            client: Client socket
-            request_id: Request ID for correlation
-            result: Result dictionary to send
         """
         try:
             # Add request_id to result for Protocol V2 correlation
@@ -527,10 +502,6 @@ class SequenceServer(TCPServerBase):
         """
         Send error response to client.
 
-        Args:
-            client: Client socket
-            request_id: Request ID
-            error_message: Error message
         """
         result = {"success": False, "error": error_message}
         self._send_response(client, request_id, result)
@@ -545,14 +516,7 @@ def run_sequence_server_background(
     """
     Start the SequenceServer in the background.
 
-    Args:
-        config: Server configuration dictionary
-        lm_studio_url: LM Studio URL for parsing
-        model: Model name for parsing
-        check_completion: Whether to wait for Unity completion signals
 
-    Returns:
-        SequenceServer instance
     """
     handler = SequenceQueryHandler()
     handler.initialize(

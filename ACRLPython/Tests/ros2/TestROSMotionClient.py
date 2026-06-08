@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for ROSMotionServer coordinate transform methods"""
-
 import math
 from unittest.mock import MagicMock, patch
 
@@ -10,7 +7,6 @@ import pytest
 
 
 def _make_server(robot1_base=(-0.475, 0.0, 0.0), robot2_base=(0.475, 0.0, 0.0)):
-    """Instantiate ROSMotionServer with ROS deps stubbed out."""
     with patch.dict(
         "sys.modules",
         {
@@ -51,7 +47,6 @@ class TestTransformWorldToLocal:
         self.server = _make_server()
 
     def test_robot1_identity_at_origin(self):
-        """Target at world origin, Robot1 base at (-0.475,0,0). ROS X = unity Z."""
         result = self.server._transform_world_to_local(
             {"x": 0.0, "y": 0.0, "z": 0.0}, "Robot1"
         )
@@ -63,7 +58,6 @@ class TestTransformWorldToLocal:
         assert result["z"] == pytest.approx(0.0)
 
     def test_robot1_forward_target(self):
-        """Target directly in front of Robot1 (unity +Z = ros +X)."""
         result = self.server._transform_world_to_local(
             {"x": -0.475, "y": 0.0, "z": 0.3}, "Robot1"
         )
@@ -73,7 +67,6 @@ class TestTransformWorldToLocal:
         assert result["z"] == pytest.approx(0.0)
 
     def test_robot1_height(self):
-        """Unity Y (up) maps to ROS Z (up)."""
         result = self.server._transform_world_to_local(
             {"x": -0.475, "y": 0.089, "z": 0.0}, "Robot1"
         )
@@ -81,7 +74,6 @@ class TestTransformWorldToLocal:
         assert result["x"] == pytest.approx(0.0)
 
     def test_robot1_documented_example(self):
-        """Example from CLAUDE.md: target (0, 0.089, 0.05) for Robot1."""
         result = self.server._transform_world_to_local(
             {"x": 0.0, "y": 0.089, "z": 0.05}, "Robot1"
         )
@@ -92,7 +84,6 @@ class TestTransformWorldToLocal:
         assert result["z"] == pytest.approx(0.089)
 
     def test_robot2_180_flip(self):
-        """Robot2 faces -Z. A target in front of Robot2 (world -Z) should map to ROS +X."""
         # Robot2 base at (0.475, 0, 0). Put target at (0.475, 0, -0.3) — directly "in front"
         result = self.server._transform_world_to_local(
             {"x": 0.475, "y": 0.0, "z": -0.3}, "Robot2"
@@ -107,7 +98,6 @@ class TestTransformWorldToLocal:
         assert result["z"] == pytest.approx(0.0)
 
     def test_robot2_right_maps_to_left(self):
-        """Unity +X (right) for Robot2 should flip to -Y in ROS after 180° rotation."""
         result = self.server._transform_world_to_local(
             {"x": 0.475 + 0.1, "y": 0.0, "z": 0.0}, "Robot2"
         )
@@ -117,14 +107,12 @@ class TestTransformWorldToLocal:
         assert result["y"] == pytest.approx(0.1)
 
     def test_unknown_robot_returns_passthrough(self):
-        """Unknown robot_id logs warning and returns original coordinates."""
         result = self.server._transform_world_to_local(
             {"x": 1.0, "y": 2.0, "z": 3.0}, "RobotUnknown"
         )
         assert result == {"x": 1.0, "y": 2.0, "z": 3.0}
 
     def test_missing_keys_default_to_zero(self):
-        """Missing x/y/z keys default to 0.0 (no KeyError)."""
         result = self.server._transform_world_to_local({}, "Robot1")
         # unity_local = (0.475, 0, 0), ros: x=0, y=-0.475, z=0
         assert result["y"] == pytest.approx(-0.475)
@@ -141,7 +129,6 @@ class TestTransformOrientationToRos:
         return math.sqrt(q["x"] ** 2 + q["y"] ** 2 + q["z"] ** 2 + q["w"] ** 2)
 
     def test_identity_quaternion_robot1(self):
-        """Unity identity {0,0,0,1} → ROS identity for Robot1 (no Y-rotation)."""
         result = self.server._transform_orientation_to_ros(
             {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}, "Robot1"
         )
@@ -153,7 +140,6 @@ class TestTransformOrientationToRos:
         assert result["w"] == pytest.approx(1.0)
 
     def test_unity_z_rotation_maps_to_ros_y(self):
-        """90° rotation around Unity Z → 90° around ROS Y (since unity_z → ros_x, unity_y → ros_z)."""
         # 90° around Unity Z: q = (0, 0, sin(45°), cos(45°))
         s = math.sin(math.pi / 4)
         c = math.cos(math.pi / 4)
@@ -167,19 +153,16 @@ class TestTransformOrientationToRos:
         assert result["w"] == pytest.approx(c)
 
     def test_output_is_unit_quaternion_robot1(self):
-        """Output quaternion norm == 1 for Robot1."""
         q = {"x": 0.1, "y": 0.2, "z": 0.3, "w": math.sqrt(1 - 0.1**2 - 0.2**2 - 0.3**2)}
         result = self.server._transform_orientation_to_ros(q, "Robot1")
         assert self._quat_norm(result) == pytest.approx(1.0, abs=1e-6)
 
     def test_output_is_unit_quaternion_robot2(self):
-        """Output quaternion norm == 1 for Robot2 (extra Z-rotation applied)."""
         q = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
         result = self.server._transform_orientation_to_ros(q, "Robot2")
         assert self._quat_norm(result) == pytest.approx(1.0, abs=1e-6)
 
     def test_robot2_identity_rotated_180(self):
-        """Robot2 identity quaternion should be rotated 180° around Z in ROS frame."""
         result = self.server._transform_orientation_to_ros(
             {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}, "Robot2"
         )
@@ -193,13 +176,11 @@ class TestTransformOrientationToRos:
         assert result["w"] == pytest.approx(expected_w, abs=1e-6)
 
     def test_w_preserved_not_negated(self):
-        """w must not be negated (negation inverts the rotation, not just representation)."""
         q = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 0.9}
         result = self.server._transform_orientation_to_ros(q, "Robot1")
         assert result["w"] == pytest.approx(0.9)
 
     def test_missing_keys_default_to_identity(self):
-        """Missing quaternion keys default to identity (x=y=z=0, w=1)."""
         result = self.server._transform_orientation_to_ros({}, "Robot1")
         # default: qx=0, qy=0, qz=0, qw=1 → identity after relabel
         assert result["w"] == pytest.approx(1.0)
@@ -238,7 +219,6 @@ class TestRobotBaseTransforms:
 
 class TestPublishOtherRobotCollision:
     def test_publish_other_robot_collision_adds_4_objects(self):
-        """_publish_other_robot_collision creates publisher and calls publish once."""
         import threading
         from unittest.mock import MagicMock, patch
 
@@ -268,7 +248,6 @@ class TestPublishOtherRobotCollision:
         assert published_scene.is_diff is True
 
     def test_publish_other_robot_collision_ids_and_count(self):
-        """_publish_other_robot_collision builds exactly 4 collision objects with correct IDs."""
         import threading
         from unittest.mock import MagicMock, patch
 
@@ -307,7 +286,6 @@ class TestPublishOtherRobotCollision:
             assert obj.id == expected_ids[i]
 
     def test_no_collision_objects_if_no_joint_state(self):
-        """_publish_other_robot_collision returns early when other robot has no joint state."""
         import threading
         from unittest.mock import patch
 
@@ -323,7 +301,6 @@ class TestPublishOtherRobotCollision:
         assert server._planning_scene_pubs == {}
 
     def test_remove_other_robot_collision_removes_4_objects(self):
-        """_remove_other_robot_collision calls publish once on the existing publisher."""
         from unittest.mock import MagicMock, patch
 
         server = _make_server()
@@ -343,7 +320,6 @@ class TestPublishOtherRobotCollision:
         assert len(objs) == 4
 
     def test_inter_robot_collision_disabled_skips_publish(self):
-        """When INTER_ROBOT_COLLISION_ENABLED=False, _publish_other_robot_collision is never called."""
         import threading
         from unittest.mock import MagicMock, patch
 

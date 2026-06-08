@@ -1,20 +1,7 @@
-#!/usr/bin/env python3
-"""
-TestAutoRTIntegration.py - Unit tests for AutoRT Unity integration
-
-Tests AutoRTHandler singleton, task generation, loop control, and caching.
-"""
-
-import unittest
+import pytest
 import threading
 import time
 from unittest.mock import Mock, patch, MagicMock
-
-# Import modules under test
-import sys
-import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from servers.AutoRTIntegration import AutoRTHandler
 from autort.DataModels import ProposedTask, Operation
@@ -41,55 +28,43 @@ def _make_task(
     )
 
 
-class TestAutoRTHandler(unittest.TestCase):
+class TestAutoRTHandler:
 
-    def setUp(self):
-        """Set up test fixtures."""
-        # Reset singleton instance for each test
+    def setup_method(self):
         AutoRTHandler._instance = None
         self.handler = AutoRTHandler.get_instance()
 
-    def tearDown(self):
-        """Clean up after each test."""
-        # Stop any running loops
+    def teardown_method(self):
         if self.handler._loop_running:
             self.handler.stop_loop()
-            time.sleep(0.1)  # Allow thread to finish
+            time.sleep(0.1)
 
-        # Reset singleton
         AutoRTHandler._instance = None
 
     def test_singleton_pattern(self):
-        """Test that AutoRTHandler follows singleton pattern."""
         handler1 = AutoRTHandler.get_instance()
         handler2 = AutoRTHandler.get_instance()
 
-        self.assertIs(handler1, handler2, "Should return same instance")
-        self.assertIs(handler1, self.handler, "Should match initial instance")
+        assert handler1 is handler2
+        assert handler1 is self.handler
 
     def test_initial_state(self):
-        self.assertIsNone(
-            self.handler._orchestrator, "Orchestrator should be lazy-initialized"
-        )
-        self.assertIsNone(self.handler._loop_thread, "No loop thread initially")
-        self.assertFalse(self.handler._loop_running, "Loop should not be running")
-        self.assertEqual(
-            len(self.handler._pending_tasks), 0, "No pending tasks initially"
-        )
-        self.assertIsNone(self.handler._task_callback, "No callback initially")
+        assert self.handler._orchestrator is None
+        assert self.handler._loop_thread is None
+        assert not self.handler._loop_running
+        assert len(self.handler._pending_tasks) == 0
+        assert self.handler._task_callback is None
 
     def test_set_task_callback(self):
         mock_callback = Mock()
         self.handler.set_task_callback(mock_callback)
 
-        self.assertEqual(self.handler._task_callback, mock_callback)
+        assert self.handler._task_callback == mock_callback
 
     def test_generate_tasks_success(self):
-        # Mock AutoRTOrchestrator by pre-setting it on the handler
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
 
-        # Mock scene capture
         from autort.DataModels import SceneDescription
 
         mock_scene = SceneDescription(
@@ -97,46 +72,39 @@ class TestAutoRTHandler(unittest.TestCase):
         )
         mock_orchestrator._capture_scene.return_value = mock_scene
 
-        # Mock task candidates (ProposedTask objects)
         task1 = _make_task("Task 1", task_id="t1")
         task2 = _make_task("Task 2", task_id="t2")
         mock_candidates = [task1, task2]
         mock_orchestrator.task_generator.generate_tasks.return_value = mock_candidates
 
-        # Mock constitution approval
         mock_verdict = MagicMock()
         mock_verdict.approved = True
         mock_verdict.warnings = []
         mock_orchestrator.constitution.evaluate_task.return_value = mock_verdict
 
-        # Mock selection
         mock_orchestrator.task_selector.select_task.side_effect = mock_candidates + [
             None
         ]
 
-        # Generate tasks with safety validation disabled to avoid the full stack
         with patch("servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION", False):
             result = self.handler.generate_tasks(
                 num_tasks=2, robot_ids=["Robot1", "Robot2"]
             )
 
-        # Assertions
-        self.assertTrue(result["success"], "Should succeed")
-        self.assertEqual(len(result["tasks"]), 2, "Should return 2 tasks")
-        self.assertIsNone(result["error"], "Should have no error")
-        self.assertFalse(result["loop_running"], "Loop should not be running")
+        assert result["success"]
+        assert len(result["tasks"]) == 2
+        assert result["error"] is None
+        assert not result["loop_running"]
 
-        # Check tasks have required fields
         for task in result["tasks"]:
-            self.assertIn("task_id", task)
-            self.assertIn("description", task)
-            self.assertIn("operations", task)
-            self.assertIn("required_robots", task)
-            self.assertIn("estimated_complexity", task)
-            self.assertIn("reasoning", task)
+            assert "task_id" in task
+            assert "description" in task
+            assert "operations" in task
+            assert "required_robots" in task
+            assert "estimated_complexity" in task
+            assert "reasoning" in task
 
-        # Verify tasks are cached
-        self.assertEqual(len(self.handler._pending_tasks), 2, "Tasks should be cached")
+        assert len(self.handler._pending_tasks) == 2
 
     def test_generate_tasks_validation_filters_invalid(self):
         mock_orchestrator = MagicMock()
@@ -155,7 +123,6 @@ class TestAutoRTHandler(unittest.TestCase):
         mock_candidates = [task_valid1, task_invalid, task_valid2]
         mock_orchestrator.task_generator.generate_tasks.return_value = mock_candidates
 
-        # Second task is rejected by constitution
         def mock_evaluate(task, scene):
             verdict = MagicMock()
             verdict.warnings = []
@@ -174,8 +141,8 @@ class TestAutoRTHandler(unittest.TestCase):
 
         result = self.handler.generate_tasks(num_tasks=3)
 
-        self.assertTrue(result["success"])
-        self.assertEqual(len(result["tasks"]), 2, "Should only return valid tasks")
+        assert result["success"]
+        assert len(result["tasks"]) == 2
 
     def test_generate_tasks_no_candidates(self):
         mock_orchestrator = MagicMock()
@@ -191,49 +158,45 @@ class TestAutoRTHandler(unittest.TestCase):
 
         result = self.handler.generate_tasks()
 
-        self.assertTrue(result["success"], "Should succeed even with no tasks")
-        self.assertEqual(len(result["tasks"]), 0, "Should return empty list")
-        self.assertIsNone(result["error"])
+        assert result["success"]
+        assert len(result["tasks"]) == 0
+        assert result["error"] is None
 
     def test_generate_tasks_error_handling(self):
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
 
-        # Simulate error during scene capture
         mock_orchestrator._capture_scene.side_effect = Exception("Scene capture failed")
 
         result = self.handler.generate_tasks()
 
-        self.assertFalse(result["success"], "Should fail")
-        self.assertEqual(len(result["tasks"]), 0)
-        self.assertIsNotNone(result["error"])
-        self.assertIn("Scene capture failed", result["error"])
+        assert not result["success"]
+        assert len(result["tasks"]) == 0
+        assert result["error"] is not None
+        assert "Scene capture failed" in result["error"]
 
     def test_start_loop_success(self):
         result = self.handler.start_loop(loop_delay=0.1)
 
-        self.assertTrue(result["success"])
-        self.assertTrue(result["loop_running"])
-        self.assertIsNone(result["error"])
+        assert result["success"]
+        assert result["loop_running"]
+        assert result["error"] is None
 
-        # Verify loop is actually running
-        self.assertTrue(self.handler._loop_running)
-        self.assertIsNotNone(self.handler._loop_thread)
+        assert self.handler._loop_running
+        assert self.handler._loop_thread is not None
         if self.handler._loop_thread is not None:
-            self.assertTrue(self.handler._loop_thread.is_alive())
+            assert self.handler._loop_thread.is_alive()
 
     def test_start_loop_already_running(self):
         self.handler.start_loop(loop_delay=0.1)
 
-        # Try to start again
         result = self.handler.start_loop()
 
-        self.assertTrue(result["success"])
-        self.assertTrue(result["loop_running"])
-        self.assertIn("already running", result["error"].lower())
+        assert result["success"]
+        assert result["loop_running"]
+        assert "already running" in result["error"].lower()
 
     def test_stop_loop_success(self):
-        # Pre-set mock orchestrator so the loop thread doesn't try to initialize the real one
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
         from autort.DataModels import SceneDescription
@@ -244,114 +207,94 @@ class TestAutoRTHandler(unittest.TestCase):
         mock_orchestrator._capture_scene.return_value = mock_scene
         mock_orchestrator.task_generator.generate_tasks.return_value = []
 
-        # Start loop first
         with patch("servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION", False):
-            self.handler.start_loop(
-                loop_delay=60.0
-            )  # Long delay so loop sleeps after 1st iter
-        time.sleep(0.1)  # Let it start and complete first iteration
+            self.handler.start_loop(loop_delay=60.0)
+        time.sleep(0.1)
 
-        # Stop loop
         result = self.handler.stop_loop()
 
-        self.assertTrue(result["success"])
-        self.assertFalse(result["loop_running"])
-        self.assertIsNone(result["error"])
+        assert result["success"]
+        assert not result["loop_running"]
+        assert result["error"] is None
 
-        # Verify loop is stopped
-        self.assertFalse(self.handler._loop_running)
+        assert not self.handler._loop_running
 
-        # Wait for thread to finish
         if self.handler._loop_thread:
             self.handler._loop_thread.join(timeout=2.0)
-            self.assertFalse(self.handler._loop_thread.is_alive())
+            assert not self.handler._loop_thread.is_alive()
 
     def test_stop_loop_not_running(self):
         result = self.handler.stop_loop()
 
-        self.assertTrue(result["success"])
-        self.assertFalse(result["loop_running"])
+        assert result["success"]
+        assert not result["loop_running"]
 
     def test_execute_task_success(self):
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
 
-        # Cache a ProposedTask object
         task = _make_task("Test task")
         task_id = self.handler._cache_task(task)
 
-        # Mock execution
         mock_orchestrator._execute_task.return_value = {"success": True, "error": None}
 
-        # Execute
         result = self.handler.execute_task(task_id)
 
-        self.assertTrue(result["success"])
-        self.assertIsNone(result["error"])
-        self.assertIsNotNone(result["result"])
+        assert result["success"]
+        assert result["error"] is None
+        assert result["result"] is not None
 
-        # Verify task removed from cache
         with self.handler._task_lock:
-            self.assertNotIn(task_id, self.handler._pending_tasks)
+            assert task_id not in self.handler._pending_tasks
 
     def test_execute_task_not_found(self):
-        """Test executing non-existent task."""
         result = self.handler.execute_task("nonexistent_task_id")
 
-        self.assertFalse(result["success"])
-        self.assertIsNone(result["result"])
-        self.assertIn("not found", result["error"].lower())
+        assert not result["success"]
+        assert result["result"] is None
+        assert "not found" in result["error"].lower()
 
     def test_execute_task_error(self):
-        # execute_task submits asynchronously; to test error path directly,
-        # we verify that a missing task returns the not-found error response.
         result = self.handler.execute_task("nonexistent_id_for_error_test")
 
-        self.assertFalse(result["success"])
-        self.assertIsNone(result["result"])
-        self.assertIsNotNone(result["error"])
+        assert not result["success"]
+        assert result["result"] is None
+        assert result["error"] is not None
 
     def test_get_status(self):
-        # Cache some tasks
         self.handler._cache_task(_make_task("Task 1"))
         self.handler._cache_task(_make_task("Task 2"))
 
         status = self.handler.get_status()
 
-        self.assertTrue(status["success"])
-        self.assertFalse(status["loop_running"])
-        self.assertEqual(status["pending_tasks_count"], 2)
-        self.assertIn("loop_config", status)
-        self.assertIsNone(status["error"])
+        assert status["success"]
+        assert not status["loop_running"]
+        assert status["pending_tasks_count"] == 2
+        assert "loop_config" in status
+        assert status["error"] is None
 
     def test_task_caching(self):
         task = _make_task("Test task")
 
         task_id = self.handler._cache_task(task)
 
-        # Verify cached
         with self.handler._task_lock:
-            self.assertIn(task_id, self.handler._pending_tasks)
+            assert task_id in self.handler._pending_tasks
             cached_task, _ = self.handler._pending_tasks[task_id]
-            self.assertIs(cached_task, task)
+            assert cached_task is task
 
     def test_cache_size_limit(self):
-        # Fill cache to limit
         for i in range(TASK_CACHE_SIZE + 5):
             task = _make_task(f"Task {i}")
             self.handler._cache_task(task)
 
-        # Verify cache doesn't exceed limit
         with self.handler._task_lock:
-            self.assertLessEqual(len(self.handler._pending_tasks), TASK_CACHE_SIZE)
+            assert len(self.handler._pending_tasks) <= TASK_CACHE_SIZE
 
     def test_cleanup_expired_tasks(self):
-        """Test that expired tasks are cleaned up."""
-        # Cache a task
         task = _make_task("Test")
         task_id = self.handler._cache_task(task)
 
-        # Manually set timestamp to expired
         from datetime import datetime, timedelta
 
         with self.handler._task_lock:
@@ -360,17 +303,14 @@ class TestAutoRTHandler(unittest.TestCase):
             )
             self.handler._pending_tasks[task_id] = (task, expired_time)
 
-        # Run cleanup
         self.handler._cleanup_expired_tasks()
 
-        # Verify task removed
         with self.handler._task_lock:
-            self.assertNotIn(task_id, self.handler._pending_tasks)
+            assert task_id not in self.handler._pending_tasks
 
     def test_serialize_task(self):
         from autort.DataModels import ProposedTask, Operation
 
-        # Create a ProposedTask object (not a dict) to match method signature
         task = ProposedTask(
             task_id="test_task_123",
             description="Move to position",
@@ -385,13 +325,12 @@ class TestAutoRTHandler(unittest.TestCase):
 
         serialized = self.handler._serialize_task(task)
 
-        # Verify all required fields
-        self.assertEqual(serialized["task_id"], "test_task_123")
-        self.assertEqual(serialized["description"], "Move to position")
-        self.assertEqual(len(serialized["operations"]), 2)
-        self.assertEqual(serialized["required_robots"], ["Robot1"])
-        self.assertEqual(serialized["estimated_complexity"], 3)
-        self.assertEqual(serialized["reasoning"], "Need to pick up object")
+        assert serialized["task_id"] == "test_task_123"
+        assert serialized["description"] == "Move to position"
+        assert len(serialized["operations"]) == 2
+        assert serialized["required_robots"] == ["Robot1"]
+        assert serialized["estimated_complexity"] == 3
+        assert serialized["reasoning"] == "Need to pick up object"
 
     def test_loop_worker_generates_tasks(self):
         mock_orchestrator = MagicMock()
@@ -407,7 +346,6 @@ class TestAutoRTHandler(unittest.TestCase):
         mock_orchestrator.task_generator.generate_tasks.return_value = [loop_task]
         mock_orchestrator.task_selector.select_task.return_value = loop_task
 
-        # Set up callback to track calls
         callback_called = threading.Event()
         received_tasks = []
 
@@ -417,22 +355,17 @@ class TestAutoRTHandler(unittest.TestCase):
 
         self.handler.set_task_callback(mock_callback)
 
-        # Start loop with short delay (safety validation disabled for speed)
         with patch("servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION", False):
             self.handler.start_loop(loop_delay=0.2, robot_ids=["Robot1"])
 
-        # Wait for at least one callback
         callback_called.wait(timeout=1.0)
 
-        # Stop loop
         self.handler.stop_loop()
 
-        # Verify callback was called with tasks
-        self.assertGreater(len(received_tasks), 0, "Callback should be called")
-        self.assertIn("tasks", received_tasks[0])
+        assert len(received_tasks) > 0
+        assert "tasks" in received_tasks[0]
 
     def test_thread_safety(self):
-        """Test thread-safe operations on pending tasks."""
         results = []
 
         def cache_tasks():
@@ -441,21 +374,18 @@ class TestAutoRTHandler(unittest.TestCase):
                 task_id = self.handler._cache_task(task)
                 results.append(task_id)
 
-        # Run multiple threads caching tasks
         threads = [threading.Thread(target=cache_tasks) for _ in range(3)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
 
-        # Verify all tasks cached (within cache size limit)
         with self.handler._task_lock:
-            self.assertLessEqual(len(self.handler._pending_tasks), TASK_CACHE_SIZE)
-            self.assertGreater(len(self.handler._pending_tasks), 0)
+            assert len(self.handler._pending_tasks) <= TASK_CACHE_SIZE
+            assert len(self.handler._pending_tasks) > 0
 
 
-class TestAutoRTProtocol(unittest.TestCase):
-    """Test suite for AutoRT protocol encoding/decoding."""
+class TestAutoRTProtocol:
 
     def test_command_encoding_decoding(self):
         from core.UnityProtocol import UnityProtocol
@@ -464,19 +394,16 @@ class TestAutoRTProtocol(unittest.TestCase):
         params = {"num_tasks": 5, "robot_ids": ["Robot1", "Robot2"]}
         request_id = 12345
 
-        # Encode
         encoded = UnityProtocol.encode_autort_command(command_type, params, request_id)
 
-        # Decode
         decoded_request_id, decoded_command, decoded_params = (
             UnityProtocol.decode_autort_command(encoded)
         )
 
-        # Verify
-        self.assertEqual(decoded_request_id, request_id)
-        self.assertEqual(decoded_command, command_type)
-        self.assertEqual(decoded_params["num_tasks"], 5)
-        self.assertEqual(decoded_params["robot_ids"], ["Robot1", "Robot2"])
+        assert decoded_request_id == request_id
+        assert decoded_command == command_type
+        assert decoded_params["num_tasks"] == 5
+        assert decoded_params["robot_ids"] == ["Robot1", "Robot2"]
 
     def test_response_encoding_decoding(self):
         from core.UnityProtocol import UnityProtocol
@@ -498,21 +425,14 @@ class TestAutoRTProtocol(unittest.TestCase):
         }
         request_id = 67890
 
-        # Encode
         encoded = UnityProtocol.encode_autort_response(response_data, request_id)
 
-        # Decode
         decoded_request_id, decoded_response = UnityProtocol.decode_autort_response(
             encoded
         )
 
-        # Verify
-        self.assertEqual(decoded_request_id, request_id)
-        self.assertEqual(decoded_response["success"], True)
-        self.assertEqual(len(decoded_response["tasks"]), 1)
-        self.assertEqual(decoded_response["tasks"][0]["task_id"], "task_123")
-        self.assertEqual(decoded_response["loop_running"], False)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert decoded_request_id == request_id
+        assert decoded_response["success"] is True
+        assert len(decoded_response["tasks"]) == 1
+        assert decoded_response["tasks"][0]["task_id"] == "task_123"
+        assert decoded_response["loop_running"] is False

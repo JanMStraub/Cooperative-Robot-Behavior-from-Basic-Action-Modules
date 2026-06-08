@@ -223,15 +223,12 @@ class CommandBroadcaster:
         self.create_completion_queue(request_id)
 
         try:
-            # Send command
             if not self.send_command(command, request_id):
                 return None
 
-            # Wait for completion
             return self.get_completion(request_id, timeout)
 
         finally:
-            # Clean up queue
             self.remove_completion_queue(request_id)
 
     def send_command_to_robot(
@@ -249,13 +246,8 @@ class CommandBroadcaster:
             return False
 
         try:
-            # Add request_id to command
             command["request_id"] = request_id
-
-            # Encode message
             message = UnityProtocol.encode_result_message(command, request_id)
-
-            # Send to specific client
             sent = self._server.send_to_client(client, message)
 
             if sent:
@@ -278,7 +270,6 @@ class CommandServer(TCPServerBase):
             config = ServerConfig(host=DEFAULT_HOST, port=COMMAND_SERVER_PORT)
         super().__init__(config)
 
-        # Initialize broadcaster
         self._broadcaster = CommandBroadcaster()
         self._broadcaster.set_server(self)
 
@@ -297,15 +288,13 @@ class CommandServer(TCPServerBase):
         """Read one completion from Unity. Accepts RESULT and STATUS_RESPONSE types."""
         from core.UnityProtocol import MessageType
 
-        # Read header
         header = self._recv_exact(client, 5)
         if not header:
             return None
 
         msg_type = header[0]
-        request_id = struct.unpack("<I", header[1:5])[0]  # Little-endian to match Unity
+        request_id = struct.unpack("<I", header[1:5])[0]  # little-endian, matches Unity
 
-        # Validate message type - accept both RESULT and STATUS_RESPONSE
         valid_types = [MessageType.RESULT, MessageType.STATUS_RESPONSE]
         if msg_type not in valid_types:
             logger.warning(
@@ -313,18 +302,15 @@ class CommandServer(TCPServerBase):
             )
             return None
 
-        # Read JSON length
         len_bytes = self._recv_exact(client, 4)
         if not len_bytes:
             return None
-        # Little-endian to match Unity
         json_len = struct.unpack("<I", len_bytes)[0]
 
         if json_len > MAX_STRING_LENGTH * 10:
             logger.error(f"Completion too large: {json_len}")
             return None
 
-        # Read JSON data
         json_bytes = self._recv_exact(client, json_len)
         if not json_bytes:
             return None
@@ -333,7 +319,6 @@ class CommandServer(TCPServerBase):
             completion = json.loads(json_bytes.decode("utf-8"))
             completion["request_id"] = request_id
 
-            # Handle world state updates
             if completion.get("type") == "world_state_update":
                 self._handle_world_state_update(completion)
                 # Don't return world state updates as completions

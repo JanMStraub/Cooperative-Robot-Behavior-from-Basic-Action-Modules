@@ -140,11 +140,9 @@ def _execute_grasp_with_follow_target(
             }
             current_position = corrected
 
-            # Step A: move to pre-grasp hover above the new object position.
-            # No orientation constraint here — constraining at hover shrinks the IK
-            # solution space and causes OMPL to fail at borderline reach distances
-            # (same reasoning as _grasp_via_ros_planned for non-top approaches).
-            # Orientation is enforced at descent (Step B) where it matters.
+            # Hover without orientation constraint — constraining at hover shrinks IK
+            # solution space and causes OMPL to fail at borderline reach distances.
+            # Orientation is enforced at descent where it matters.
             logger.info(
                 f"[follow_target] {robot_id}: moving to hover above corrected position"
             )
@@ -171,10 +169,8 @@ def _execute_grasp_with_follow_target(
                 )
                 return False, "sequence aborted"
 
-            # Step B: Move to corrected grasp position.
-            # Uses free-space planner (OMPL) rather than Cartesian descent — the retract
-            # in Step A already lifted the arm clear of the table, so dragging is not a risk.
-            # OMPL is more robust than Cartesian descent at workspace-edge configurations.
+            # Free-space planner (OMPL) rather than Cartesian descent — the retract
+            # above already cleared the table, and OMPL is more robust at workspace edges.
             logger.info(
                 f"[follow_target] {robot_id}: moving to corrected grasp position"
             )
@@ -275,11 +271,7 @@ def _handle_ros_failure(error_msg: str, context: str):
     if _get_control_mode() == "hybrid":
         logger.warning(f"{context}: {error_msg}, falling back to TCP")
         return True, None
-    return False, OperationResult.error_result(
-        "ROS_PLANNING_FAILED",
-        error_msg,
-        ["Check MoveIt logs", "Verify object is reachable"],
-    )
+    return False, OperationResult.error_result("ROS_PLANNING_FAILED", error_msg)
 
 
 def _yaw_from_world_state_or_robot(

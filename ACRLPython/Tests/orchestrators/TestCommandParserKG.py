@@ -1,15 +1,10 @@
-#!/usr/bin/env python3
-"""Tests for CommandParser Knowledge Graph Integration"""
-
-import unittest
+import pytest
 from unittest.mock import MagicMock, patch
 
 
-class TestCommandParserKG(unittest.TestCase):
-    """Tests for CommandParser._get_spatial_context() KG integration."""
+class TestCommandParserKG:
 
     def _make_parser(self):
-        """Create a CommandParser with all heavy dependencies mocked out."""
         with patch("orchestrators.CommandParser.RAGSystem", MagicMock()):
             from orchestrators.CommandParser import CommandParser
 
@@ -18,24 +13,21 @@ class TestCommandParserKG(unittest.TestCase):
             return parser
 
     def test_spatial_context_returns_empty_when_kg_disabled(self):
-        """Returns empty string when KNOWLEDGE_GRAPH_ENABLED is False."""
         parser = self._make_parser()
         with patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", False):
             result = parser._get_spatial_context("Robot1")
-        self.assertEqual(result, "")
+        assert result == ""
 
     def test_spatial_context_returns_empty_when_engine_is_none(self):
-        """Returns empty string when get_graph_query_engine() returns None."""
         parser = self._make_parser()
         with (
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
             patch("core.Imports.get_graph_query_engine", return_value=None),
         ):
             result = parser._get_spatial_context("Robot1")
-        self.assertEqual(result, "")
+        assert result == ""
 
     def test_spatial_context_formats_reachable_objects(self):
-        """Formats reachable objects with distance and color."""
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
@@ -54,13 +46,12 @@ class TestCommandParserKG(unittest.TestCase):
         ):
             result = parser._get_spatial_context("Robot1")
 
-        self.assertIn("red_cube", result)
-        self.assertIn("0.45m", result)
-        self.assertIn("red", result)
-        self.assertIn("SPATIAL CONTEXT", result)
+        assert "red_cube" in result
+        assert "0.45m" in result
+        assert "red" in result
+        assert "SPATIAL CONTEXT" in result
 
     def test_spatial_context_formats_held_object(self):
-        """Appends [held by X] annotation when object is grasped."""
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
@@ -79,10 +70,9 @@ class TestCommandParserKG(unittest.TestCase):
         ):
             result = parser._get_spatial_context("Robot1")
 
-        self.assertIn("held by Robot2", result)
+        assert "held by Robot2" in result
 
     def test_spatial_context_caps_at_five_objects(self):
-        """Only the first 5 reachable objects are included in the context."""
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
@@ -102,14 +92,12 @@ class TestCommandParserKG(unittest.TestCase):
         ):
             result = parser._get_spatial_context("Robot1")
 
-        # Only obj_0 through obj_4 should appear
         for i in range(5):
-            self.assertIn(f"obj_{i}", result)
+            assert f"obj_{i}" in result
         for i in range(5, 10):
-            self.assertNotIn(f"obj_{i}", result)
+            assert f"obj_{i}" not in result
 
     def test_spatial_context_formats_nearby_robots(self):
-        """Formats nearby robots with distance."""
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = []
@@ -123,13 +111,10 @@ class TestCommandParserKG(unittest.TestCase):
         ):
             result = parser._get_spatial_context("Robot1")
 
-        # No objects → header only, so should return empty (no data)
-        # But nearby robot was present — expect it in result
-        self.assertIn("Robot2", result)
-        self.assertIn("0.18m", result)
+        assert "Robot2" in result
+        assert "0.18m" in result
 
     def test_spatial_context_suppresses_exceptions(self):
-        """Returns empty string when any exception occurs inside the method."""
         parser = self._make_parser()
         with (
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
@@ -138,10 +123,9 @@ class TestCommandParserKG(unittest.TestCase):
             ),
         ):
             result = parser._get_spatial_context("Robot1")
-        self.assertEqual(result, "")
+        assert result == ""
 
     def test_spatial_context_returns_empty_when_no_data(self):
-        """Returns empty string when KG has no objects and no nearby robots."""
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = []
@@ -153,10 +137,9 @@ class TestCommandParserKG(unittest.TestCase):
         ):
             result = parser._get_spatial_context("Robot1")
 
-        self.assertEqual(result, "")
+        assert result == ""
 
     def test_spatial_context_includes_handoff_candidates(self):
-        """Handoff candidates are formatted when both robots can reach the object."""
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
@@ -186,12 +169,11 @@ class TestCommandParserKG(unittest.TestCase):
                 "Robot1", command_text="handoff red_cube to Robot2"
             )
 
-        self.assertIn("Handoff red_cube with Robot2", result)
-        self.assertIn("r1=0.40m", result)
-        self.assertIn("r2=0.40m", result)
+        assert "Handoff red_cube with Robot2" in result
+        assert "r1=0.40m" in result
+        assert "r2=0.40m" in result
 
     def test_spatial_context_no_handoff_when_empty_candidates(self):
-        """No handoff line added when get_handoff_candidates returns empty list."""
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
@@ -212,10 +194,9 @@ class TestCommandParserKG(unittest.TestCase):
         ):
             result = parser._get_spatial_context("Robot1")
 
-        self.assertNotIn("Handoff", result)
+        assert "Handoff" not in result
 
     def test_spatial_context_path_clear(self):
-        """Path line shows 'clear' when is_path_blocked returns False."""
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
@@ -237,11 +218,10 @@ class TestCommandParserKG(unittest.TestCase):
         ):
             result = parser._get_spatial_context("Robot1", target=(0.3, 0.2, 0.1))
 
-        self.assertIn("Path to target: clear", result)
+        assert "Path to target: clear" in result
         mock_qe.is_path_blocked.assert_called_once_with("Robot1", (0.3, 0.2, 0.1))
 
     def test_spatial_context_path_blocked(self):
-        """Path line shows 'BLOCKED' when is_path_blocked returns True."""
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
@@ -263,10 +243,9 @@ class TestCommandParserKG(unittest.TestCase):
         ):
             result = parser._get_spatial_context("Robot1", target=(0.3, 0.2, 0.1))
 
-        self.assertIn("Path to target: BLOCKED", result)
+        assert "Path to target: BLOCKED" in result
 
     def test_spatial_context_no_path_check_when_no_target(self):
-        """No path line when target is not provided."""
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
@@ -287,12 +266,11 @@ class TestCommandParserKG(unittest.TestCase):
         ):
             result = parser._get_spatial_context("Robot1")
 
-        self.assertNotIn("Path to target", result)
+        assert "Path to target" not in result
         mock_qe.is_path_blocked.assert_not_called()
 
 
-class TestCommandParserBetweenPrompt(unittest.TestCase):
-    """Verify the BETWEEN PLACEMENT block is present in the system prompt."""
+class TestCommandParserBetweenPrompt:
 
     def _get_prompt(self, robot_id="Robot1"):
         with patch("orchestrators.CommandParser.RAGSystem", MagicMock()):
@@ -304,33 +282,24 @@ class TestCommandParserBetweenPrompt(unittest.TestCase):
             return builder.build("place between blue and red cube", robot_id)
 
     def test_between_section_header_present(self):
-        """Prompt includes the BETWEEN PLACEMENT section."""
         prompt = self._get_prompt()
-        self.assertIn("BETWEEN PLACEMENT", prompt)
+        assert "BETWEEN PLACEMENT" in prompt
 
     def test_between_prompt_mentions_arithmetic(self):
-        """Prompt documents multi-variable arithmetic expressions."""
         prompt = self._get_prompt()
-        self.assertIn("$blue_obj", prompt)
-        self.assertIn("$red_obj", prompt)
+        assert "$blue_obj" in prompt
+        assert "$red_obj" in prompt
 
     def test_between_prompt_has_midpoint_example(self):
-        """Prompt contains the midpoint averaging example."""
         prompt = self._get_prompt()
-        self.assertIn("blue_obj.x + $red_obj.x", prompt)
-        self.assertIn("/ 2", prompt)
+        assert "blue_obj.x + $red_obj.x" in prompt
+        assert "/ 2" in prompt
 
     def test_between_prompt_mentions_parallel_groups(self):
-        """Prompt explains that detects can share a parallel_group."""
         prompt = self._get_prompt()
-        self.assertIn("parallel_group", prompt)
+        assert "parallel_group" in prompt
 
     def test_between_prompt_uses_two_capture_vars(self):
-        """Example uses two different capture_var names."""
         prompt = self._get_prompt()
-        self.assertIn("blue_obj", prompt)
-        self.assertIn("red_obj", prompt)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert "blue_obj" in prompt
+        assert "red_obj" in prompt

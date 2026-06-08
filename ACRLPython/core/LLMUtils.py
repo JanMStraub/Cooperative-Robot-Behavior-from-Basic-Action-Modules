@@ -24,10 +24,27 @@ _TUPLE_RE = re.compile(
     r",\s*(-?[\d.]+(?:e[+-]?\d+)?)\)"
 )
 
+# Matches simple arithmetic expressions in JSON numeric positions, e.g. -0.09 + 0.05
+# LLMs sometimes emit these instead of pre-computed values.
+_ARITHMETIC_RE = re.compile(
+    r"(-?[\d.]+(?:e[+-]?\d+)?)\s*([+\-])\s*([\d.]+(?:e[+-]?\d+)?)"
+)
+
 
 def _sanitize_tuples(s: str) -> str:
     """Replace Python tuple coordinate syntax ``(x, y, z)`` with JSON arrays ``[x, y, z]``."""
     return _TUPLE_RE.sub(r"[\1, \2, \3]", s)
+
+
+def _sanitize_arithmetic(s: str) -> str:
+    """Evaluate simple ``a + b`` / ``a - b`` expressions so JSON can parse numeric fields."""
+
+    def _eval(m: re.Match) -> str:
+        a, op, b = float(m.group(1)), m.group(2), float(m.group(3))
+        result = a + b if op == "+" else a - b
+        return repr(result)
+
+    return _ARITHMETIC_RE.sub(_eval, s)
 
 
 def extract_json(content: str) -> Optional[Dict]:
@@ -45,15 +62,10 @@ def extract_json(content: str) -> Optional[Dict]:
        markdown fences, wrapped as ``{"commands": [...]}``.
 
     Returns ``None`` and logs an error if all stages fail.
-
-    Args:
-        content: Raw LLM response text.
-
-    Returns:
-        Parsed dict, or None if the response could not be decoded.
     """
-    # Pre-process: replace Python tuple coordinate syntax before any JSON parse.
+    # Pre-process: replace Python tuple syntax and inline arithmetic before any JSON parse.
     content = _sanitize_tuples(content)
+    content = _sanitize_arithmetic(content)
     try:
         return json.loads(content)
     except json.JSONDecodeError as e:

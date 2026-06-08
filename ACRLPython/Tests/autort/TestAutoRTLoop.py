@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""
-Test AutoRT Orchestration Loop
-
-Integration tests for the main AutoRT loop.
-"""
-
 import pytest
 import time
 from unittest.mock import Mock, MagicMock, patch
@@ -20,7 +13,6 @@ from autort.DataModels import (
 
 @pytest.fixture
 def mock_config():
-    """Mock AutoRT config"""
     config = Mock()
     config.DEFAULT_ROBOTS = ["Robot1", "Robot2"]
     config.HUMAN_IN_LOOP_DEFAULT = False  # Disable for automated testing
@@ -33,7 +25,6 @@ def mock_config():
 
 @pytest.fixture
 def mock_registry():
-    """Mock operation registry"""
     registry = Mock()
     registry.execute_operation_by_name = Mock(return_value=Mock(success=False))
     return registry
@@ -41,7 +32,6 @@ def mock_registry():
 
 @pytest.fixture
 def mock_world_state():
-    """Mock WorldState"""
     world_state = Mock()
     world_state.get_all_objects = Mock(return_value=[])
     world_state.get_robot_state = Mock(return_value=None)
@@ -51,7 +41,6 @@ def mock_world_state():
 
 @pytest.fixture
 def sample_scene():
-    """Sample scene with objects"""
     return SceneDescription(
         timestamp=time.time(),
         objects=[
@@ -70,7 +59,6 @@ def sample_scene():
 
 @pytest.fixture
 def sample_task():
-    """Sample proposed task"""
     return ProposedTask(
         task_id="task_001",
         description="Pick red cube",
@@ -92,11 +80,7 @@ def sample_task():
     )
 
 
-# Initialization Tests
-
-
 def test_orchestrator_init_defaults():
-    """AutoRTOrchestrator initializes with defaults"""
     with patch("autort.AutoRTLoop.config") as mock_cfg:
         mock_cfg.DEFAULT_ROBOTS = ["Robot1"]
         mock_cfg.HUMAN_IN_LOOP_DEFAULT = True
@@ -116,7 +100,6 @@ def test_orchestrator_init_defaults():
 
 
 def test_orchestrator_init_custom():
-    """AutoRTOrchestrator accepts custom parameters"""
     with patch("autort.AutoRTLoop.get_global_registry"):
         with patch("autort.AutoRTLoop.get_world_state"):
             orchestrator = AutoRTOrchestrator(
@@ -133,7 +116,6 @@ def test_orchestrator_init_custom():
 
 
 def test_orchestrator_autonomous_overrides_human_in_loop():
-    """Autonomous flag overrides human_in_loop"""
     with patch("autort.AutoRTLoop.get_global_registry"):
         with patch("autort.AutoRTLoop.get_world_state"):
             orchestrator = AutoRTOrchestrator(
@@ -143,11 +125,7 @@ def test_orchestrator_autonomous_overrides_human_in_loop():
             assert orchestrator.human_in_loop is False
 
 
-# Scene Capture Tests
-
-
 def test_capture_scene_stereo_detection(mock_config, mock_registry, mock_world_state):
-    """Scene capture uses detect_object_stereo"""
     # Mock detection result
     detection_result = Mock(
         success=True,
@@ -191,7 +169,6 @@ def test_capture_scene_stereo_detection(mock_config, mock_registry, mock_world_s
 
 
 def test_capture_scene_supplements_with_world_state(mock_config, mock_registry):
-    """Scene capture supplements with WorldState objects"""
     # Mock empty detection
     mock_registry.execute_operation_by_name = Mock(return_value=Mock(success=False))
 
@@ -224,7 +201,6 @@ def test_capture_scene_supplements_with_world_state(mock_config, mock_registry):
 
 
 def test_capture_scene_deduplicates_objects(mock_config, mock_registry):
-    """Scene capture avoids duplicating objects from stereo and WorldState"""
     # Mock detection with one object
     detection_result = Mock(
         success=True,
@@ -271,11 +247,7 @@ def test_capture_scene_deduplicates_objects(mock_config, mock_registry):
                             assert len(scene.objects) == 1
 
 
-# Task Execution Tests
-
-
 def test_execute_task_converts_to_sequence_format(mock_config, sample_task):
-    """Task execution converts ProposedTask to SequenceExecutor format"""
     mock_executor = Mock()
     mock_executor.execute_sequence = Mock(return_value={"success": True})
 
@@ -302,7 +274,6 @@ def test_execute_task_converts_to_sequence_format(mock_config, sample_task):
 
 
 def test_execute_task_handles_errors(mock_config, sample_task):
-    """Task execution handles exceptions gracefully"""
     mock_executor = Mock()
     mock_executor.execute_sequence = Mock(side_effect=Exception("Execution failed"))
 
@@ -321,11 +292,7 @@ def test_execute_task_handles_errors(mock_config, sample_task):
                         assert "error" in result
 
 
-# Full Iteration Tests
-
-
 def test_run_one_iteration_no_objects_skips(mock_config):
-    """Iteration skips when no objects detected"""
     mock_orchestrator = MagicMock()
     mock_orchestrator._capture_scene = Mock(
         return_value=SceneDescription(
@@ -342,10 +309,9 @@ def test_run_one_iteration_no_objects_skips(mock_config):
 
 
 def test_run_one_iteration_no_tasks_generated_skips(mock_config, sample_scene):
-    """Iteration skips when no tasks generated"""
     mock_orchestrator = MagicMock()
     mock_orchestrator._capture_scene = Mock(return_value=sample_scene)
-    mock_orchestrator.task_generator.generate_tasks = Mock(return_value=[])  # No tasks
+    mock_orchestrator.task_generator.generate_tasks = Mock(return_value=[])
     mock_orchestrator.robot_ids = ["Robot1"]
 
     # Mock config access
@@ -359,7 +325,6 @@ def test_run_one_iteration_no_tasks_generated_skips(mock_config, sample_scene):
 def test_run_one_iteration_all_tasks_rejected_skips(
     mock_config, sample_scene, sample_task
 ):
-    """Iteration skips when all tasks rejected by constitution"""
     mock_orchestrator = MagicMock()
     mock_orchestrator._capture_scene = Mock(return_value=sample_scene)
     mock_orchestrator.task_generator.generate_tasks = Mock(return_value=[sample_task])
@@ -376,7 +341,6 @@ def test_run_one_iteration_all_tasks_rejected_skips(
 
 
 def test_run_one_iteration_full_success(mock_config, sample_scene, sample_task):
-    """Full iteration executes task successfully"""
     mock_orchestrator = MagicMock()
     mock_orchestrator._capture_scene = Mock(return_value=sample_scene)
     mock_orchestrator.task_generator.generate_tasks = Mock(return_value=[sample_task])
@@ -401,11 +365,7 @@ def test_run_one_iteration_full_success(mock_config, sample_scene, sample_task):
     mock_orchestrator.task_selector.update_history.assert_called_once()
 
 
-# Human Approval Tests
-
-
 def test_request_approval_accepts_y(mock_config, sample_task):
-    """Human approval accepts 'y' input"""
     with patch("autort.AutoRTLoop.get_global_registry"):
         with patch("autort.AutoRTLoop.get_world_state"):
             with patch("builtins.input", return_value="y"):
@@ -416,7 +376,6 @@ def test_request_approval_accepts_y(mock_config, sample_task):
 
 
 def test_request_approval_rejects_n(mock_config, sample_task):
-    """Human approval rejects 'n' input"""
     with patch("autort.AutoRTLoop.get_global_registry"):
         with patch("autort.AutoRTLoop.get_world_state"):
             with patch("builtins.input", return_value="n"):
@@ -427,7 +386,6 @@ def test_request_approval_rejects_n(mock_config, sample_task):
 
 
 def test_request_approval_handles_eof(mock_config, sample_task):
-    """Human approval handles EOF gracefully"""
     with patch("autort.AutoRTLoop.get_global_registry"):
         with patch("autort.AutoRTLoop.get_world_state"):
             with patch("builtins.input", side_effect=EOFError):
@@ -437,11 +395,7 @@ def test_request_approval_handles_eof(mock_config, sample_task):
                 assert approved_task is None
 
 
-# Loop Control Tests
-
-
 def test_stop_stops_loop(mock_config):
-    """Stop method stops the loop"""
     with patch("autort.AutoRTLoop.get_global_registry"):
         with patch("autort.AutoRTLoop.get_world_state"):
             orchestrator = AutoRTOrchestrator()

@@ -35,17 +35,14 @@ class VariableResolver:
         if self._registry is None:
             return
 
-        # Get operation definition to access relationships
         op_def = self._registry.get_operation_by_name(operation_name)
         if not op_def or not op_def.relationships:
             return
 
-        # Check if operation has parameter flows
         param_flows = op_def.relationships.parameter_flows
         if not param_flows:
             return
 
-        # Capture each output defined in parameter flows
         for flow in param_flows:
             output_key = flow.source_output_key
 
@@ -71,6 +68,15 @@ class VariableResolver:
                 f"Auto-captured {output_key}={value} to ${var_name} (from {operation_name})"
             )
 
+            # Also store keyed by operation_id so auto_inject_parameters can find it.
+            # auto_inject_parameters uses flow.source_operation (an ID like
+            # "perception_stereo_detect_001") to build the lookup key, while this
+            # function receives the human-readable name ("detect_object_stereo").
+            # Storing under both keys makes both lookup paths work.
+            if op_def.operation_id and op_def.operation_id != operation_name:
+                id_var_name = f"{op_def.operation_id}_{safe_key}"
+                self._variables[id_var_name] = value
+
             # Also store in operation-level dict for easier access
             op_result_var = f"{operation_name}_result"
             if op_result_var not in self._variables:
@@ -82,34 +88,29 @@ class VariableResolver:
     ) -> Dict[str, Any]:
         if self._registry is None:
             return params
-        # Get operation definition to access relationships
         op_def = self._registry.get_operation_by_name(operation_name)
         if not op_def:
             return params
-        relationships = getattr(op_def, "relationships", None)
-        if not relationships:
-            return params
 
-        # Check if operation has parameter flows (inputs from other operations)
-        param_flows = relationships.parameter_flows
-        if not param_flows:
+        # Flows are defined on SOURCE operations, not targets.  Scan all registered
+        # ops to collect flows whose target_operation matches the current op.
+        target_ids = {getattr(op_def, "operation_id", operation_name), operation_name}
+        all_flows: list = []
+        for src_op in self._registry.get_all_operations():
+            relationships = getattr(src_op, "relationships", None)
+            if not relationships:
+                continue
+            for flow in relationships.parameter_flows or []:
+                if flow.target_operation in target_ids:
+                    all_flows.append((src_op.name, src_op.operation_id, flow))
+
+        if not all_flows:
             return params
 
         enhanced_params = dict(params)
 
-        # Inject parameters from previous operations
-        for flow in param_flows:
-            # Check if this flow targets the current operation
-            if (
-                flow.target_operation != op_def.operation_id
-                and flow.target_operation != operation_name
-            ):
-                continue
-
-            # Check if parameter is already provided with a concrete (non-$var) value.
-            # If the existing value is an unresolved $var reference (e.g. "$target.color"),
-            # fall through to auto-inject so the real captured value is used instead of
-            # a literal $var string reaching the downstream operation.
+        for src_name, src_id, flow in all_flows:
+            # Skip if parameter already has a concrete (non-$var) value.
             # None explicitly suppresses injection (caller's intent is preserved).
             target_param = flow.target_input_param
             if target_param in enhanced_params:
@@ -120,34 +121,37 @@ class VariableResolver:
                     )
                     continue
 
-            # Try to get value from captured variables
-            # Dots in source_output_key are stored as underscores (see auto_capture_outputs)
+            # Try both source name and source ID as variable prefix (auto_capture_outputs
+            # stores under the name; the old ID-based key is also stored as an alias).
             safe_key = flow.source_output_key.replace(".", "_")
-            source_var_name = f"{flow.source_operation}_{safe_key}"
-            if source_var_name in self._variables:
-                var_value = self._variables[source_var_name]
+            var_value = None
+            for prefix in (src_name, src_id, flow.source_operation):
+                candidate = f"{prefix}_{safe_key}"
+                if candidate in self._variables:
+                    var_value = self._variables[candidate]
+                    break
 
-                # Special handling for object_id parameter with detection result
-                if target_param == "object_id" and isinstance(var_value, dict):
-                    # Extract object identifier from detection result
-                    # Detection results have 'color' field (e.g., "blue_cube")
-                    if "color" in var_value:
-                        enhanced_params[target_param] = var_value["color"]
-                        logger.info(
-                            f"Auto-injected {target_param}='{var_value['color']}' (extracted from detection result ${source_var_name})"
-                        )
-                    else:
-                        logger.warning(
-                            f"Detection result missing 'color' field, cannot auto-inject {target_param}"
-                        )
-                else:
-                    enhanced_params[target_param] = var_value
+            if var_value is None:
+                logger.debug(
+                    f"No captured value for {src_name}/{src_id}_{safe_key}, cannot auto-inject {target_param}"
+                )
+                continue
+
+            # Special handling for object_id with detection result dict
+            if target_param == "object_id" and isinstance(var_value, dict):
+                if "color" in var_value:
+                    enhanced_params[target_param] = var_value["color"]
                     logger.info(
-                        f"Auto-injected {target_param}={var_value} from ${source_var_name}"
+                        f"Auto-injected {target_param}='{var_value['color']}' (extracted from detection result)"
+                    )
+                else:
+                    logger.warning(
+                        f"Detection result missing 'color' field, cannot auto-inject {target_param}"
                     )
             else:
-                logger.debug(
-                    f"No captured value for {source_var_name}, cannot auto-inject {target_param}"
+                enhanced_params[target_param] = var_value
+                logger.info(
+                    f"Auto-injected {target_param}={var_value} from {src_name}_{safe_key}"
                 )
 
         return enhanced_params
@@ -159,7 +163,19 @@ class VariableResolver:
             resolved_value = self.resolve_expression(value)
             if resolved_value is not None:
                 return resolved_value
-            logger.warning(f"Could not resolve expression: {value}")
+            # Find which variable(s) caused the failure for easier diagnosis
+            import re as _re
+
+            _unresolved = [
+                v
+                for v in _re.findall(r"\$[\w.]+", value)
+                if not self._variables.get(v.lstrip("$").split(".")[0])
+            ]
+            logger.warning(
+                f"Could not resolve expression '{value}' "
+                f"(unresolved vars: {_unresolved or 'unknown'}) — "
+                f"returning raw string, downstream type check will fail"
+            )
             return value
 
         # Handle dotted notation (e.g., "$target.x") — resolves to a scalar directly

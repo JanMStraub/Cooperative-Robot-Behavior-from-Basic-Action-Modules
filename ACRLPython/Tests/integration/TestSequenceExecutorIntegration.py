@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Integration tests for SequenceExecutor with Verification
 
@@ -15,14 +14,12 @@ from operations.Base import OperationResult, BasicOperation, OperationCategory
 
 
 class TestSequenceExecutorVerification:
-    """Test SequenceExecutor with verification enabled"""
 
     @patch("operations.Registry.get_global_registry")
     @patch("orchestrators.SequenceExecutor.OperationVerifier")
     def test_verification_enabled_blocks_bad_operation(
         self, mock_verifier_class, mock_registry, cleanup_world_state
     ):
-        """Test verification blocks operation with failed preconditions"""
         # Setup mock operation
         mock_op = Mock(spec=BasicOperation)
         mock_op.name = "move_to_coordinate"
@@ -69,7 +66,6 @@ class TestSequenceExecutorVerification:
 
     @patch("operations.Registry.get_global_registry")
     def test_verification_disabled_no_checks(self, mock_registry, cleanup_world_state):
-        """Test no verification when disabled"""
         # Setup mock operation
         mock_op = Mock(spec=BasicOperation)
         mock_op.name = "move_to_coordinate"
@@ -113,7 +109,6 @@ class TestSequenceExecutorVerification:
     def test_precondition_fails_blocks_execution(
         self, mock_verifier_class, mock_registry, cleanup_world_state
     ):
-        """Test precondition failure blocks execution"""
         mock_op = Mock(spec=BasicOperation)
         mock_op.name = "control_gripper"
         mock_op.category = OperationCategory.MANIPULATION
@@ -162,7 +157,6 @@ class TestSequenceExecutorVerification:
         mock_registry,
         cleanup_world_state,
     ):
-        """Test multi-robot conflict detected and blocks execution"""
         mock_op = Mock(spec=BasicOperation)
         mock_op.name = "move_to_coordinate"
         mock_op.category = OperationCategory.NAVIGATION
@@ -214,7 +208,6 @@ class TestSequenceExecutorVerification:
     def test_postcondition_warning_logged(
         self, mock_verifier_class, mock_registry, cleanup_world_state
     ):
-        """Test postcondition violation logged as warning"""
         mock_op = Mock(spec=BasicOperation)
         mock_op.name = "move_to_coordinate"
         mock_op.category = OperationCategory.NAVIGATION
@@ -268,7 +261,6 @@ class TestSequenceExecutorVerification:
     def test_verification_recovery_suggestions_included(
         self, mock_verifier_class, mock_registry, cleanup_world_state
     ):
-        """Test error includes recovery suggestions"""
         mock_op = Mock(spec=BasicOperation)
         mock_op.name = "move_to_coordinate"
         mock_op.category = OperationCategory.NAVIGATION
@@ -309,18 +301,13 @@ class TestSequenceExecutorVerification:
         assert len(error_str) > 0
 
 
-# End-to-End Integration Tests
-
-
 class TestSequenceExecutorEndToEnd:
-    """Test end-to-end command execution flows"""
 
     @patch("operations.Registry.get_global_registry")
     @patch("servers.CommandServer.get_command_broadcaster")
     def test_e2e_detect_and_move(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test end-to-end detect then move workflow"""
         # Mock detect operation
         detect_op = Mock(spec=BasicOperation)
         detect_op.name = "detect_object_stereo"
@@ -391,7 +378,6 @@ class TestSequenceExecutorEndToEnd:
     def test_e2e_detect_move_grip(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test full pick-up workflow: detect, move, grip"""
         # Setup mock operations
         operations = {
             "detect_object_stereo": Mock(
@@ -471,7 +457,6 @@ class TestSequenceExecutorEndToEnd:
     def test_e2e_multi_robot_coordination(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test multi-robot coordinated movements"""
         move_op = Mock(
             spec=BasicOperation,
             name="move_to_coordinate",
@@ -513,11 +498,9 @@ class TestSequenceExecutorEndToEnd:
 
 
 class TestSequenceExecutorErrorPropagation:
-    """Test error propagation through sequence execution"""
 
     @patch("operations.Registry.get_global_registry")
     def test_e2e_detection_fails(self, mock_registry, cleanup_world_state):
-        """Test sequence stops when detection fails"""
         detect_op = Mock(
             spec=BasicOperation,
             name="detect_object_stereo",
@@ -569,7 +552,6 @@ class TestSequenceExecutorErrorPropagation:
     def test_e2e_movement_timeout(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test timeout handling during movement"""
         move_op = Mock(
             spec=BasicOperation,
             name="move_to_coordinate",
@@ -609,7 +591,6 @@ class TestSequenceExecutorErrorPropagation:
 
     @patch("operations.Registry.get_global_registry")
     def test_e2e_gripper_fails(self, mock_registry, cleanup_world_state):
-        """Test gripper failure handling"""
         gripper_op = Mock(
             spec=BasicOperation,
             name="control_gripper",
@@ -647,7 +628,6 @@ class TestSequenceExecutorErrorPropagation:
     def test_e2e_coordination_conflict(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test coordination conflict during execution"""
         move_op = Mock(
             spec=BasicOperation,
             name="move_to_coordinate",
@@ -700,14 +680,12 @@ class TestSequenceExecutorErrorPropagation:
 
 
 class TestComplexSequences:
-    """Test complex multi-step sequences"""
 
     @patch("operations.Registry.get_global_registry")
     @patch("servers.CommandServer.get_command_broadcaster")
     def test_handoff_between_robots(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test object handoff between two robots"""
         operations = {
             "detect_object_stereo": Mock(
                 spec=BasicOperation,
@@ -800,7 +778,6 @@ class TestComplexSequences:
     def test_parallel_movements(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test parallel robot movements"""
         move_op = Mock(
             spec=BasicOperation,
             name="move_to_coordinate",
@@ -846,7 +823,6 @@ class TestComplexSequences:
     def test_compound_command_sequence(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test complex compound sequence with branching logic"""
         operations = {
             "detect_object_stereo": Mock(
                 spec=BasicOperation,
@@ -941,14 +917,12 @@ class TestComplexSequences:
 
 
 class TestVariablePassingIntegration:
-    """Test variable passing between operations"""
 
     @patch("operations.Registry.get_global_registry")
     @patch("servers.CommandServer.get_command_broadcaster")
     def test_variable_capture_and_use(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test capturing detection result and using in move"""
         detect_op = Mock(
             spec=BasicOperation,
             name="detect_object_stereo",
@@ -1021,7 +995,6 @@ class TestVariablePassingIntegration:
     def test_multiple_variable_substitution(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test multiple variables in one command"""
         status_op = Mock(
             spec=BasicOperation,
             name="check_robot_status",
@@ -1078,18 +1051,13 @@ class TestVariablePassingIntegration:
         assert result["success"] is True
 
 
-# Performance and Stress Tests
-
-
 class TestSequenceExecutorPerformance:
-    """Test performance with large sequences"""
 
     @patch("operations.Registry.get_global_registry")
     @patch("servers.CommandServer.get_command_broadcaster")
     def test_large_sequence_execution(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test executing a large sequence (20+ commands)"""
         move_op = Mock(
             spec=BasicOperation,
             name="move_to_coordinate",
@@ -1131,7 +1099,6 @@ class TestSequenceExecutorPerformance:
     def test_rapid_consecutive_commands(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test rapid execution of consecutive commands"""
         gripper_op = Mock(
             spec=BasicOperation,
             name="control_gripper",
@@ -1168,11 +1135,9 @@ class TestSequenceExecutorPerformance:
 
 
 class TestSequenceExecutorEdgeCases:
-    """Test edge cases in integration scenarios"""
 
     @patch("operations.Registry.get_global_registry")
     def test_empty_sequence(self, mock_registry, cleanup_world_state):
-        """Test executing empty sequence"""
         executor = SequenceExecutor(enable_verification=False, check_completion=False)
 
         result = executor.execute_sequence([])
@@ -1182,7 +1147,6 @@ class TestSequenceExecutorEdgeCases:
 
     @patch("operations.Registry.get_global_registry")
     def test_sequence_with_unknown_operation(self, mock_registry, cleanup_world_state):
-        """Test sequence with unknown operation"""
         mock_registry.return_value.get_operation_by_name = Mock(return_value=None)
 
         executor = SequenceExecutor(enable_verification=False, check_completion=False)
@@ -1200,7 +1164,6 @@ class TestSequenceExecutorEdgeCases:
     def test_partial_sequence_failure_recovery(
         self, mock_broadcaster, mock_registry, cleanup_world_state
     ):
-        """Test partial failure and recovery in sequence"""
         move_op = Mock(
             spec=BasicOperation,
             name="move_to_coordinate",
@@ -1257,7 +1220,6 @@ class TestSequenceExecutorEdgeCases:
         assert call_count[0] == 2  # Only first two should execute
 
     def test_variable_resolution_dotted_notation(self, cleanup_world_state):
-        """Test variable resolution with dotted notation ($target.x)"""
         executor = SequenceExecutor(enable_verification=False)
 
         # Simulate a detection result
@@ -1277,7 +1239,6 @@ class TestSequenceExecutorEdgeCases:
         assert isinstance(resolved["z"], float)
 
     def test_variable_resolution_arithmetic_expressions(self, cleanup_world_state):
-        """Test variable resolution with arithmetic expressions ($target.z + 0.05)"""
         executor = SequenceExecutor(enable_verification=False)
 
         # Simulate a detection result
@@ -1295,7 +1256,6 @@ class TestSequenceExecutorEdgeCases:
         assert isinstance(resolved["z"], float)
 
     def test_variable_resolution_complex_expressions(self, cleanup_world_state):
-        """Test variable resolution with more complex arithmetic"""
         executor = SequenceExecutor(enable_verification=False)
 
         executor.set_variable("offset", 0.1)
@@ -1314,7 +1274,6 @@ class TestSequenceExecutorEdgeCases:
         assert resolved["z"] == pytest.approx(0.6, rel=1e-6)
 
     def test_variable_resolution_missing_variable(self, cleanup_world_state):
-        """Test that missing variables are handled gracefully"""
         executor = SequenceExecutor(enable_verification=False)
 
         # Don't set any variables

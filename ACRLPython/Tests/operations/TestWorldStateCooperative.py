@@ -3,7 +3,6 @@ from operations.WorldState import WorldState, RobotState
 
 
 class TestRobotStateIntentFields:
-    """RobotState carries intent fields for joint-attention coordination."""
 
     def test_robot_state_has_moving_toward_object_field(self):
         state = RobotState(robot_id="Robot1")
@@ -41,7 +40,6 @@ class TestRobotStateIntentFields:
 
 
 class TestIntentAwareWorkspaceAllocation:
-    """Workspace allocation respects urgency and estimated duration."""
 
     def _get_region(self):
         from config.Robot import WORKSPACE_REGIONS
@@ -85,7 +83,6 @@ class TestIntentAwareWorkspaceAllocation:
 
 
 class TestTaskOutcomeBroadcasting:
-    """Completed sequences publish outcomes to WorldState for peer robots."""
 
     def test_broadcast_task_outcome_stores_result(self):
         ws = WorldState()
@@ -139,10 +136,8 @@ class TestTaskOutcomeBroadcasting:
 
 
 class TestSupplementObjectFromUnity:
-    """supplement_object_from_unity: vision is authoritative, Unity only fills gaps."""
 
     def _get(self, ws, object_id):
-        """Return raw ObjectState (not the dict serialization)."""
         return ws._objects.get(object_id)
 
     def test_creates_new_object_when_not_in_worldstate(self):

@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for GraspOperations module"""
-
 import pytest
 from unittest.mock import patch, MagicMock
 from operations.GraspOperations import grasp_object, GRASP_OBJECT_OPERATION

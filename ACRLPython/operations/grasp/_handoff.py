@@ -38,7 +38,6 @@ def receive_handoff(
                 return OperationResult.error_result(
                     f"INVALID_{param.upper()}",
                     f"{param} must be a non-empty string, got: {value}",
-                    [f"Provide a valid {param} such as 'Robot2'"],
                 )
 
         try:
@@ -54,6 +53,29 @@ def receive_handoff(
         object_dimensions = None
         receiver_pos = None
         world_state = None
+
+        # Re-detect from the receiver's perspective so WorldState has the object's
+        # current position (it may have moved with the source robot since initial detection).
+        try:
+            from ..VisionOperations import detect_object_stereo as _detect
+
+            _color = object_id.split("_")[0] if "_" in object_id else object_id
+            _det_result = _detect(
+                color=_color, robot_id=robot_id, request_id=request_id
+            )
+            if _det_result.success:
+                _dp = _det_result.result or {}
+                logger.info(
+                    f"receive_handoff: re-detected '{object_id}' via {robot_id} at "
+                    f"({_dp.get('x', 0.0):.3f}, {_dp.get('y', 0.0):.3f}, {_dp.get('z', 0.0):.3f})"
+                )
+            else:
+                logger.warning(
+                    f"receive_handoff: re-detect failed ({_det_result.error}) — "
+                    f"falling back to WorldState"
+                )
+        except Exception as _det_err:
+            logger.warning(f"receive_handoff: re-detect skipped ({_det_err})")
 
         try:
             from core.Imports import get_world_state
@@ -71,7 +93,6 @@ def receive_handoff(
             return OperationResult.error_result(
                 "OBJECT_NOT_IN_WORLD_STATE",
                 f"Object '{object_id}' position not found in WorldState",
-                ["Ensure detect_object_stereo was run before receive_handoff"],
             )
 
         if object_dimensions is None:
@@ -150,12 +171,7 @@ def receive_handoff(
                 return OperationResult.error_result(
                     "APPROACH_UNREACHABLE",
                     f"receive_handoff: approach position ({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f}) "
-                    f"is outside {robot_id}'s reach — {reach_reason}. "
-                    "Source robot should present object closer to the shared workspace.",
-                    [
-                        "Ensure source robot moves object to shared zone before signalling",
-                        "Check handoff position is within receiving robot's workspace",
-                    ],
+                    f"is outside {robot_id}'s reach — {reach_reason}",
                 )
         except Exception as _e:
             logger.warning(
@@ -245,10 +261,9 @@ def receive_handoff(
 
             # Re-read object position and source EE after pre-waypoint completes.
             # By now (~8s elapsed) Robot1 has settled at its handoff position.
-            # Use live WorldState object position for X/Z (50 Hz from Unity = accurate).
-            # EE is read only for Y correction: when the object is held in the air,
-            # stereo detection may return table-level Y. If EE is >10cm above detected Y,
-            # use EE-derived object-center Y instead.
+            # Re-read WorldState at approach time (Robot1 has settled).
+            # If EE is >10cm above detected Y the object has been lifted —
+            # WorldState Y is stale. Use EE-derived Y instead.
             try:
                 _src2 = (
                     world_state.get_robot_state(source_robot_id)
@@ -388,10 +403,6 @@ def receive_handoff(
             return OperationResult.error_result(
                 "MOVE_FAILED",
                 f"receive_handoff: approach failed — {approach_error}",
-                [
-                    "Check for workspace collision",
-                    "Verify approach_position is reachable",
-                ],
             )
 
         from ..GripperOperations import control_gripper
@@ -405,7 +416,6 @@ def receive_handoff(
             return OperationResult.error_result(
                 "GRIPPER_FAILED",
                 f"receive_handoff: gripper close failed — {gripper_result.error}",
-                ["Check gripper state", "Verify object is within gripper reach"],
             )
 
         # Destroy source robot's FixedJoint immediately after closing ours.
@@ -482,11 +492,7 @@ def receive_handoff(
 
     except Exception as e:
         logger.exception(f"Exception in receive_handoff: {e}")
-        return OperationResult.error_result(
-            "EXCEPTION",
-            f"Exception during receive_handoff: {str(e)}",
-            ["Check stack trace in logs", "Verify WorldState is populated"],
-        )
+        return OperationResult.error_result("EXCEPTION", str(e))
 
 
 RECEIVE_HANDOFF_OPERATION = BasicOperation(
@@ -495,33 +501,11 @@ RECEIVE_HANDOFF_OPERATION = BasicOperation(
     category=OperationCategory.COORDINATION,
     complexity=OperationComplexity.COMPLEX,
     description=(
-        "Full receive side of a handoff: orient gripper toward object, move to approach "
-        "position, and close gripper. Approach geometry computed autonomously from WorldState."
+        "Full receive side of a handoff: approach position computed from WorldState, open gripper, move, close. "
+        "Trigger phrases: 'take the object from Robot1', 'accept the handoff', 'receive what Robot1 is offering', "
+        "'grab it from Robot1', 'collect from partner'. "
+        "Call after source robot signals readiness and after detect_object_stereo populates WorldState."
     ),
-    long_description="""
-        High-level operation that handles the complete receive side of a robot-to-robot
-        handoff. Equivalent to grasp_object for the receiving robot.
-
-        Trigger phrases: "take the object from Robot1", "accept the handoff", "receive
-        what Robot1 is offering", "take the object that the other robot is holding",
-        "grab it from Robot1", "pick it up from Robot1", "Robot1 is passing the object",
-        "collect from partner", "take the offered object".
-
-        Autonomously derives approach position (object centre ± half-width + clearance)
-        and gripper orientation from WorldState. No hardcoded coordinates required.
-
-        Internal sequence:
-          1. Fetch object position + dimensions from WorldState.
-          2. Compute near_face_x (reach check, pre-waypoint) and center_x (insert target).
-          3. Open gripper — guarantee maximum jaw width before approach.
-          4. TCP path: move_to_coordinate(center_x) — jaw gap straddles object center.
-             ROS path: pre-waypoint → Cartesian to near_face_x → slow insertion to center_x.
-          5. control_gripper(open_gripper=False) — close symmetrically around object center.
-          6. Emit release_signal so source robot opens in parallel (optional).
-
-        Must be called AFTER the source robot has signalled readiness (r1_at_handoff)
-        and AFTER detect_object_stereo so WorldState has current object geometry.
-    """,
     usage_examples=[
         "Robot2 receives red cube from Robot1: "
         "receive_handoff(robot_id='Robot2', object_id='red_cube', source_robot_id='Robot1')",

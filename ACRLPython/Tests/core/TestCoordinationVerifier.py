@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Unit tests for CoordinationVerifier.py
-
-Tests multi-robot coordination safety verification including collision detection,
-workspace conflicts, object access conflicts, and deadlock detection.
-"""
-
 from unittest.mock import Mock, patch
 from operations.CoordinationVerifier import (
     CoordinationIssue,
@@ -15,14 +7,10 @@ from operations.CoordinationVerifier import (
 )
 from operations.Base import OperationCategory
 
-# Config imports not needed - using fixtures
-
 
 class TestCoordinationIssue:
-    """Test CoordinationIssue dataclass"""
 
     def test_coordination_issue_creation(self):
-        """Test creating a CoordinationIssue"""
         issue = CoordinationIssue(
             issue_type="collision",
             severity="blocking",
@@ -38,7 +26,6 @@ class TestCoordinationIssue:
         assert len(issue.resolution_suggestions) == 2
 
     def test_coordination_issue_defaults(self):
-        """Test default values for CoordinationIssue"""
         issue = CoordinationIssue(
             issue_type="workspace_conflict",
             severity="warning",
@@ -50,10 +37,8 @@ class TestCoordinationIssue:
 
 
 class TestCoordinationCheckResult:
-    """Test CoordinationCheckResult dataclass"""
 
     def test_coordination_check_result_safe(self):
-        """Test safe coordination result"""
         result = CoordinationCheckResult()
 
         assert result.safe is True
@@ -61,7 +46,6 @@ class TestCoordinationCheckResult:
         assert len(result.warnings) == 0
 
     def test_add_issue_blocking(self):
-        """Test adding blocking issue sets safe to False"""
         result = CoordinationCheckResult()
 
         issue = CoordinationIssue(
@@ -78,7 +62,6 @@ class TestCoordinationCheckResult:
         assert len(result.warnings) == 0
 
     def test_add_issue_warning(self):
-        """Test adding warning doesn't set safe to False"""
         result = CoordinationCheckResult()
 
         issue = CoordinationIssue(
@@ -95,7 +78,6 @@ class TestCoordinationCheckResult:
         assert len(result.warnings) == 1
 
     def test_coordination_check_result_to_dict(self):
-        """Test serialization to dictionary"""
         result = CoordinationCheckResult()
         result.checked_robots = ["Robot1", "Robot2"]
 
@@ -117,12 +99,10 @@ class TestCoordinationCheckResult:
 
 
 class TestCoordinationVerifier:
-    """Test CoordinationVerifier"""
 
     def test_verify_multi_robot_safety_navigation(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test navigation operation safety checks"""
         verifier = CoordinationVerifier()
 
         params = {"x": 0.2, "y": 0.1, "z": 0.15}
@@ -138,7 +118,6 @@ class TestCoordinationVerifier:
     def test_verify_multi_robot_safety_manipulation(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test manipulation operation safety checks"""
         verifier = CoordinationVerifier()
 
         params = {"object_id": "test_object", "action": "grasp"}
@@ -156,7 +135,6 @@ class TestCoordinationVerifier:
     def test_check_collision_static_robot(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test static robot too close"""
         verifier = CoordinationVerifier()
 
         # Robot2 is stationary at (0.3, 0.0, 0.1)
@@ -175,7 +153,6 @@ class TestCoordinationVerifier:
     def test_check_collision_moving_robot(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test moving robot path collision detection"""
         verifier = CoordinationVerifier()
 
         # Setup Robot2 as moving
@@ -200,7 +177,6 @@ class TestCoordinationVerifier:
     def test_check_collision_safe(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test no collision case"""
         verifier = CoordinationVerifier()
 
         # Robot2 at (0.3, 0.0, 0.1)
@@ -216,7 +192,6 @@ class TestCoordinationVerifier:
     def test_check_workspace_conflict(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test workspace already allocated"""
         verifier = CoordinationVerifier()
 
         # Mock workspace allocated to Robot2
@@ -235,7 +210,6 @@ class TestCoordinationVerifier:
     def test_check_workspace_conflict_shared_zone_ok(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test shared zone allowed for all robots"""
         verifier = CoordinationVerifier()
 
         # Mock no workspace owner
@@ -252,7 +226,6 @@ class TestCoordinationVerifier:
     def test_check_object_conflict(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test object already grasped"""
         verifier = CoordinationVerifier()
 
         # Mark object as grasped by Robot2
@@ -272,7 +245,6 @@ class TestCoordinationVerifier:
     def test_check_object_conflict_not_tracked(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test object not tracked in world state"""
         verifier = CoordinationVerifier()
 
         params = {"object_id": "nonexistent_object", "action": "grasp"}
@@ -286,7 +258,6 @@ class TestCoordinationVerifier:
     def test_check_deadlock_potential(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test circular workspace dependency detection"""
         verifier = CoordinationVerifier()
 
         # This test is complex - simplified version
@@ -308,7 +279,6 @@ class TestCoordinationVerifier:
             assert issue.severity == "warning"
 
     def test_get_workspace_for_position(self, cleanup_world_state):
-        """Test position to workspace mapping"""
         verifier = CoordinationVerifier()
 
         # Test left_workspace
@@ -329,10 +299,8 @@ class TestCoordinationVerifier:
 
 
 class TestQuickCheckMultiRobotSafety:
-    """Test quick_check_multi_robot_safety helper"""
 
     def test_quick_check_safe(self, mock_world_state_multi_robot, cleanup_world_state):
-        """Test quick check passes for safe operation"""
         params = {"x": -0.5, "y": 0.0, "z": 0.2}
 
         is_safe, result = quick_check_multi_robot_safety(
@@ -346,7 +314,6 @@ class TestQuickCheckMultiRobotSafety:
     def test_quick_check_unsafe(
         self, mock_world_state_multi_robot, cleanup_world_state
     ):
-        """Test quick check detects unsafe operation"""
         # Create scenario where Robot2 is very close
         robot2_state = mock_world_state_multi_robot._robot_states["Robot2"]
         robot2_state.position = (0.25, 0.0, 0.1)

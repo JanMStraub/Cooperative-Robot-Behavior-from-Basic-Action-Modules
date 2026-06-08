@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Shared Base Classes for Singleton Pattern Tests
 ================================================
@@ -50,7 +49,6 @@ class SingletonTestMixin:
         return None
 
     def test_singleton_pattern(self, request):
-        """Test that only one instance of singleton exists."""
         # Get cleanup fixture if specified
         cleanup_fixture = self.get_cleanup_fixture_name()
         if cleanup_fixture and hasattr(request, "getfixturevalue"):
@@ -80,7 +78,6 @@ class SingletonTestMixin:
             assert instances[i] is instances[0]
 
     def test_singleton_thread_safe_initialization(self, request):
-        """Test singleton is thread-safe during concurrent initialization."""
         cleanup_fixture = self.get_cleanup_fixture_name()
         if cleanup_fixture and hasattr(request, "getfixturevalue"):
             try:
@@ -141,7 +138,6 @@ class ResetableSingletonTestMixin(SingletonTestMixin):
         )
 
     def test_singleton_reset(self, request):
-        """Test singleton can be reset/reinitialized."""
         cleanup_fixture = self.get_cleanup_fixture_name()
         if cleanup_fixture and hasattr(request, "getfixturevalue"):
             try:
@@ -173,23 +169,18 @@ class ExampleSingletonTest(SingletonTestMixin):
     """
 
     def get_singleton_instance(self):
-        """Return your singleton instance."""
         # Example:
         # from mymodule import get_my_singleton
         # return get_my_singleton()
         pass
 
     def get_cleanup_fixture_name(self):
-        """Return cleanup fixture name if needed."""
         return "cleanup_my_singleton"
 
     # Now you automatically get:
     # - test_singleton_pattern()
     # - test_singleton_returns_same_instance()
     # - test_singleton_thread_safe_initialization()
-
-
-# Consolidated Singleton Tests
 
 
 class TestConsolidatedSingletons:
@@ -200,7 +191,6 @@ class TestConsolidatedSingletons:
     """
 
     def test_all_singletons_thread_safe(self):
-        """Test all major singletons are thread-safe."""
         from operations.WorldState import get_world_state
         from servers.CommandServer import get_command_broadcaster
 
@@ -235,7 +225,6 @@ class TestConsolidatedSingletons:
                 assert instance is instances[0], f"{name} returned different instances"
 
     def test_all_singletons_return_same_instance(self):
-        """Test all singletons consistently return same instance."""
         from operations.WorldState import get_world_state
         from servers.CommandServer import get_command_broadcaster
 

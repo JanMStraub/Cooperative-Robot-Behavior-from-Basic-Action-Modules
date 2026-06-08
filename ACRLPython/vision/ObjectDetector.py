@@ -511,7 +511,6 @@ class CubeDetector:
                 # Confidence is combination of shape and color match
                 confidence = min((fill_ratio * 0.5 + color_ratio * 0.5) * 1.2, 1.0)
 
-                # Filter by confidence
                 if confidence < self.min_confidence:
                     logging.debug(
                         f"    Contour {i}: Rejected by confidence ({confidence:.2f}, need >={self.min_confidence})"
@@ -531,7 +530,6 @@ class CubeDetector:
                     }
                 )
 
-            # Summary log for each color
             if accepted_count > 0:
                 logging.info(
                     f"  {color_name.upper()}: {accepted_count} cube(s) detected"
@@ -542,17 +540,8 @@ class CubeDetector:
     def _save_debug_image(
         self, image: np.ndarray, detections: List[DetectionObject], camera_id: str
     ):
-        """
-        Save annotated image with bounding boxes for debugging
-
-        Args:
-            image: Original image
-            detections: List of detected objects
-            camera_id: Camera ID for filename
-        """
         debug_image = image.copy()
 
-        # Color map for visualization
         color_map = {
             "red": (0, 0, 255),  # BGR
             "blue": (255, 0, 0),  # BGR
@@ -564,11 +553,9 @@ class CubeDetector:
             "magenta": (255, 0, 255),  # BGR
         }
 
-        # Draw bounding boxes
         for det in detections:
             color = color_map.get(det.color, (0, 255, 0))
 
-            # Draw rectangle
             cv2.rectangle(
                 debug_image,
                 (det.bbox_x, det.bbox_y),
@@ -577,10 +564,8 @@ class CubeDetector:
                 2,
             )
 
-            # Draw center point
             cv2.circle(debug_image, (det.center_x, det.center_y), 5, color, -1)
 
-            # Draw label
             label = f"{det.color} {det.confidence:.2f}"
             cv2.putText(
                 debug_image,
@@ -592,7 +577,6 @@ class CubeDetector:
                 2,
             )
 
-        # Save to debug directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = self.debug_dir / f"{camera_id}_{timestamp}.jpg"
         cv2.imwrite(str(filename), debug_image)

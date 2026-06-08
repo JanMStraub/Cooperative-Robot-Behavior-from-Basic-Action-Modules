@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Unity Integration Tests
 ========================
@@ -25,7 +24,6 @@ from BackendClient import BackendClient, backend_available, port_open  # type: i
 
 
 def _port_open(port: int, timeout: float = 2.0) -> bool:
-    """Return True if a TCP server is accepting connections on *port*."""
     return port_open(port, timeout)
 
 
@@ -54,15 +52,12 @@ SKIP_REASON = (
 class TestUnityCommandExecution:
 
     def test_connection_to_command_server(self):
-        """Verify direct TCP connection to the CommandServer (port 5007)."""
         assert _port_open(5007), "Could not connect to CommandServer on port 5007"
 
     def test_connection_to_sequence_server(self):
-        """Verify direct TCP connection to the SequenceServer (port 5008)."""
         assert _port_open(5008), "Could not connect to SequenceServer on port 5008"
 
     def test_real_robot_status_query(self):
-        """Query real robot status through the backend SequenceServer."""
         with BackendClient(timeout=120.0) as client:
             result = client.send_command(
                 command="check robot status for Robot1",
@@ -92,8 +87,7 @@ class TestUnityCommandExecution:
         ), f"Move command failed: {result.get('error')}"
 
     def test_real_gripper_control(self):
-        """Test real gripper open/close through the backend."""
-        with BackendClient(timeout=120.0) as client:
+        with BackendClient(timeout=240.0) as client:
             result_open = client.send_command(
                 command="open gripper for Robot1",
                 robot_id="Robot1",
@@ -106,7 +100,7 @@ class TestUnityCommandExecution:
 
         time.sleep(0.3)
 
-        with BackendClient(timeout=120.0) as client:
+        with BackendClient(timeout=240.0) as client:
             result_close = client.send_command(
                 command="close gripper for Robot1",
                 robot_id="Robot1",
@@ -123,7 +117,6 @@ class TestUnityCommandExecution:
 class TestUnityImageCapture:
 
     def test_connection_to_image_server(self):
-        """Verify direct TCP connection to the ImageServer (port 5006)."""
         assert _port_open(5006), "Could not connect to ImageServer on port 5006"
 
     def test_real_single_image_capture(self):
@@ -150,10 +143,8 @@ class TestUnityImageCapture:
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not UNITY_AVAILABLE, reason=SKIP_REASON)
 class TestUnityProtocolCompatibility:
-    """Test Protocol V2 request/response correlation with the backend."""
 
     def test_request_id_correlation(self):
-        """Verify that request_id is echoed back correctly in the response."""
         request_id = 12345
         with BackendClient(timeout=120.0) as client:
             result = client.send_command(

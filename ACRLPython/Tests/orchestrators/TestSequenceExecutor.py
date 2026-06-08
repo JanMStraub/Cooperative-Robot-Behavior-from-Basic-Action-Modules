@@ -1,17 +1,11 @@
-#!/usr/bin/env python3
-"""Unit tests for SequenceExecutor"""
-
 import threading
 import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Helpers
-
 
 def _make_op_result(success: bool, result=None, error_code=None, error_msg=None):
-    """Create a mock OperationResult."""
     r = MagicMock()
     r.success = success
     r.result = result or {}
@@ -20,7 +14,6 @@ def _make_op_result(success: bool, result=None, error_code=None, error_msg=None)
 
 
 def _make_op_def(name: str, category=None):
-    """Create a minimal mock operation definition."""
     from operations.Base import OperationCategory
 
     op = MagicMock()
@@ -33,7 +26,6 @@ def _make_op_def(name: str, category=None):
 
 
 def _make_executor(enable_verification=False, check_completion=False):
-    """Build a SequenceExecutor with all heavy deps mocked out."""
     with (
         patch("core.Imports.get_global_registry") as mock_reg,
         patch("core.Imports.get_world_state", return_value=None),
@@ -60,9 +52,6 @@ def _make_executor(enable_verification=False, check_completion=False):
         executor._metrics = SequenceExecutor._MetricsTracker()
         executor.outcome_tracker = None
         return executor, registry
-
-
-# _extract_waypoint_from_verification
 
 
 class TestExtractWaypoint:
@@ -96,9 +85,6 @@ class TestExtractWaypoint:
             }
         }
         assert _extract_waypoint_from_verification(vr) is None
-
-
-# _MetricsTracker
 
 
 class TestMetricsTracker:
@@ -154,9 +140,6 @@ class TestMetricsTracker:
         for th in threads:
             th.join()
         assert t.snapshot()["ops_executed"] == 20
-
-
-# _resolve_variables / _resolve_dotted_variable / _resolve_expression
 
 
 class TestVariableResolution:
@@ -217,7 +200,6 @@ class TestVariableResolution:
         assert params["pts"] == pytest.approx([0.3, 0.5])
 
     def test_field_center_fallback(self):
-        # $field.center.x where $field == {"x":1.0, "y":2.0, "z":3.0}
         self.executor._variables["field"] = {"x": 1.0, "y": 2.0, "z": 3.0}
         params = self.executor._resolve_variables({"x": "$field.center.x"})
         assert params["x"] == pytest.approx(1.0)
@@ -227,9 +209,6 @@ class TestVariableResolution:
         self.executor._capture_result_to_var("field_d", result)
         assert self.executor._variables["field_d"] == result["center"]
         assert self.executor._variables["field_d_result"] == result
-
-
-# execute_sequence — sequential mode
 
 
 class TestExecuteSequenceSequential:
@@ -298,7 +277,7 @@ class TestExecuteSequenceSequential:
         def slow_execute(name, **kwargs):
             nonlocal call_count
             call_count += 1
-            executor._abort_flag = True  # abort after first op
+            executor._abort_flag = True
             return _make_op_result(True)
 
         registry.execute_operation_by_name.side_effect = slow_execute
@@ -368,9 +347,6 @@ class TestExecuteSequenceSequential:
         assert metrics["ops_succeeded"] == 1
 
 
-# execute_sequence — parallel groups
-
-
 class TestExecuteSequenceParallelGroups:
     def _setup(self):
         return _make_executor()
@@ -431,12 +407,8 @@ class TestExecuteSequenceParallelGroups:
             },
         ]
         result = executor.execute_sequence(cmds)
-        # Group 1 fails → group 2 not executed
         assert result["success"] is False
-        assert call_count == 2  # only group 0 executed
-
-
-# abort and progress callbacks
+        assert call_count == 2
 
 
 class TestAbortAndCallbacks:
@@ -473,9 +445,6 @@ class TestAbortAndCallbacks:
         executor.execute_sequence(
             [{"operation": "move_to_coordinate", "params": {"robot_id": "Robot1"}}]
         )
-
-
-# get_variable / set_variable
 
 
 class TestVariableAccessors:

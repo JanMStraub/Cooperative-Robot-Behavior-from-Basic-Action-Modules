@@ -241,10 +241,6 @@ def generate_point_cloud(
             return OperationResult.error_result(
                 "NO_STEREO_IMAGES",
                 "No stereo images available in UnifiedImageStorage",
-                [
-                    "Capture stereo images first using 'capture_stereo_images' command",
-                    "Ensure Unity stereo camera is active and transmitting on port 5006",
-                ],
             )
 
         img_left, img_right, _prompt, timestamp, metadata = stereo_data
@@ -253,10 +249,6 @@ def generate_point_cloud(
             return OperationResult.error_result(
                 "INCOMPLETE_STEREO_PAIR",
                 "One or both stereo images are missing",
-                [
-                    "Re-capture stereo images",
-                    "Verify StereoCameraController is configured in Unity",
-                ],
             )
 
         # Guard against callers (e.g. LLM) passing None, 0 or negative values.
@@ -271,10 +263,6 @@ def generate_point_cloud(
                 "STALE_IMAGE",
                 f"Stereo images are {age:.1f}s old (max {effective_max_age}s). "
                 "Capture fresh images before generating a point cloud.",
-                [
-                    "Call 'capture_stereo_images' or wait for live streaming to update",
-                    "Increase max_age_seconds if images are intentionally pre-cached",
-                ],
             )
 
         try:
@@ -351,10 +339,6 @@ def generate_point_cloud(
             return OperationResult.error_result(
                 "EMPTY_POINT_CLOUD",
                 "Stereo reconstruction produced no valid 3D points",
-                [
-                    "Ensure there is sufficient texture in the scene for disparity matching",
-                    "Check that the stereo baseline and FOV are correctly configured",
-                ],
             )
 
         # --- Background removal + statistical outlier cleaning ---
@@ -368,11 +352,6 @@ def generate_point_cloud(
                 return OperationResult.error_result(
                     "EMPTY_POINT_CLOUD_AFTER_CLEANING",
                     "All points were removed during background/outlier cleaning",
-                    [
-                        "Check POINT_CLOUD_BG_COLORS in config/Vision.py — tolerance may be too broad",
-                        "Disable cleaning with POINT_CLOUD_CLEANING_ENABLED=false to inspect raw cloud",
-                        "Check POINT_CLOUD_MIN_DEPTH / POINT_CLOUD_MAX_DEPTH range",
-                    ],
                 )
 
         # Guard against callers (e.g. LLM) passing None or non-positive values.
@@ -461,10 +440,6 @@ def generate_point_cloud(
         return OperationResult.error_result(
             "EXCEPTION",
             f"Unexpected error during point cloud generation: {exc}",
-            [
-                "Check stack trace in logs",
-                "Verify vision dependencies (numpy, opencv) are installed",
-            ],
         )
 
 
@@ -476,14 +451,6 @@ GENERATE_POINT_CLOUD_OPERATION = BasicOperation(
     description=(
         "Generate a dense 3D point cloud from the robot's stereo camera pair "
         "using SGBM disparity estimation."
-    ),
-    long_description=(
-        "Captures the latest stereo image pair from UnifiedImageStorage and "
-        "reconstructs a 3D point cloud via semi-global block matching. "
-        "The cloud is expressed in Unity camera space (X-negated, left-handed) "
-        "and includes camera extrinsics so downstream operations can transform "
-        "poses into world space. Useful as input for neural grasp planners such "
-        "as VGN."
     ),
     usage_examples=[
         "generate_point_cloud('Robot1')",

@@ -288,11 +288,9 @@ class SequenceExecutor:
 
         logger.info(f"Starting sequence {_sid} with {len(commands)} commands")
 
-        # Check if commands use parallel_group
         has_parallel_groups = any("parallel_group" in cmd for cmd in commands)
 
         if has_parallel_groups:
-            # Execute with parallel group support
             logger.info("Parallel execution mode enabled")
             group_results, group_completed = self._execute_parallel_groups(
                 commands, timeout
@@ -300,7 +298,6 @@ class SequenceExecutor:
             results = group_results
             completed = group_completed
         else:
-            # Sequential execution
             logger.info("Sequential execution mode (no parallel_group)")
             for i, cmd in enumerate(commands):
                 if self._abort_flag:
@@ -311,7 +308,6 @@ class SequenceExecutor:
                 params = cmd.get("params", {})
                 capture_var = cmd.get("capture_var")  # Variable name to capture result
 
-                # Auto-inject parameters from previous operations based on ParameterFlow definitions
                 params = self._auto_inject_parameters(operation, params)
 
                 # Self-reference guard: null out params that reference their own capture_var,
@@ -374,7 +370,6 @@ class SequenceExecutor:
                     logger.error(f"Command {i + 1} failed: {_cmd_err}")
                     break
 
-                # Resolve variable references in params (manual $ references)
                 params = self._resolve_variables(params)
 
                 logger.info(f"Executing command {i + 1}/{len(commands)}: {operation}")
@@ -457,11 +452,9 @@ class SequenceExecutor:
                         f"Command {i + 1} completed successfully in {cmd_duration:.0f}ms"
                     )
 
-                    # Capture result to variable if specified (manual capture)
                     if capture_var and cmd_result.get("result"):
                         self._capture_result_to_var(capture_var, cmd_result["result"])
 
-                    # Automatically capture outputs based on ParameterFlow definitions
                     self._auto_capture_outputs(operation, cmd_result.get("result", {}))
                 else:
                     self._notify_progress(i, len(commands), operation, "failed")
@@ -523,6 +516,13 @@ class SequenceExecutor:
                                 else:
                                     var_descs.append(f"${vname}")
                             hint += f" Captured variables: {', '.join(var_descs)}."
+                        hint += (
+                            " OUTPUT: Return exactly ONE JSON command object"
+                            ' {"operation": ..., "params": {...}} to replace the failed'
+                            " operation. Do NOT return an array or a full plan."
+                            " Do NOT define capture_var — it will not execute."
+                            " Only reference variables listed in 'Captured variables' above."
+                        )
 
                         # Inject WorldState context: held objects are inside the gripper and
                         # invisible to cameras — the LLM must not try to re-detect them.
@@ -1525,13 +1525,49 @@ class SequenceExecutor:
                     # Only block when the list is populated AND robot is not in it.
                     # Empty list = KG not yet populated = don't block.
                     if reachable_robots and robot_id not in reachable_robots:
-                        return {
-                            "safe": False,
-                            "warning": (
+                        # Enrich with workspace context so Reflexion hint is actionable
+                        try:
+                            from config.Robot import ROBOT_WORKSPACE_ASSIGNMENTS
+                            from operations.SpatialPredicates import is_in_shared_zone
+
+                            assigned_ws = ROBOT_WORKSPACE_ASSIGNMENTS.get(
+                                robot_id, "unknown"
+                            )
+                            # Determine object's workspace from KG node data
+                            obj_node = qe._graph.get_node(object_id)
+                            obj_pos = obj_node.get("position") if obj_node else None
+                            if obj_pos and len(obj_pos) >= 3:
+                                in_shared, _ = is_in_shared_zone(*obj_pos[:3])
+                                if in_shared:
+                                    obj_ws = "shared_zone"
+                                else:
+                                    obj_ws = (
+                                        ROBOT_WORKSPACE_ASSIGNMENTS.get(
+                                            reachable_robots[0], "unknown workspace"
+                                        )
+                                        if reachable_robots
+                                        else "unknown"
+                                    )
+                            else:
+                                obj_ws = "unknown"
+                            alt = (
+                                reachable_robots[0]
+                                if reachable_robots
+                                else "a different robot"
+                            )
+                            warning = (
+                                f"{robot_id} is not in the reachable set for '{object_id}' "
+                                f"(reachable: {reachable_robots}). "
+                                f"{robot_id} is assigned to '{assigned_ws}'; "
+                                f"'{object_id}' is in '{obj_ws}'. "
+                                f"Use {alt} instead, or plan a handoff."
+                            )
+                        except Exception:
+                            warning = (
                                 f"{robot_id} is not in the reachable set for '{object_id}' "
                                 f"(reachable: {reachable_robots})"
-                            ),
-                        }
+                            )
+                        return {"safe": False, "warning": warning}
 
             return {"safe": True}
 

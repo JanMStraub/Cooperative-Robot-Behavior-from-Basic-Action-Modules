@@ -134,10 +134,6 @@ class OperationVerifier:
                     predicate=precondition,
                     reason="Predicate could not be parsed — verify syntax (expected: 'predicate_name(param1, ...)')",
                     severity="warning",
-                    suggestions=[
-                        "Check precondition syntax: use predicate_name(param) format",
-                        "Verify the predicate name is registered in SpatialPredicates",
-                    ],
                 )
                 continue
 
@@ -189,10 +185,6 @@ class OperationVerifier:
                     predicate=precondition,
                     reason=f"Predicate evaluation error: {str(e)}",
                     severity="error",
-                    suggestions=[
-                        "Check predicate parameters",
-                        "Verify world state is accessible",
-                    ],
                 )
 
         return result
@@ -235,10 +227,6 @@ class OperationVerifier:
                     predicate=postcondition,
                     reason="Predicate could not be parsed — verify syntax (expected: 'predicate_name(param1, ...)')",
                     severity="warning",
-                    suggestions=[
-                        "Check postcondition syntax: use predicate_name(param) format",
-                        "Verify the predicate name is registered in SpatialPredicates",
-                    ],
                 )
                 continue
 
@@ -266,12 +254,7 @@ class OperationVerifier:
                     result.add_violation(
                         predicate=postcondition,
                         reason=reason,
-                        severity="warning",  # Postconditions are usually warnings, not blockers
-                        suggestions=[
-                            "Operation may not have completed fully",
-                            "Check robot status",
-                            "Consider retrying operation",
-                        ],
+                        severity="warning",  # postconditions are warnings, not blockers
                     )
                     logger.warning(f"Postcondition failed: {postcondition} - {reason}")
 
@@ -281,7 +264,6 @@ class OperationVerifier:
                     predicate=postcondition,
                     reason=f"Evaluation error: {str(e)}",
                     severity="warning",
-                    suggestions=["Check world state", "Verify operation completed"],
                 )
 
         return result
@@ -292,12 +274,10 @@ class OperationVerifier:
         suggestions = []
 
         if predicate_name == "target_within_reach":
-            # Query WorldState for which robots CAN reach the target
             x, y, z = params.get("x"), params.get("y"), params.get("z")
             if x is not None and y is not None and z is not None:
                 from .SpatialPredicates import target_within_reach
 
-                # Check which other robots can reach this target
                 for robot_id, _state in self.world_state._robot_states.items():
                     if robot_id != params.get("robot_id"):
                         is_valid, _ = target_within_reach(
@@ -308,7 +288,6 @@ class OperationVerifier:
                                 f"Use {robot_id} instead (target is within reach)"
                             )
 
-            # Add generic suggestions if no specific robot found
             if not suggestions:
                 suggestions.extend(
                     [
@@ -347,10 +326,8 @@ class OperationVerifier:
             )
 
         elif predicate_name == "object_accessible_by_robot":
-            # Suggest alternative nearby accessible objects
             x, y, z = params.get("x"), params.get("y"), params.get("z")
             if x is None or y is None or z is None:
-                # Try to get from object_position tuple
                 obj_pos = params.get("object_position")
                 if obj_pos and len(obj_pos) == 3:
                     x, y, z = obj_pos
@@ -358,7 +335,6 @@ class OperationVerifier:
             if x is not None and y is not None and z is not None:
                 from .SpatialPredicates import object_accessible_by_robot
 
-                # Find nearby objects that ARE accessible
                 nearby = self.world_state.find_objects_near((x, y, z), radius=0.15)
                 robot_id = params.get("robot_id")
 
@@ -372,7 +348,6 @@ class OperationVerifier:
                             f"Try {obj.object_id} at ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}) instead (accessible)"
                         )
 
-            # Add generic suggestions if no alternatives found
             if not suggestions:
                 suggestions.extend(
                     [

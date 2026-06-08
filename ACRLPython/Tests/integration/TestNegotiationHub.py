@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Tests for the Multi-Robot Negotiation System.
 
@@ -31,28 +30,21 @@ from orchestrators.SequenceExecutor import SequenceExecutor
 from core.Imports import get_negotiation_hub
 import config.Negotiation as neg_config
 
-# Helpers
-
 
 def _mock_llm_response(content):
-    """Create a mock requests.post response with given content."""
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = {"choices": [{"message": {"content": content}}]}
     return mock_resp
 
 
-# Config Tests
-
-
 class TestNegotiationConfig:
-    """Tests for config/Negotiation.py defaults and env overrides."""
 
     def test_default_values(self):
         assert NEGOTIATION_ENABLED is False
         assert MAX_NEGOTIATION_ROUNDS == 3
-        assert AGENT_LLM_TIMEOUT == 60.0
-        assert NEGOTIATION_TIMEOUT == 120.0
+        assert AGENT_LLM_TIMEOUT == 90.0
+        assert NEGOTIATION_TIMEOUT == 300.0
         assert NEGOTIATION_TEMPERATURE == 0.3
         assert isinstance(COLLABORATION_KEYWORDS, list)
         assert "both" in COLLABORATION_KEYWORDS
@@ -92,11 +84,7 @@ class TestNegotiationConfig:
         importlib.reload(neg_config)
 
 
-# Robot LLM Agent Tests
-
-
 class TestRobotLLMAgent:
-    """Tests for agents/RobotLLMAgent.py."""
 
     def test_agent_creation(self):
         agent = RobotLLMAgent("Robot1")
@@ -280,7 +268,6 @@ class TestRobotLLMAgent:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_llm_timeout_fallback(self, mock_post):
-        """Test graceful handling of LLM timeout."""
         mock_post.side_effect = req.exceptions.Timeout()
 
         agent = RobotLLMAgent("Robot1")
@@ -313,18 +300,12 @@ class TestRobotLLMAgent:
         assert analysis.confidence == 0.6
 
 
-# Negotiation Hub Tests
-
-
 class TestNegotiationHub:
-    """Tests for servers/NegotiationHub.py."""
 
     def setup_method(self):
-        """Reset singleton between tests."""
         NegotiationHub._instance = None
 
     def test_singleton(self):
-        """Test NegotiationHub is a singleton."""
         hub1 = NegotiationHub()
         hub2 = NegotiationHub()
         assert hub1 is hub2
@@ -338,12 +319,10 @@ class TestNegotiationHub:
 
     @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     def test_needs_negotiation_multi_robot_ref(self):
-        """Test multi-robot reference detection."""
         hub = NegotiationHub()
         assert hub.needs_negotiation("Robot1 detects and Robot2 grasps") is True
 
     def test_needs_negotiation_single_robot(self):
-        """Test single-robot commands don't trigger negotiation."""
         hub = NegotiationHub()
         assert hub.needs_negotiation("Move to (0.3, 0.2, 0.1)") is False
         assert hub.needs_negotiation("Robot1 close the gripper") is False
@@ -364,7 +343,6 @@ class TestNegotiationHub:
 
     @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     def test_needs_negotiation_word_boundaries(self):
-        """Test that 'robot10' does NOT trigger negotiation for Robot1 match."""
         hub = NegotiationHub()
         # "robot10" must not be counted as a reference to "Robot1"
         assert hub.needs_negotiation("Check robot10 status") is False
@@ -510,7 +488,6 @@ class TestNegotiationHub:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluation_skips_non_contributors(self, mock_post):
-        """Test that robots with can_contribute=False are not called during evaluation."""
         NegotiationHub._instance = None
         hub = NegotiationHub()
 
@@ -547,7 +524,6 @@ class TestNegotiationHub:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_negotiate_timeout(self, mock_post):
-        """Test negotiation timeout."""
 
         # Make LLM calls very slow
         def slow_response(*args, **kwargs):
@@ -576,11 +552,7 @@ class TestNegotiationHub:
         assert result.state in (NegotiationState.TIMEOUT, NegotiationState.FAILED)
 
 
-# Negotiation Verifier Tests
-
-
 class TestNegotiationVerifier:
-    """Tests for operations/NegotiationVerifier.py."""
 
     def test_empty_plan(self):
         verifier = NegotiationVerifier()
@@ -624,7 +596,6 @@ class TestNegotiationVerifier:
         )
 
     def test_matched_signal_wait_pair(self):
-        """Test matched signal/wait pair passes."""
         commands = [
             {
                 "operation": "signal",
@@ -686,7 +657,6 @@ class TestNegotiationVerifier:
         assert len(var_errors) == 0
 
     def test_parallel_group_collision_check(self):
-        """Test spatial safety detects close concurrent targets."""
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -707,7 +677,6 @@ class TestNegotiationVerifier:
         assert result.safety_check is False
 
     def test_safe_parallel_targets(self):
-        """Test safe concurrent targets pass spatial check."""
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -728,7 +697,6 @@ class TestNegotiationVerifier:
         assert len(spatial_errors) == 0
 
     def test_invalid_parallel_group_type(self):
-        """Test non-integer parallel_group is detected."""
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -743,7 +711,6 @@ class TestNegotiationVerifier:
         assert any("integer" in e for e in result.errors)
 
     def test_safe_parallel_targets_with_position_tuple(self):
-        """Test safe concurrent targets expressed as position list pass spatial check."""
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -784,17 +751,12 @@ class TestNegotiationVerifier:
         assert result.safety_check is False
 
 
-# Integration Tests
-
-
 class TestSequenceExecutorNegotiation:
 
     def setup_method(self):
-        """Reset singleton between tests."""
         NegotiationHub._instance = None
 
     def test_negotiate_if_needed_returns_none_for_simple_command(self):
-        """Test that simple commands bypass negotiation."""
         executor = SequenceExecutor(check_completion=False, enable_verification=False)
         result = executor.negotiate_if_needed("Move to (0.3, 0.2, 0.1)", "Robot1")
         assert result is None
@@ -895,14 +857,9 @@ class TestSequenceExecutorNegotiation:
             assert result is None
 
 
-# Core Imports Tests
-
-
 class TestCoreImportsNegotiation:
-    """Tests for get_negotiation_hub in core/Imports.py."""
 
     def setup_method(self):
-        """Reset singleton between tests."""
         NegotiationHub._instance = None
 
     @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
@@ -922,19 +879,13 @@ class TestCoreImportsNegotiation:
         importlib.reload(neg_config)
 
 
-# Bug Fix Regression Tests
-
-
 class TestBugFixes:
-    """Regression tests for the 7 negotiation system bug fixes."""
 
     def setup_method(self):
-        """Reset singleton between tests."""
         NegotiationHub._instance = None
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_llm_failure_rejects(self, mock_post):
-        """BUG 1: LLM connection error must reject the proposal, not accept it."""
         mock_post.side_effect = req.exceptions.ConnectionError()
 
         agent = RobotLLMAgent("Robot2")
@@ -958,7 +909,6 @@ class TestBugFixes:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_json_failure_rejects(self, mock_post):
-        """BUG 1: Malformed JSON response must reject the proposal, not accept it."""
         mock_post.return_value = _mock_llm_response("not valid json at all")
 
         agent = RobotLLMAgent("Robot2")
@@ -976,7 +926,6 @@ class TestBugFixes:
         ), "Unparseable LLM JSON must produce accept=False, not auto-accept"
 
     def test_validate_before_normalize_catches_missing_operation(self):
-        """BUG 2: Validation must run on raw commands, catching missing 'operation' fields."""
         hub = NegotiationHub()
 
         # A plan where one command is missing the "operation" field entirely.
@@ -996,7 +945,6 @@ class TestBugFixes:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_analysis_refreshed_on_round_2(self, mock_post):
-        """BUG 3: Analysis must be re-run at start of round 2 to get fresh world state."""
         # Round 1 analysis: can_contribute=True for both robots
         analysis_r = _mock_llm_response(
             json.dumps(
@@ -1073,7 +1021,6 @@ class TestBugFixes:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_propose_plan_includes_operations_in_prompt(self, mock_post):
-        """BUG 4: propose_plan must include available operations in the LLM prompt."""
         mock_post.return_value = _mock_llm_response(
             json.dumps(
                 {
@@ -1115,7 +1062,6 @@ class TestBugFixes:
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_propose_plan_no_operations_logs_warning(self, mock_post, caplog):
-        """BUG 4: propose_plan without available_operations must log a WARNING."""
         import logging
 
         mock_post.return_value = _mock_llm_response(
@@ -1139,26 +1085,22 @@ class TestBugFixes:
         ), "Missing available_operations must produce a WARNING log"
 
     def test_workspace_label_robot1(self):
-        """BUG 5: Robot1 (left_workspace) must return left-side label via config, not substring."""
         agent = RobotLLMAgent("Robot1")
         label = agent._get_workspace_label()
         assert "left" in label.lower(), f"Robot1 should be 'left', got: {label}"
 
     def test_workspace_label_robot2(self):
-        """BUG 5: Robot2 (right_workspace) must return right-side label via config."""
         agent = RobotLLMAgent("Robot2")
         label = agent._get_workspace_label()
         assert "right" in label.lower(), f"Robot2 should be 'right', got: {label}"
 
     def test_workspace_label_unknown_robot(self):
-        """BUG 5: Robot with no assignment must return a safe fallback, not crash."""
         agent = RobotLLMAgent("Robot99")
         label = agent._get_workspace_label()
         # Must not raise; content varies but must be a non-empty string
         assert isinstance(label, str) and len(label) > 0
 
     def test_signal_without_waiter_logs_warning(self, caplog):
-        """BUG 7: A signal with no matching wait_for_signal must log a WARNING."""
         import logging
 
         commands = [

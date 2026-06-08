@@ -1,5 +1,3 @@
-"""Tests for FeatureFlagContext — apply/restore in server process."""
-
 from __future__ import annotations
 
 import struct
@@ -75,7 +73,6 @@ def test_restore_on_exception():
 
 
 def _make_sequence_msg(command: str, robot_id: str, flags_json: str = "") -> bytes:
-    """Build a raw SEQUENCE_QUERY message with optional flags."""
     SEQUENCE_QUERY = 0x08
     request_id = 42
     cam = "TableStereoCamera"

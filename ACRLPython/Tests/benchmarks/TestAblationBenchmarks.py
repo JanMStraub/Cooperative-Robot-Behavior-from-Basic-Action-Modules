@@ -153,9 +153,6 @@ def test_b15_get_tasks_returns_list():
     assert all(isinstance(t, str) for t in tasks)
 
 
-# Task 1: execution_mode field on BenchmarkConfig
-
-
 def test_execution_mode_default():
     from benchmarks.Config import BenchmarkConfig
 
@@ -168,9 +165,6 @@ def test_execution_mode_live():
 
     cfg = BenchmarkConfig(execution_mode="live")
     assert cfg.execution_mode == "live"
-
-
-# Task 2: --live CLI flag
 
 
 def test_live_flag_parsed():
@@ -187,9 +181,6 @@ def test_live_flag_parsed():
     assert args.live is True
 
 
-# Task 3: NegotiationHub exposes get_last_round_count
-
-
 def test_negotiation_hub_exposes_round_count():
     from servers.NegotiationHub import NegotiationHub
 
@@ -197,9 +188,6 @@ def test_negotiation_hub_exposes_round_count():
     hub._last_round_count = 0
     assert hasattr(hub, "get_last_round_count")
     assert hub.get_last_round_count() == 0
-
-
-# Task 4: offline B11 captures negotiation_rounds from hub
 
 
 def test_b11_offline_captures_negotiation_rounds(monkeypatch):
@@ -231,9 +219,6 @@ def test_b11_offline_captures_negotiation_rounds(monkeypatch):
     assert hasattr(result.ablation, "negotiation_rounds")
 
 
-# Task 5: B10 RAG ablation always returns paired conditions (parse-only, no _send)
-
-
 def test_b10_returns_ablation_condition():
     """B11 RAG ablation is parse-only — returns single condition matching cfg.use_rag."""
     from benchmarks.Runner import BenchmarkRunner
@@ -255,9 +240,6 @@ def test_b10_returns_ablation_condition():
     result_no_rag = runner.run(11, cfg_no_rag)
     assert result_no_rag.ablation is not None
     assert result_no_rag.ablation.condition == "disabled"
-
-
-# Task 6: B11 is always parse-only, never dispatches to _send
 
 
 def test_b11_is_always_parse_only():
@@ -302,9 +284,6 @@ def test_benchmark_result_has_ablation_baseline_field():
     assert r.ablation_baseline is not None
     assert r.ablation_baseline.condition == "disabled"
     assert r.ablation_baseline.hallucinated_ops == 3
-
-
-# Task source tests
 
 
 def test_b10_tasks_are_drawn_from_b1_to_b5():
@@ -361,9 +340,6 @@ def test_b15_tasks_include_b1_and_b2():
     tasks = B16RosAblation.get_tasks(BenchmarkConfig())
     assert b1() in tasks
     assert b2() in tasks
-
-
-# ── New tests added by benchmark audit overhaul ────────────────────────────
 
 
 def test_b9_parser_exception_does_not_count_as_graceful_rejection():

@@ -7,7 +7,6 @@ from typing import List, Optional, Dict, Tuple
 from dataclasses import dataclass
 import math
 
-# Import detection data models
 try:
     from ..vision.DetectionDataModels import DetectionObject
 except ImportError:
@@ -16,7 +15,6 @@ except ImportError:
     except ImportError:
         DetectionObject = None
 
-# Import config
 try:
     from config.Vision import (
         CONFLICT_RESOLUTION_STRATEGY,
@@ -113,10 +111,8 @@ class SharedVisionState:
 
             obj = self.detections[object_id]
 
-            # Check if already claimed
             if obj.claimed_by is not None:
                 if obj.claimed_by == robot_id:
-                    # Already claimed by this robot, refresh timestamp
                     obj.claim_timestamp = time.time()
                     return True
                 else:
@@ -125,7 +121,6 @@ class SharedVisionState:
                     )
                     return False
 
-            # Claim object
             obj.claimed_by = robot_id
             obj.claim_timestamp = time.time()
             logger.info(f"Robot {robot_id} claimed object {object_id}")
@@ -191,21 +186,17 @@ class SharedVisionState:
 
             obj = self.detections[object_id]
 
-            # Check existing claim
             if obj.claimed_by is not None:
                 logger.debug(f"Conflict resolved by existing claim: {obj.claimed_by}")
                 return obj.claimed_by
 
-            # Apply conflict resolution strategy
             if self.conflict_strategy == "closest_robot":
-                # Calculate distances
                 dist1 = self._calculate_distance(robot1_pos, obj.world_position)
                 dist2 = self._calculate_distance(robot2_pos, obj.world_position)
 
                 min_diff = CONFLICT_MIN_DISTANCE_DIFF
 
                 if abs(dist1 - dist2) > min_diff:
-                    # Clear winner: assign to closer robot
                     winner = robot1_id if dist1 < dist2 else robot2_id
                     logger.info(
                         f"Conflict resolved by distance: {winner} "
@@ -213,12 +204,11 @@ class SharedVisionState:
                     )
                     return winner
                 else:
-                    # Too close to call, use tie-breaker (alphabetical)
+                    # Tie-breaker: alphabetical by robot ID
                     winner = robot1_id if robot1_id < robot2_id else robot2_id
                     logger.info(f"Conflict tie-breaker (distances equal): {winner}")
                     return winner
             else:
-                # "first_claim" strategy: first robot wins
                 logger.info(f"Conflict resolved by first claim: {robot1_id}")
                 return robot1_id
 

@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Test Cases for RAG Vector Store
-================================
-
-Tests for the vector storage and similarity search module.
-"""
-
 import pytest
 import numpy as np
 import os
@@ -15,10 +7,7 @@ from rag.VectorStore import VectorStore
 
 
 class TestVectorStore:
-    """Test vector store functionality"""
-
     def test_initialization(self):
-        """Test vector store initialization"""
         store = VectorStore()
 
         assert len(store) == 0
@@ -27,7 +16,6 @@ class TestVectorStore:
         assert len(store.metadata) == 0
 
     def test_add_operation(self):
-        """Test adding an operation to the store"""
         store = VectorStore()
         embedding = np.array([0.1, 0.2, 0.3])
         metadata = {"name": "test_op", "category": "navigation"}
@@ -60,7 +48,6 @@ class TestVectorStore:
         assert store.vectors.shape == (5, 3)
 
     def test_embedding_dimension_mismatch(self):
-        """Test error when adding embeddings with different dimensions"""
         store = VectorStore()
 
         # Add first operation
@@ -71,7 +58,6 @@ class TestVectorStore:
             store.add_operation("op_002", np.array([0.1, 0.2]), {})
 
     def test_search_basic(self):
-        """Test basic similarity search"""
         store = VectorStore()
 
         # Add operations
@@ -91,7 +77,6 @@ class TestVectorStore:
         assert results[1]["operation_id"] == "op_003"  # Second most similar
 
     def test_search_with_min_score(self):
-        """Test search with minimum score threshold"""
         store = VectorStore()
 
         store.add_operation("op_001", np.array([1.0, 0.0, 0.0]), {"name": "op1"})
@@ -105,7 +90,6 @@ class TestVectorStore:
         assert results[0]["operation_id"] == "op_001"
 
     def test_search_with_category_filter(self):
-        """Test search with category filtering"""
         store = VectorStore()
 
         store.add_operation(
@@ -125,7 +109,6 @@ class TestVectorStore:
         assert all(r["metadata"]["category"] == "navigation" for r in results)
 
     def test_search_empty_store(self):
-        """Test search on empty store"""
         store = VectorStore()
         query = np.array([1.0, 0.0])
         results = store.search(query)
@@ -133,7 +116,6 @@ class TestVectorStore:
         assert results == []
 
     def test_get_operation(self):
-        """Test retrieving operation by ID"""
         store = VectorStore()
         embedding = np.array([0.1, 0.2, 0.3])
         metadata = {"name": "test_op"}
@@ -148,14 +130,12 @@ class TestVectorStore:
         assert op["metadata"] == metadata
 
     def test_get_operation_not_found(self):
-        """Test retrieving non-existent operation"""
         store = VectorStore()
         op = store.get_operation("nonexistent")
 
         assert op is None
 
     def test_save_and_load(self):
-        """Test saving and loading vector store"""
         # Create temporary file
         with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp:
             tmp_path = tmp.name
@@ -183,14 +163,12 @@ class TestVectorStore:
                 os.remove(tmp_path)
 
     def test_load_nonexistent_file(self):
-        """Test loading from non-existent file returns empty store"""
         store = VectorStore.load("nonexistent_file.pkl")
 
         assert len(store) == 0
         assert store.embedding_dimension is None
 
     def test_get_stats(self):
-        """Test getting store statistics"""
         store = VectorStore()
 
         store.add_operation(
@@ -218,7 +196,6 @@ class TestVectorStore:
         assert stats["complexities"]["basic"] == 2
 
     def test_clear(self):
-        """Test clearing the store"""
         store = VectorStore()
         store.add_operation("op_001", np.array([0.1, 0.2]), {"name": "op1"})
         store.add_operation("op_002", np.array([0.3, 0.4]), {"name": "op2"})
@@ -232,7 +209,6 @@ class TestVectorStore:
         assert len(store.operation_ids) == 0
 
     def test_repr(self):
-        """Test string representation"""
         store = VectorStore()
         store.add_operation("op_001", np.array([0.1, 0.2]), {"name": "op1"})
 
@@ -243,12 +219,10 @@ class TestVectorStore:
         assert "dim=2" in repr_str
 
     def test_thread_safety(self):
-        """Test thread safety with concurrent adds and searches"""
         store = VectorStore()
         errors = []
 
         def add_operations(start_idx, count):
-            """Worker function to add operations"""
             try:
                 for i in range(count):
                     op_id = f"op_{start_idx + i:03d}"
@@ -259,7 +233,6 @@ class TestVectorStore:
                 errors.append(e)
 
         def search_operations(count):
-            """Worker function to search operations"""
             try:
                 for _ in range(count):
                     query = np.random.rand(10)

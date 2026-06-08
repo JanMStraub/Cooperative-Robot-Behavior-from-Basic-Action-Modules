@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Unit tests for YOLODetector.py
 
@@ -19,12 +18,10 @@ except ImportError:
 
 
 class TestYOLODetectorInitialization:
-    """Test YOLODetector initialization"""
 
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.YOLODetector.YOLO")
     def test_yolo_detector_init_with_default_model(self, mock_yolo_class):
-        """Test YOLODetector initialization with default model"""
         mock_model = Mock()
         mock_model.names = None
         mock_yolo_class.return_value = mock_model
@@ -40,7 +37,6 @@ class TestYOLODetectorInitialization:
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.YOLODetector.YOLO")
     def test_yolo_detector_init_with_custom_model(self, mock_yolo_class):
-        """Test YOLODetector initialization with custom model path"""
         mock_model = Mock()
         mock_model.names = None
         mock_yolo_class.return_value = mock_model
@@ -55,7 +51,6 @@ class TestYOLODetectorInitialization:
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.YOLODetector.YOLO")
     def test_yolo_detector_class_mapping(self, mock_yolo_class):
-        """Test custom class mapping"""
         mock_model = Mock()
         mock_model.names = None
         mock_yolo_class.return_value = mock_model
@@ -72,7 +67,6 @@ class TestYOLODetectorInitialization:
 
 
 class TestYOLODetection:
-    """Test YOLO detection functionality"""
 
     # Helper to simulate PyTorch tensor .cpu().numpy() chain
     def _create_mock_tensor(self, data):
@@ -83,7 +77,6 @@ class TestYOLODetection:
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.YOLODetector.YOLO")
     def test_detect_objects_empty_image(self, mock_yolo_class):
-        """Test detection with empty image"""
         mock_model = Mock()
         mock_model.names = None
         mock_yolo_class.return_value = mock_model
@@ -101,7 +94,6 @@ class TestYOLODetection:
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.YOLODetector.YOLO")
     def test_detect_objects_with_detections(self, mock_yolo_class):
-        """Test detection with mock YOLO results"""
         # Setup mock YOLO model
         mock_model = Mock()
         mock_model.names = None
@@ -146,7 +138,6 @@ class TestYOLODetection:
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.YOLODetector.YOLO")
     def test_detect_objects_filters_by_area(self, mock_yolo_class):
-        """Test that detections are filtered by area"""
         # Setup mock YOLO model
         mock_model = Mock()
         mock_model.names = None
@@ -179,7 +170,6 @@ class TestYOLODetection:
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.YOLODetector.YOLO")
     def test_detect_objects_multiple_detections(self, mock_yolo_class):
-        """Test detection with multiple cubes"""
         # Setup mock YOLO model
         mock_model = Mock()
         mock_model.names = None
@@ -228,14 +218,12 @@ class TestYOLODetection:
 
 
 class TestYOLOIntegration:
-    """Test YOLO integration with ObjectDetector"""
 
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.ObjectDetector.YOLO_AVAILABLE", True)
     @patch("vision.ObjectDetector.YOLODetector")
     @patch("vision.ObjectDetector.USE_YOLO", True)
     def test_cube_detector_uses_yolo_when_enabled(self, mock_yolo_detector_class):
-        """Test that CubeDetector uses YOLO when enabled in config"""
         from vision.ObjectDetector import CubeDetector
 
         mock_yolo_instance = Mock()
@@ -254,12 +242,10 @@ if __name__ == "__main__":
 
 
 class TestYOLODetectorSegmentation:
-    """Test mask population when YOLO task=segment."""
 
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.YOLODetector.YOLO")
     def test_mask_populated_when_segment_result(self, mock_yolo_class):
-        """DetectionObject.mask is populated when results[0].masks is present."""
         import numpy as np
 
         mock_model = MagicMock()
@@ -298,7 +284,6 @@ class TestYOLODetectorSegmentation:
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.YOLODetector.YOLO")
     def test_mask_is_none_when_no_masks(self, mock_yolo_class):
-        """DetectionObject.mask is None when results[0].masks is None (detect mode)."""
         import numpy as np
 
         mock_model = MagicMock()

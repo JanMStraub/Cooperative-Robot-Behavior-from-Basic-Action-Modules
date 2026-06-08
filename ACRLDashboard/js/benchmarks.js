@@ -1,9 +1,3 @@
-/**
- * benchmarks.js
- * Logic for the Benchmark Analytics Dashboard — Run Details + Analysis tabs.
- */
-
-// ── Palette (Okabe-Ito colorblind-safe) ──────────────────────────────────────
 const PALETTE = {
     blue: '#0072B2',
     orange: '#E69F00',
@@ -18,7 +12,6 @@ const PASS_COLOR = PALETTE.teal;
 const FAIL_COLOR = PALETTE.vermillion;
 const WARN_COLOR = PALETTE.orange;
 
-// ── State ─────────────────────────────────────────────────────────────────────
 let stepChartInstance = null;
 let analysisChartInstances = {};
 let compareStepChartInstance = null;
@@ -27,8 +20,8 @@ let thesisMode = false;
 let currentTab = 'details';
 let compareSet = new Set();       // filenames selected for comparison
 let compareDataCache = {};        // { filename: runData }
+let folderCheckboxes = [];        // [{ checkbox, filepaths }] for folder-level selection
 
-// ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initTabs();
@@ -61,7 +54,6 @@ function setupEventListeners() {
     }
 }
 
-// ── Tabs ──────────────────────────────────────────────────────────────────────
 function initTabs() {
     document.querySelectorAll('.bm-tab').forEach(btn => {
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -86,7 +78,6 @@ function switchTab(tab) {
     if (tab === 'compare') loadCompareView();
 }
 
-// ── Theme ─────────────────────────────────────────────────────────────────────
 function initTheme() {
     if (!document.body.classList.contains('light-theme')) {
         document.body.classList.add('dark-theme');
@@ -109,7 +100,6 @@ function applyChartDefaults() {
     Chart.defaults.font.size = 11;
 }
 
-// ── Thesis Mode ───────────────────────────────────────────────────────────────
 function toggleThesisMode() {
     thesisMode = !thesisMode;
     document.body.classList.toggle('thesis-mode', thesisMode);
@@ -121,7 +111,6 @@ function toggleThesisMode() {
     if (aggregateData) renderAllAnalysisCharts(aggregateData);
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function relativeTime(mtimeSeconds) {
     const diffMs = Date.now() - mtimeSeconds * 1000;
     const diffS = Math.floor(diffMs / 1000);
@@ -182,7 +171,20 @@ function destroyChart(id) {
     }
 }
 
-// ── Compare Selection ─────────────────────────────────────────────────────────
+function syncAllCheckboxes() {
+    document.querySelectorAll('.compare-checkbox').forEach(cb => {
+        const fn = cb.dataset.filename;
+        cb.checked = compareSet.has(fn);
+        const item = cb.closest('.history-item');
+        if (item) item.classList.toggle('history-item--in-compare', compareSet.has(fn));
+    });
+    folderCheckboxes.forEach(({ checkbox, filepaths }) => {
+        const selected = filepaths.filter(fp => compareSet.has(fp)).length;
+        checkbox.checked = selected === filepaths.length && filepaths.length > 0;
+        checkbox.indeterminate = selected > 0 && selected < filepaths.length;
+    });
+}
+
 function toggleCompareItem(filename, checked) {
     if (checked) {
         compareSet.add(filename);
@@ -191,13 +193,7 @@ function toggleCompareItem(filename, checked) {
         delete compareDataCache[filename];
     }
     updateCompareTab();
-    // Sync visual state on all history items
-    document.querySelectorAll('.compare-checkbox').forEach(cb => {
-        const fn = cb.dataset.filename;
-        cb.checked = compareSet.has(fn);
-        const item = cb.closest('.history-item');
-        if (item) item.classList.toggle('history-item--in-compare', compareSet.has(fn));
-    });
+    syncAllCheckboxes();
 }
 
 function updateCompareTab() {
@@ -212,7 +208,6 @@ function updateCompareTab() {
     }
 }
 
-// ── Run History ───────────────────────────────────────────────────────────────
 async function fetchBenchmarkList() {
     const listContainer = document.getElementById('history-list');
     listContainer.innerHTML = `
@@ -238,25 +233,55 @@ async function fetchBenchmarkList() {
         }
 
         listContainer.innerHTML = '';
+        folderCheckboxes = [];
+
+        // Build two-level map: benchmarkKey -> { name, models: Map<modelKey, files[]>, files: [] }
+        const benchmarkMap = new Map();
         files.forEach(file => {
+            const parts = file.folder ? file.folder.split('/') : [];
+            const benchmarkKey = parts[0] || '';
+            const modelKey = parts[1] || '';
+            if (!benchmarkMap.has(benchmarkKey)) {
+                benchmarkMap.set(benchmarkKey, { name: file.benchmark_name || '', models: new Map(), files: [] });
+            }
+            const entry = benchmarkMap.get(benchmarkKey);
+            if (!entry.name && file.benchmark_name) entry.name = file.benchmark_name;
+            if (modelKey) {
+                if (!entry.models.has(modelKey)) entry.models.set(modelKey, []);
+                entry.models.get(modelKey).push(file);
+            } else {
+                entry.files.push(file);
+            }
+        });
+
+        const numOf = k => parseInt(k.replace(/\D/g, ''), 10);
+        const sortedBenchmarks = [...benchmarkMap.keys()].sort((a, b) => {
+            if (a === '' && b !== '') return 1;
+            if (b === '' && a !== '') return -1;
+            const na = numOf(a), nb = numOf(b);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return a.localeCompare(b);
+        });
+
+        const makeHistoryItem = (file, container) => {
+            const filepath = file.filepath;
             const statusClass = file.success ? 'status-pass' : 'status-fail';
             const statusText = file.success ? 'PASS' : 'FAIL';
             const duration = (file.total_duration_ms / 1000).toFixed(1) + 's';
             const ago = relativeTime(file.mtime);
             const opsText = file.ops_executed != null ? `${file.ops_executed} ops` : '';
-
             const successRate = file.success_rate != null ? file.success_rate : (file.success ? 1 : 0);
             const fillPct = Math.round(successRate * 100);
             const fillClass = successRate >= 1 ? 'progress-pass' : successRate > 0 ? 'progress-warn' : 'progress-fail';
 
             const item = document.createElement('div');
             item.className = 'history-item';
-            item.dataset.filename = file.filename;
+            item.dataset.filename = filepath;
 
-            const isChecked = compareSet.has(file.filename);
+            const isChecked = compareSet.has(filepath);
             item.innerHTML = `
                 <div style="display:flex;align-items:flex-start;gap:0">
-                    <input type="checkbox" class="compare-checkbox" data-filename="${file.filename}" ${isChecked ? 'checked' : ''} title="Add to compare">
+                    <input type="checkbox" class="compare-checkbox" data-filename="${filepath}" ${isChecked ? 'checked' : ''} title="Add to compare">
                     <div style="flex:1;min-width:0">
                         <div class="history-item-top">
                             <span class="history-item-badge">B${file.benchmark_id}</span>
@@ -273,22 +298,110 @@ async function fetchBenchmarkList() {
                 </div>
             `;
 
-            // Checkbox: toggle compare set without navigating
             const checkbox = item.querySelector('.compare-checkbox');
             checkbox.addEventListener('click', (e) => {
                 e.stopPropagation();
-                toggleCompareItem(file.filename, checkbox.checked);
+                toggleCompareItem(filepath, checkbox.checked);
             });
-
-            // Item body click: load details (single-select)
             item.addEventListener('click', (e) => {
                 if (e.target === checkbox) return;
                 document.querySelectorAll('.history-item').forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
-                loadBenchmarkDetails(file.filename);
+                loadBenchmarkDetails(filepath);
             });
+            container.appendChild(item);
+        };
 
-            listContainer.appendChild(item);
+        const makeFolderHeader = (labelText, allFilepaths, isModel = false) => {
+            const header = document.createElement('div');
+            header.className = 'folder-header';
+
+            const left = document.createElement('div');
+            left.className = 'folder-header-left';
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.className = 'folder-compare-checkbox';
+            cb.title = 'Select all for comparison';
+            cb.addEventListener('click', (e) => {
+                e.stopPropagation();
+                allFilepaths.forEach(fp => {
+                    if (cb.checked) {
+                        compareSet.add(fp);
+                    } else {
+                        compareSet.delete(fp);
+                        delete compareDataCache[fp];
+                    }
+                });
+                updateCompareTab();
+                syncAllCheckboxes();
+            });
+            left.appendChild(cb);
+
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = labelText;
+            left.appendChild(labelSpan);
+
+            const chevron = document.createElement('i');
+            chevron.className = 'fa-solid fa-chevron-down folder-chevron';
+
+            header.appendChild(left);
+            header.appendChild(chevron);
+
+            folderCheckboxes.push({ checkbox: cb, filepaths: allFilepaths });
+            return header;
+        };
+
+        sortedBenchmarks.forEach(benchmarkKey => {
+            const { name, models, files: flatFiles } = benchmarkMap.get(benchmarkKey);
+
+            // Collect all filepaths in this benchmark for the top-level checkbox
+            const allModelFiles = [...models.values()].flat();
+            const allBenchmarkFilepaths = [...flatFiles, ...allModelFiles].map(f => f.filepath);
+
+            const group = document.createElement('div');
+            group.className = 'folder-group';
+
+            const labelText = benchmarkKey === ''
+                ? 'Other'
+                : (name ? `${benchmarkKey.toUpperCase()} — ${name}` : benchmarkKey.toUpperCase());
+            const header = makeFolderHeader(labelText, allBenchmarkFilepaths, false);
+            header.addEventListener('click', (e) => {
+                if (e.target.classList.contains('folder-compare-checkbox')) return;
+                group.classList.toggle('expanded');
+            });
+            group.appendChild(header);
+
+            const itemsContainer = document.createElement('div');
+            itemsContainer.className = 'folder-items';
+            group.appendChild(itemsContainer);
+            listContainer.appendChild(group);
+
+            // Flat files (no model sub-folder) go directly in outer items
+            flatFiles.forEach(file => makeHistoryItem(file, itemsContainer));
+
+            // Model sub-groups, sorted alphabetically
+            [...models.keys()].sort((a, b) => a.localeCompare(b)).forEach(modelKey => {
+                const modelFiles = models.get(modelKey);
+                const modelFilepaths = modelFiles.map(f => f.filepath);
+
+                const modelGroup = document.createElement('div');
+                modelGroup.className = 'folder-group folder-group--model';
+
+                const modelHeader = makeFolderHeader(modelKey, modelFilepaths, true);
+                modelHeader.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('folder-compare-checkbox')) return;
+                    modelGroup.classList.toggle('expanded');
+                });
+                modelGroup.appendChild(modelHeader);
+
+                const modelItems = document.createElement('div');
+                modelItems.className = 'folder-items';
+                modelGroup.appendChild(modelItems);
+                itemsContainer.appendChild(modelGroup);
+
+                modelFiles.forEach(file => makeHistoryItem(file, modelItems));
+            });
         });
 
     } catch (e) {
@@ -300,7 +413,6 @@ async function fetchBenchmarkList() {
     }
 }
 
-// ── Run Details Tab ───────────────────────────────────────────────────────────
 async function loadBenchmarkDetails(filename) {
     document.getElementById('no-selection').style.display = 'none';
     const detailsPanel = document.getElementById('benchmark-details');
@@ -325,6 +437,7 @@ function renderDetails(data) {
     document.getElementById('kpi-avg-step').textContent = data.avg_step_duration_ms.toFixed(0) + 'ms';
 
     renderRunInfo(data);
+    renderChainMetrics(data);
     renderOpStats(data.per_op_stats);
 
     const tbody = document.getElementById('step-table-body');
@@ -343,6 +456,10 @@ function renderDetails(data) {
 
         const robotId = step.robot_id != null ? `<span class="robot-badge robot-badge--${step.robot_id}">${step.robot_id}</span>` : '<span class="step-na">—</span>';
         const pgId = step.parallel_group_id != null ? `<span class="pg-badge">pg${step.parallel_group_id}</span>` : '<span class="step-na">—</span>';
+        const retryCount = step.retry_count ?? 0;
+        const retryCell = retryCount > 0
+            ? `<span style="color:var(--warn,#E69F00);font-weight:600">${retryCount}</span>`
+            : `<span class="step-na">—</span>`;
 
         tr.innerHTML = `
             <td>${step.index}</td>
@@ -351,8 +468,14 @@ function renderDetails(data) {
             <td>${step.duration_ms.toFixed(0)}</td>
             <td>${robotId}</td>
             <td>${pgId}</td>
+            <td>${retryCell}</td>
             <td class="step-error">${step.error_code || ''} ${step.error_message ? '- ' + step.error_message : ''}</td>
         `;
+
+        if (data.first_failure_step != null && step.index === data.first_failure_step) {
+            tr.classList.add('step-row--first-failure');
+        }
+
         tbody.appendChild(tr);
 
         labels.push(`Step ${step.index}`);
@@ -424,8 +547,68 @@ function renderRunInfo(data) {
         </div>`;
     }
 
+    const qm = [
+        { label: 'Hallucinated Ops',     value: data.hallucinated_ops     ?? 0, warn: v => v > 0,
+          tip: 'Operations the LLM generated that do not exist in the operation registry. Always fail. Higher values indicate poor LLM adherence to the available operation set.' },
+        { label: 'Reflexion Recoveries', value: data.reflexion_recoveries  ?? 0, warn: () => false,
+          tip: 'Number of times the Reflexion self-correction loop successfully recovered a failed step by re-prompting with error context. Higher is better when reflexion is enabled.' },
+        { label: 'Negotiation Rounds',   value: data.negotiation_rounds    ?? 0, warn: () => false,
+          tip: 'LLM negotiation rounds completed between robots before execution. Relevant for dual-arm benchmarks with use_negotiation enabled.' },
+        { label: 'Total Retries',        value: data.retry_count           ?? 0, warn: v => v > 0,
+          tip: 'Total number of step-level retries across the entire run (includes Reflexion retries and policy retries). Non-zero values indicate at least one step needed recovery.' },
+    ];
+    const qmHtml = qm.map(m =>
+        `<span class="qm-chip${m.warn(m.value) ? ' qm-chip--warn' : ''}" title="${m.tip}">${m.label}: <strong>${m.value}</strong></span>`
+    ).join('');
+    html += `<div class="run-info-row run-info-row--qm">
+        <span class="run-info-label">Quality Metrics <i class="fa-solid fa-circle-info kpi-info" title="Run-level quality signals: plan correctness (hallucinations), self-correction effectiveness (reflexion), coordination overhead (negotiation), and overall retry burden."></i></span>
+        <div class="qm-chips">${qmHtml}</div>
+    </div>`;
+
     html += '</div>';
     panel.innerHTML = html;
+    panel.style.display = '';
+}
+
+function renderChainMetrics(data) {
+    const panel = document.getElementById('chain-metrics-panel');
+    if (!panel) return;
+    const cm = data.chain_metrics;
+    if (!cm) { panel.style.display = 'none'; return; }
+
+    const phases = Object.entries(cm.per_phase_success || {});
+    const phaseBars = phases.map(([phase, rate]) => {
+        const pct = Math.round(rate * 100);
+        const cls = rate >= 1 ? 'progress-pass' : rate > 0 ? 'progress-warn' : 'progress-fail';
+        return `<div class="chain-phase">
+            <span class="chain-phase-label">${phase}</span>
+            <div class="history-item-progress" style="flex:1">
+                <div class="history-item-progress-fill ${cls}" style="width:${pct}%"></div>
+            </div>
+            <span class="chain-phase-pct">${pct}%</span>
+        </div>`;
+    }).join('');
+
+    panel.innerHTML = `
+        <div class="run-info-header"><i class="fa-solid fa-list-check"></i> Chain Metrics</div>
+        <div class="run-info-body">
+            <div class="run-info-row">
+                <span class="run-info-label">Tasks Completed <i class="fa-solid fa-circle-info kpi-info" title="Number of discrete sub-tasks completed out of the total planned. Each task is a self-contained pick/place/transport sequence within the chain benchmark."></i></span>
+                <span>${cm.completed_tasks} / ${cm.total_tasks}</span>
+            </div>
+            <div class="run-info-row">
+                <span class="run-info-label">Error Rate <i class="fa-solid fa-circle-info kpi-info" title="Fraction of sub-tasks that failed (error_rate = 1 - completed/total). Directly comparable across chain benchmarks."></i></span>
+                <span>${(cm.error_rate * 100).toFixed(1)}%</span>
+            </div>
+            <div class="run-info-row">
+                <span class="run-info-label">Recoveries <i class="fa-solid fa-circle-info kpi-info" title="Number of sub-task-level recovery attempts (distinct from step-level Reflexion retries). Positive values mean the chain self-healed at least once."></i></span>
+                <span>${cm.recovery_count}</span>
+            </div>
+            ${phases.length ? `<div class="run-info-row run-info-row--phases">
+                <span class="run-info-label">Phase Success <i class="fa-solid fa-circle-info kpi-info" title="Pass rate per pipeline phase (A=detect, B=grasp, C=transport, D=place). Identifies which phase of the chain degrades first."></i></span>
+                <div class="chain-phases">${phaseBars}</div>
+            </div>` : ''}
+        </div>`;
     panel.style.display = '';
 }
 
@@ -534,7 +717,6 @@ function renderStepChart(labels, data, colors) {
     });
 }
 
-// ── Analysis Tab ──────────────────────────────────────────────────────────────
 async function loadAnalysis() {
     if (aggregateData) {
         // already loaded — just re-render in case theme changed
@@ -962,7 +1144,6 @@ function renderStabilityChart(sortedEntries) {
     });
 }
 
-// ── Operation Categories ──────────────────────────────────────────────────────
 const OP_CATEGORIES = {
     perception: { ops: ['detect_object_stereo', 'detect_field', 'analyze_scene', 'generate_point_cloud', 'detect_all_fields'], color: PALETTE.blue },
     motion: { ops: ['move_to_coordinate', 'adjust_end_effector_orientation', 'return_to_start_position', 'pick_object_at_coordinate', 'move_relative_to_object'], color: PALETTE.teal },
@@ -1248,7 +1429,6 @@ function renderCoverageMatrix(sortedEntries) {
     container.innerHTML = html;
 }
 
-// ── Compare View ──────────────────────────────────────────────────────────────
 async function loadCompareView() {
     const loading = document.getElementById('compare-loading');
     const content = document.getElementById('compare-content');
@@ -1317,9 +1497,13 @@ function renderCompareKPIMatrix(runsData) {
         { key: 'total_duration_ms',  label: 'Total Duration',       fmt: v => (v / 1000).toFixed(2) + 's', higher: false },
         { key: 'ops_ratio',          label: 'Ops (succ/total)',     fmt: (v, r) => `${r.data.ops_succeeded}/${r.data.ops_executed}`, avgFmt: v => (v * 100).toFixed(1) + '%', higher: true, val: r => r.data.ops_succeeded / Math.max(r.data.ops_executed, 1) },
         { key: 'avg_step_duration_ms', label: 'Avg Step Time',     fmt: v => v.toFixed(0) + 'ms',         higher: false },
-        { key: 'hallucinated_ops',   label: 'Hallucinated Ops',     fmt: v => v,                           higher: false },
-        { key: 'reflexion_recoveries', label: 'Reflexion Recoveries', fmt: v => v,                        higher: false },
-        { key: 'retry_count',        label: 'Total Retries',        fmt: v => v,                           higher: false },
+        { key: 'slowest_step', label: 'Slowest Step',
+          val: r => { const s = r.data.steps || []; return s.length ? Math.max(...s.map(x => x.duration_ms)) : null; },
+          fmt: (v, r) => { const step = (r.data.steps || []).find(x => x.duration_ms === v); return step ? `${step.operation} <span class="compare-kpi-sub">${v.toFixed(0)}ms</span>` : '—'; },
+          avgFmt: v => v.toFixed(0) + 'ms avg',
+          higher: false },
+        { key: 'hallucinated_ops',     label: 'Hallucinated Ops',     fmt: v => v, higher: false },
+        { key: 'negotiation_rounds',   label: 'Negotiation Rounds',   fmt: v => v ?? 0, higher: false },
     ];
 
     // Run column headers: short run_id (last 6 chars) + relative timestamp
@@ -1603,7 +1787,6 @@ function renderCompareOpStats(runsData) {
     el.innerHTML = html;
 }
 
-// ── Export ────────────────────────────────────────────────────────────────────
 function exportHeatmapCsv() {
     if (!aggregateData) { alert('No data loaded.'); return; }
     const sorted = Object.values(aggregateData).sort((a, b) => a.benchmark_id - b.benchmark_id);

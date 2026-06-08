@@ -84,7 +84,6 @@ class RobotLLMAgent:
             temperature if temperature is not None else NEGOTIATION_TEMPERATURE
         )
 
-        # Robot config
         self.base_position = ROBOT_BASE_POSITIONS.get(robot_id, (0, 0, 0))
         self.workspace = ROBOT_WORKSPACE_ASSIGNMENTS.get(robot_id, "unknown")
         self.max_reach = MAX_ROBOT_REACH
@@ -189,7 +188,18 @@ CRITICAL RULES:
 - You MUST include at least one command for EVERY robot: {", ".join(all_robot_ids)}.
 - A plan that only covers {self.robot_id} will be REJECTED.
 - Each command needs operation+params(robot_id), optional parallel_group/capture_var.
-- Every signal needs a matching wait_for_signal.
+- Every signal MUST have a matching wait_for_signal and MUST include "event_name".
+- CROSS-ROBOT SIGNALS: if you plan wait_for_signal('X') for one robot, you MUST also plan signal('X') for the other robot in the SAME proposal. Both sides of every signal pair must appear.
+- COORDINATE RULES:
+  * pick_object_at_coordinate requires x, y, z, use the exact coordinates from "Objects in scene" above.
+  * grasp_object and receive_handoff compute positions internally and do NOT include x/y/z.
+  * move_to_coordinate requires x, y, z, use numeric values, never omit them.
+  * place_object requires x, y, z.
+- SIGNAL RULES: signal and wait_for_signal MUST include "event_name" (a unique string).
+
+OPERATION EXAMPLES:
+  pick: {{"parallel_group":1,"operation":"pick_object_at_coordinate","params":{{"robot_id":"{self.robot_id}","x":0.0,"y":0.012,"z":0.0}}}}
+  signal pair: {{"parallel_group":2,"operation":"signal","params":{{"event_name":"r1_done"}}}} + {{"parallel_group":2,"operation":"wait_for_signal","params":{{"robot_id":"{other_robot_ids[0] if other_robot_ids else 'Robot2'}","event_name":"r1_done"}}}}
 
 JSON (show commands for ALL robots): {_example_json}"""
 
@@ -293,7 +303,6 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
             f"Shared zone (both robots): x=[{sz.get('x_min')},{sz.get('x_max')}] -> objects here are reachable by either robot"
         )
 
-        # Robot state from world state
         robot_states = world_state_snapshot.get("robots", {})
         my_state = robot_states.get(self.robot_id, {})
         if my_state:

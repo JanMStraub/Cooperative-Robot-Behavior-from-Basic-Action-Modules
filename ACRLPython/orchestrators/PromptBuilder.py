@@ -26,7 +26,17 @@ _SECTION_WORKSPACE = """\
 
 Robot1 (left, x=-0.475): reachable x < 0.165. Robot2 (right, x=+0.475): reachable x > -0.165.
 x > 0 -> Robot2's side. x < 0 -> Robot1's side. x = 0 -> shared.
-Wrong-side task -> use HANDOFF sequence."""
+Wrong-side task -> use HANDOFF sequence.
+SINGULARITY RULE: Never command a robot to a position directly above its own base.
+  Robot1 base column: x=-0.475, z=0 -> keep targets at x > -0.36 or x < -0.59 to avoid.
+  Robot2 base column: x=+0.475, z=0 -> keep targets at x < +0.36 or x > +0.59 to avoid."""
+
+_SECTION_ROBOT_ASSIGNMENT = """\
+=== ROBOT ASSIGNMENT RULE ===
+Assign robot_id based ONLY on which robot can physically reach the object.
+"The other robot", "second robot", or "Robot2" are NOT valid reasons by themselves.
+Cross-check every grasp/pick against the 'Object reachability by robot' section below.
+If an object appears only under Robot1, always use robot_id='Robot1', regardless of task wording."""
 
 _SECTION_MULTI_ROBOT = """\
 === MULTI-ROBOT COORDINATION ===
@@ -142,7 +152,19 @@ _SECTION_INDEPENDENT_PARALLEL = """\
 
 When two robots have fully independent tasks (no shared objects, no handoff, no sync point), assign MATCHING parallel_group numbers so both chains execute simultaneously.
 Step N for Robot1 and step N for Robot2 belong in the same group, do NOT assign monotonically increasing groups across both robots.
-Use distinct capture_var names per robot (e.g. "r1_target" / "r2_target") to avoid collisions."""
+Use distinct capture_var names per robot (e.g. "r1_target" / "r2_target") to avoid collisions.
+
+Example: "Robot1 picks the red cube and places it in field C; Robot2 picks the yellow cube and places it in field D":
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot1", "color": "red"}, "capture_var": "r1_target", "parallel_group": 1}
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot2", "color": "yellow"}, "capture_var": "r2_target", "parallel_group": 1}
+{"operation": "grasp_object", "params": {"robot_id": "Robot1", "object_id": "$r1_target.color"}, "parallel_group": 2}
+{"operation": "grasp_object", "params": {"robot_id": "Robot2", "object_id": "$r2_target.color"}, "parallel_group": 2}
+{"operation": "detect_field", "params": {"robot_id": "Robot1", "field_label": "c"}, "capture_var": "r1_field", "parallel_group": 3}
+{"operation": "detect_field", "params": {"robot_id": "Robot2", "field_label": "d"}, "capture_var": "r2_field", "parallel_group": 3}
+{"operation": "place_object", "params": {"robot_id": "Robot1", "x": "$r1_field.x", "y": "$r1_field.y", "z": "$r1_field.z"}, "parallel_group": 4}
+{"operation": "place_object", "params": {"robot_id": "Robot2", "x": "$r2_field.x", "y": "$r2_field.y", "z": "$r2_field.z"}, "parallel_group": 4}
+
+grasp is group 2 (not 1) because it reads $r1_target/$r2_target captured in group 1. Variable dependency forces a new group, but both robots' grasps still share group 2. Same logic for place after detect_field."""
 
 _SECTION_COOPERATIVE = """\
 === COOPERATIVE POSITIONING RULE ===
@@ -213,7 +235,7 @@ _RE_SYNC = re.compile(
 _RE_DETECT_FIELD = re.compile(
     r"\b(detect\s+field|field[_\s]label|field\s+[A-I])\b", re.IGNORECASE
 )
-_RE_GRASP = re.compile(r"\b(pick\w*|grab\w*|grasp\w*|grip\w*|hold\w*)\b", re.IGNORECASE)
+_RE_GRASP = re.compile(r"\b(pick\w*|grab\w*|grasp\w*|grip(?!per)\w*|hold\w*)\b", re.IGNORECASE)
 _RE_PLACE = re.compile(r"\b(place|deposit|put\s+down|drop)\b", re.IGNORECASE)
 _RE_ROBOT1 = re.compile(r"\bRobot1\b")
 _RE_ROBOT2 = re.compile(r"\bRobot2\b")
@@ -254,7 +276,16 @@ class PromptBuilder:
         sections: List[str] = [
             f"Available Operations: {available_ops}",
             f'Command to parse: "{command_text}"\n        {_robot_id_line}',
+        ]
+
+        if spatial_section:
+            sections.append(
+                f"{spatial_section}\n        IMPORTANT: The object IDs listed above are the EXACT identifiers you MUST use in operation params (e.g. object_id, color). Do NOT invent, shorten, or paraphrase object names. Use ONLY operations from Available Operations above."
+            )
+
+        sections += [
             _SECTION_WORKSPACE,
+            _SECTION_ROBOT_ASSIGNMENT,
         ]
 
         if "multi_robot" in tags:
@@ -292,16 +323,17 @@ class PromptBuilder:
         if "detect_field" in tags or "place" in tags:
             sections.append(_SECTION_DETECT_FIELD)
 
-        if spatial_section:
-            sections.append(
-                f"{spatial_section}\n        NOTE: Spatial context is reference only. Use ONLY operations from Available Operations above."
-            )
         if anti_pattern_section:
             sections.append(anti_pattern_section)
         if hint:
             sections.append(f"=== REFLECTION ===\n        {hint}")
 
-        sections.append("Output only valid JSON, no explanation, no comments.")
+        if hint:
+            sections.append(
+                "Output exactly ONE valid JSON command object (not an array). No explanation."
+            )
+        else:
+            sections.append("Output only valid JSON, no explanation, no comments.")
 
         return "\n\n        ".join(sections)
 

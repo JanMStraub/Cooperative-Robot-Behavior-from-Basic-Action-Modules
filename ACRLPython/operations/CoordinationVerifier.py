@@ -118,10 +118,8 @@ class CoordinationVerifier:
         result = CoordinationCheckResult()
         result.checked_robots.append(robot_id)
 
-        # Get all other robots in system
         other_robots = [rid for rid in ROBOT_BASE_POSITIONS.keys() if rid != robot_id]
 
-        # Check 1: Path collision with other robots
         # Skipped for handoff-class operations — they intentionally colocate EEs and
         # manage safety internally via signal/wait serialization and ProximityGuard disable.
         if (
@@ -146,14 +144,12 @@ class CoordinationVerifier:
                             )
                         result.add_issue(collision_issue)
 
-        # Check 2: Workspace conflicts
         workspace_issue = self._check_workspace_conflict(
             robot_id, params, other_robots, world_state
         )
         if workspace_issue:
             result.add_issue(workspace_issue)
 
-        # Check 3: Object access conflicts
         if operation_category == OperationCategory.MANIPULATION:
             object_issue = self._check_object_conflict(
                 robot_id, params, other_robots, world_state
@@ -161,14 +157,12 @@ class CoordinationVerifier:
             if object_issue:
                 result.add_issue(object_issue)
 
-        # Check 4: Deadlock potential
         deadlock_issue = self._check_deadlock_potential(
             robot_id, params, other_robots, world_state
         )
         if deadlock_issue:
             result.add_issue(deadlock_issue)
 
-        # Add general recommendations
         if not result.safe:
             result.recommendations.extend(
                 [
@@ -184,7 +178,10 @@ class CoordinationVerifier:
         self, params: Dict[str, Any]
     ) -> Optional[Tuple[float, float, float]]:
         if "x" in params and "y" in params and "z" in params:
-            return (params["x"], params["y"], params["z"])
+            try:
+                return (float(params["x"]), float(params["y"]), float(params["z"]))
+            except (TypeError, ValueError):
+                return None
         elif "target_position" in params:
             return params["target_position"]
         elif "position" in params:
@@ -198,10 +195,9 @@ class CoordinationVerifier:
         other_robot_id: str,
         world_state,
     ) -> Optional[CoordinationIssue]:
-        # Get other robot's current target (if moving)
         other_robot_state = world_state._robot_states.get(other_robot_id)
         if other_robot_state is None:
-            return None  # Other robot not tracked
+            return None
 
         # From config.Robot.STATIC_COLLISION_RADIUS (default 0.03m).
         # Only blocks commands that would place EE inside the other robot's physical
@@ -228,12 +224,10 @@ class CoordinationVerifier:
                     )
             return None
 
-        # Other robot is moving - check path collision
         other_target = other_robot_state.target_position
         if other_target is None:
             return None
 
-        # Use robots_will_collide predicate
         will_collide, reason = robots_will_collide(
             robot_id, target_pos, other_robot_id, other_target, world_state
         )
@@ -287,17 +281,14 @@ class CoordinationVerifier:
         if target_pos is None:
             return None
 
-        # Determine which workspace this operation targets
         target_workspace = self._get_workspace_for_position(target_pos)
         if target_workspace is None:
-            return None  # Not in any defined workspace
+            return None
 
-        # Shared zones are allowed for all robots
         is_shared, _ = is_in_shared_zone(*target_pos)
         if is_shared:
             return None
 
-        # Check if another robot has allocated this workspace
         current_owner = world_state.get_workspace_owner(target_workspace)
         if current_owner is not None and current_owner != robot_id:
             return CoordinationIssue(
@@ -322,15 +313,13 @@ class CoordinationVerifier:
         _other_robots: List[str],
         world_state,
     ) -> Optional[CoordinationIssue]:
-        # Extract target object ID from params
         target_object_id = params.get("object_id") or params.get("object_ref")
         if target_object_id is None or not isinstance(target_object_id, str):
-            return None  # No specific object targeted
+            return None
 
-        # Check if object is already grasped
         obj_state = world_state._objects.get(target_object_id)
         if obj_state is None:
-            return None  # Object not tracked
+            return None
 
         if obj_state.grasped_by is not None and obj_state.grasped_by != robot_id:
             return CoordinationIssue(
@@ -362,7 +351,6 @@ class CoordinationVerifier:
         if target_workspace is None:
             return None
 
-        # Check if any other robot is trying to move to this robot's current workspace
         robot_current_workspace = ROBOT_WORKSPACE_ASSIGNMENTS.get(robot_id)
         if robot_current_workspace is None:
             return None
@@ -372,7 +360,6 @@ class CoordinationVerifier:
             if other_state is None or other_state.target_position is None:
                 continue
 
-            # Get other robot's target workspace
             other_target_workspace = self._get_workspace_for_position(
                 other_state.target_position
             )
@@ -409,11 +396,6 @@ class CoordinationVerifier:
             ):
                 return region_name
         return None
-
-
-# ============================================================================
-# Utility Functions
-# ============================================================================
 
 
 def quick_check_multi_robot_safety(

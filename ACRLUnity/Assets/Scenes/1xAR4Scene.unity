@@ -839,6 +839,10 @@ PrefabInstance:
       propertyPath: maxAttachRadius
       value: 0.05
       objectReference: {fileID: 0}
+    - target: {fileID: 1116772510549147897, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: minJawGraspWidth
+      value: 0.2
+      objectReference: {fileID: 0}
     - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _attachObjectOnGrasp
       value: 1
@@ -887,6 +891,14 @@ PrefabInstance:
       propertyPath: m_Material
       value: 
       objectReference: {fileID: 2099700521}
+    - target: {fileID: 5075431559166153548, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.05
+      objectReference: {fileID: 0}
+    - target: {fileID: 5075431559166153548, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.07
+      objectReference: {fileID: 0}
     - target: {fileID: 5232535901379417394, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -962,6 +974,10 @@ PrefabInstance:
     - target: {fileID: 7409242131979378376, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: maxAttachRadius
       value: 0.05
+      objectReference: {fileID: 0}
+    - target: {fileID: 7409242131979378376, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: minJawGraspWidth
+      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 7756261985914743818, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive

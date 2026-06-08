@@ -1,13 +1,5 @@
-#!/usr/bin/env python3
-"""Test Dual-Robot ROS Control"""
-
-import sys
-import os
 import time
 import pytest
-
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from ros2.ROSBridge import ROSBridge
 
@@ -31,11 +23,6 @@ pytestmark = pytest.mark.skipif(
 
 def test_dual_robot_connection():
     """Test connection to ROS bridge and verify multi-robot support."""
-    logger.info("=" * 60)
-    logger.info("Test 1: Verify ROS Bridge Connection")
-    logger.info("=" * 60)
-
-    # Use singleton instance to ensure connection persists across tests
     bridge = ROSBridge.get_instance()
 
     if not bridge.connect(timeout=10.0):
@@ -54,16 +41,10 @@ def test_dual_robot_connection():
 
 
 def test_robot1_motion():
-    logger.info("=" * 60)
-    logger.info("Test 2: Robot1 Motion Planning")
-    logger.info("=" * 60)
-
     bridge = ROSBridge.get_instance()
 
-    # Test position for Robot1 (Unity world coordinates - will be auto-transformed)
-    # Send: world (-0.2, 0.15, 0.0)
-    # Robot1 at world (-0.475, 0, 0), rotation 0°
-    # Transform: local = (-0.2 - (-0.475), 0.15, 0) = (0.275, 0.15, 0)
+    # Unity world coords; Robot1 at (-0.475, 0, 0), rotation 0°
+    # local = (-0.2 - (-0.475), 0.15, 0) = (0.275, 0.15, 0)
     target_position = {"x": -0.2, "y": 0.15, "z": 0.0}
 
     logger.info(f"Requesting motion for Robot1 to {target_position}")
@@ -82,16 +63,10 @@ def test_robot1_motion():
 
 
 def test_robot2_motion():
-    logger.info("=" * 60)
-    logger.info("Test 3: Robot2 Motion Planning")
-    logger.info("=" * 60)
-
     bridge = ROSBridge.get_instance()
 
-    # Test position for Robot2 (Unity world coordinates - will be auto-transformed)
-    # Send: world (0.2, 0.15, 0)
-    # Robot2 at world (0.475, 0, 0), rotation 180°
-    # Transform: translate (0.2 - 0.475 = -0.275), rotate 180° -> (0.275, 0.15, 0)
+    # Unity world coords; Robot2 at (0.475, 0, 0), rotation 180°
+    # local: translate (-0.275), rotate 180° → (0.275, 0.15, 0)
     target_position = {"x": 0.2, "y": 0.15, "z": 0.0}
 
     logger.info(f"Requesting motion for Robot2 to {target_position}")
@@ -110,34 +85,21 @@ def test_robot2_motion():
 
 
 def test_simultaneous_motion():
-    logger.info("=" * 60)
-    logger.info("Test 4: Simultaneous Dual-Robot Motion")
-    logger.info("=" * 60)
-
     bridge = ROSBridge.get_instance()
 
-    # Target positions for both robots
     robot1_target = {"x": -0.1, "y": 0.15, "z": 0.0}
     robot2_target = {"x": 0.1, "y": 0.15, "z": 0.0}
 
-    logger.info("Sending simultaneous commands to both robots")
-
-    # Send Robot1 command
-    logger.info(f"Robot1 -> {robot1_target}")
     result1 = bridge.plan_and_execute(
         position=robot1_target, robot_id="Robot1", planning_time=10.0
     )
 
-    # Small delay to avoid overwhelming the system
     time.sleep(0.5)
 
-    # Send Robot2 command
-    logger.info(f"Robot2 -> {robot2_target}")
     result2 = bridge.plan_and_execute(
         position=robot2_target, robot_id="Robot2", planning_time=10.0
     )
 
-    # Check results
     success1 = result1 and result1.get("success")
     success2 = result2 and result2.get("success")
 
@@ -249,70 +211,3 @@ def test_get_joint_states():
         logger.info("Joint state retrieval successful")
     else:
         pytest.fail("No joint states available - Unity may not be running")
-
-
-def run_all_tests():
-    """Run all dual-robot tests."""
-    logger.info("\n" + "=" * 60)
-    logger.info("DUAL-ROBOT ROS CONTROL TEST SUITE")
-    logger.info("=" * 60 + "\n")
-
-    results = {}
-
-    # Test 1: Connection
-    results["connection"] = test_dual_robot_connection()
-    if not results["connection"]:
-        logger.error("\nConnection test failed - aborting remaining tests")
-        return results
-
-    time.sleep(2)
-
-    # Test 2: Robot1 motion
-    results["robot1_motion"] = test_robot1_motion()
-    time.sleep(3)
-
-    # Test 3: Robot2 motion
-    results["robot2_motion"] = test_robot2_motion()
-    time.sleep(3)
-
-    # Test 4: Simultaneous motion
-    results["simultaneous"] = test_simultaneous_motion()
-    time.sleep(3)
-
-    # Test 5: Gripper control
-    results["gripper"] = test_gripper_control()
-    time.sleep(2)
-
-    # Test 6: Joint states
-    results["joint_states"] = test_get_joint_states()
-
-    # Summary
-    logger.info("\n" + "=" * 60)
-    logger.info("TEST SUMMARY")
-    logger.info("=" * 60)
-    for test_name, success in results.items():
-        status = "PASS" if success else "FAIL"
-        logger.info(f"  {test_name:20s}: {status}")
-
-    total = len(results)
-    passed = sum(results.values())
-    logger.info(f"\nTotal: {passed}/{total} tests passed")
-    logger.info("=" * 60 + "\n")
-
-    return results
-
-
-if __name__ == "__main__":
-    try:
-        results = run_all_tests()
-
-        # Exit with appropriate code
-        all_passed = all(results.values())
-        sys.exit(0 if all_passed else 1)
-
-    except KeyboardInterrupt:
-        logger.info("\nTests interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}", exc_info=True)
-        sys.exit(1)

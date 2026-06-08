@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Unit tests for quaternion mathematical operations.
 
@@ -39,7 +38,6 @@ class TestQuaternionBasics:
         assert np.allclose(normalized, quat, atol=1e-6)
 
     def test_normalize_non_unit_quaternion(self):
-        """Test normalizing a non-unit quaternion."""
         quat = (1.0, 1.0, 1.0, 1.0)
         normalized = quaternion_normalize(quat)
         magnitude = np.sqrt(sum(x**2 for x in normalized))
@@ -53,7 +51,6 @@ class TestEulerConversions:
         assert np.allclose(quat, (0.0, 0.0, 0.0, 1.0), atol=1e-6)
 
     def test_90_degree_x_rotation(self):
-        """Test 90 degree rotation around X-axis."""
         quat = quaternion_from_euler(np.pi / 2, 0.0, 0.0)
         # Expected: sin(45°) on x, cos(45°) on w
         expected_x = np.sin(np.pi / 4)
@@ -62,7 +59,6 @@ class TestEulerConversions:
         assert np.isclose(quat[3], expected_w, atol=1e-6)
 
     def test_90_degree_y_rotation(self):
-        """Test 90 degree rotation around Y-axis."""
         quat = quaternion_from_euler(0.0, np.pi / 2, 0.0)
         expected_y = np.sin(np.pi / 4)
         expected_w = np.cos(np.pi / 4)
@@ -70,7 +66,6 @@ class TestEulerConversions:
         assert np.isclose(quat[3], expected_w, atol=1e-6)
 
     def test_90_degree_z_rotation(self):
-        """Test 90 degree rotation around Z-axis."""
         quat = quaternion_from_euler(0.0, 0.0, np.pi / 2)
         expected_z = np.sin(np.pi / 4)
         expected_w = np.cos(np.pi / 4)
@@ -78,7 +73,6 @@ class TestEulerConversions:
         assert np.isclose(quat[3], expected_w, atol=1e-6)
 
     def test_roundtrip_conversion(self):
-        """Test converting euler -> quaternion -> euler."""
         roll, pitch, yaw = 0.5, 0.3, 0.7
         quat = quaternion_from_euler(roll, pitch, yaw)
         roll2, pitch2, yaw2 = euler_from_quaternion(*quat)
@@ -96,7 +90,6 @@ class TestQuaternionMultiplication:
         assert np.allclose(result, quat, atol=1e-6)
 
     def test_multiplication_order(self):
-        """Test that quaternion multiplication is non-commutative."""
         q1 = quaternion_from_euler(np.pi / 4, 0.0, 0.0)
         q2 = quaternion_from_euler(0.0, np.pi / 4, 0.0)
 
@@ -107,7 +100,6 @@ class TestQuaternionMultiplication:
         assert not np.allclose(result1, result2, atol=1e-6)
 
     def test_inverse_multiplication(self):
-        """Test that q * q^(-1) = identity."""
         quat = quaternion_from_euler(0.5, 0.3, 0.7)
         inv_quat = quaternion_inverse(quat)
         result = quaternion_multiply(quat, inv_quat)
@@ -126,7 +118,6 @@ class TestVectorRotation:
         assert np.allclose(rotated, vec, atol=1e-6)
 
     def test_90_degree_rotation_around_z(self):
-        """Test 90 degree rotation around Z-axis."""
         vec = np.array([1.0, 0.0, 0.0])
         quat = quaternion_from_euler(0.0, 0.0, np.pi / 2)
         rotated = quaternion_rotate_vector(quat, vec)
@@ -136,7 +127,6 @@ class TestVectorRotation:
         assert np.allclose(rotated, expected, atol=1e-6)
 
     def test_90_degree_rotation_around_y(self):
-        """Test 90 degree rotation around Y-axis."""
         vec = np.array([1.0, 0.0, 0.0])
         quat = quaternion_from_euler(0.0, np.pi / 2, 0.0)
         rotated = quaternion_rotate_vector(quat, vec)
@@ -183,7 +173,6 @@ class TestQuaternionAngle:
 
 
 class TestAxisAngleConversion:
-    """Test axis-angle to quaternion conversion."""
 
     def test_zero_angle(self):
         axis = np.array([0.0, 0.0, 1.0])
@@ -191,7 +180,6 @@ class TestAxisAngleConversion:
         assert np.allclose(quat, quaternion_identity(), atol=1e-6)
 
     def test_90_degree_around_z(self):
-        """Test 90 degree rotation around Z-axis."""
         axis = np.array([0.0, 0.0, 1.0])
         quat = quaternion_from_axis_angle(axis, np.pi / 2)
 
@@ -217,7 +205,6 @@ class TestQuaternionInverse:
         assert np.allclose(inv, identity, atol=1e-6)
 
     def test_double_inverse(self):
-        """Test that (q^-1)^-1 = q."""
         quat = quaternion_from_euler(0.5, 0.3, 0.7)
         inv_inv = quaternion_inverse(quaternion_inverse(quat))
         assert np.allclose(quat, inv_inv, atol=1e-6)

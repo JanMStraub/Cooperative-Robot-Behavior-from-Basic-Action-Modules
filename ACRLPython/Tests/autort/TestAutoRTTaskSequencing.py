@@ -1,17 +1,6 @@
-#!/usr/bin/env python3
-"""
-Tests for context-aware AutoRT task sequencing.
-
-Covers ExecutedTaskContext model, SceneDescription backward compat,
-_build_previous_task_section logic, _build_task_prompt injection,
-and AutoRTOrchestrator state tracking.
-"""
-
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from pydantic import ValidationError
-
-# Fixtures
 
 
 def make_scene(last_task_context=None):
@@ -64,9 +53,6 @@ def _build_generator():
     return TaskGenerator(cfg)
 
 
-# Section 1: ExecutedTaskContext model
-
-
 class TestExecutedTaskContext:
     def test_valid_success(self):
         from autort.DataModels import ExecutedTaskContext
@@ -117,9 +103,6 @@ class TestExecutedTaskContext:
             )
 
 
-# Section 2: SceneDescription backward compat
-
-
 class TestSceneDescriptionBackwardCompat:
     def test_no_context_still_valid(self):
         scene = make_scene()
@@ -141,9 +124,6 @@ class TestSceneDescriptionBackwardCompat:
         restored = SceneDescription(**data)
         assert restored.last_task_context is not None
         assert restored.last_task_context.success is False
-
-
-# Section 3: _build_previous_task_section — success paths
 
 
 class TestBuildPreviousTaskSectionSuccess:
@@ -189,9 +169,6 @@ class TestBuildPreviousTaskSectionSuccess:
         section = self.gen._build_previous_task_section(ctx)
         assert "PREVIOUS TASK CONTEXT" in section
         assert "detect_object_stereo" in section  # generic follow-ups
-
-
-# Section 4: _build_previous_task_section — failure paths
 
 
 class TestBuildPreviousTaskSectionFailure:
@@ -242,9 +219,6 @@ class TestBuildPreviousTaskSectionFailure:
         assert "motor overheated" in section
 
 
-# Section 5: _build_task_prompt integration
-
-
 class TestBuildTaskPromptIntegration:
     @pytest.fixture(autouse=True)
     def _setup_gen(self):
@@ -283,9 +257,6 @@ class TestBuildTaskPromptIntegration:
         scene = make_scene()
         prompt = self.gen._build_task_prompt(scene, ["Robot1"], 1, False)
         assert "TASK:" in prompt
-
-
-# Section 6: AutoRTOrchestrator state tracking
 
 
 class TestAutoRTOrchestratorState:

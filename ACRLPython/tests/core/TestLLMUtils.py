@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Tests for core.LLMUtils.extract_json"""
-
 from core.LLMUtils import extract_json
 
 

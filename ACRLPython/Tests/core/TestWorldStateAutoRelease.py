@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Unit tests for WorldState workspace auto-release (Phase 2 improvement).
 
@@ -18,10 +17,8 @@ from operations.WorldState import (
 
 
 class TestWorkspaceAutoRelease:
-    """Test workspace auto-release with timeout"""
 
     def test_workspace_allocation_structure(self, cleanup_world_state):
-        """Test WorkspaceAllocation dataclass has required fields"""
         allocation = WorkspaceAllocation(robot_id="Robot1", region="left_workspace")
 
         assert allocation.robot_id == "Robot1"
@@ -30,7 +27,6 @@ class TestWorkspaceAutoRelease:
         assert isinstance(allocation.allocated_at, float)
 
     def test_allocate_workspace_fresh(self, cleanup_world_state):
-        """Test allocating a fresh workspace"""
         world_state = get_world_state()
 
         # Note: WorldState uses (region, robot_id) parameter order
@@ -41,7 +37,6 @@ class TestWorkspaceAutoRelease:
         assert allocated_robot == "Robot1"
 
     def test_allocate_workspace_already_owned(self, cleanup_world_state):
-        """Test allocating a workspace already owned by the same robot"""
         world_state = get_world_state()
 
         # First allocation
@@ -55,7 +50,6 @@ class TestWorkspaceAutoRelease:
     def test_allocate_workspace_already_owned_different_robot(
         self, cleanup_world_state
     ):
-        """Test allocating a workspace owned by another robot"""
         world_state = get_world_state()
 
         # Robot1 allocates workspace
@@ -68,7 +62,6 @@ class TestWorkspaceAutoRelease:
         assert world_state.get_workspace_owner("left_workspace") == "Robot1"
 
     def test_release_workspace(self, cleanup_world_state):
-        """Test manual workspace release"""
         world_state = get_world_state()
 
         # Allocate workspace
@@ -80,7 +73,6 @@ class TestWorkspaceAutoRelease:
         assert world_state.get_workspace_owner("left_workspace") is None
 
     def test_cleanup_stale_allocations_timeout(self, cleanup_world_state):
-        """Test stale allocations are cleaned up after timeout"""
         world_state = get_world_state()
 
         # Set short timeout for testing (1 second)
@@ -100,7 +92,6 @@ class TestWorkspaceAutoRelease:
         assert world_state.get_workspace_owner("left_workspace") is None
 
     def test_cleanup_preserves_fresh_allocations(self, cleanup_world_state):
-        """Test cleanup preserves fresh allocations"""
         world_state = get_world_state()
 
         # Set timeout
@@ -116,7 +107,6 @@ class TestWorkspaceAutoRelease:
         assert world_state.get_workspace_owner("left_workspace") == "Robot1"
 
     def test_cleanup_multiple_workspaces_partial_stale(self, cleanup_world_state):
-        """Test cleanup handles mix of fresh and stale allocations"""
         world_state = get_world_state()
 
         # Set short timeout
@@ -141,7 +131,6 @@ class TestWorkspaceAutoRelease:
         assert world_state.get_workspace_owner("shared_zone") == "Robot3"
 
     def test_default_timeout_value(self, cleanup_world_state):
-        """Test default workspace timeout is 60 seconds"""
         world_state = get_world_state()
 
         # Default timeout should be 60 seconds
@@ -149,7 +138,6 @@ class TestWorkspaceAutoRelease:
         assert world_state._workspace_timeout == 60.0
 
     def test_configurable_timeout(self, cleanup_world_state):
-        """Test workspace timeout can be configured"""
         world_state = get_world_state()
 
         # Set custom timeout
@@ -158,7 +146,6 @@ class TestWorkspaceAutoRelease:
         assert world_state._workspace_timeout == 30.0
 
     def test_allocation_timestamp_updates(self, cleanup_world_state):
-        """Test allocation timestamp updates on re-allocation"""
         world_state = get_world_state()
 
         # First allocation
@@ -178,7 +165,6 @@ class TestWorkspaceAutoRelease:
         assert second_timestamp > first_timestamp
 
     def test_cleanup_called_periodically(self, cleanup_world_state):
-        """Test cleanup is called automatically during operations"""
         world_state = get_world_state()
 
         # Set short timeout
@@ -199,7 +185,6 @@ class TestWorkspaceAutoRelease:
         assert world_state.get_workspace_owner("right_workspace") == "Robot2"
 
     def test_workspace_regions_independent(self, cleanup_world_state):
-        """Test different workspace regions are tracked independently"""
         world_state = get_world_state()
 
         # Allocate different regions
@@ -221,7 +206,6 @@ class TestWorkspaceAutoRelease:
         assert world_state.get_workspace_owner("shared_zone") == "Robot3"
 
     def test_reset_clears_workspaces(self, cleanup_world_state):
-        """Test reset clears all workspace allocations"""
         world_state = get_world_state()
 
         # Allocate workspaces
@@ -236,7 +220,6 @@ class TestWorkspaceAutoRelease:
         assert world_state.get_workspace_owner("right_workspace") is None
 
     def test_stale_allocation_warning_logged(self, cleanup_world_state, caplog):
-        """Test that stale allocation cleanup logs a warning"""
         import logging
 
         world_state = get_world_state()
@@ -261,7 +244,6 @@ class TestWorkspaceAutoRelease:
         )
 
     def test_multiple_robots_same_region_sequential(self, cleanup_world_state):
-        """Test multiple robots can use same region sequentially after timeout"""
         world_state = get_world_state()
 
         # Set short timeout
@@ -284,7 +266,6 @@ class TestWorkspaceAutoRelease:
 
 @pytest.fixture
 def cleanup_world_state():
-    """Fixture to cleanup WorldState singleton between tests"""
     # Reset before test
     if WorldState._instance is not None:
         WorldState._instance.reset()

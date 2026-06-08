@@ -126,11 +126,6 @@ SIGNAL_OPERATION = BasicOperation(
     category=OperationCategory.SYNC,
     complexity=OperationComplexity.ATOMIC,
     description="Emit named event for other robots to wait on",
-    long_description=(
-        "Signals a named event that other robots can wait for using wait_for_signal. "
-        "This enables flexible synchronization between robots without hardcoded coordination patterns. "
-        "The event persists until all waiting robots have received it, then auto-clears."
-    ),
     parameters=[
         OperationParameter(
             name="event_name",
@@ -176,11 +171,6 @@ def _execute_wait_for_signal(
             return OperationResult.error_result(
                 error_code="WAIT_TIMEOUT",
                 message=f"Timeout waiting for event '{event_name}' after {timeout_ms}ms",
-                recovery_suggestions=[
-                    f"Check if the signaling robot is executing signal('{event_name}')",
-                    "Increase timeout_ms if operation takes longer than expected",
-                    "Verify execution order - signal must come after wait_for_signal starts",
-                ],
             )
     except Exception as e:
         return OperationResult.error_result(
@@ -193,14 +183,9 @@ WAIT_FOR_SIGNAL_OPERATION = BasicOperation(
     name="wait_for_signal",
     category=OperationCategory.SYNC,
     complexity=OperationComplexity.ATOMIC,
-    description="Block until named event is received",
-    long_description=(
-        "Waits for another robot to signal a named event. Blocks execution until the event "
-        "is signaled or timeout is reached. Use this to synchronize multi-robot tasks. "
-        "Common pattern: Robot2 waits for 'cube_gripped' while Robot1 detects and grips cube. "
-        "Trigger phrases: 'do not move until signal', 'wait for the go signal', 'hold position "
-        "until Robot1 signals', 'stay still until you receive the signal', 'block until partner "
-        "is ready', 'do not start until signal received', 'pause until go signal from Robot1'."
+    description=(
+        "Block until named event is received. Trigger phrases: 'do not move until signal', "
+        "'wait for the go signal', 'hold position until Robot1 signals', 'block until partner ready'."
     ),
     parameters=[
         OperationParameter(
@@ -215,12 +200,12 @@ WAIT_FOR_SIGNAL_OPERATION = BasicOperation(
             description="Maximum wait time in milliseconds",
             required=False,
             default=30000,
-            valid_range=(100, 300000),  # 100ms to 5 minutes
+            valid_range=(100, 300000),
         ),
     ],
     preconditions=[],
     postconditions=[],
-    average_duration_ms=5000,  # Depends on when signal is sent
+    average_duration_ms=5000,
     success_rate=0.95,
     failure_modes=["Timeout reached", "Signal never sent", "Event name mismatch"],
     usage_examples=[
@@ -264,23 +249,18 @@ WAIT_OPERATION = BasicOperation(
     category=OperationCategory.SYNC,
     complexity=OperationComplexity.ATOMIC,
     description="Pause execution for specified duration",
-    long_description=(
-        "Simple time-based pause in execution. Use this for timing coordination "
-        "or allowing time for physical processes to complete (e.g., gripper closing, "
-        "settling after movement). For robot-to-robot synchronization, prefer wait_for_signal."
-    ),
     parameters=[
         OperationParameter(
             name="duration_ms",
             type="int",
             description="Time to wait in milliseconds",
             required=True,
-            valid_range=(0, 60000),  # 0 to 60 seconds
+            valid_range=(0, 60000),
         ),
     ],
     preconditions=[],
     postconditions=[],
-    average_duration_ms=1000,  # Depends on parameter
+    average_duration_ms=1000,
     success_rate=0.999,
     failure_modes=["Invalid duration"],
     usage_examples=[
@@ -305,14 +285,12 @@ def _execute_reset_simulation(**_kwargs) -> OperationResult:
         return OperationResult.error_result(
             "COMMUNICATION_FAILED",
             "Failed to send reset_simulation to Unity or timed out",
-            ["Ensure Unity is running and connected to CommandServer (port 5007)"],
         )
 
     if not completion.get("success", False):
         return OperationResult.error_result(
             "RESET_FAILED",
             "Simulation reset did not complete successfully",
-            ["Check Unity console for SimulationManager errors"],
         )
 
     return OperationResult.success_result({"reset": True})
@@ -324,11 +302,6 @@ RESET_SIMULATION_OPERATION = BasicOperation(
     category=OperationCategory.SYNC,
     complexity=OperationComplexity.ATOMIC,
     description="Reset simulation to initial state (robots, objects, scene)",
-    long_description=(
-        "Triggers a full simulation reset: robots return to start positions, "
-        "all scene objects return to their initial positions. "
-        "Used between benchmark runs or after errors."
-    ),
     parameters=[],
     preconditions=[],
     postconditions=[],
@@ -392,14 +365,8 @@ def yield_workspace(
             error_code="WORKSPACE_TIMEOUT",
             message=(
                 f"Timeout waiting for workspace region '{region_id}' to be cleared "
-                f"after {timeout_ms}ms. Partner robot must call "
-                f"signal('region_clear_{region_id}') when leaving the region."
+                f"after {timeout_ms}ms. Partner must call signal('region_clear_{region_id}')."
             ),
-            recovery_suggestions=[
-                f"Partner robot should call signal('region_clear_{region_id}') when leaving the region",
-                "Increase timeout_ms if the partner robot needs more time",
-                "Verify the partner robot's task sequence includes the clear signal",
-            ],
         )
 
     waited_ms = (time.time() - start_time) * 1000
@@ -435,18 +402,11 @@ YIELD_WORKSPACE_OPERATION = BasicOperation(
     name="yield_workspace",
     category=OperationCategory.COORDINATION,
     complexity=OperationComplexity.ATOMIC,
-    description="Signal intent to enter a workspace region and wait until the region is cleared by the partner robot",
-    long_description="""
-        Request access to a shared workspace region and block until the partner robot has
-        vacated it. Use this before moving into any region that another robot may occupy.
-
-        Trigger phrases: "request access to workspace", "wait until Robot2 has cleared",
-        "need the shared zone", "enter the handoff area", "wait for region to be free",
-        "hold until partner clears", "request workspace access".
-
-        Internally signals the partner and waits for a clearance acknowledgement before
-        returning. Prevents collision when both robots need the same region.
-    """,
+    description=(
+        "Signal intent to enter a workspace region and block until the partner robot vacates it. "
+        "Trigger phrases: 'request access to workspace', 'wait until Robot2 has cleared', "
+        "'enter the handoff area', 'hold until partner clears'."
+    ),
     parameters=[
         OperationParameter(
             name="robot_id",

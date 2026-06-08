@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for PointCloudOperations.py"""
-
 import time
 import pytest
 import numpy as np
@@ -57,11 +54,8 @@ _STEREO_SKIP = (
     "Backend not reachable on port 5008 — run Unity and start the backend servers"
 )
 
-# Helpers
-
 
 def _make_stereo_images(width: int = 64, height: int = 48) -> tuple:
-    """Return a minimal stereo pair (left, right) with simple chessboard texture."""
     board = np.zeros((height, width, 3), dtype=np.uint8)
     # Chessboard pattern so SGBM can find disparity
     for r in range(height):
@@ -77,7 +71,6 @@ def _make_storage_mock(
     timestamp=None,
     metadata=None,
 ):
-    """Return a mock UnifiedImageStorage with get_latest_stereo_image configured."""
     if timestamp is None:
         timestamp = time.time()
     if metadata is None:
@@ -98,14 +91,9 @@ def _make_storage_mock(
     return storage
 
 
-# Tests
-
-
 class TestGeneratePointCloud:
-    """Unit tests for generate_point_cloud — all IO is mocked."""
 
     def _patch_storage(self, monkeypatch, storage):
-        """Patch get_unified_image_storage to return the given mock storage."""
         monkeypatch.setattr(
             "operations.PointCloudOperations.get_unified_image_storage",
             Mock(return_value=storage),
@@ -113,7 +101,6 @@ class TestGeneratePointCloud:
         )
 
     def _patch_reconstruct(self, monkeypatch, fake_pc):
-        """Patch stereo_reconstruct_stream to return a synthetic point cloud."""
         monkeypatch.setattr(
             "operations.PointCloudOperations.stereo_reconstruct_stream",
             Mock(return_value=fake_pc),
@@ -121,7 +108,6 @@ class TestGeneratePointCloud:
         )
 
     def test_success_returns_expected_keys(self, monkeypatch):
-        """A valid stereo pair produces a result with all required keys."""
         left, right = _make_stereo_images()
         storage = _make_storage_mock(left, right)
         self._patch_storage(monkeypatch, storage)
@@ -150,7 +136,6 @@ class TestGeneratePointCloud:
         assert r["point_count"] == n_pts
 
     def test_stale_image_rejected(self, monkeypatch):
-        """Images older than max_age_seconds return STALE_IMAGE error."""
         left, right = _make_stereo_images()
         stale_ts = time.time() - 60.0  # 60 seconds old
         storage = _make_storage_mock(left, right, timestamp=stale_ts)
@@ -163,7 +148,6 @@ class TestGeneratePointCloud:
         assert result.error["code"] == "STALE_IMAGE"
 
     def test_no_stereo_images_available(self, monkeypatch):
-        """When storage returns None, operation returns NO_STEREO_IMAGES error."""
         storage = Mock()
         storage.get_latest_stereo_image.return_value = None
         self._patch_storage(monkeypatch, storage)
@@ -175,7 +159,6 @@ class TestGeneratePointCloud:
         assert result.error["code"] == "NO_STEREO_IMAGES"
 
     def test_incomplete_stereo_pair(self, monkeypatch):
-        """When right image is None, operation returns INCOMPLETE_STEREO_PAIR."""
         left, _ = _make_stereo_images()
         storage = _make_storage_mock(left, None)
         self._patch_storage(monkeypatch, storage)
@@ -187,7 +170,6 @@ class TestGeneratePointCloud:
         assert result.error["code"] == "INCOMPLETE_STEREO_PAIR"
 
     def test_downsample_applied_when_above_max_points(self, monkeypatch):
-        """When raw cloud exceeds max_points, result is capped at max_points."""
         left, right = _make_stereo_images()
         storage = _make_storage_mock(left, right)
         self._patch_storage(monkeypatch, storage)
@@ -208,7 +190,6 @@ class TestGeneratePointCloud:
         assert len(result.result["points"]) == max_pts
 
     def test_nan_points_filtered(self, monkeypatch):
-        """NaN/Inf points from SGBM are removed before downsampling."""
         left, right = _make_stereo_images()
         storage = _make_storage_mock(left, right)
         self._patch_storage(monkeypatch, storage)
@@ -229,7 +210,6 @@ class TestGeneratePointCloud:
         assert result.result["point_count"] == 2
 
     def test_camera_position_in_result(self, monkeypatch):
-        """camera_position metadata is propagated correctly from stereo metadata."""
         left, right = _make_stereo_images()
         expected_pos = [1.5, 0.8, 2.3]
         metadata = {
@@ -255,7 +235,6 @@ class TestGeneratePointCloud:
         assert result.result["camera_position"] == pytest.approx(expected_pos)
 
     def test_operation_definition_has_implementation(self):
-        """Registry operation definition must carry an implementation callable."""
         assert GENERATE_POINT_CLOUD_OPERATION.implementation is not None
         assert callable(GENERATE_POINT_CLOUD_OPERATION.implementation)
 
@@ -321,7 +300,6 @@ class TestGeneratePointCloudIntegration:
             )
 
     def test_live_point_cloud_has_valid_points(self):
-        """Point count > 0 and all points are finite."""
         result_dict = self._run_point_cloud(request_id=9902)
         assert result_dict.get("success"), result_dict.get("error")
         cmd_results = result_dict.get("results", [{}])
@@ -331,7 +309,6 @@ class TestGeneratePointCloudIntegration:
         assert np.isfinite(pts).all(), "Point cloud contains non-finite values"
 
     def test_live_camera_position_non_zero(self):
-        """camera_position from Unity metadata should not be the origin."""
         result_dict = self._run_point_cloud(request_id=9904)
         assert result_dict.get("success"), result_dict.get("error")
         cmd_results = result_dict.get("results", [{}])

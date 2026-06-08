@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for GripperOperations.py"""
-
 import pytest
 from unittest.mock import Mock, patch
 
@@ -12,8 +9,6 @@ from operations.GripperOperations import (
     place_between_objects,
     PLACE_BETWEEN_OBJECTS_OPERATION,
 )
-
-# Fixtures
 
 
 @pytest.fixture
@@ -171,7 +166,6 @@ class TestGripperOperationDefinition:
         assert op.implementation is not None
 
     def test_operation_execution_through_definition(self, patch_command_broadcaster):
-        """Test executing operation through BasicOperation.execute()."""
 
         result = CONTROL_GRIPPER_OPERATION.execute(robot_id="Robot1", open_gripper=True)
 
@@ -182,7 +176,6 @@ class TestGripperOperationDefinition:
 
 
 def _make_ws_two_objects():
-    """WorldState mock with blue and red cube at known positions."""
     ws = Mock()
 
     def _resolve(obj_id):
@@ -214,7 +207,6 @@ class TestPlaceBetweenObjects:
             pass
 
     def test_midpoint_computed_correctly(self, monkeypatch, patch_command_broadcaster):
-        """Midpoint x/z correct for two known object positions."""
         ws = _make_ws_two_objects()
         self._patch_ws(monkeypatch, ws)
 
@@ -227,7 +219,6 @@ class TestPlaceBetweenObjects:
         assert abs(result.result["placed_at"]["z"] - 0.4) < 1e-6
 
     def test_midpoint_in_result_metadata(self, monkeypatch, patch_command_broadcaster):
-        """Result includes midpoint and reference_objects metadata."""
         ws = _make_ws_two_objects()
         self._patch_ws(monkeypatch, ws)
 
@@ -239,7 +230,6 @@ class TestPlaceBetweenObjects:
         assert result.result["reference_objects"] == ["blue", "red"]
 
     def test_first_object_not_found(self, monkeypatch, patch_command_broadcaster):
-        """Returns OBJECT_NOT_FOUND error when first object missing."""
         ws = Mock()
         ws.resolve_canonical_id = Mock(return_value=None)
         self._patch_ws(monkeypatch, ws)
@@ -252,7 +242,6 @@ class TestPlaceBetweenObjects:
         assert "missing" in result.error["message"]
 
     def test_second_object_not_found(self, monkeypatch, patch_command_broadcaster):
-        """Returns OBJECT_NOT_FOUND error when second object missing."""
         ws = Mock()
 
         def _resolve(obj_id):
@@ -273,14 +262,12 @@ class TestPlaceBetweenObjects:
         assert "missing" in result.error["message"]
 
     def test_invalid_robot_id(self, monkeypatch):
-        """Returns INVALID_ROBOT_ID for empty robot_id."""
         result = place_between_objects("", "blue", "red")
         assert result.success is False
         assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_operation_registered(self):
-        """PLACE_BETWEEN_OBJECTS_OPERATION has required metadata."""
         op = PLACE_BETWEEN_OBJECTS_OPERATION
         param_names = {p.name for p in op.parameters}
         assert "object_id_1" in param_names
@@ -290,7 +277,6 @@ class TestPlaceBetweenObjects:
     def test_default_y_used_when_no_on_top_of(
         self, monkeypatch, patch_command_broadcaster
     ):
-        """Explicit y passes through unchanged when on_top_of not given."""
         ws = _make_ws_two_objects()
         self._patch_ws(monkeypatch, ws)
 
@@ -309,7 +295,6 @@ def _make_world_state(
     position=(0.0, 0.05, 0.0),
     dimensions=(0.05, 0.10, 0.05),
 ):
-    """Build a minimal WorldState mock for place_object stacking tests."""
     ws = Mock()
     ws.resolve_canonical_id = Mock(return_value=obj_id)
     ws.get_object_position = Mock(return_value=position)
@@ -318,10 +303,8 @@ def _make_world_state(
 
 
 class TestPlaceObjectOnTopOf:
-    """Tests for place_object's on_top_of stacking behaviour."""
 
     def _patch_ws(self, monkeypatch, ws):
-        """Patch get_world_state in GripperOperations module."""
         import operations.GripperOperations as mod
 
         monkeypatch.setattr(mod, "_resolve_placement_y.__globals__", {}, raising=False)
@@ -340,7 +323,6 @@ class TestPlaceObjectOnTopOf:
             pass
 
     def test_resolves_y_from_worldstate(self, monkeypatch, patch_command_broadcaster):
-        """Placement Y computed from object center + half-height when on_top_of set."""
         ws = _make_world_state(position=(0.0, 0.05, 0.0), dimensions=(0.05, 0.10, 0.05))
         self._patch_ws(monkeypatch, ws)
 
@@ -354,7 +336,6 @@ class TestPlaceObjectOnTopOf:
         assert result.result["resolution"] == "stacked_on:target_cube"
 
     def test_with_placed_object_height(self, monkeypatch, patch_command_broadcaster):
-        """placed_object_height shifts the TCP up by half the held object's height."""
         ws = _make_world_state(position=(0.0, 0.05, 0.0), dimensions=(0.05, 0.10, 0.05))
         self._patch_ws(monkeypatch, ws)
 
@@ -374,7 +355,6 @@ class TestPlaceObjectOnTopOf:
         assert abs(placed_y - 0.12) < 1e-6, f"expected 0.12, got {placed_y}"
 
     def test_object_not_found_fallback(self, monkeypatch, patch_command_broadcaster):
-        """Falls back to explicit y when object not in WorldState."""
         ws = Mock()
         ws.resolve_canonical_id = Mock(return_value=None)
         self._patch_ws(monkeypatch, ws)
@@ -387,7 +367,6 @@ class TestPlaceObjectOnTopOf:
         assert result.result["resolution"] == "fallback_object_not_found"
 
     def test_no_dimensions_fallback(self, monkeypatch, patch_command_broadcaster):
-        """Falls back to explicit y when object has no dimensions (vision-only)."""
         ws = Mock()
         ws.resolve_canonical_id = Mock(return_value="target_cube")
         ws.get_object_position = Mock(return_value=(0.0, 0.05, 0.0))
@@ -402,7 +381,6 @@ class TestPlaceObjectOnTopOf:
         assert result.result["resolution"] == "fallback_no_dimensions"
 
     def test_no_position_fallback(self, monkeypatch, patch_command_broadcaster):
-        """Falls back to explicit y when object position is None."""
         ws = Mock()
         ws.resolve_canonical_id = Mock(return_value="target_cube")
         ws.get_object_position = Mock(return_value=None)
@@ -417,7 +395,6 @@ class TestPlaceObjectOnTopOf:
         assert result.result["resolution"] == "fallback_no_position"
 
     def test_none_on_top_of_uses_explicit_coords(self, patch_command_broadcaster):
-        """Without on_top_of, explicit y passes through unchanged."""
         result = place_object("Robot1", x=0.0, y=0.42, z=0.0)
 
         assert result.success is True
@@ -428,7 +405,6 @@ class TestPlaceObjectOnTopOf:
     def test_tcp_command_y_matches_computed(
         self, monkeypatch, patch_command_broadcaster
     ):
-        """The y value in the Unity command dict equals the computed effective_y."""
         ws = _make_world_state(position=(0.0, 0.10, 0.0), dimensions=(0.05, 0.20, 0.05))
         self._patch_ws(monkeypatch, ws)
 
@@ -441,7 +417,6 @@ class TestPlaceObjectOnTopOf:
         assert abs(sent_y - 0.20) < 1e-6, f"expected 0.20, got {sent_y}"
 
     def test_place_object_operation_has_on_top_of_param(self):
-        """PLACE_OBJECT_OPERATION metadata exposes on_top_of and placed_object_height."""
         param_names = {p.name for p in PLACE_OBJECT_OPERATION.parameters}
         assert "on_top_of" in param_names
         assert "placed_object_height" in param_names

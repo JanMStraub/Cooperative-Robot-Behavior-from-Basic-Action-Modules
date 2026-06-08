@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for MoveOperations.py"""
-
 import pytest
 from unittest.mock import Mock
 
@@ -217,7 +214,6 @@ class TestMoveOperationDefinition:
         assert op.implementation is not None
 
     def test_operation_execution_through_definition(self, patch_command_broadcaster):
-        """Test executing operation through BasicOperation.execute()."""
 
         result = MOVE_TO_COORDINATE_OPERATION.execute(
             robot_id="Robot1", x=0.3, y=0.2, z=0.1

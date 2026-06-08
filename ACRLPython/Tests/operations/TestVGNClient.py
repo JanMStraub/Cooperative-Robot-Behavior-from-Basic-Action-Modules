@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for VGNClient"""
-
 import sys
 import types
 import numpy as np
@@ -10,8 +7,6 @@ from unittest.mock import MagicMock, patch
 
 if TYPE_CHECKING:
     from operations.VGNClient import VGNClient
-
-# Helpers
 
 
 def _make_points(n: int = 200) -> np.ndarray:
@@ -29,7 +24,6 @@ def _make_points(n: int = 200) -> np.ndarray:
 
 
 def _make_image(h: int = 480, w: int = 640) -> np.ndarray:
-    """Return a blank BGR image."""
     return np.zeros((h, w, 3), dtype=np.uint8)
 
 
@@ -37,11 +31,7 @@ def _yolo_bbox() -> tuple:
     return (100, 100, 200, 200)
 
 
-# _parse_bbox_from_vlm_response
-
-
 class TestParseBboxFromVlmResponse:
-    """Tests for the module-level _parse_bbox_from_vlm_response helper."""
 
     def _fn(self, text, fallback=(10, 20, 30, 40), iw=640, ih=480):
         from operations.VGNClient import _parse_bbox_from_vlm_response
@@ -49,30 +39,25 @@ class TestParseBboxFromVlmResponse:
         return _parse_bbox_from_vlm_response(text, fallback, iw, ih)
 
     def test_parse_bbox_valid_json(self):
-        """Clean JSON object → parsed tuple."""
         result = self._fn('{"x": 50, "y": 60, "w": 100, "h": 80}')
         assert result == (50, 60, 100, 80)
 
     def test_parse_bbox_json_embedded_in_text(self):
-        """JSON buried in prose → still extracted."""
         text = 'The best grip region is {"x": 120, "y": 90, "w": 50, "h": 70} for stability.'
         result = self._fn(text)
         assert result == (120, 90, 50, 70)
 
     def test_parse_bbox_falls_back_on_invalid_json(self):
-        """Malformed JSON → returns yolo_bbox fallback."""
         fallback = (5, 6, 7, 8)
         result = self._fn("not valid json at all", fallback=fallback)
         assert result == fallback
 
     def test_parse_bbox_falls_back_on_missing_key(self):
-        """JSON with missing key → returns fallback."""
         fallback = (1, 2, 3, 4)
         result = self._fn('{"x": 10, "y": 20, "w": 30}', fallback=fallback)
         assert result == fallback
 
     def test_parse_bbox_clamps_to_image_bounds(self):
-        """Bbox exceeding image dimensions → clamped."""
         # x+w > image_width, y+h > image_height
         result = self._fn('{"x": 600, "y": 450, "w": 200, "h": 200}', iw=640, ih=480)
         x, y, w, h = result
@@ -80,21 +65,15 @@ class TestParseBboxFromVlmResponse:
         assert y + h <= 480
 
     def test_parse_bbox_clamps_negative_origin(self):
-        """Negative x/y are clamped to 0."""
         result = self._fn('{"x": -10, "y": -5, "w": 50, "h": 40}')
         x, y, w, h = result
         assert x >= 0
         assert y >= 0
 
 
-# VGNClient.is_available()
-
-
 class TestVGNClientIsAvailable:
-    """Tests for VGNClient.is_available() without real model or torch."""
 
     def test_is_available_false_when_model_missing(self, tmp_path):
-        """is_available() returns False when model file does not exist."""
         from operations.VGNClient import VGNClient
 
         client = VGNClient.__new__(VGNClient)
@@ -103,7 +82,6 @@ class TestVGNClientIsAvailable:
         assert client.is_available() is False
 
     def test_is_available_false_when_torch_unavailable(self, tmp_path):
-        """is_available() returns False when torch cannot be imported."""
         model_file = tmp_path / "vgn_conv.pth"
         model_file.touch()
 
@@ -118,7 +96,6 @@ class TestVGNClientIsAvailable:
         assert result is False
 
     def test_is_available_true_when_model_exists_and_torch_importable(self, tmp_path):
-        """is_available() returns True when both conditions met."""
         model_file = tmp_path / "vgn_conv.pth"
         model_file.touch()
 
@@ -137,11 +114,7 @@ class TestVGNClientIsAvailable:
         assert result is True
 
 
-# VGNClient.predict_grasps() — output contract
-
-
 def _make_mock_grasp(pos=(0.1, 0.2, 0.3), score=0.9, width=0.08):
-    """Construct a minimal mock VGN Grasp object."""
     grasp = MagicMock()
     grasp.pose.translation = np.array(pos)
     # Use scipy Rotation to produce a real unit quaternion / matrix
@@ -155,7 +128,6 @@ def _make_mock_grasp(pos=(0.1, 0.2, 0.3), score=0.9, width=0.08):
 
 
 class _VGNPatchedClient:
-    """Context manager that makes VGNClient.predict_grasps testable without GPU."""
 
     def __init__(self, n_grasps: int = 3, mask_points: int = 200):
         self.n_grasps = n_grasps
@@ -256,7 +228,6 @@ class _VGNPatchedClient:
         if existing_torch is None:
             sys.modules["torch"] = torch_stub
 
-        # Patch _points_to_tsdf_grid to avoid scipy dependency in tests
         grid_patch = patch(
             "operations.VGNClient._points_to_tsdf_grid",
             return_value=np.zeros((1, 40, 40, 40), dtype=np.float32),
@@ -285,7 +256,6 @@ class _VGNPatchedClient:
 
 
 class TestPredictGraspsOutputContract:
-    """Tests for the output format of VGNClient.predict_grasps()."""
 
     def _make_client(self, tmp_path) -> "VGNClient":
         from operations.VGNClient import VGNClient
@@ -298,7 +268,6 @@ class TestPredictGraspsOutputContract:
         return client
 
     def test_predict_grasps_output_keys(self, tmp_path):
-        """Each grasp dict contains all required keys."""
         client = self._make_client(tmp_path)
         pts = _make_points(200)
 
@@ -326,7 +295,6 @@ class TestPredictGraspsOutputContract:
             assert "approach_direction" in g
 
     def test_predict_grasps_returns_none_on_too_few_points(self, tmp_path):
-        """Returns None when fewer than 50 points pass the mask."""
         client = self._make_client(tmp_path)
         # Only 10 points — not enough to pass the ≥50 check
         pts = _make_points(10)
@@ -346,7 +314,6 @@ class TestPredictGraspsOutputContract:
         assert result is None
 
     def test_output_rotation_is_unit_quaternion(self, tmp_path):
-        """Every rotation quaternion has unit norm."""
         client = self._make_client(tmp_path)
         pts = _make_points(200)
         full_image_bbox = (0, 0, 640, 480)
@@ -373,7 +340,6 @@ class TestPredictGraspsOutputContract:
             ), f"Quaternion not unit: {q}, norm={np.linalg.norm(q)}"
 
     def test_predict_grasps_respects_top_k(self, tmp_path):
-        """Result length is at most top_k."""
         client = self._make_client(tmp_path)
         pts = _make_points(200)
         full_image_bbox = (0, 0, 640, 480)
@@ -398,14 +364,9 @@ class TestPredictGraspsOutputContract:
         assert len(result) <= top_k
 
 
-# Segmentation mask bug fix test
-
-
 class TestSegmentationMaskLabelBugFix:
-    """Verify that _build_segmentation_mask is called with 'color' field, not 'label'."""
 
     def test_segmentation_mask_uses_color_field(self):
-        """_grasp_via_vgn uses det.get('color') to match detections, not 'label'."""
         # Simulate what the detection dict looks like after DetectionObject.to_dict()
         detection_with_color = {
             "color": "red_cube",

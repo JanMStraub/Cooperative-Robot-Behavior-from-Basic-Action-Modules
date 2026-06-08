@@ -201,17 +201,13 @@ class RobotController:
 
             world_state = get_world_state()
 
-            # Define callback to sync Unity state into the operations WorldState singleton
             def on_state_update(state_data):
-                """Called on each world state update from Unity."""
                 try:
-                    # Forward robot states into operations WorldState singleton
                     for robot in state_data.get("robots", []):
                         robot_id = robot.get("robot_id")
                         if robot_id:
                             world_state.update_robot_state(robot_id, robot)
 
-                    # Forward object states (position, dimensions, rotation) into WorldState
                     from config.Vision import USE_UNITY_OBJECT_POSITIONS
 
                     objects = state_data.get("objects", [])
@@ -240,13 +236,11 @@ class RobotController:
                                     rotation=rot,
                                 )
 
-                    # Trigger confidence decay based on currently visible objects
                     world_state.decay_object_confidence(seen_object_ids)
 
                 except Exception as e:
                     logger.error(f"Error in state update callback: {e}")
 
-            # Register callback with WorldStateServer
             if self._world_state_server:
                 self._world_state_server.register_update_callback(on_state_update)
                 logger.info("WorldStateServer callback registered for confidence decay")

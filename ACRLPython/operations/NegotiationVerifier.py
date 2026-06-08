@@ -14,8 +14,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PlanVerificationResult:
-    """Result of verifying a negotiated plan."""
-
     valid: bool = True
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
@@ -49,24 +47,17 @@ class NegotiationVerifier:
             result.add_error("Empty plan (no commands)")
             return result
 
-        # Run all structural checks
-        op_errors = self._verify_operations_exist(commands)
-        for err in op_errors:
+        for err in self._verify_operations_exist(commands):
+            result.add_error(err)
+        for err in self._verify_signal_wait_pairs(commands):
+            result.add_error(err)
+        for err in self._verify_coordinate_params(commands):
+            result.add_error(err)
+        for err in self._verify_variable_flow(commands):
+            result.add_error(err)
+        for err in self._verify_parallel_group_ordering(commands):
             result.add_error(err)
 
-        signal_errors = self._verify_signal_wait_pairs(commands)
-        for err in signal_errors:
-            result.add_error(err)
-
-        var_errors = self._verify_variable_flow(commands)
-        for err in var_errors:
-            result.add_error(err)
-
-        group_errors = self._verify_parallel_group_ordering(commands)
-        for err in group_errors:
-            result.add_error(err)
-
-        # Run spatial safety checks
         safety_errors, safety_warnings = self._verify_spatial_safety(
             commands, world_state
         )
@@ -98,6 +89,33 @@ class NegotiationVerifier:
 
         return errors
 
+    def _verify_coordinate_params(self, commands: List[Dict[str, Any]]) -> List[str]:
+        """Reject coordinate-requiring operations that have None or missing x/y/z."""
+        errors = []
+        COORD_OPS = {"pick_object_at_coordinate", "move_to_coordinate", "place_object"}
+        for i, cmd in enumerate(commands):
+            operation = cmd.get("operation", "")
+            if operation not in COORD_OPS:
+                continue
+            params = cmd.get("params", {})
+            missing = [
+                k
+                for k in ("x", "y", "z")
+                if params.get(k) is None and not isinstance(params.get(k), (int, float))
+            ]
+            # Also treat unresolved $vars as missing (negotiation runs before variable substitution)
+            unresolved = [
+                k
+                for k in ("x", "y", "z")
+                if isinstance(params.get(k), str) and params[k].startswith("$")
+            ]
+            if missing or unresolved:
+                errors.append(
+                    f"Command {i} ('{operation}'): missing or unresolved coordinate params "
+                    f"{missing + unresolved} — use numeric values from world state"
+                )
+        return errors
+
     def _verify_signal_wait_pairs(self, commands: List[Dict[str, Any]]) -> List[str]:
         errors = []
         defined_signals = set()
@@ -111,11 +129,19 @@ class NegotiationVerifier:
                 event = params.get("event_name")
                 if event:
                     defined_signals.add(event)
+                else:
+                    errors.append(
+                        f"signal command missing required 'event_name' parameter"
+                    )
 
             elif operation == "wait_for_signal":
                 event = params.get("event_name")
                 if event:
                     waited_signals.add(event)
+                else:
+                    errors.append(
+                        f"wait_for_signal command missing required 'event_name' parameter"
+                    )
 
         unmatched = waited_signals - defined_signals
         for event in unmatched:
@@ -223,7 +249,6 @@ class NegotiationVerifier:
                         x, y, z = pos_param[0], pos_param[1], pos_param[2]
 
                 if x is not None and y is not None and z is not None:
-                    # Skip variable references
                     if any(isinstance(v, str) and v.startswith("$") for v in [x, y, z]):
                         continue
 
@@ -232,7 +257,6 @@ class NegotiationVerifier:
                     except (ValueError, TypeError):
                         continue
 
-                    # Check reachability from robot base
                     base = ROBOT_BASE_POSITIONS.get(robot_id)
                     if base:
                         dx = pos[0] - base[0]
@@ -247,7 +271,6 @@ class NegotiationVerifier:
 
                     group_targets[group].append((robot_id, pos))
 
-        # Check for concurrent moves that are too close
         for group, targets in group_targets.items():
             if len(targets) < 2:
                 continue

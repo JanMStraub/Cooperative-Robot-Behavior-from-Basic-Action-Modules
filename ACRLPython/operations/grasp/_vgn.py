@@ -262,7 +262,6 @@ def _grasp_via_vgn(
         return OperationResult.error_result(
             "COMMUNICATION_ERROR",
             "CommandBroadcaster not available",
-            ["Ensure CommandServer is running"],
         )
 
     logger.info(
@@ -283,7 +282,6 @@ def _grasp_via_vgn(
     return OperationResult.error_result(
         "COMMUNICATION_ERROR",
         "Failed to send VGN grasp command to Unity",
-        ["Check Unity is connected to CommandServer"],
     )
 
 
@@ -845,11 +843,6 @@ def _grasp_via_vgn_with_ros(
         return OperationResult.error_result(
             "GRASP_EXECUTION_FAILED",
             f"VGN+ROS grasp failed for {robot_id}: {grasp_fail_reason}",
-            [
-                "Check gripper hardware/simulation state",
-                "Verify GripperContactSensor is active",
-                "If corrective move failed, check for workspace collision with partner robot",
-            ],
         )
 
     return OperationResult.success_result(

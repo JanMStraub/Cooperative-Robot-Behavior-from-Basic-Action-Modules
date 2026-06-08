@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Tests for intermediate motion layer (Improvement 4)"""
-
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import json
@@ -19,9 +16,6 @@ def _make_session_response(content, status=200):
     resp.status_code = status
     resp.json.return_value = {"choices": [{"message": {"content": content}}]}
     return resp
-
-
-# _decompose_to_motions()
 
 
 class TestDecomposeToMotions:
@@ -71,9 +65,6 @@ class TestDecomposeToMotions:
         assert result == []
 
 
-# _parse_with_motion_layer()
-
-
 class TestParseWithMotionLayer:
     def _ok_llm_result(self):
         return {
@@ -121,9 +112,6 @@ class TestParseWithMotionLayer:
         assert result["success"] is True
 
 
-# parse() use_motion_layer flag
-
-
 class TestParseMotionLayerFlag:
     def test_parse_calls_motion_layer_when_flag_true(self, parser):
         """parse(use_motion_layer=True) calls _parse_with_motion_layer."""
@@ -168,9 +156,6 @@ class TestParseMotionLayerFlag:
             parser._parse_with_llm.assert_called_once()
 
 
-# Config
-
-
 class TestMotionLayerConfig:
     def test_use_motion_layer_is_bool(self):
         from config.Servers import USE_MOTION_LAYER
@@ -194,9 +179,6 @@ class TestMotionLayerConfig:
 
         importlib.reload(srv)
         assert srv.USE_MOTION_LAYER is True
-
-
-# parse_with_hint() motion layer integration
 
 
 class TestParseWithHintMotionLayer:

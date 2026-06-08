@@ -29,19 +29,12 @@ def check_robot_status(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
-                [
-                    "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
-                    "Check RobotManager in Unity for available robot IDs",
-                ],
             )
 
         if not isinstance(detailed, bool):
             return OperationResult.error_result(
                 "INVALID_DETAILED_PARAMETER",
                 f"detailed must be a boolean, got: {type(detailed).__name__}",
-                [
-                    "Use detailed=True for full status or detailed=False for basic status",
-                ],
             )
 
         command = {
@@ -62,12 +55,6 @@ def check_robot_status(
             return OperationResult.error_result(
                 "COMMUNICATION_FAILED",
                 "Failed to send command to Unity - no clients connected",
-                [
-                    "Ensure Unity is running with UnifiedPythonReceiver active",
-                    "Verify CommandServer is running (port 5007)",
-                    "Check Unity console for connection errors",
-                    "Restart backend: python -m orchestrators.RunRobotController",
-                ],
             )
 
         logger.info(f"Successfully sent status check to {robot_id}")
@@ -83,16 +70,7 @@ def check_robot_status(
 
     except Exception as e:
         logger.error(f"Unexpected error in check_robot_status: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            [
-                "Check logs for detailed error information",
-                "Verify all parameters are correct types",
-                "Retry the operation",
-                "Report bug if error persists",
-            ],
-        )
+        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
 
 
 def create_check_robot_status_operation() -> BasicOperation:
@@ -102,21 +80,6 @@ def create_check_robot_status_operation() -> BasicOperation:
         category=OperationCategory.STATE_CHECK,
         complexity=OperationComplexity.ATOMIC,
         description="Query the current status and state of a robot without causing any movement",
-        long_description="""
-            This operation sends a status check request to Unity to retrieve
-            the current state of the robot including position, joint angles,
-            and operational status. This is a read-only operation that does
-            not cause any movement or state changes.
-
-            The operation can return either basic status (position, active state)
-            or detailed status (including all joint angles, velocities, and targets).
-
-            This is useful for:
-            - Verifying robot is ready before starting a task
-            - Checking current position before planning movement
-            - Debugging robot behavior
-            - Monitoring robot health during operation
-        """,
         usage_examples=[
             "Before moving robot: check_robot_status('Robot1') to ensure it's ready",
             "check_robot_status('Robot1', detailed=True) to get full joint information",

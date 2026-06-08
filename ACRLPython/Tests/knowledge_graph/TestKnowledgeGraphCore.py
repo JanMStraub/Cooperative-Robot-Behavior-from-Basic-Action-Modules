@@ -1,34 +1,28 @@
-#!/usr/bin/env python3
-"""Test suite for KnowledgeGraph Core"""
-
-import unittest
 import os
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import pytest
 from knowledge_graph.Core import KnowledgeGraph
 from knowledge_graph.Schema import RobotNode
 
 
-class TestKnowledgeGraphCore(unittest.TestCase):
+class TestKnowledgeGraphCore:
 
-    def setUp(self):
-        """Create fresh graph for each test."""
+    def setup_method(self):
         self.graph = KnowledgeGraph()
 
-    def tearDown(self):
-        """Clean up."""
+    def teardown_method(self):
         self.graph.clear()
 
     def test_add_node(self):
         self.graph.add_node("Robot1", node_type="robot", position=(-0.3, 0.2, 0.1))
 
-        self.assertTrue(self.graph.has_node("Robot1"))
+        assert self.graph.has_node("Robot1")
         node_attrs = self.graph.get_node("Robot1")
-        self.assertIsNotNone(node_attrs)
-        assert node_attrs is not None  # Type narrowing for Pylance
-        self.assertEqual(node_attrs["node_type"], "robot")
-        self.assertEqual(node_attrs["position"], (-0.3, 0.2, 0.1))
+        assert node_attrs is not None
+        assert node_attrs["node_type"] == "robot"
+        assert node_attrs["position"] == (-0.3, 0.2, 0.1)
 
     def test_add_node_with_schema(self):
         robot = RobotNode(
@@ -38,26 +32,25 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.graph.add_node(robot.node_id, **robot.to_dict())
 
         node_attrs = self.graph.get_node("Robot1")
-        self.assertIsNotNone(node_attrs)
-        assert node_attrs is not None  # Type narrowing for Pylance
-        self.assertEqual(node_attrs["gripper_state"], "open")
+        assert node_attrs is not None
+        assert node_attrs["gripper_state"] == "open"
 
     def test_remove_node(self):
         self.graph.add_node("Robot1", node_type="robot")
-        self.assertTrue(self.graph.has_node("Robot1"))
+        assert self.graph.has_node("Robot1")
 
         success = self.graph.remove_node("Robot1")
-        self.assertTrue(success)
-        self.assertFalse(self.graph.has_node("Robot1"))
+        assert success
+        assert not self.graph.has_node("Robot1")
 
     def test_remove_nonexistent_node(self):
         """Test removing node that doesn't exist."""
         success = self.graph.remove_node("NonexistentNode")
-        self.assertFalse(success)
+        assert not success
 
     def test_get_node_nonexistent(self):
         node_attrs = self.graph.get_node("NonexistentNode")
-        self.assertIsNone(node_attrs)
+        assert node_attrs is None
 
     def test_add_edge(self):
         self.graph.add_node("Robot1", node_type="robot")
@@ -66,7 +59,7 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH", distance=0.5)
 
         neighbors = self.graph.get_neighbors("Robot1")
-        self.assertIn("RedCube", neighbors)
+        assert "RedCube" in neighbors
 
     def test_add_multiple_edges_same_nodes(self):
         self.graph.add_node("Robot1", node_type="robot")
@@ -75,9 +68,8 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH", distance=0.5)
         self.graph.add_edge("Robot1", "RedCube", "NEAR", distance=0.1)
 
-        # Should support both edges
         neighbors = self.graph.get_neighbors("Robot1")
-        self.assertIn("RedCube", neighbors)
+        assert "RedCube" in neighbors
 
     def test_remove_edge(self):
         self.graph.add_node("Robot1", node_type="robot")
@@ -85,10 +77,10 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH")
 
         count = self.graph.remove_edge("Robot1", "RedCube")
-        self.assertEqual(count, 1)
+        assert count == 1
 
         neighbors = self.graph.get_neighbors("Robot1")
-        self.assertNotIn("RedCube", neighbors)
+        assert "RedCube" not in neighbors
 
     def test_remove_edge_by_type(self):
         self.graph.add_node("Robot1", node_type="robot")
@@ -96,13 +88,11 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH")
         self.graph.add_edge("Robot1", "RedCube", "NEAR")
 
-        # Remove only CAN_REACH edge
         count = self.graph.remove_edge("Robot1", "RedCube", edge_type="CAN_REACH")
-        self.assertEqual(count, 1)
+        assert count == 1
 
-        # NEAR edge should still exist
         neighbors_near = self.graph.get_neighbors("Robot1", edge_type="NEAR")
-        self.assertIn("RedCube", neighbors_near)
+        assert "RedCube" in neighbors_near
 
     def test_get_neighbors_filtered_by_edge_type(self):
         self.graph.add_node("Robot1", node_type="robot")
@@ -113,12 +103,12 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.graph.add_edge("Robot1", "BlueCube", "GRASPING")
 
         reachable = self.graph.get_neighbors("Robot1", edge_type="CAN_REACH")
-        self.assertIn("RedCube", reachable)
-        self.assertNotIn("BlueCube", reachable)
+        assert "RedCube" in reachable
+        assert "BlueCube" not in reachable
 
         grasped = self.graph.get_neighbors("Robot1", edge_type="GRASPING")
-        self.assertIn("BlueCube", grasped)
-        self.assertNotIn("RedCube", grasped)
+        assert "BlueCube" in grasped
+        assert "RedCube" not in grasped
 
     def test_get_predecessors(self):
         self.graph.add_node("Robot1", node_type="robot")
@@ -127,7 +117,7 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH")
 
         predecessors = self.graph.get_predecessors("RedCube")
-        self.assertIn("Robot1", predecessors)
+        assert "Robot1" in predecessors
 
     def test_get_all_nodes(self):
         self.graph.add_node("Robot1", node_type="robot")
@@ -135,28 +125,27 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.graph.add_node("RedCube", node_type="object")
 
         all_nodes = self.graph.get_all_nodes()
-        self.assertEqual(len(all_nodes), 3)
+        assert len(all_nodes) == 3
 
-        # Filter by type
         robots = self.graph.get_all_nodes(node_type="robot")
-        self.assertEqual(len(robots), 2)
-        self.assertIn("Robot1", robots)
-        self.assertIn("Robot2", robots)
+        assert len(robots) == 2
+        assert "Robot1" in robots
+        assert "Robot2" in robots
 
         objects = self.graph.get_all_nodes(node_type="object")
-        self.assertEqual(len(objects), 1)
-        self.assertIn("RedCube", objects)
+        assert len(objects) == 1
+        assert "RedCube" in objects
 
     def test_node_and_edge_counts(self):
-        self.assertEqual(self.graph.node_count(), 0)
-        self.assertEqual(self.graph.edge_count(), 0)
+        assert self.graph.node_count() == 0
+        assert self.graph.edge_count() == 0
 
         self.graph.add_node("Robot1", node_type="robot")
         self.graph.add_node("RedCube", node_type="object")
-        self.assertEqual(self.graph.node_count(), 2)
+        assert self.graph.node_count() == 2
 
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH")
-        self.assertEqual(self.graph.edge_count(), 1)
+        assert self.graph.edge_count() == 1
 
     def test_clear(self):
         self.graph.add_node("Robot1", node_type="robot")
@@ -165,8 +154,8 @@ class TestKnowledgeGraphCore(unittest.TestCase):
 
         self.graph.clear()
 
-        self.assertEqual(self.graph.node_count(), 0)
-        self.assertEqual(self.graph.edge_count(), 0)
+        assert self.graph.node_count() == 0
+        assert self.graph.edge_count() == 0
 
     def test_get_stats(self):
         self.graph.add_node("Robot1", node_type="robot")
@@ -176,19 +165,17 @@ class TestKnowledgeGraphCore(unittest.TestCase):
 
         stats = self.graph.get_stats()
 
-        self.assertEqual(stats["total_nodes"], 4)
-        self.assertEqual(stats["node_types"]["robot"], 2)
-        self.assertEqual(stats["node_types"]["object"], 1)
-        self.assertEqual(stats["node_types"]["region"], 1)
+        assert stats["total_nodes"] == 4
+        assert stats["node_types"]["robot"] == 2
+        assert stats["node_types"]["object"] == 1
+        assert stats["node_types"]["region"] == 1
 
     def test_save_and_load_graphml(self):
         """Test saving and loading graph to/from GraphML."""
-        # Build graph
         self.graph.add_node("Robot1", node_type="robot", position=(-0.3, 0.2, 0.1))
         self.graph.add_node("RedCube", node_type="object", color="red")
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH", distance=0.5)
 
-        # Save to temp file
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".graphml", delete=False
         ) as f:
@@ -197,22 +184,19 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         try:
             self.graph.save_graphml(temp_path)
 
-            # Load into new graph
             new_graph = KnowledgeGraph()
             new_graph.load_graphml(temp_path)
 
-            # Verify nodes and edges
-            self.assertEqual(new_graph.node_count(), 2)
-            self.assertEqual(new_graph.edge_count(), 1)
-            self.assertTrue(new_graph.has_node("Robot1"))
-            self.assertTrue(new_graph.has_node("RedCube"))
+            assert new_graph.node_count() == 2
+            assert new_graph.edge_count() == 1
+            assert new_graph.has_node("Robot1")
+            assert new_graph.has_node("RedCube")
 
         finally:
             os.unlink(temp_path)
 
     def test_thread_safety_concurrent_reads(self):
         """Test thread safety with concurrent read operations."""
-        # Populate graph
         for i in range(10):
             self.graph.add_node(f"Node{i}", node_type="test")
 
@@ -224,15 +208,13 @@ class TestKnowledgeGraphCore(unittest.TestCase):
                 counts.append(len(nodes))
             return counts
 
-        # Use ThreadPoolExecutor so exceptions in workers propagate via future.result()
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(read_nodes) for _ in range(10)]
             for future in as_completed(futures):
-                counts = future.result()  # raises if worker raised
-                self.assertTrue(
-                    all(c >= 10 for c in counts),
-                    "Node count should never drop below pre-populated 10",
-                )
+                counts = future.result()
+                assert all(
+                    c >= 10 for c in counts
+                ), "Node count should never drop below pre-populated 10"
 
     def test_thread_safety_concurrent_writes(self):
         """Test thread safety with concurrent write operations."""
@@ -246,24 +228,20 @@ class TestKnowledgeGraphCore(unittest.TestCase):
                 added.append(node_id)
             return added
 
-        # Use ThreadPoolExecutor so exceptions in workers propagate via future.result()
         added_ids = []
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(add_nodes, i) for i in range(5)]
             for future in as_completed(futures):
-                added_ids.extend(future.result())  # raises if worker raised
+                added_ids.extend(future.result())
 
-        self.assertEqual(self.graph.node_count(), 50)  # 5 threads * 10 nodes each
-        # Verify every node that was claimed to be added actually exists
+        assert self.graph.node_count() == 50  # 5 threads * 10 nodes each
         for node_id in added_ids:
-            self.assertTrue(
-                self.graph.has_node(node_id),
-                f"Node {node_id} was added but not found in graph",
-            )
+            assert self.graph.has_node(
+                node_id
+            ), f"Node {node_id} was added but not found in graph"
 
     def test_thread_safety_mixed_operations(self):
         """Test thread safety with mixed read/write operations."""
-        # Pre-populate
         for i in range(10):
             self.graph.add_node(f"Node{i}", node_type="test")
 
@@ -286,24 +264,20 @@ class TestKnowledgeGraphCore(unittest.TestCase):
             reader_futures = [executor.submit(reader) for _ in range(5)]
             writer_futures = [executor.submit(writer, i) for i in range(2)]
 
-            # Writers must not raise
             for future in as_completed(writer_futures):
                 future.result()
 
-            # Readers must not raise, and observed counts must be monotonically
-            # non-decreasing (writers only add nodes, never remove them here)
             for future in as_completed(reader_futures):
                 counts = future.result()
-                self.assertTrue(
-                    all(c >= 10 for c in counts),
-                    "Observed node count should never drop below initial 10",
-                )
+                assert all(
+                    c >= 10 for c in counts
+                ), "Observed node count should never drop below initial 10"
 
 
-class TestCanReachPosition(unittest.TestCase):
+class TestCanReachPosition:
     """Tests for GraphQueryEngine.can_reach_position()."""
 
-    def setUp(self):
+    def setup_method(self):
         from knowledge_graph.Core import KnowledgeGraph
         from knowledge_graph.QueryEngine import GraphQueryEngine
         from unittest.mock import patch
@@ -312,7 +286,7 @@ class TestCanReachPosition(unittest.TestCase):
         self.qe = GraphQueryEngine(self.graph)
         self._patch = patch
 
-    def tearDown(self):
+    def teardown_method(self):
         self.graph.clear()
 
     def _add_robot(self, robot_id="Robot1", pos=(-0.475, 0.3, 0.0)):
@@ -329,14 +303,13 @@ class TestCanReachPosition(unittest.TestCase):
             create=True,
         ):
             result = self.qe.can_reach_position("Robot1", (-0.475, 0.3, 0.2))
-        self.assertTrue(result["reachable"])
-        self.assertFalse(result["path_blocked"])
-        self.assertTrue(result["within_reach"])
+        assert result["reachable"]
+        assert not result["path_blocked"]
+        assert result["within_reach"]
 
     def test_unreachable_outside_reach(self):
         """Position beyond reach radius → not reachable."""
         self._add_robot()
-        # target_within_reach imported inside method; patch at import location
         from unittest.mock import patch as mpatch
 
         with mpatch(
@@ -344,16 +317,13 @@ class TestCanReachPosition(unittest.TestCase):
             return_value=(False, "exceeds max reach"),
         ):
             result = self.qe.can_reach_position("Robot1", (5.0, 5.0, 5.0))
-        self.assertFalse(result["reachable"])
-        self.assertFalse(result["within_reach"])
-        self.assertIn("reach", result["reason"])
+        assert not result["reachable"]
+        assert not result["within_reach"]
+        assert "reach" in result["reason"]
 
     def test_unreachable_path_blocked(self):
         """Obstacle on path → path_blocked=True → not reachable."""
         self._add_robot(pos=(-0.475, 0.0, 0.0))
-        # Obstacle at 0.15m from robot (beyond ee_exclusion_radius=0.12m) and
-        # directly on the path to target at 0.3m; NEAR edge required by
-        # _collect_obstacle_candidates.
         self.graph.add_node(
             "obstacle", node_type="object", position=(-0.475, 0.0, 0.15)
         )
@@ -367,8 +337,8 @@ class TestCanReachPosition(unittest.TestCase):
         ):
             result = self.qe.can_reach_position("Robot1", (-0.475, 0.0, 0.3))
 
-        self.assertFalse(result["reachable"])
-        self.assertTrue(result["path_blocked"])
+        assert not result["reachable"]
+        assert result["path_blocked"]
 
     def test_kg_disabled_returns_kg_disabled(self):
         """When KG is disabled _check_placement_reachability returns 'kg_disabled'."""
@@ -377,7 +347,7 @@ class TestCanReachPosition(unittest.TestCase):
 
         with mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", False):
             note = mod._check_placement_reachability("Robot1", 0.0, 0.06, 0.0)
-        self.assertEqual(note, "kg_disabled")
+        assert note == "kg_disabled"
 
     def test_check_reachable_returns_reachable(self):
         """_check_placement_reachability returns 'reachable' when KG check passes."""
@@ -396,7 +366,7 @@ class TestCanReachPosition(unittest.TestCase):
             "core.Imports.get_graph_query_engine", return_value=mock_qe
         ):
             note = mod._check_placement_reachability("Robot1", 0.0, 0.06, 0.0)
-        self.assertEqual(note, "reachable")
+        assert note == "reachable"
 
     def test_check_unreachable_logs_warning(self):
         """_check_placement_reachability returns 'unreachable:...' when check fails."""
@@ -415,11 +385,9 @@ class TestCanReachPosition(unittest.TestCase):
             "core.Imports.get_graph_query_engine", return_value=mock_qe
         ):
             note = mod._check_placement_reachability("Robot1", 5.0, 5.0, 5.0)
-        self.assertTrue(note.startswith("unreachable:"))
+        assert note.startswith("unreachable:")
 
-    def test_result_includes_reachability_key(
-        self,
-    ):
+    def test_result_includes_reachability_key(self):
         """place_object success result includes reachability key."""
         from unittest.mock import patch as mpatch, MagicMock
 
@@ -431,10 +399,6 @@ class TestCanReachPosition(unittest.TestCase):
             "config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", False
         ), mpatch.object(mod, "_get_command_broadcaster", return_value=mock_bc):
             result = mod.place_object("Robot1", x=0.0, y=0.06, z=0.0)
-        self.assertTrue(result.success)
+        assert result.success
         assert result.result is not None
-        self.assertIn("reachability", result.result)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert "reachability" in result.result

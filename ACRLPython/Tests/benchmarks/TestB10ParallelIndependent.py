@@ -1,11 +1,4 @@
-#!/usr/bin/env python3
-"""Tests for B10 Parallel Independent Tasks benchmark."""
-
 from __future__ import annotations
-
-# ---------------------------------------------------------------------------
-# Case file tests
-# ---------------------------------------------------------------------------
 
 
 def test_b16_get_task_returns_string():
@@ -40,11 +33,6 @@ def test_b16_task_uses_disjoint_objects():
     ), "B10 must reference two distinct objects"
 
 
-# ---------------------------------------------------------------------------
-# Registration tests
-# ---------------------------------------------------------------------------
-
-
 def test_b16_registered_in_benchmark_names():
     from benchmarks.Runner import _BENCHMARK_NAMES
 
@@ -57,11 +45,6 @@ def test_b16_registered_in_case_modules():
 
     assert 10 in _CASE_MODULES
     assert "B10" in _CASE_MODULES[10]
-
-
-# ---------------------------------------------------------------------------
-# _compute_parallelism_ratio unit tests
-# ---------------------------------------------------------------------------
 
 
 def _make_step(index, robot_id, group_id):
@@ -148,11 +131,6 @@ def test_parallelism_ratio_partial():
     assert count == 2
 
 
-# ---------------------------------------------------------------------------
-# Runner integration (dry-run, no hardware)
-# ---------------------------------------------------------------------------
-
-
 def test_b16_dry_run_has_parallelism_metrics():
     """Dry-run must return BenchmarkResult with parallelism keys in per_op_stats."""
     from benchmarks.Runner import BenchmarkRunner
@@ -219,36 +197,30 @@ def test_b16_success_true_when_all_parallel():
     runner = BenchmarkRunner()
 
     def fake_send(payload, robot_id, cfg, flags=None):
+        chain = [
+            "detect_object_stereo",
+            "detect_object_stereo",
+            "grasp_object",
+            "grasp_object",
+            "detect_field",
+            "detect_field",
+            "place_object",
+            "place_object",
+        ]
+        robots = ["Robot1", "Robot2"] * (len(chain) // 2)
         ops = [
-            {
-                "operation": "grasp_object",
-                "params": {"robot_id": "Robot1"},
-                "parallel_group": 1,
-            },
-            {
-                "operation": "grasp_object",
-                "params": {"robot_id": "Robot2"},
-                "parallel_group": 1,
-            },
+            {"operation": op, "params": {"robot_id": robots[i]}, "parallel_group": 1}
+            for i, op in enumerate(chain)
+        ]
+        results = [
+            {"index": i, "operation": op, "success": True, "duration_ms": 50.0}
+            for i, op in enumerate(chain)
         ]
         return {
             "success": True,
-            "results": [
-                {
-                    "index": 0,
-                    "operation": "grasp_object",
-                    "success": True,
-                    "duration_ms": 50.0,
-                },
-                {
-                    "index": 1,
-                    "operation": "grasp_object",
-                    "success": True,
-                    "duration_ms": 50.0,
-                },
-            ],
+            "results": results,
             "parsed_commands": ops,
-            "total_duration_ms": 100.0,
+            "total_duration_ms": 400.0,
         }
 
     runner._send = fake_send  # type: ignore[method-assign]

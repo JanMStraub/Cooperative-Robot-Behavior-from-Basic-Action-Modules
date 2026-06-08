@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for CoordinationOperations.py"""
-
 import pytest
 from unittest.mock import Mock
 
@@ -11,11 +8,8 @@ from operations.CoordinationOperations import (
     MIRROR_MOVEMENT_OPERATION,
 )
 
-# Test Class: detect_other_robot - Robot Detection
-
 
 class TestDetectOtherRobot:
-    """Test robot-to-robot detection operation."""
 
     def test_detect_other_robot_success(
         self, mock_world_state_multi_robot, patch_world_state
@@ -44,7 +38,6 @@ class TestDetectOtherRobot:
         assert result.result["detected"] is True
         assert "position" in result.result
         assert "distance" in result.result
-        # Distance should be approximately 0.6m (0.3 - (-0.3))
         assert 0.55 <= result.result["distance"] <= 0.65
 
     def test_detect_other_robot_invalid_robot_id(self):
@@ -167,9 +160,6 @@ class TestDetectOtherRobot:
         assert result.result["camera_id"] == "stereo"
 
 
-# Test Class: mirror_movement_of_other_robot - Movement Mirroring
-
-
 class TestMirrorMovement:
 
     def test_mirror_movement_success(self, patch_command_broadcaster):
@@ -279,9 +269,6 @@ class TestMirrorMovement:
         assert result.error["code"] == "UNEXPECTED_ERROR"
 
 
-# Test Class: Operation Definitions
-
-
 class TestCoordinationOperationDefinitions:
 
     def test_detect_other_robot_operation_definition(self):
@@ -351,9 +338,6 @@ class TestCoordinationOperationDefinitions:
         assert result.success is True
 
 
-# Test Class: Concurrent Execution
-
-
 class TestCoordinationConcurrency:
 
     def test_concurrent_detections(
@@ -418,11 +402,7 @@ class TestCoordinationConcurrency:
         assert all(r.success for r in results)
 
 
-# Test Class: Edge Cases
-
-
 class TestCoordinationEdgeCases:
-    """Test edge cases for coordination operations."""
 
     def test_detect_robot_same_id(
         self, mock_world_state_multi_robot, patch_world_state
@@ -477,6 +457,5 @@ class TestCoordinationEdgeCases:
 
         assert result.success is True
         assert result.result is not None
-        # Distance should be sqrt((2)^2 + (2)^2 + (0.5)^2) ≈ 2.915
         assert result.result["distance"] > 2.8
         assert result.result["distance"] < 3.0

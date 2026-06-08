@@ -32,7 +32,6 @@ except ImportError:
     )
     sys.exit(1)
 
-# Import config
 try:
     from config.Servers import (
         VISION_MODELS,
@@ -335,7 +334,6 @@ Note: StreamingServer.py must be running for this script to work.
     args = parser.parse_args()
 
     try:
-        # List cameras mode
         if args.list_cameras:
             storage = get_unified_image_storage()
             camera_ids = storage.get_all_camera_ids()
@@ -352,11 +350,9 @@ Note: StreamingServer.py must be running for this script to work.
                 logger.info("No cameras available. Is ImageServer running?")
             sys.exit(0)
 
-        # Initialize LM Studio processor
         logger.info("Initializing LM Studio vision processor...")
         processor = LMStudioVisionProcessor(model=args.model, base_url=args.base_url)
 
-        # Create output directory if needed
         output_dir = Path(args.output_dir)
         if not args.no_save:
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -408,9 +404,8 @@ Note: StreamingServer.py must be running for this script to work.
                     current_timestamp = time.time() - age
 
                     if current_timestamp <= last_processed:
-                        continue  # Already processed
+                        continue
                     else:
-                        # Process the image
                         logger.info(f"\n{'='*60}")
                         logger.info(f"Processing image from: {cam_id}")
                         logger.info(f"Age: {age:.2f}s, Prompt: '{prompt}'")

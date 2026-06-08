@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Unit tests for SequenceExecutor request ID generation (Phase 2 improvement).
-
-Tests the atomic counter + timestamp hybrid approach to prevent request ID collisions
-in multi-threaded scenarios with rapid sequential operations.
-"""
-
 import time
 import threading
 from orchestrators.SequenceExecutor import SequenceExecutor

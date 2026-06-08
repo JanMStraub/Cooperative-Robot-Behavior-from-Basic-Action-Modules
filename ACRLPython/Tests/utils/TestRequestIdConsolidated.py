@@ -1,13 +1,9 @@
-#!/usr/bin/env python3
-"""Consolidated Request ID Correlation Tests"""
-
 import pytest
 import threading
 import time
 
 
 class TestRequestIDBasics:
-    """Basic request ID correlation tests."""
 
     def test_request_id_uniqueness(self):
         request_ids = set()
@@ -23,7 +19,6 @@ class TestRequestIDBasics:
         assert len(request_ids) == 1000
 
     def test_request_response_matching(self):
-        """Test basic request-response matching."""
         # Simulate request-response pairs
         requests = {}
 
@@ -40,7 +35,6 @@ class TestRequestIDBasics:
         assert original_request["command"] == "move"
 
     def test_multiple_concurrent_requests(self):
-        """Test handling multiple concurrent requests with different IDs."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()
@@ -71,10 +65,8 @@ class TestRequestIDBasics:
 
 
 class TestRequestIDConcurrency:
-    """Test request ID correlation under concurrent load."""
 
     def test_concurrent_request_id_generation(self):
-        """Test that concurrent request ID generation produces unique IDs."""
         generated_ids = []
         errors = []
         lock = threading.Lock()
@@ -105,7 +97,6 @@ class TestRequestIDConcurrency:
         assert len(set(generated_ids)) == 1000
 
     def test_concurrent_response_matching(self):
-        """Test matching responses to requests under concurrent load."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()
@@ -158,10 +149,8 @@ class TestRequestIDConcurrency:
 
 
 class TestRequestIDTimeouts:
-    """Test request ID handling with timeouts."""
 
     def test_timeout_with_no_response(self):
-        """Test timeout when no response received for request ID."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()
@@ -181,7 +170,6 @@ class TestRequestIDTimeouts:
         broadcaster.remove_completion_queue(request_id)
 
     def test_response_before_timeout(self):
-        """Test receiving response before timeout."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()
@@ -240,7 +228,6 @@ class TestRequestIDErrors:
         broadcaster.remove_completion_queue(request_id)
 
     def test_nonexistent_request_id_completion(self):
-        """Test putting completion for non-existent request ID."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()
@@ -254,7 +241,6 @@ class TestRequestIDErrors:
             assert "999999" in str(e) or "not found" in str(e).lower()
 
     def test_error_response_correlation(self):
-        """Test that error responses are correctly correlated."""
         from servers.CommandServer import CommandBroadcaster
 
         broadcaster = CommandBroadcaster()
@@ -283,7 +269,6 @@ class TestRequestIDErrors:
 
 
 class TestRequestIDSequencing:
-    """Test request ID sequencing and ordering."""
 
     def test_out_of_order_responses(self):
         from servers.CommandServer import CommandBroadcaster
@@ -328,7 +313,6 @@ class TestRequestIDSequencing:
 
 
 class TestRequestIDIntegration:
-    """Integration tests for request ID correlation across components."""
 
     def test_end_to_end_request_flow(self):
         from servers.CommandServer import CommandBroadcaster

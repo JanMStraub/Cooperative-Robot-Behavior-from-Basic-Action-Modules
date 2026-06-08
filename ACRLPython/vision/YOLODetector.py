@@ -241,20 +241,16 @@ class YOLODetector:
             boxes = results[0].boxes
 
             for i in range(len(boxes)):
-                # Get bounding box coordinates (x1, y1, x2, y2)
                 box = boxes.xyxy[i].cpu().numpy()
                 x1, y1, x2, y2 = map(int, box)
 
-                # Convert to (x, y, w, h) format
                 x, y = x1, y1
                 w, h = x2 - x1, y2 - y1
                 area = w * h
 
-                # Get class ID and confidence
                 class_id = int(boxes.cls[i].cpu().numpy())
                 confidence = float(boxes.conf[i].cpu().numpy())
 
-                # Filter by area
                 if area < self.min_area or area > self.max_area:
                     logging.debug(
                         f"Detection {i}: Rejected by area ({area}px, "
@@ -262,10 +258,8 @@ class YOLODetector:
                     )
                     continue
 
-                # Map class ID to class name
                 class_name = self.get_class_name(class_id)
 
-                # Filter by class name if filter_classes is provided
                 if filter_classes is not None and class_name not in filter_classes:
                     logging.debug(
                         f"Detection {i}: Rejected by filter (class={class_name}, "
@@ -273,8 +267,6 @@ class YOLODetector:
                     )
                     continue
 
-                # Create detection object
-                # Extract segmentation mask if available (task=segment)
                 mask = None
                 if results[0].masks is not None and hasattr(results[0].masks, "data"):
                     try:
@@ -486,7 +478,6 @@ class YOLODetector:
             )
 
         for det in detection_result.detections:
-            # Bbox-guided depth sampling (NEW - more accurate than center point)
             if use_bbox_sampling:
                 focal_length_px = get_focal_length_pixels(camera_config, w, h)
 
@@ -527,8 +518,7 @@ class YOLODetector:
                 ):
                     disp_value = float(disparity[det.center_y, det.center_x])
 
-                # Calculate depth from disparity using camera parameters
-                # Depth = (baseline * focal_length) / disparity
+                # depth = (baseline * focal_length) / disparity
                 depth_m = None
                 if (
                     disp_value is not None and disp_value > 1.0
@@ -539,7 +529,6 @@ class YOLODetector:
                     )
                     depth_m = (camera_config.baseline * focal_length) / disp_value
 
-            # Estimate 3D world position using pre-computed disparity map (optimized)
             world_pos = estimate_object_world_position_from_disparity(
                 disparity,
                 det.center_x,

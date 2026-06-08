@@ -1,5 +1,3 @@
-"""Tests for shared perception context injection in CommandParser."""
-
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -16,8 +14,6 @@ def _make_parser(mock_ws=None):
 
 
 class TestPeerContext:
-    """_get_peer_context includes both robots' reachability and intent state."""
-
     def test_peer_context_includes_peer_robot(self):
         r1 = MagicMock()
         r1.robot_id = "Robot1"

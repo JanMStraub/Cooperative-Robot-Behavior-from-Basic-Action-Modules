@@ -117,7 +117,6 @@ class CommandParser:
         if motion_layer and self._is_perception_only_command(command_text):
             motion_layer = False
 
-        # Try LLM parsing first
         if use_llm:
             if motion_layer:
                 result = self._parse_with_motion_layer(command_text, robot_id)
@@ -129,7 +128,6 @@ class CommandParser:
                 f"LLM parsing failed: {result.get('error')}. Falling back to regex."
             )
 
-        # Fallback to regex parsing
         regex_result = self._parse_with_regex(command_text, robot_id)
         if regex_result["success"]:
             return regex_result
@@ -248,7 +246,15 @@ class CommandParser:
                Example: 'grasp the cyan cube and place it in field C': ["detect cyan cube position", "grasp cyan cube (full approach and grip)", "place cyan cube at field C"]
 
             4. Multi-robot tasks: include motions for ALL robots in sequence order.
-               Example: 'Robot1 grasps the green cube and hands it to Robot2': ["Robot1: detect green cube", "Robot1: grasp green cube (full approach and grip)", "Robot1: move to handoff position", "Robot1: orient end-effector", "Robot1: signal ready + Robot2: wait for signal", "Robot2: receive handoff from Robot1", "Robot1: release object"]
+               Example: 'Robot1 grasps the green cube and hands it to Robot2': ["Robot1: detect green cube", "Robot1: grasp green cube (full approach and grip)", "Robot1: move to handoff position", "Robot1: orient end-effector", "Robot1: signal ready + Robot2: wait for signal", "Robot2: detect green cube at Robot1's hand", "Robot2: receive handoff from Robot1", "Robot1: release object"]
+
+            5. ROBOT ASSIGNMENT RULE for multi-robot tasks:
+               Assign robots based on object workspace, NOT linguistic cues like "the other robot" or "Robot2":
+               - Objects at x < 0 (left side) -> Robot1 only.
+               - Objects at x > 0 (right side) -> Robot2 only.
+               - Objects at x = 0 (shared zone, |x| < 0.1) -> either robot.
+               If the task says "the other robot picks up the blue cube" and blue_cube is on the left (x < 0), assign Robot1 and NOT Robot2.
+               When object positions are unknown, use color/name context: blue/yellow cubes are typically on the left (Robot1), green/magenta/red cubes may vary.
 
             Output a JSON array of strings only. No markdown.
         """
@@ -320,7 +326,6 @@ class CommandParser:
         )
 
         try:
-            # Use cached or direct request depending on initialization
             result = self._parse_cache(prompt, command_text)
 
             if not result.get("success"):
@@ -328,12 +333,10 @@ class CommandParser:
 
             parsed = result["parsed"]
 
-            # Normalize multi-robot "plan" format to "commands" format.
             # LLM may emit plan in two shapes:
-            #   A) flat list: [{parallel_group, robot, operation, params, ...}, ...]
-            #   B) grouped:   [{parallel_group, operations:[{robot, operation, ...}]}, ...]
-            # Shape A has "operation" directly on each item; shape B has "operations" sub-list.
-            # Also accept "operations" as a top-level alias for "commands"
+            #   A) flat list: [{parallel_group, operation, ...}, ...]
+            #   B) grouped:   [{parallel_group, operations:[...]}]
+            # Also accept "operations" as a top-level alias for "commands".
             if (
                 "operations" in parsed
                 and "commands" not in parsed
@@ -542,6 +545,23 @@ class CommandParser:
                     lines.append(
                         f"  - {obj['object_id']} ({obj['color']}, {dist_str}){held_str}"
                     )
+
+            # Cross-robot reachability map — tells the LLM which robot can reach each object
+            try:
+                all_robot_nodes = qe._graph.get_all_nodes(node_type="robot")
+                other_robots = [r for r in all_robot_nodes if r != robot_id]
+                if other_robots:
+                    lines.append(
+                        "Object reachability by robot (use correct robot for each object):"
+                    )
+                    for rid in [robot_id] + other_robots:
+                        robot_objs = qe.get_objects_in_reach(rid)[:8]
+                        obj_names = [o["object_id"] for o in robot_objs]
+                        lines.append(
+                            f"  {rid}: {', '.join(obj_names) if obj_names else 'none in reach'}"
+                        )
+            except Exception:
+                pass
 
             # Nearby robots
             nearby = qe.find_robots_near(robot_id)

@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for config modules"""
-
 import os
 
 from config.Servers import (
@@ -44,10 +41,8 @@ from config.Vision import (
 
 
 class TestConfigConstants:
-    """Test configuration constants have expected values"""
 
     def test_network_config(self):
-        """Test network configuration constants"""
         assert DEFAULT_HOST == "127.0.0.1"
         assert STEREO_DETECTION_PORT == 5006
         assert COMMAND_SERVER_PORT == 5007
@@ -57,14 +52,12 @@ class TestConfigConstants:
         assert SOCKET_ACCEPT_TIMEOUT > 0
 
     def test_protocol_limits(self):
-        """Test protocol limit constants"""
         assert MAX_STRING_LENGTH == 256
         assert MAX_IMAGE_SIZE == 10 * 1024 * 1024  # 10MB
         assert MAX_STRING_LENGTH > 0
         assert MAX_IMAGE_SIZE > 0
 
     def test_image_processing_config(self):
-        """Test image processing configuration"""
         assert MIN_IMAGE_AGE >= 0
         assert MAX_IMAGE_AGE > MIN_IMAGE_AGE
         assert IMAGE_CHECK_INTERVAL > 0
@@ -73,12 +66,10 @@ class TestConfigConstants:
         assert VISION_OPERATION_TIMEOUT > 0
 
     def test_llm_config(self):
-        """Test LLM configuration constants"""
         assert DEFAULT_LMSTUDIO_MODEL in VISION_MODELS
         assert DEFAULT_TEMPERATURE >= 0.0
         assert DEFAULT_TEMPERATURE <= 2.0
         assert len(VISION_MODELS) > 0
-        # LMSTUDIO_BASE_URL should use environment variable or default to localhost
         assert LMSTUDIO_BASE_URL is not None
         assert isinstance(LMSTUDIO_BASE_URL, str)
         assert LMSTUDIO_BASE_URL.startswith("http")
@@ -106,66 +97,50 @@ class TestConfigConstants:
         ), f"Default LMSTUDIO_BASE_URL must be an http URL, got: {url!r}"
 
     def test_queue_config(self):
-        """Test queue configuration"""
         assert MAX_RESULT_QUEUE_SIZE > 0
 
     def test_logging_config(self):
-        """Test logging configuration"""
         assert LOG_FORMAT is not None
         assert LOG_LEVEL in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         assert DEFAULT_OUTPUT_DIR is not None
 
     def test_detection_config(self):
-        """Test object detection configuration"""
-        # Color ranges
         assert len(RED_HSV_LOWER_1) == 3
         assert len(RED_HSV_UPPER_1) == 3
         assert len(BLUE_HSV_LOWER) == 3
         assert len(BLUE_HSV_UPPER) == 3
 
-        # Detection filters
         assert MIN_CUBE_AREA_PX > 0
         assert MAX_CUBE_AREA_PX > MIN_CUBE_AREA_PX
         assert 0 < MIN_ASPECT_RATIO < MAX_ASPECT_RATIO
         assert 0 <= MIN_CONFIDENCE <= 1.0
 
     def test_stereo_config(self):
-        """Test stereo reconstruction configuration"""
         assert DEFAULT_STEREO_BASELINE > 0
         assert DEFAULT_STEREO_FOV > 0
         assert DEFAULT_STEREO_FOV < 180  # FOV should be reasonable
 
 
 class TestConfigModuleStructure:
-    """Test that config modules are properly structured"""
 
     def test_servers_module_imports(self):
-        """Test that Servers module exports expected constants"""
         from config import Servers
 
-        # Network constants
         assert hasattr(Servers, "DEFAULT_HOST")
         assert hasattr(Servers, "STEREO_DETECTION_PORT")
         assert hasattr(Servers, "SEQUENCE_SERVER_PORT")
-
-        # LLM constants
         assert hasattr(Servers, "LMSTUDIO_BASE_URL")
         assert hasattr(Servers, "DEFAULT_LMSTUDIO_MODEL")
 
     def test_vision_module_imports(self):
-        """Test that Vision module exports expected constants"""
         from config import Vision
 
-        # Detection constants
         assert hasattr(Vision, "USE_YOLO")
         assert hasattr(Vision, "MIN_CUBE_AREA_PX")
         assert hasattr(Vision, "ENABLE_DEBUG_IMAGES")
-
-        # Stereo constants
         assert hasattr(Vision, "DEFAULT_STEREO_BASELINE")
 
     def test_rag_module_imports(self):
-        """Test that Rag module exports expected constants"""
         from config import Rag
 
         assert hasattr(Rag, "RAG_LM_STUDIO_URL")
@@ -173,7 +148,6 @@ class TestConfigModuleStructure:
         assert hasattr(Rag, "RAG_DEFAULT_TOP_K")
 
     def test_robot_module_imports(self):
-        """Test that Robot module exports expected constants"""
         from config import Robot
 
         assert hasattr(Robot, "WORKSPACE_REGIONS")

@@ -1,14 +1,9 @@
-#!/usr/bin/env python3
-"""Unit tests for CommandParser.py"""
-
 import pytest
 import json
 from unittest.mock import Mock, patch
 import requests
 
 from orchestrators.CommandParser import CommandParser, get_command_parser
-
-# Fixtures
 
 
 @pytest.fixture
@@ -128,11 +123,7 @@ def mock_registry():
     return registry
 
 
-# Test Class: LLM Parsing
-
-
 class TestCommandParserLLM:
-    """Test LLM-based command parsing."""
 
     def test_parse_simple_move_command(
         self, command_parser, mock_lm_studio_response, mock_registry
@@ -308,11 +299,7 @@ class TestCommandParserLLM:
                     assert result["commands"][0]["operation"] == "move_to_coordinate"
 
 
-# Test Class: Regex Fallback
-
-
 class TestCommandParserRegex:
-    """Test regex-based command parsing (fallback mode)."""
 
     def test_regex_parse_move_to_coordinate(self, command_parser, mock_registry):
         with patch.object(command_parser, "registry", mock_registry):
@@ -363,9 +350,6 @@ class TestCommandParserRegex:
             assert result["commands"][1]["operation"] == "control_gripper"
 
 
-# Test Class: Parameter Extraction
-
-
 class TestCommandParserParameters:
 
     def test_extract_coordinates_from_text(self, command_parser, mock_registry):
@@ -408,11 +392,7 @@ class TestCommandParserParameters:
             assert result["commands"][0]["params"]["robot_id"] == "CustomRobot"
 
 
-# Test Class: Error Handling
-
-
 class TestCommandParserErrors:
-    """Test error handling for invalid/ambiguous commands."""
 
     def test_parse_empty_command(self, command_parser):
         result = command_parser.parse("", robot_id="Robot1")
@@ -505,9 +485,6 @@ class TestCommandParserErrors:
                     assert "error" in result or result["success"] is True
 
 
-# Test Class: Variable Handling
-
-
 class TestCommandParserVariables:
 
     def test_variable_interpolation_single(self, command_parser, mock_registry):
@@ -523,9 +500,6 @@ class TestCommandParserVariables:
             assert result["commands"][0].get("capture_var") == "target"
             # Second command should reference variable
             assert result["commands"][1]["params"]["position"] == "$target"
-
-
-# Test Class: Integration
 
 
 class TestCommandParserIntegration:
@@ -561,22 +535,15 @@ class TestCommandParserIntegration:
                 assert cmd["params"]["robot_id"] == "Robot1"
 
 
-# Test Class: LLM Fallback Validation
-
-# Test Class: Multi-Robot Command Disambiguation
-
-
 class TestMultiRobotCommands:
 
     @pytest.fixture
     def command_parser(self):
-        """Create CommandParser instance."""
         parser = CommandParser(use_rag=False)
         return parser
 
     @pytest.fixture
     def mock_registry(self):
-        """Mock registry with test operations."""
         registry = Mock()
         registry.get_operation_by_name.side_effect = lambda name: (
             Mock(name=name, operation_id=f"op_{name}", parameters=[])
@@ -641,20 +608,15 @@ class TestMultiRobotCommands:
                 assert result["commands"][0]["params"]["robot_id"] == "Robot1"
 
 
-# Test Class: Variable Substitution Edge Cases
-
-
 class TestVariableSubstitution:
 
     @pytest.fixture
     def command_parser(self):
-        """Create CommandParser instance."""
         parser = CommandParser(use_rag=False)
         return parser
 
     @pytest.fixture
     def mock_registry(self):
-        """Mock registry."""
         registry = Mock()
         registry.get_operation_by_name.side_effect = lambda name: (
             Mock(name=name, operation_id=f"op_{name}", parameters=[])
@@ -742,7 +704,6 @@ class TestVariableSubstitution:
 
 
 class TestExpandArrayOperations:
-    """Unit tests for _expand_array_operations covering all LLM output forms."""
 
     def test_form_d_ops_key(self, command_parser):
         """Form D: operation is string list + sub-ops under 'ops' key."""
@@ -800,6 +761,3 @@ class TestExpandArrayOperations:
         assert len(result) == 2
         assert result[0]["params"].get("event_name") == "ev"
         assert result[1]["params"].get("event_name") == "ev"
-
-
-# Test Class: Complex Command Chains

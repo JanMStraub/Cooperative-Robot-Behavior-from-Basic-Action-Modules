@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Concurrency and Thread Safety Tests"""
-
 import numpy as np
 import threading
 import time
@@ -18,14 +15,10 @@ from operations.Base import (
 from operations.MoveOperations import move_to_coordinate
 from operations.WorldState import WorldState
 
-# Test Concurrent Image Operations
-
 
 class TestConcurrentImageOperations:
-    """Test thread safety of ImageStorage"""
 
     def test_concurrent_image_writes(self, cleanup_singletons):
-        """Test multiple threads writing images simultaneously"""
         storage = UnifiedImageStorage()
         num_threads = 20
         images_per_thread = 10
@@ -40,7 +33,7 @@ class TestConcurrentImageOperations:
                     storage.store_single_image(
                         camera_id, image, f"prompt_{thread_id}_{i}"
                     )
-                    time.sleep(0.001)  # Small delay to increase contention
+                    time.sleep(0.001)
             except Exception as e:
                 errors.append(e)
 
@@ -53,7 +46,6 @@ class TestConcurrentImageOperations:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
 
         # Images may be evicted due to MAX_STORED_IMAGES limit (20 images)
@@ -62,11 +54,9 @@ class TestConcurrentImageOperations:
         assert len(camera_ids) == expected
 
     def test_concurrent_read_write_mix(self, cleanup_singletons):
-        """Test concurrent reads and writes on same camera"""
         storage = UnifiedImageStorage()
         camera_id = "shared_camera"
 
-        # Pre-populate
         image = np.zeros((100, 100, 3), dtype=np.uint8)
         storage.store_single_image(camera_id, image, "initial")
 
@@ -102,18 +92,13 @@ class TestConcurrentImageOperations:
         for t in readers + writers:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
-
-        # Reads and writes should have occurred
         assert read_count[0] > 0
         assert write_count[0] == 300  # 3 writers * 100 writes each
 
     def test_concurrent_cleanup(self, cleanup_singletons):
-        """Test cleanup while images are being accessed"""
         storage = UnifiedImageStorage()
 
-        # Store initial images
         for i in range(50):
             image = np.zeros((50, 50, 3), dtype=np.uint8)
             storage.store_single_image(f"cam_{i}", image, "")
@@ -132,8 +117,8 @@ class TestConcurrentImageOperations:
 
         def cleanup_old():
             try:
-                time.sleep(0.05)  # Let some access happen first
-                storage.cleanup_old_images(max_age_seconds=0.01)  # Very aggressive
+                time.sleep(0.05)
+                storage.cleanup_old_images(max_age_seconds=0.01)
             except Exception as e:
                 errors.append(e)
 
@@ -148,22 +133,13 @@ class TestConcurrentImageOperations:
             t.join()
         cleaner.join()
 
-        # No errors should occur despite concurrent cleanup
         assert len(errors) == 0
 
 
-# Test Concurrent Command Broadcasting
-
-
 class TestConcurrentCommandBroadcasting:
-    """Test thread safety of CommandBroadcaster"""
 
     def test_concurrent_command_sends(self):
-        """Test multiple threads sending commands simultaneously"""
         broadcaster = CommandBroadcaster()
-
-        # Mock server to allow commands to be queued
-        from unittest.mock import Mock
 
         mock_server = Mock()
         broadcaster.set_server(mock_server)
@@ -199,30 +175,20 @@ class TestConcurrentCommandBroadcasting:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
-
-        # Commands should be sent (queued since no real client)
         assert sent_count[0] > 0
 
     def test_concurrent_completion_queue_operations(self):
-        """Test concurrent creation and access of completion queues"""
         broadcaster = CommandBroadcaster()
 
         errors = []
 
         def create_and_use_queue(request_id):
             try:
-                # Create queue
                 broadcaster.create_completion_queue(request_id)
-
-                # Put completion
                 completion = {"status": "success", "request_id": request_id}
                 broadcaster.put_completion(request_id, completion)
-
-                # Get completion
                 result = broadcaster.get_completion(request_id, timeout=1.0)
-
                 assert result is not None
                 assert result["request_id"] == request_id
             except Exception as e:
@@ -237,23 +203,16 @@ class TestConcurrentCommandBroadcasting:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
 
 
-# Test Concurrent Registry Operations
-
-
 class TestConcurrentRegistryOperations:
-    """Test thread safety of OperationRegistry"""
 
     def test_concurrent_operation_execution(self, clean_registry):
-        """Test executing operations from multiple threads"""
         registry = get_global_registry()
 
-        # Create a simple operation
         def test_impl(**kwargs):
-            time.sleep(0.01)  # Simulate work
+            time.sleep(0.01)
             return OperationResult.success_result({"executed": True})
 
         op = BasicOperation(
@@ -300,14 +259,10 @@ class TestConcurrentRegistryOperations:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
-
-        # All executions should succeed
         assert success_count[0] == 100  # 10 threads * 10 executions
 
     def test_concurrent_registry_lookups(self, clean_registry):
-        """Test concurrent operation lookups"""
         registry = get_global_registry()
 
         errors = []
@@ -316,7 +271,6 @@ class TestConcurrentRegistryOperations:
         def lookup_operations():
             try:
                 for _ in range(100):
-                    # Look up by name
                     op = registry.get_operation_by_name("move_to_coordinate")
                     if op:
                         lookup_count[0] += 1
@@ -337,21 +291,13 @@ class TestConcurrentRegistryOperations:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
-
-        # Lookups should have occurred (10 threads * 100 iterations * 2 lookups = 2000)
-        assert lookup_count[0] == 2000
-
-
-# Test Concurrent World State Updates
+        assert lookup_count[0] == 2000  # 10 threads * 100 iterations * 2 lookups
 
 
 class TestConcurrentWorldStateUpdates:
-    """Test thread safety of WorldState singleton"""
 
     def test_concurrent_robot_state_updates(self, cleanup_world_state):
-        """Test updating robot states concurrently"""
         world_state = WorldState()
 
         errors = []
@@ -370,7 +316,6 @@ class TestConcurrentWorldStateUpdates:
             except Exception as e:
                 errors.append(e)
 
-        # Update 5 robots concurrently
         threads = [
             threading.Thread(target=update_robot_state, args=(f"Robot{i}", 50))
             for i in range(5)
@@ -381,16 +326,13 @@ class TestConcurrentWorldStateUpdates:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
 
-        # All robots should be registered
         for i in range(5):
             robot_state = world_state.get_robot_state(f"Robot{i}")
             assert robot_state is not None
 
     def test_concurrent_object_registration(self, cleanup_world_state):
-        """Test registering objects concurrently"""
         world_state = WorldState()
 
         errors = []
@@ -409,7 +351,6 @@ class TestConcurrentWorldStateUpdates:
             except Exception as e:
                 errors.append(e)
 
-        # Register objects from 10 threads
         threads = [
             threading.Thread(target=register_objects, args=(i, 20)) for i in range(10)
         ]
@@ -419,18 +360,13 @@ class TestConcurrentWorldStateUpdates:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
-
-        # All objects should be registered
         all_objects = world_state.get_all_objects()
         assert len(all_objects) == 200  # 10 threads * 20 objects
 
     def test_concurrent_read_write_world_state(self, cleanup_world_state):
-        """Test concurrent reads and writes to world state"""
         world_state = WorldState()
 
-        # Pre-populate
         for i in range(10):
             world_state.update_robot(
                 robot_id=f"Robot{i}",
@@ -477,23 +413,14 @@ class TestConcurrentWorldStateUpdates:
         for t in readers + writers:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
-
-        # Reads and writes should have occurred
         assert read_count[0] > 0
         assert write_count[0] == 1500  # 3 writers * 50 iterations * 10 robots
 
 
-# Test Singleton Thread Safety
-
-
 class TestSingletonThreadSafety:
-    """Test thread safety of singleton initialization"""
 
     def test_image_storage_singleton_thread_safe(self):
-        """Test ImageStorage singleton is thread-safe"""
-        # Reset singleton
         UnifiedImageStorage._instance = None
 
         instances = []
@@ -514,15 +441,10 @@ class TestSingletonThreadSafety:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
-
-        # All instances should be the same object
         assert all(inst is instances[0] for inst in instances)
 
     def test_world_state_singleton_thread_safe(self):
-        """Test WorldState singleton is thread-safe"""
-        # Reset singleton
         WorldState._instance = None
 
         instances = []
@@ -543,21 +465,13 @@ class TestSingletonThreadSafety:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
-
-        # All instances should be the same object
         assert all(inst is instances[0] for inst in instances)
 
 
-# Test Race Conditions
-
-
 class TestRaceConditions:
-    """Test for potential race conditions"""
 
     def test_command_queue_race_condition(self):
-        """Test for race conditions in command queuing"""
         broadcaster = CommandBroadcaster()
 
         results = []
@@ -571,7 +485,6 @@ class TestRaceConditions:
             except Exception as e:
                 errors.append(e)
 
-        # Send many commands simultaneously
         threads = [
             threading.Thread(target=send_and_track, args=(i,)) for i in range(100)
         ]
@@ -581,18 +494,13 @@ class TestRaceConditions:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0
-
-        # All commands should be tracked
         assert len(results) == 100
 
     @patch("servers.CommandServer.get_command_broadcaster")
     def test_operation_execution_race_condition(
         self, mock_broadcaster, cleanup_world_state
     ):
-        """Test for race conditions during operation execution"""
-        # Mock broadcaster to return success
         mock_broadcaster.return_value.send_command = Mock(return_value=True)
 
         execution_order = []
@@ -611,7 +519,6 @@ class TestRaceConditions:
                 with lock:
                     errors.append(e)
 
-        # Execute moves for different robots simultaneously
         threads = [
             threading.Thread(target=execute_move, args=(f"Robot{i}", 0.3, 0.0, 0.1))
             for i in range(20)
@@ -622,8 +529,5 @@ class TestRaceConditions:
         for t in threads:
             t.join()
 
-        # No errors should occur
         assert len(errors) == 0, f"Errors occurred: {errors}"
-
-        # All robots should have executed
         assert len(execution_order) == 20

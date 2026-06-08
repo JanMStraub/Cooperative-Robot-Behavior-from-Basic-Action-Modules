@@ -257,7 +257,7 @@ class VisionProcessor:
                     time.sleep(frame_interval * 0.5)
                     continue
 
-                last_thumb = thumb  # update reference for next iteration
+                last_thumb = thumb
 
                 logger.debug(
                     f"VisionProcessor: Processing new frame (timestamp: {timestamp:.3f}, "
@@ -315,7 +315,6 @@ class VisionProcessor:
                         imgL, camera_id="stereo_stream"
                     )
 
-                # --- Object tracking ---
                 if self.tracker and len(result.detections) > 0:
                     tracked_detections = self.tracker.update(result.detections)
                     result = DetectionResult(
@@ -325,7 +324,6 @@ class VisionProcessor:
                         tracked_detections,
                     )
 
-                # --- Publish / callback ---
                 if self.enable_shared_state and len(result.detections) > 0:
                     try:
                         self.shared_state.update_detections(result.detections)
@@ -341,7 +339,6 @@ class VisionProcessor:
                     except Exception as e:
                         logger.error(f"Error in result callback: {e}")
 
-                # --- Visualization ---
                 if self.enable_visualization:
                     try:
                         if (
@@ -413,18 +410,15 @@ class VisionProcessor:
             }
 
             for det in detections:
-                # Get color (match by prefix)
                 bbox_color = color_map["default"]
                 for key, value in color_map.items():
                     if key in det.color.lower():
                         bbox_color = value
                         break
 
-                # Draw bounding box
                 x, y, w, h = det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h
                 cv2.rectangle(vis_image, (x, y), (x + w, y + h), bbox_color, 2)
 
-                # Build label text
                 label_parts = [det.color]
                 if det.track_id is not None:
                     label_parts.append(f"ID:{det.track_id}")

@@ -128,7 +128,6 @@ def synchronized_grasp(
                 return OperationResult.error_result(
                     "ROS_PARTNER_APPROACH_FAILED",
                     f"ROS approach succeeded for {robot_id} but failed for {partner_robot_id}",
-                    ["Check partner robot reachability", "Use TCP mode instead"],
                 )
 
             bridge.control_gripper(0.0, robot_id=robot_id)
@@ -170,7 +169,6 @@ def synchronized_grasp(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity",
-                    ["Ensure Unity is running"],
                 )
 
             return OperationResult.success_result(
@@ -350,9 +348,6 @@ def joint_transport(
                 return OperationResult.error_result(
                     "PRECONDITION_FAILED",
                     f"Both robots must be grasping the object. {robot_id}: {r1_gripper}, {partner_robot_id}: {r2_gripper}",
-                    [
-                        "Use synchronized_grasp first to have both robots grasp the object"
-                    ],
                 )
         except Exception as e:
             logger.debug(f"WorldState precondition check skipped: {e}")
@@ -400,11 +395,6 @@ def joint_transport(
                 return OperationResult.error_result(
                     "ROS_PARTNER_LIFT_FAILED",
                     f"Lift succeeded for {robot_id} but failed for {partner_robot_id}",
-                    [
-                        "Check partner robot reachability",
-                        "Reduce lift_height",
-                        "Use TCP mode",
-                    ],
                 )
 
             target = {"x": target_x, "y": target_y + lift_height, "z": target_z}
@@ -416,7 +406,6 @@ def joint_transport(
                 return OperationResult.error_result(
                     "ROS_TRANSPORT_R1_FAILED",
                     f"Transport failed for {robot_id} after lift phase",
-                    ["Verify target reachability", "Use TCP mode"],
                 )
 
             mv2 = bridge.plan_and_execute(
@@ -428,7 +417,6 @@ def joint_transport(
                 return OperationResult.error_result(
                     "ROS_TRANSPORT_R2_FAILED",
                     f"Transport failed for {partner_robot_id} after {robot_id} reached target",
-                    ["Verify target reachability", "Use TCP mode"],
                 )
 
             return OperationResult.success_result(
@@ -469,7 +457,6 @@ def joint_transport(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity",
-                    ["Ensure Unity is running"],
                 )
 
             return OperationResult.success_result(

@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for GraspFrameTransform.py"""
-
 import math
 import pytest
 import numpy as np
@@ -12,11 +9,8 @@ from operations.GraspFrameTransform import (
     _normalise_quat,
 )
 
-# Internal quaternion math tests
-
 
 class TestQuaternionMath:
-    """Verify the internal NumPy quaternion helpers are correct."""
 
     def test_identity_rotation_leaves_vector_unchanged(self):
         """Rotating by identity quaternion must return the original vector."""
@@ -27,9 +21,7 @@ class TestQuaternionMath:
 
     def test_180_rotation_around_y_negates_xz(self):
         """180° around Y maps (x,y,z) → (-x,y,-z)."""
-        q_180y = np.array(
-            [0.0, 1.0, 0.0, 0.0]
-        )  # [sin(90°)*Y, cos(90°)] already normalised
+        q_180y = np.array([0.0, 1.0, 0.0, 0.0])
         v = np.array([1.0, 0.0, 1.0])
         result = _quat_rotate_vector(q_180y, v)
         np.testing.assert_allclose(result, np.array([-1.0, 0.0, -1.0]), atol=1e-9)
@@ -46,9 +38,6 @@ class TestQuaternionMath:
         q = np.array([0.0, 0.0, 0.0, 0.0])
         result = _normalise_quat(q)
         np.testing.assert_allclose(result, np.array([0.0, 0.0, 0.0, 1.0]))
-
-
-# Frame transform tests
 
 
 class TestTransformGraspnetPosesToUnity:
@@ -71,7 +60,6 @@ class TestTransformGraspnetPosesToUnity:
 
         assert len(result) == 1
         pos = result[0]["position"]
-        # X negated (RH→LH flip), Y and Z unchanged, camera at origin so no translation
         np.testing.assert_allclose(pos, [-1.0, 2.0, 3.0], atol=1e-6)
 
     def test_camera_translation_is_added(self):
@@ -90,7 +78,6 @@ class TestTransformGraspnetPosesToUnity:
 
         assert len(result) == 1
         pos = result[0]["position"]
-        # Origin flipped = still origin; then cam_pos is added
         np.testing.assert_allclose(pos, [0.5, 1.0, 2.0], atol=1e-6)
 
     def test_camera_rotation_applied_to_position(self):
@@ -110,9 +97,7 @@ class TestTransformGraspnetPosesToUnity:
 
         assert len(result) == 1
         pos = result[0]["position"]
-        # Step 1: flip X → (-1, 0, 1)
-        # Step 2: rotate by 180° around Y → (1, 0, -1)
-        # (No translation)
+        # flip X → (-1, 0, 1), rotate 180° Y → (1, 0, -1)
         np.testing.assert_allclose(pos, [1.0, 0.0, -1.0], atol=1e-6)
 
     def test_grasp_pointing_down_in_camera_is_down_in_world(self):
@@ -176,7 +161,6 @@ class TestTransformGraspnetPosesToUnity:
 
         result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
-        # Only the valid grasp should be in the output
         assert len(result) == 1
         assert result[0]["score"] == pytest.approx(0.9)
 
@@ -213,7 +197,6 @@ class TestTransformGraspnetPosesToUnity:
         result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
         assert len(result) == 3
-        # X-flip: [1,0,0] → [-1,0,0], [2,0,0] → [-2,0,0], etc.
         np.testing.assert_allclose(result[0]["position"], [-1.0, 0.0, 0.0], atol=1e-6)
         np.testing.assert_allclose(result[1]["position"], [-2.0, 0.0, 0.0], atol=1e-6)
         np.testing.assert_allclose(result[2]["position"], [-3.0, 0.0, 0.0], atol=1e-6)
@@ -235,7 +218,6 @@ class TestTransformGraspnetPosesToUnity:
 
         assert len(result) == 1
         approach = result[0]["approach_direction"]
-        # X is negated by handedness flip; identity camera rotation leaves the rest
         np.testing.assert_allclose(approach, [-1.0, 0.0, 0.0], atol=1e-6)
 
     def test_grasp_with_3element_euler_rotation_is_accepted(self):

@@ -45,9 +45,6 @@ class ROSBridge:
         """
         Initialize the ROS bridge client.
 
-        Args:
-            host: ROS bridge server host (default from config)
-            port: ROS bridge server port (default from config)
         """
         try:
             from config.ROS import (
@@ -181,32 +178,7 @@ class ROSBridge:
         """
         Plan and execute a motion to target pose for a specific robot.
 
-        Args:
-            position: Dict with x, y, z coordinates.
-            orientation: Dict with x, y, z, w quaternion in ROS base_link frame. If None,
-                         MoveIt plans to the position with any feasible orientation.
-            planning_time: Max planning time in seconds.
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
-            max_velocity_scaling: MoveIt velocity scaling factor (0.0 = default = 1.0).
-                Use values < 1.0 for slow, smooth descent motions (e.g. 0.3 for grasp approach).
-            max_acceleration_scaling: MoveIt acceleration scaling factor (0.0 = default = 1.0).
-            coordinate_space: "base_link" if position is already in ROS base_link frame
-                (LLM-generated, move_to_coordinate). "unity_world" if position is in Unity
-                world space and needs the world→base_link transform applied (grasp planner,
-                detection-derived positions). Default: "unity_world".
-            constrain_joint6: When True, adds a path constraint on joint_6 around its current
-                position. Window controlled by joint6_window_rad (default ±30°). Only set for
-                pre-grasp hover or handoff approach; never for descent/grasp moves.
-            constrain_joint4: When True, adds a path constraint on joint_4 around its current
-                position. Window controlled by joint4_window_rad (default ±90°). Prevents
-                RRTConnect from choosing the long-arc IK solution.
-            joint6_window_rad: Half-window in radians for joint_6 constraint. Default 0.5236
-                (±30°). Use 1.5708 (±90°) for handoff approach.
-            joint4_window_rad: Half-window in radians for joint_4 constraint. Default 1.5708
-                (±90°). Use 2.3562 (±135°) when robot starts far from neutral pose.
 
-        Returns:
-            Dict with success status and details.
         """
         cmd = {
             "command": "plan_and_execute",
@@ -249,16 +221,7 @@ class ROSBridge:
         Falls back automatically to free-space planning if the Cartesian path
         is blocked (e.g. collision avoidance needed).
 
-        Args:
-            position: Dict with x, y, z in Unity world coordinates.
-            orientation: Dict with x, y, z, w quaternion. Should be the same
-                         orientation used for the preceding pre-grasp move.
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
-            max_velocity_scaling: Velocity scaling (default 0.3 for slow descent).
-            max_acceleration_scaling: Acceleration scaling (default 0.3).
 
-        Returns:
-            Dict with success status and details.
         """
         cmd = {
             "command": "plan_cartesian_descent",
@@ -289,19 +252,7 @@ class ROSBridge:
         end-effector must translate in a straight line without wrist rotation
         (e.g. handoff slide-in along X, grasp descent along Z).
 
-        Args:
-            position: Dict with x, y, z in Unity world coordinates.
-            orientation: Dict with x, y, z, w quaternion (optional).
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
-            max_velocity_scaling: Velocity scaling factor (default 0.3).
-            max_acceleration_scaling: Acceleration scaling factor (default 0.3).
-            lock_orientation: Keep orientation fixed during move (default True).
-            avoid_collisions: Enable MoveIt collision checking (default True).
-                Set False when the path intentionally passes near a cooperative
-                robot (e.g. handoff slide-in toward Robot1).
 
-        Returns:
-            Dict with success status and details.
         """
         cmd = {
             "command": "plan_cartesian_move",
@@ -337,11 +288,7 @@ class ROSBridge:
 
         Returns position and orientation in ROS base_link frame.
 
-        Args:
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
 
-        Returns:
-            Dict with success, position {x,y,z}, orientation {x,y,z,w} in base_link.
         """
         return self._send_command({"command": "get_ee_pose", "robot_id": robot_id})
 

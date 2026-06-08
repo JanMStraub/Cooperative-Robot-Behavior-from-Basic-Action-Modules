@@ -372,8 +372,6 @@ class ROSMotionServer:
         Published to /{robot_id}/planning_scene once at startup. MoveIt's planning
         scene monitor picks it up and applies it to all subsequent planning requests.
 
-        Args:
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2")
         """
         if not HAS_ROS:
             return
@@ -432,9 +430,6 @@ class ROSMotionServer:
         base_link frame, and publishes conservative bounding-box CollisionObjects so
         MoveIt avoids the physical space occupied by the other arm.
 
-        Args:
-            planning_robot_id: Robot whose planning scene receives the obstacles.
-            other_robot_id: Robot whose current arm pose is added as obstacles.
         """
         import math
 
@@ -518,9 +513,6 @@ class ROSMotionServer:
         Sends REMOVE operations for all four link collision objects that were added
         by _publish_other_robot_collision. Should be called after planning completes.
 
-        Args:
-            planning_robot_id: Robot whose planning scene is being cleaned up.
-            other_robot_id: Robot whose arm collision objects should be removed.
         """
         if not HAS_ROS:
             return
@@ -561,12 +553,7 @@ class ROSMotionServer:
         - Convert to ROS: x=local_z=0.05 (forward), y=-local_x=-0.475 (left), z=0.089 (up)
 
 
-        Args:
-            world_position: Dict with x, y, z in Unity world coordinates (Y-up)
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2")
 
-        Returns:
-            Dict with x, y, z in ROS base_link coordinates (Z-up)
         """
         import math
 
@@ -640,12 +627,7 @@ class ROSMotionServer:
         misinterpreted orientation, causing joint 4 and the gripper to spin
         extensively before settling near the pre-grasp waypoint.
 
-        Args:
-            unity_orientation: Dict with x, y, z, w quaternion in Unity world frame.
-            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
 
-        Returns:
-            Dict with x, y, z, w quaternion in ROS base_link frame.
         """
         import math
 
@@ -762,8 +744,6 @@ class ROSMotionServer:
         _process_request(), and sends the JSON response back. Runs in its own
         daemon thread so multiple clients can be served concurrently.
 
-        Args:
-            client_socket: The accepted socket returned by server.accept().
         """
         buffer = ""
         try:
@@ -872,9 +852,6 @@ class ROSMotionServer:
         When orientation is not provided, only a position constraint is added,
         allowing MoveIt to reach the target with any feasible orientation.
 
-        Args:
-            request: Request dict with position, orientation, planning_time
-            robot_id: Robot namespace to populate start_state from cached joint states
         """
         position = request.get("position", {})
         orientation = request.get("orientation")
@@ -1144,15 +1121,7 @@ class ROSMotionServer:
         return goal
 
     def _wait_for_joint_states(self, robot_id: str, timeout: float = 5.0) -> bool:
-        """Wait for initial joint states from Unity.
-
-        Args:
-            robot_id: Robot namespace
-            timeout: Max time to wait in seconds
-
-        Returns:
-            True if joint states received, False if timeout
-        """
+        """Wait for initial joint states from Unity."""
         start_time = time.time()
         while time.time() - start_time < timeout:
             with self._joint_states_lock:
@@ -1162,17 +1131,7 @@ class ROSMotionServer:
         return False
 
     def _call_move_group_plan(self, goal, robot_id, planning_time=5.0):
-        """Send a planning-only goal to MoveGroup and return the result.
-
-        Args:
-            goal: MoveGroup.Goal message
-            robot_id: Robot namespace to route to correct MoveIt instance
-            planning_time: Max planning time in seconds
-
-        Returns:
-            (trajectory, planning_time, error_msg) tuple.
-            trajectory is a JointTrajectory or None on failure.
-        """
+        """Send a planning-only goal to MoveGroup and return the result."""
         move_group_client = self._move_group_clients[robot_id]
 
         # Wait for joint states before planning
@@ -1310,16 +1269,7 @@ class ROSMotionServer:
         each trajectory point so the result can be sent over the TCP wire to
         the Python backend or logged.
 
-        Args:
-            trajectory: JointTrajectory message (from MoveIt plan result or
-                        GetCartesianPath response).
 
-        Returns:
-            Dict with keys:
-                - joint_names (List[str]): Ordered list of joint name strings.
-                - points (List[Dict]): One dict per waypoint with keys
-                  'positions', 'velocities', 'accelerations' (all List[float])
-                  and 'time_from_start' (float, seconds).
         """
         points = []
         for pt in trajectory.points:
@@ -1338,15 +1288,7 @@ class ROSMotionServer:
         }
 
     def _plan_to_pose(self, request, robot_id):
-        """Plan a trajectory to a target pose (plan only, no execution).
-
-        Args:
-            request: Request dict with position, orientation, planning_time
-            robot_id: Robot namespace to route to correct MoveIt instance
-
-        Returns:
-            Dict with success status and trajectory info.
-        """
+        """Plan a trajectory to a target pose (plan only, no execution)."""
         planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
         goal = self._build_move_group_goal(request, robot_id)
 
@@ -1378,9 +1320,6 @@ class ROSMotionServer:
            This corrects MoveIt choosing the 333° arc when 27° is available
            across the ±π boundary.
 
-        Args:
-            trajectory: JointTrajectory whose points.positions will be mutated in-place.
-            joint_names_to_limits: Dict mapping joint-name str → (lower_rad, upper_rad).
         """
         import math as _math
 
@@ -1460,12 +1399,7 @@ class ROSMotionServer:
         3. We publish it to /{robot_id}/arm_controller/joint_trajectory
         4. Unity's ROSTrajectorySubscriber picks it up and executes
 
-        Args:
-            request: Request dict with position, orientation, planning_time
-            robot_id: Robot namespace to route to correct MoveIt instance
 
-        Returns:
-            Dict with success status and execution info.
         """
         planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
         goal = self._build_move_group_goal(request, robot_id)
@@ -1587,14 +1521,7 @@ class ROSMotionServer:
         return result
 
     def _get_current_pose(self, robot_id):
-        """Get the current joint state from Unity via namespaced /joint_states topic.
-
-        Args:
-            robot_id: Robot namespace
-
-        Returns:
-            Dict with joint positions and names.
-        """
+        """Get the current joint state from Unity via namespaced /joint_states topic."""
         with self._joint_states_lock:
             joint_state = self._current_joint_states.get(robot_id)
 
@@ -1620,12 +1547,7 @@ class ROSMotionServer:
         gripper opening (0.0=closed, 1.0=open), matching what Unity's
         ROSGripperSubscriber expects.
 
-        Args:
-            request: Request dict with position
-            robot_id: Robot namespace to route to correct gripper
 
-        Returns:
-            Dict with success status.
         """
         position = request.get("position", 0.0)
 
@@ -1656,12 +1578,7 @@ class ROSMotionServer:
         Each waypoint is planned as a separate plan_and_execute call.
         The robot moves through each waypoint in order.
 
-        Args:
-            request: Request dict with waypoints list and planning_time.
-            robot_id: Robot namespace.
 
-        Returns:
-            Dict with success status and total planning time.
         """
         waypoints = request.get("waypoints", [])
         planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
@@ -1710,13 +1627,7 @@ class ROSMotionServer:
         Calls MoveIt's compute_fk service with the current joint state snapshot
         to obtain the real Cartesian position of ee_link in base_link frame.
 
-        Args:
-            robot_id: Robot namespace.
-            timeout: Service call timeout in seconds.
 
-        Returns:
-            Dict with "success" bool and "position" dict (x, y, z) on success,
-            or "success": False and "error" string on failure.
         """
         fk_client = self._fk_service_clients.get(robot_id)
         if fk_client is None:
@@ -1766,12 +1677,7 @@ class ROSMotionServer:
         Falls back to _plan_and_publish (OMPL) if the Cartesian client is unavailable
         or if GetCartesianPath returns < 95% fraction.
 
-        Args:
-            request: Request dict with orientation (roll, pitch, yaw in degrees).
-            robot_id: Robot namespace.
 
-        Returns:
-            Dict with success status and planning time.
         """
         import math
 
@@ -2007,14 +1913,7 @@ class ROSMotionServer:
         is unavailable or parameterization fails, so the caller always gets a usable
         trajectory.
 
-        Args:
-            trajectory: JointTrajectory message from GetCartesianPath (untimed).
-            vel_scaling: Velocity scaling factor (0.0–1.0).
-            acc_scaling: Acceleration scaling factor (0.0–1.0).
-            robot_id: Robot namespace string (used only for log messages).
 
-        Returns:
-            JointTrajectory with time_from_start populated, or the original if TOTG fails.
         """
         try:
             from moveit.trajectory_processing import TimeOptimalTrajectoryGeneration  # type: ignore[import-not-found]
@@ -2065,13 +1964,7 @@ class ROSMotionServer:
         the fastest joint needs at the scaled velocity — a conservative but
         correct approximation of trapezoidal profiling.
 
-        Args:
-            trajectory: JointTrajectory with time_from_start = 0 on all points.
-            vel_scaling: Velocity scaling factor (0.0–1.0).
-            robot_id: Robot namespace string (for log messages).
 
-        Returns:
-            JointTrajectory with time_from_start populated.
         """
         import math as _math
         from builtin_interfaces.msg import Duration  # type: ignore[import-not-found]
@@ -2129,16 +2022,7 @@ class ROSMotionServer:
         Use instead of plan_and_execute whenever the end-effector must travel in
         a straight line (grasp descent, handoff slide-in, etc.).
 
-        Args:
-            request: Dict with keys:
-                position: Target position dict {x, y, z} in Unity world coords.
-                orientation: Target orientation dict {x, y, z, w} (optional).
-                max_velocity_scaling: Velocity scaling factor (default 0.3).
-                max_acceleration_scaling: Acceleration scaling factor (default 0.3).
-            robot_id: Robot namespace (e.g. "Robot1").
 
-        Returns:
-            Dict with success status and trajectory info.
         """
         cartesian_client = self._cartesian_path_clients.get(robot_id)
         if cartesian_client is None:
@@ -2444,12 +2328,7 @@ class ROSMotionServer:
         joints at 0 rad (the URDF home pose), which is exact and avoids the
         IK ambiguity of a Cartesian position approximation.
 
-        Args:
-            request: Request dict with planning_time.
-            robot_id: Robot namespace.
 
-        Returns:
-            Dict with success status and planning time.
         """
         planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
 
@@ -2606,12 +2485,7 @@ class ROSMotionServer:
         Tests each candidate's grasp and pre-grasp poses for IK reachability.
         Returns validation results with IK quality scores.
 
-        Args:
-            request: Request dict with 'candidates' list
-            robot_id: Robot namespace
 
-        Returns:
-            Dict with success status and validation results per candidate
         """
         candidates = request.get("candidates", [])
 
@@ -2639,12 +2513,7 @@ class ROSMotionServer:
         Uses MoveIt's compute_ik service to check if each candidate's
         grasp pose can be reached by the robot.
 
-        Args:
-            candidates: List of candidate dicts with position/orientation
-            robot_id: Robot namespace
 
-        Returns:
-            List of (is_valid, quality_score) tuples for each candidate
         """
         ik_client = self._ik_service_clients.get(robot_id)
 

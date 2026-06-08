@@ -1,14 +1,9 @@
-#!/usr/bin/env python3
-"""Unit tests for FieldOperations"""
-
 from contextlib import ExitStack
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from operations.FieldOperations import detect_field, detect_all_fields
-
-# Shared helpers
 
 
 def _make_detection(color: str, world_position=(0.1, 0.2, 0.3), confidence=0.85):
@@ -42,9 +37,6 @@ def _stereo_params(metadata=None):
     return params
 
 
-# detect_field
-
-
 class TestDetectField:
     def _patch_all(self, detections_result, stereo=None):
         """Context manager that patches all external deps for detect_field."""
@@ -66,11 +58,7 @@ class TestDetectField:
             ),
             patch("vision.YOLODetector.YOLODetector", return_value=detector),
             patch(
-                (
-                    "operations.FieldOperations.YOLODetector"
-                    if False
-                    else "vision.YOLODetector.YOLODetector"
-                ),
+                "vision.YOLODetector.YOLODetector",
                 return_value=detector,
             ),
             patch(
@@ -96,8 +84,6 @@ class TestDetectField:
         detector_inst.detect_objects_stereo.return_value = det_result
         world_state = MagicMock()
 
-        # camera_config_from_metadata and YOLODetector are local imports inside the
-        # function body, so patch at the source module, not on FieldOperations.
         with (
             patch(
                 "operations.FieldOperations.get_unified_image_storage",
@@ -235,9 +221,6 @@ class TestDetectField:
         _, _, detector = self._run(field_label="E", detections=[det])
         call_kwargs = detector.detect_objects_stereo.call_args.kwargs
         assert call_kwargs["filter_classes"] == ["field_e"]
-
-
-# detect_all_fields
 
 
 class TestDetectAllFields:

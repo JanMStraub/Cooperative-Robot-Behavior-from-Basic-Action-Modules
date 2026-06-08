@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for Registry.py"""
-
 import pytest
 import threading
 import time
@@ -14,8 +11,6 @@ from operations.Base import (
     OperationParameter,
     OperationResult,
 )
-
-# Fixtures
 
 
 @pytest.fixture
@@ -64,9 +59,6 @@ def clean_registry():
     return registry
 
 
-# Test Class: Registration & Lookup
-
-
 class TestRegistryRegistration:
 
     def test_registry_initializes_with_operations(self):
@@ -96,7 +88,6 @@ class TestRegistryRegistration:
         assert op.operation_id == "motion_move_to_coord_001"
 
     def test_get_operation_by_name_case_insensitive(self):
-        """Test retrieving operation by name is case-insensitive."""
         registry = OperationRegistry()
 
         op1 = registry.get_operation_by_name("move_to_coordinate")
@@ -108,7 +99,6 @@ class TestRegistryRegistration:
         assert op1 is op3
 
     def test_get_nonexistent_operation_by_id(self):
-        """Test retrieving non-existent operation by ID returns None."""
         registry = OperationRegistry()
 
         op = registry.get_operation("nonexistent_op_999")
@@ -116,7 +106,6 @@ class TestRegistryRegistration:
         assert op is None
 
     def test_get_nonexistent_operation_by_name(self):
-        """Test retrieving non-existent operation by name returns None."""
         registry = OperationRegistry()
 
         op = registry.get_operation_by_name("nonexistent_operation")
@@ -131,9 +120,6 @@ class TestRegistryRegistration:
         assert isinstance(ops, list)
         assert len(ops) > 0
         assert all(isinstance(op, BasicOperation) for op in ops)
-
-
-# Test Class: Execution
 
 
 class TestRegistryExecution:
@@ -158,7 +144,6 @@ class TestRegistryExecution:
         assert result.success is True
 
     def test_execute_nonexistent_operation_by_id(self):
-        """Test executing non-existent operation by ID returns error."""
         registry = OperationRegistry()
 
         result = registry.execute_operation("nonexistent_op", robot_id="Robot1")
@@ -168,7 +153,6 @@ class TestRegistryExecution:
         assert result.error["code"] == "OPERATION_NOT_FOUND"
 
     def test_execute_nonexistent_operation_by_name(self):
-        """Test executing non-existent operation by name returns error."""
         registry = OperationRegistry()
 
         result = registry.execute_operation_by_name("nonexistent", robot_id="Robot1")
@@ -176,9 +160,6 @@ class TestRegistryExecution:
         assert result.success is False
         assert result.error is not None
         assert result.error["code"] == "OPERATION_NOT_FOUND"
-
-
-# Test Class: Filtering
 
 
 class TestRegistryFiltering:
@@ -217,14 +198,9 @@ class TestRegistryFiltering:
         assert all(op.complexity == OperationComplexity.BASIC for op in basic_nav_ops)
 
 
-# Test Class: Concurrency
-
-
 class TestRegistryConcurrency:
-    """Test concurrent access to registry."""
 
     def test_concurrent_operation_execution(self, clean_registry, sample_operation):
-        """Test executing operations concurrently from multiple threads."""
         clean_registry.operations[sample_operation.operation_id] = sample_operation
 
         results = []
@@ -256,7 +232,6 @@ class TestRegistryConcurrency:
         assert all(r.success for r in results)
 
     def test_thread_safe_registry_access(self):
-        """Test thread-safe access to registry operations."""
         registry = OperationRegistry()
 
         operations = []
@@ -284,9 +259,6 @@ class TestRegistryConcurrency:
         assert len(set(operations)) == 1
 
 
-# Test Class: Performance
-
-
 class TestRegistryPerformance:
 
     def test_lookup_performance_large_registry(self):
@@ -301,9 +273,6 @@ class TestRegistryPerformance:
 
         # Should be very fast (< 100ms for 1000 lookups)
         assert duration < 0.1
-
-
-# Test Class: Export and Documentation
 
 
 class TestRegistryExport:
@@ -333,14 +302,9 @@ class TestRegistryExport:
         assert (output_dir / "operations_index.json").exists()
 
 
-# Test Class: Global Registry Singleton
-
-
 class TestGlobalRegistry:
-    """Test global registry singleton."""
 
     def test_get_global_registry_singleton(self):
-        """Test get_global_registry returns singleton instance."""
         registry1 = get_global_registry()
         registry2 = get_global_registry()
 

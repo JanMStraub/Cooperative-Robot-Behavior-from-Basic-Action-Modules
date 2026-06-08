@@ -45,7 +45,6 @@ class AutoRTServer(TCPServerBase):
         msg_type = header_bytes[0]
         request_id = struct.unpack("<I", header_bytes[1:5])[0]
 
-        # Validate message type
         if msg_type != MessageType.AUTORT_COMMAND:
             logger.error(
                 f"Invalid message type: {msg_type} (expected {MessageType.AUTORT_COMMAND})"
@@ -53,7 +52,6 @@ class AutoRTServer(TCPServerBase):
             self._send_error(client, request_id, f"Invalid message type: {msg_type}")
             return
 
-        # Handle AutoRT command
         self._handle_autort_command(client, header_bytes, request_id)
 
     def _handle_autort_command(

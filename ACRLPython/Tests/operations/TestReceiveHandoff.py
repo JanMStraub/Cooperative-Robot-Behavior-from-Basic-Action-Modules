@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for receive_handoff geometry and path logic."""
-
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -21,7 +18,6 @@ def _make_world_state(
 
 @pytest.fixture
 def mock_deps():
-    """Patch all external I/O so receive_handoff runs offline (TCP path)."""
     ws = _make_world_state()
     move_result = MagicMock()
     move_result.success = True
@@ -50,7 +46,6 @@ def mock_deps():
 
 class TestHandoffGeometry:
     def test_tcp_path_moves_to_object_center_not_near_face(self, mock_deps):
-        """TCP path must target object center X, not near-face X."""
         from operations.grasp._handoff import receive_handoff
 
         # obj at x=0.0, dims lx=0.04 → near_face = 0.0 + 1.0*0.02 = 0.02
@@ -65,7 +60,6 @@ class TestHandoffGeometry:
         )
 
     def test_gripper_closed_after_move(self, mock_deps):
-        """Final gripper close must happen after the approach move."""
         from operations.grasp._handoff import receive_handoff
 
         result = receive_handoff("Robot2", "red_bar", "Robot1")
@@ -79,7 +73,6 @@ class TestHandoffGeometry:
         assert close_calls, "Gripper never closed"
 
     def test_reach_check_still_uses_near_face(self, mock_deps):
-        """Reach check must use near_face_x (ap_x), not center — center may be in source robot workspace."""
         from operations.grasp._handoff import receive_handoff
 
         with patch(

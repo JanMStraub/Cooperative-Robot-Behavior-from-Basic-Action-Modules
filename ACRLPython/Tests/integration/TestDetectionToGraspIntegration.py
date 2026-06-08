@@ -1,17 +1,8 @@
-#!/usr/bin/env python3
-"""
-Test detection result to grasp operation integration.
-
-This test verifies that detection results (containing x, y, z, color, etc.)
-are correctly converted to object_id when passed to grasp operations.
-"""
-
 import pytest
 from orchestrators.SequenceExecutor import SequenceExecutor
 
 
 class TestDetectionToGraspIntegration:
-    """Test detection result conversion for grasp operations"""
 
     def test_variable_substitution_extracts_object_id_from_detection(self):
         """Test that $variable substitution extracts 'color' field for object_id parameter"""
@@ -52,12 +43,8 @@ class TestDetectionToGraspIntegration:
             "confidence": 0.9,
             "camera_id": "MainCamera",
         }
-        # Auto-captured variables use the pattern: {operation_name}_{output_key}
         executor._variables["detect_object_result"] = detection_result
 
-        # Test auto-injection for object_id parameter
-        # Note: This would normally be triggered by ParameterFlow relationships
-        # For this test, we manually inject the variable
         source_var_name = "detect_object_result"
         executor._variables[source_var_name] = detection_result
 

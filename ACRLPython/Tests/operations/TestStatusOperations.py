@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for StatusOperations.py"""
-
 from unittest.mock import Mock
 
 from operations.StatusOperations import check_robot_status, CHECK_ROBOT_STATUS_OPERATION
@@ -131,7 +128,6 @@ class TestStatusOperationDefinition:
         assert op.implementation is not None
 
     def test_operation_execution_through_definition(self, patch_command_broadcaster):
-        """Test executing operation through BasicOperation.execute()."""
         result = CHECK_ROBOT_STATUS_OPERATION.execute(robot_id="Robot1", detailed=False)
 
         assert result.success is True

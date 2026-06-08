@@ -1,39 +1,23 @@
-#!/usr/bin/env python3
-"""
-Integration tests for end-to-end grasp planning pipeline.
-
-Tests the full pipeline from candidate generation through scoring and selection.
-"""
-
 import pytest
 import numpy as np
-import sys
-from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from grasp_planning.GraspPlanner import GraspPlanner
 from grasp_planning.GraspConfig import GraspConfig
 
 
 class TestGraspPlanner:
-    """Test end-to-end grasp planning pipeline."""
 
     @pytest.fixture
     def planner(self):
-        """Create default grasp planner."""
         return GraspPlanner()
 
     @pytest.fixture
     def fast_planner(self):
-        """Create fast grasp planner."""
         config = GraspConfig.create_fast()
         return GraspPlanner(config)
 
     @pytest.fixture
     def precise_planner(self):
-        """Create precise grasp planner."""
         config = GraspConfig.create_precise()
         return GraspPlanner(config)
 
@@ -90,7 +74,6 @@ class TestGraspPlanner:
         robot_id = "Robot1"
         gripper_position = (0.0, 0.15, 0.0)
 
-        # Very high threshold - should return None
         best_grasp = planner.plan_grasp(
             object_position=object_position,
             object_rotation=object_rotation,
@@ -98,13 +81,13 @@ class TestGraspPlanner:
             robot_id=robot_id,
             gripper_position=gripper_position,
             use_moveit_ik=False,
-            min_score=10.0,  # Impossibly high
+            min_score=10.0,
         )
 
         assert best_grasp is None
 
     def test_plan_grasp_with_unreachable_object(self, planner):
-        object_position = (10.0, 10.0, 10.0)  # Very far
+        object_position = (10.0, 10.0, 10.0)
         object_rotation = (0.0, 0.0, 0.0, 1.0)
         object_size = (0.05, 0.05, 0.05)
         robot_id = "Robot1"
@@ -119,9 +102,7 @@ class TestGraspPlanner:
             use_moveit_ik=False,
         )
 
-        # Should still return a candidate, but with low score
         if best_grasp is not None:
-            # IK score should be very low due to distance
             assert best_grasp.ik_score < 0.5
 
     def test_plan_multi_grasp(self, planner):
@@ -142,7 +123,6 @@ class TestGraspPlanner:
         )
 
         assert len(candidates) == 3
-        # Should be sorted by score
         assert candidates[0].total_score >= candidates[1].total_score
         assert candidates[1].total_score >= candidates[2].total_score
 
@@ -172,14 +152,12 @@ class TestGraspPlanner:
         assert "approach_counts" in stats
 
     def test_fast_planner_generates_fewer_candidates(self, fast_planner, planner):
-        # Fast planner should have fewer candidates per approach
         assert (
             fast_planner.config.candidates_per_approach
             < planner.config.candidates_per_approach
         )
 
     def test_precise_planner_generates_more_candidates(self, precise_planner, planner):
-        # Precise planner should have more candidates per approach
         assert (
             precise_planner.config.candidates_per_approach
             > planner.config.candidates_per_approach
@@ -191,7 +169,6 @@ class TestGraspPlanner:
         robot_id = "Robot1"
         gripper_position = (0.0, 0.15, 0.0)
 
-        # Identity rotation
         best_grasp_1 = planner.plan_grasp(
             object_position=object_position,
             object_rotation=(0.0, 0.0, 0.0, 1.0),
@@ -201,7 +178,6 @@ class TestGraspPlanner:
             use_moveit_ik=False,
         )
 
-        # 45 degree rotation around Y
         from utils.QuaternionMath import quaternion_from_euler
 
         rotated_quat = quaternion_from_euler(0.0, np.pi / 4, 0.0)
@@ -215,7 +191,6 @@ class TestGraspPlanner:
             use_moveit_ik=False,
         )
 
-        # Grasp rotations should differ (object rotation affects grasp orientation)
         if best_grasp_1 and best_grasp_2:
             assert not np.allclose(
                 best_grasp_1.grasp_rotation, best_grasp_2.grasp_rotation, atol=1e-3
@@ -227,7 +202,6 @@ class TestGraspPlanner:
         robot_id = "Robot1"
         gripper_position = (0.0, 0.15, 0.0)
 
-        # Small object
         small_grasp = planner.plan_grasp(
             object_position=object_position,
             object_rotation=object_rotation,
@@ -237,7 +211,6 @@ class TestGraspPlanner:
             use_moveit_ik=False,
         )
 
-        # Large object
         large_grasp = planner.plan_grasp(
             object_position=object_position,
             object_rotation=object_rotation,
@@ -247,11 +220,8 @@ class TestGraspPlanner:
             use_moveit_ik=False,
         )
 
-        # Both should return candidates
         assert small_grasp is not None
         assert large_grasp is not None
-
-        # Approach distances should differ based on object size
         assert small_grasp.approach_distance != large_grasp.approach_distance
 
     def test_gripper_rotation_affects_scoring(self, planner):
@@ -261,7 +231,6 @@ class TestGraspPlanner:
         robot_id = "Robot1"
         gripper_position = (0.0, 0.15, 0.0)
 
-        # Without gripper rotation
         grasp_no_rot = planner.plan_grasp(
             object_position=object_position,
             object_rotation=object_rotation,
@@ -272,7 +241,6 @@ class TestGraspPlanner:
             use_moveit_ik=False,
         )
 
-        # With gripper rotation (should affect orientation consistency)
         from utils.QuaternionMath import quaternion_from_euler
 
         gripper_rot = quaternion_from_euler(0.0, 0.0, np.pi / 2)
@@ -287,16 +255,11 @@ class TestGraspPlanner:
             use_moveit_ik=False,
         )
 
-        # Both should return candidates
         assert grasp_no_rot is not None
         assert grasp_with_rot is not None
 
-        # Scores may differ due to orientation consistency
-        # (not guaranteed, but validates scoring is working)
-
 
 class TestGraspPlannerEdgeCases:
-    """Test edge cases and error handling."""
 
     def test_empty_object_size(self):
         planner = GraspPlanner()
@@ -310,8 +273,7 @@ class TestGraspPlannerEdgeCases:
             use_moveit_ik=False,
         )
 
-        # Should still return a candidate (may have low score)
-        assert best_grasp is not None or best_grasp is None  # Both valid
+        assert best_grasp is not None or best_grasp is None
 
     def test_negative_min_score(self):
         planner = GraspPlanner()
@@ -326,7 +288,6 @@ class TestGraspPlannerEdgeCases:
             min_score=-1.0,
         )
 
-        # Should accept any candidate
         assert best_grasp is not None
 
 
@@ -355,11 +316,8 @@ class TestGraspPlannerConfigMutationRegression:
             min_score=-1.0,  # accept any candidate
         )
 
-        # First call: restrict to top only
         planner.plan_grasp(preferred_approach="top", **common_kwargs)  # type: ignore[arg-type]
 
-        # Second call: no preference — all approaches must be available
-        # Collect all candidates directly from the generator to verify approach mix
         candidates = planner.generator.generate_candidates(
             object_position=(0.0, 0.05, 0.0),
             object_rotation=(0.0, 0.0, 0.0, 1.0),
@@ -381,7 +339,6 @@ class TestGraspPlannerConfigMutationRegression:
         """
         planner = GraspPlanner()
 
-        # Capture original weights
         original_weights = {
             s.approach_type: s.preference_weight
             for s in planner.config.enabled_approaches
@@ -404,10 +361,6 @@ class TestGraspPlannerConfigMutationRegression:
             ), f"preference_weight for '{s.approach_type}' was not restored"
 
     def test_unknown_preferred_approach_logs_warning_and_returns_none(self):
-        """
-        When preferred_approach matches no approach name, all approaches are
-        disabled so no candidates are generated and plan_grasp returns None.
-        """
         planner = GraspPlanner()
 
         result = planner.plan_grasp(
@@ -420,16 +373,9 @@ class TestGraspPlannerConfigMutationRegression:
             preferred_approach="nonexistent_approach",
         )
 
-        # All approaches disabled → no candidates → None
         assert result is None
 
     def test_config_restored_even_when_generation_raises(self):
-        """
-        Config state must be restored even if candidate generation fails.
-
-        Simulates an error during generate_candidates and verifies that
-        subsequent calls on the same instance still have all approaches enabled.
-        """
         import unittest.mock as mock
 
         planner = GraspPlanner()
@@ -451,12 +397,7 @@ class TestGraspPlannerConfigMutationRegression:
                     preferred_approach="top",
                 )
 
-        # Config must be restored despite the exception
         for s, orig in zip(planner.config.enabled_approaches, original_enabled):
             assert (
                 s.enabled == orig
             ), f"enabled state for '{s.approach_type}' not restored after exception"
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

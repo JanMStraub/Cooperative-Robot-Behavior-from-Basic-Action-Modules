@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-"""
-Test AutoRT Data Models
-
-Tests for Pydantic models in autort/DataModels.py
-"""
-
 import pytest
 from pydantic import ValidationError
 from autort.DataModels import (
@@ -15,11 +8,8 @@ from autort.DataModels import (
     TaskVerdict,
 )
 
-# GroundedObject Tests
-
 
 def test_grounded_object_valid():
-    """GroundedObject accepts valid data"""
     obj = GroundedObject(
         object_id="cube_01",
         color="red",
@@ -35,7 +25,6 @@ def test_grounded_object_valid():
 
 
 def test_grounded_object_confidence_bounds():
-    """GroundedObject rejects confidence outside [0, 1]"""
     with pytest.raises(ValidationError):
         GroundedObject(
             object_id="cube_01",
@@ -54,7 +43,6 @@ def test_grounded_object_confidence_bounds():
 
 
 def test_grounded_object_forbids_extra_fields():
-    """GroundedObject rejects extra fields"""
     with pytest.raises(ValidationError):
         GroundedObject(
             object_id="cube_01",
@@ -65,11 +53,7 @@ def test_grounded_object_forbids_extra_fields():
         )
 
 
-# SceneDescription Tests
-
-
 def test_scene_description_valid():
-    """SceneDescription accepts valid data"""
     obj = GroundedObject(
         object_id="cube_01",
         color="red",
@@ -89,18 +73,13 @@ def test_scene_description_valid():
 
 
 def test_scene_description_empty_defaults():
-    """SceneDescription allows empty objects and defaults"""
     scene = SceneDescription(timestamp=123456.789, objects=[])
     assert len(scene.objects) == 0
     assert scene.scene_summary == ""
     assert len(scene.robot_states) == 0
 
 
-# Operation Tests
-
-
 def test_operation_valid():
-    """Operation accepts valid data"""
     op = Operation(
         type="move_to_coordinate",
         robot_id="Robot1",
@@ -112,16 +91,11 @@ def test_operation_valid():
 
 
 def test_operation_empty_parameters():
-    """Operation allows empty parameters dict"""
     op = Operation(type="wait", robot_id="Robot1", parameters={})
     assert op.parameters == {}
 
 
-# ProposedTask Tests
-
-
 def test_proposed_task_valid():
-    """ProposedTask accepts valid data"""
     task = ProposedTask(
         task_id="task_001",
         description="Pick up red cube",
@@ -148,7 +122,6 @@ def test_proposed_task_valid():
 
 
 def test_proposed_task_rejects_empty_operations():
-    """ProposedTask rejects empty operations list"""
     with pytest.raises(ValidationError):
         ProposedTask(
             task_id="task_001",
@@ -161,7 +134,6 @@ def test_proposed_task_rejects_empty_operations():
 
 
 def test_proposed_task_rejects_empty_required_robots():
-    """ProposedTask rejects empty required_robots list"""
     with pytest.raises(ValidationError):
         ProposedTask(
             task_id="task_001",
@@ -176,7 +148,6 @@ def test_proposed_task_rejects_empty_required_robots():
 
 
 def test_proposed_task_validates_robot_ids_consistent():
-    """ProposedTask rejects operations with robot_ids not in required_robots"""
     with pytest.raises(ValidationError, match="not in required_robots"):
         ProposedTask(
             task_id="task_001",
@@ -195,7 +166,6 @@ def test_proposed_task_validates_robot_ids_consistent():
 
 
 def test_proposed_task_complexity_bounds():
-    """ProposedTask validates complexity is between 1 and 10"""
     with pytest.raises(ValidationError):
         ProposedTask(
             task_id="task_001",
@@ -222,7 +192,6 @@ def test_proposed_task_complexity_bounds():
 
 
 def test_proposed_task_multi_robot():
-    """ProposedTask accepts multi-robot tasks with consistent robot_ids"""
     task = ProposedTask(
         task_id="task_001",
         description="Collaborative handoff",
@@ -253,7 +222,6 @@ def test_proposed_task_multi_robot():
 
 
 def test_proposed_task_forbids_extra_fields():
-    """ProposedTask rejects extra fields"""
     with pytest.raises(ValidationError):
         ProposedTask(
             task_id="task_001",
@@ -268,11 +236,7 @@ def test_proposed_task_forbids_extra_fields():
         )
 
 
-# TaskVerdict Tests
-
-
 def test_task_verdict_approved():
-    """TaskVerdict for approved task"""
     verdict = TaskVerdict(approved=True, violations=[], warnings=[])
     assert verdict.approved is True
     assert len(verdict.violations) == 0
@@ -281,7 +245,6 @@ def test_task_verdict_approved():
 
 
 def test_task_verdict_rejected():
-    """TaskVerdict for rejected task"""
     verdict = TaskVerdict(
         approved=False,
         violations=["Out of bounds"],
@@ -293,7 +256,6 @@ def test_task_verdict_rejected():
 
 
 def test_task_verdict_with_warnings():
-    """TaskVerdict can have warnings even when approved"""
     verdict = TaskVerdict(
         approved=True,
         violations=[],
@@ -305,7 +267,6 @@ def test_task_verdict_with_warnings():
 
 
 def test_task_verdict_with_modified_task():
-    """TaskVerdict can include modified task"""
     original_task = ProposedTask(
         task_id="task_001",
         description="test",

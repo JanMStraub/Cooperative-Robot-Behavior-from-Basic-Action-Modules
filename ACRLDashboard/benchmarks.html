@@ -135,7 +135,7 @@
                       >Total Duration
                       <i
                         class="fa-solid fa-circle-info kpi-info"
-                        title="Wall-clock time from first operation dispatch to final result. Reflects real-world latency including LLM inference, network round-trips, and Unity execution. High values indicate bottlenecks in the pipeline."
+                        title="End-to-end wall-clock latency"
                       ></i
                     ></span>
                     <span class="kpi-value" id="kpi-duration">-</span>
@@ -151,7 +151,7 @@
                       >Success Rate
                       <i
                         class="fa-solid fa-circle-info kpi-info"
-                        title="Fraction of operations that completed without error (ops_succeeded / ops_executed). Primary thesis metric — measures how reliably the LLM orchestrator translates task descriptions into successful robot actions."
+                        title="ops_succeeded / ops_executed"
                       ></i
                     ></span>
                     <span
@@ -169,7 +169,7 @@
                       >Ops Executed
                       <i
                         class="fa-solid fa-circle-info kpi-info"
-                        title="succeeded / total operations dispatched in this run. Low totals with low success suggest early-failure or plan generation issues. High totals with low success indicate retry loops or hallucinated operations."
+                        title="succeeded / total dispatched"
                       ></i
                     ></span>
                     <span class="kpi-value" id="kpi-ops">-</span>
@@ -183,7 +183,7 @@
                       >Avg Step Time
                       <i
                         class="fa-solid fa-circle-info kpi-info"
-                        title="Mean duration per operation step (total_duration / ops_executed). High values point to slow operations (e.g. grasp planning, VGN inference). Compare across runs to isolate the costly steps."
+                        title="Mean duration per operation step"
                       ></i
                     ></span>
                     <span class="kpi-value" id="kpi-avg-step">-</span>
@@ -195,6 +195,13 @@
               <!-- Run Info Panel (execution_mode, feature_flags, parsed_plan) -->
               <div
                 id="run-info-panel"
+                class="run-info-panel glass-box"
+                style="display: none"
+              ></div>
+
+              <!-- Chain Metrics Panel (only shown for multi-task chain benchmarks) -->
+              <div
+                id="chain-metrics-panel"
                 class="run-info-panel glass-box"
                 style="display: none"
               ></div>
@@ -244,6 +251,11 @@
                           title="Parallel group ID — non-null for steps that were dispatched concurrently (e.g. mirrored movements in B7). Steps sharing the same group ID ran at the same time. Helps verify true parallelism."
                         >
                           PG
+                        </th>
+                        <th
+                          title="Number of times this step was retried after an initial failure. Non-zero means Reflexion or the retry policy attempted recovery on this specific operation."
+                        >
+                          Retries
                         </th>
                         <th
                           title="Error code and message returned by the operation on failure. Maps to OperationResult error fields. Common codes: TIMEOUT, EXECUTION_FAILED, INVALID_PARAMS."

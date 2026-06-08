@@ -127,12 +127,7 @@ class GraphQueryEngine:
         The segment formula is used instead of a midpoint check to avoid false
         negatives for objects near the start or end of long paths.
 
-        Args:
-            robot_id: Robot identifier
-            target: Target position (x, y, z)
 
-        Returns:
-            True if path appears blocked
         """
         robot_pos = self._get_robot_position(robot_id)
         if not robot_pos:

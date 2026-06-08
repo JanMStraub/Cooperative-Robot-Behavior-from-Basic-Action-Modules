@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for ImageStorage (formerly ImageServer)"""
-
 import pytest
 import numpy as np
 import time
@@ -13,40 +10,32 @@ from servers.ImageServer import UnifiedImageStorage
 
 @pytest.fixture
 def image_storage():
-    # Reset singleton
     UnifiedImageStorage._instance = None
-    # Cameras are now managed internally
     storage = UnifiedImageStorage()
     return storage
 
 
 @pytest.fixture
 def sample_image():
-    # Create a simple 100x100 RGB image with some color
     image = np.zeros((100, 100, 3), dtype=np.uint8)
-    image[:, :] = [128, 64, 32]  # BGR color
+    image[:, :] = [128, 64, 32]
     return image
 
 
 @pytest.fixture
 def sample_stereo_pair():
     left = np.zeros((100, 100, 3), dtype=np.uint8)
-    left[:, :] = [255, 0, 0]  # Blue
+    left[:, :] = [255, 0, 0]
 
     right = np.zeros((100, 100, 3), dtype=np.uint8)
-    right[:, :] = [0, 255, 0]  # Green
+    right[:, :] = [0, 255, 0]
 
     return left, right
 
 
-# Test ImageStorage Singleton
-
-
 class TestImageStorageSingleton:
-    """Test ImageStorage singleton behavior"""
 
     def test_singleton_instance(self, image_storage):
-        """Test that ImageStorage is a singleton"""
         instance1 = UnifiedImageStorage()
         instance2 = UnifiedImageStorage()
 
@@ -54,7 +43,6 @@ class TestImageStorageSingleton:
         assert instance1 is image_storage
 
     def test_singleton_thread_safe(self):
-        """Test singleton is thread-safe"""
         UnifiedImageStorage._instance = None
         instances = []
 
@@ -67,18 +55,12 @@ class TestImageStorageSingleton:
         for t in threads:
             t.join()
 
-        # All instances should be the same
         assert all(inst is instances[0] for inst in instances)
 
 
-# Test Image Storage and Retrieval
-
-
 class TestImageStorageBasics:
-    """Test basic image storage and retrieval"""
 
     def test_store_and_retrieve_image(self, image_storage, sample_image):
-        """Test storing and retrieving a single image"""
         camera_id = "main_camera"
         prompt = "detect objects"
 

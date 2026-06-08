@@ -97,7 +97,6 @@ class NegotiationHub(SingletonBase):
                 )
                 return False
 
-        # Check collaboration keywords
         for keyword in neg_cfg.COLLABORATION_KEYWORDS:
             if keyword in text_lower:
                 logger.info(f"Negotiation triggered by keyword: '{keyword}'")
@@ -156,7 +155,6 @@ class NegotiationHub(SingletonBase):
                 result.reasoning = "Analysis phase failed"
                 return result
 
-            # Negotiation rounds
             for round_num in range(1, MAX_NEGOTIATION_ROUNDS + 1):
                 elapsed = time.time() - start_time
                 if elapsed > timeout:
@@ -203,7 +201,6 @@ class NegotiationHub(SingletonBase):
                             )
                             continue
 
-                    # Only normalize after validation passes
                     commands = self._normalize_commands(proposal.commands, robot_ids)
 
                     session.state = NegotiationState.CONSENSUS
@@ -222,7 +219,6 @@ class NegotiationHub(SingletonBase):
 
                 logger.info(f"Round {round_num}: no consensus, continuing")
 
-            # No consensus after all rounds
             result.state = NegotiationState.FAILED
             result.rounds_taken = MAX_NEGOTIATION_ROUNDS
             result.duration_s = time.time() - start_time
@@ -245,7 +241,6 @@ class NegotiationHub(SingletonBase):
     def _run_analysis_phase(
         self, session: NegotiationSession, world_state: Dict[str, Any]
     ) -> bool:
-        """Run analysis phase: each robot analyzes the task in parallel."""
         try:
             from core.Imports import get_global_registry
 

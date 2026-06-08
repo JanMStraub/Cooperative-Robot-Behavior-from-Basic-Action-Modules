@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Tests for VectorStore deferred-flush and metadata-update features"""
 
 import os
@@ -8,8 +7,6 @@ import numpy as np
 import pytest
 
 from rag.VectorStore import VectorStore
-
-# Helpers
 
 
 def _unit(n: int) -> np.ndarray:
@@ -28,9 +25,6 @@ def _store_with_ops(n: int, dim: int = 4) -> VectorStore:
         emb /= np.linalg.norm(emb)
         store.add_operation(f"op_{i:03d}", emb, {"name": f"op_{i}", "type": "test"})
     return store
-
-
-# Deferred flush: internal staging behaviour
 
 
 class TestDeferredFlush:
@@ -112,9 +106,6 @@ class TestDeferredFlush:
         assert store.vectors.shape == (1, 8)
 
 
-# Flush triggered by public API
-
-
 class TestFlushTriggeredByPublicAPI:
     """search, get_operation, and save all auto-flush before use."""
 
@@ -154,9 +145,6 @@ class TestFlushTriggeredByPublicAPI:
             assert loaded.vectors.shape == (4, 3)
         finally:
             os.unlink(tmp)
-
-
-# update_operation_metadata
 
 
 class TestUpdateOperationMetadata:

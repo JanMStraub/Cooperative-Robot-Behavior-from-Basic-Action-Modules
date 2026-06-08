@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for WorldState.py"""
-
 from unittest.mock import patch
 import time
 from operations.WorldState import (
@@ -11,17 +8,14 @@ from operations.WorldState import (
 
 
 class TestCachedValue:
-    """Test CachedValue TTL expiration"""
 
     def test_cached_value_fresh(self):
-        """Test value is fresh within TTL"""
         cached = CachedValue(value=42, ttl=1.0)
 
         assert cached.is_valid() is True
         assert cached.get() == 42
 
     def test_cached_value_expired(self):
-        """Test value expires after TTL"""
         cached = CachedValue(value=42, ttl=0.1)
         time.sleep(0.15)  # Wait for expiration
 
@@ -29,7 +23,6 @@ class TestCachedValue:
         assert cached.get() is None
 
     def test_cached_value_update(self):
-        """Test updating cached value resets TTL"""
         cached = CachedValue(value=42, ttl=0.1)
         time.sleep(0.08)  # Wait but don't expire
 
@@ -39,10 +32,8 @@ class TestCachedValue:
 
 
 class TestWorldStateSingleton:
-    """Test WorldState singleton pattern"""
 
     def test_singleton_pattern(self, cleanup_world_state):
-        """Test only one WorldState instance exists"""
         instance1 = get_world_state()
         instance2 = get_world_state()
 
@@ -50,7 +41,6 @@ class TestWorldStateSingleton:
         assert id(instance1) == id(instance2)
 
     def test_singleton_reset(self, cleanup_world_state):
-        """Test singleton can be reset"""
         world_state = get_world_state()
         world_state._robot_states["Robot1"] = RobotState("Robot1")
 
@@ -61,11 +51,9 @@ class TestWorldStateSingleton:
 
 
 class TestRobotStatus:
-    """Test robot status queries and caching"""
 
     @patch("operations.WorldState.check_robot_status")
     def test_get_robot_cached(self, mock_check_status, cleanup_world_state):
-        """Test robot status returns cached value within TTL"""
         from operations.Base import OperationResult
 
         world_state = get_world_state()
@@ -93,7 +81,6 @@ class TestRobotStatus:
     @patch("operations.WorldState.ROBOT_STATUS_CACHE_TTL", 0.1)
     @patch("operations.WorldState.check_robot_status")
     def test_get_robot_status_expired(self, mock_check_status, cleanup_world_state):
-        """Test robot status re-queries after TTL expiration"""
         world_state = get_world_state()
 
         # Mock Unity response
@@ -118,7 +105,6 @@ class TestRobotStatus:
     def test_get_robot_status_force_update(
         self, mock_check_status, cleanup_world_state
     ):
-        """Test force_update bypasses cache"""
         world_state = get_world_state()
 
         from operations.Base import OperationResult
@@ -137,11 +123,9 @@ class TestRobotStatus:
 
 
 class TestRobotPosition:
-    """Test robot position extraction"""
 
     @patch("operations.WorldState.check_robot_status")
     def test_get_robot_position(self, mock_check_status, cleanup_world_state):
-        """Test extracting position from robot status"""
         world_state = get_world_state()
 
         from operations.Base import OperationResult
@@ -154,7 +138,6 @@ class TestRobotPosition:
         assert position == (0.3, 0.15, 0.1)
 
     def test_get_robot_position_from_state(self, cleanup_world_state):
-        """Test position from cached robot state"""
         world_state = get_world_state()
 
         # Manually set robot state
@@ -166,7 +149,6 @@ class TestRobotPosition:
         assert position == (0.5, 0.2, 0.15)
 
     def test_get_robot_position_none(self, cleanup_world_state):
-        """Test position returns None when unavailable"""
         world_state = get_world_state()
 
         # Robot not tracked and no Unity query available
@@ -179,10 +161,8 @@ class TestRobotPosition:
 
 
 class TestObjectManagement:
-    """Test object tracking and manipulation"""
 
     def test_update_object_position(self, cleanup_world_state):
-        """Test updating object position"""
         world_state = get_world_state()
 
         world_state.update_object_position("cube_01", (0.3, 0.2, 0.1), "red")
@@ -195,7 +175,6 @@ class TestObjectManagement:
         assert obj.grasped_by is None
 
     def test_get_object_position(self, cleanup_world_state):
-        """Test retrieving object position"""
         world_state = get_world_state()
 
         world_state.update_object_position("cube_01", (0.3, 0.2, 0.1), "red")
@@ -204,14 +183,12 @@ class TestObjectManagement:
         assert position == (0.3, 0.2, 0.1)
 
     def test_get_object_position_not_found(self, cleanup_world_state):
-        """Test object not found returns None"""
         world_state = get_world_state()
 
         position = world_state.get_object_position("nonexistent")
         assert position is None
 
     def test_mark_object_grasped(self, cleanup_world_state):
-        """Test marking object as grasped"""
         world_state = get_world_state()
 
         world_state.update_object_position("cube_01", (0.3, 0.2, 0.1), "red")
@@ -221,7 +198,6 @@ class TestObjectManagement:
         assert obj.grasped_by == "Robot1"
 
     def test_mark_object_released(self, cleanup_world_state):
-        """Test releasing grasped object"""
         world_state = get_world_state()
 
         world_state.update_object_position("cube_01", (0.3, 0.2, 0.1), "red")
@@ -232,7 +208,6 @@ class TestObjectManagement:
         assert obj.grasped_by is None
 
     def test_get_objects_by_color(self, cleanup_world_state):
-        """Test filtering objects by color"""
         world_state = get_world_state()
 
         world_state.update_object_position("cube_01", (0.3, 0.2, 0.1), "red")
@@ -248,10 +223,8 @@ class TestObjectManagement:
 
 
 class TestWorkspaceAllocation:
-    """Test workspace allocation and release"""
 
     def test_allocate_workspace(self, cleanup_world_state):
-        """Test allocating workspace to robot"""
         world_state = get_world_state()
 
         result = world_state.allocate_workspace("left_workspace", "Robot1")
@@ -260,7 +233,6 @@ class TestWorkspaceAllocation:
         assert world_state.get_workspace_owner("left_workspace") == "Robot1"
 
     def test_allocate_workspace_conflict(self, cleanup_world_state):
-        """Test workspace allocation conflict"""
         world_state = get_world_state()
 
         # Robot1 allocates workspace
@@ -273,7 +245,6 @@ class TestWorkspaceAllocation:
         assert world_state.get_workspace_owner("left_workspace") == "Robot1"
 
     def test_release_workspace(self, cleanup_world_state):
-        """Test releasing workspace"""
         world_state = get_world_state()
 
         world_state.allocate_workspace("left_workspace", "Robot1")
@@ -282,7 +253,6 @@ class TestWorkspaceAllocation:
         assert world_state.get_workspace_owner("left_workspace") is None
 
     def test_release_workspace_wrong_owner(self, cleanup_world_state):
-        """Test releasing workspace by non-owner"""
         world_state = get_world_state()
 
         world_state.allocate_workspace("left_workspace", "Robot1")
@@ -292,7 +262,6 @@ class TestWorkspaceAllocation:
         assert world_state.get_workspace_owner("left_workspace") == "Robot1"
 
     def test_concurrent_workspace_allocation(self, cleanup_world_state):
-        """Test multiple robots competing for workspaces concurrently"""
         import threading
 
         world_state = get_world_state()
@@ -332,7 +301,6 @@ class TestWorkspaceAllocation:
         assert owner in ["Robot1", "Robot2", "Robot3"]
 
     def test_workspace_deadlock_detection(self, cleanup_world_state):
-        """Test circular workspace contention: each robot holds what the other needs."""
         world_state = get_world_state()
 
         # Robot1 allocates left_workspace, Robot2 allocates right_workspace
@@ -352,7 +320,6 @@ class TestWorkspaceAllocation:
         assert world_state.get_workspace_owner("right_workspace") == "Robot2"
 
     def test_workspace_automatic_release_on_failure(self, cleanup_world_state):
-        """Test workspace is released when robot operation fails"""
         world_state = get_world_state()
 
         # Simulate robot allocating workspace for operation
@@ -370,7 +337,6 @@ class TestWorkspaceAllocation:
         assert result is True
 
     def test_workspace_priority_queue(self, cleanup_world_state):
-        """Test workspace re-allocation after release (first-come-first-served)"""
         world_state = get_world_state()
 
         # Robot1 holds shared_zone
@@ -394,7 +360,6 @@ class TestWorkspaceAllocation:
         assert world_state.get_workspace_owner("shared_zone") == "Robot2"
 
     def test_multiple_workspace_allocation_per_robot(self, cleanup_world_state):
-        """Test single robot allocating multiple workspaces"""
         world_state = get_world_state()
 
         # Robot1 allocates all available regions for a complex operation
@@ -422,7 +387,6 @@ class TestWorkspaceAllocation:
         assert world_state.get_workspace_owner("right_workspace") is None
 
     def test_workspace_allocation_stress_test(self, cleanup_world_state):
-        """Stress test with 15 robots competing for the 4 available workspace regions"""
         import threading
 
         world_state = get_world_state()
@@ -438,7 +402,6 @@ class TestWorkspaceAllocation:
         errors = []
 
         def robot_workflow(robot_id):
-            """Simulate robot trying to allocate workspaces"""
             try:
                 for workspace_id in workspace_regions:
                     result = world_state.allocate_workspace(workspace_id, robot_id)
@@ -477,10 +440,8 @@ class TestWorkspaceAllocation:
 
 
 class TestCommandTracking:
-    """Test command registration and tracking"""
 
     def test_register_command(self, cleanup_world_state):
-        """Test registering in-flight command"""
         world_state = get_world_state()
 
         world_state.register_command(
@@ -499,7 +460,6 @@ class TestCommandTracking:
         assert cmd["status"] == "pending"
 
     def test_update_command_status(self, cleanup_world_state):
-        """Test updating command status"""
         world_state = get_world_state()
 
         world_state.register_command(
@@ -511,7 +471,6 @@ class TestCommandTracking:
         assert cmd["status"] == "completed"
 
     def test_cleanup_old_commands(self, cleanup_world_state):
-        """Test removing old commands"""
         world_state = get_world_state()
 
         # Register command and mark as completed
@@ -532,11 +491,9 @@ class TestCommandTracking:
 
 
 class TestCacheManagement:
-    """Test cache invalidation and reset"""
 
     @patch("operations.WorldState.check_robot_status")
     def test_clear_cache(self, mock_check_status, cleanup_world_state):
-        """Test cache invalidation"""
         world_state = get_world_state()
 
         from operations.Base import OperationResult

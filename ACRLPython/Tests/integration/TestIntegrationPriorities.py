@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Integration Tests for Priority 1-3 Implementations
 ===================================================
@@ -23,7 +22,6 @@ from orchestrators.SequenceExecutor import SequenceExecutor
 
 
 class TestPriority1_RAGWorkflowIntegration:
-    """Test Priority 1: Workflow patterns are indexed and searchable in RAG."""
 
     def test_workflow_patterns_in_registry(self):
         workflow_registry = get_global_workflow_registry()
@@ -123,7 +121,6 @@ class TestPriority1_RAGWorkflowIntegration:
 
 
 class TestPriority2_AutomatedParameterFlow:
-    """Test Priority 2: Automatic parameter chaining between operations."""
 
     @patch("operations.Registry.get_global_registry")
     def test_auto_capture_outputs(self, mock_registry):
@@ -163,7 +160,6 @@ class TestPriority2_AutomatedParameterFlow:
         print("Outputs automatically captured to variables")
 
     def test_auto_inject_parameters(self):
-        """Test that parameters are automatically injected from previous operations."""
         # Use REAL operations from registry instead of mocks
         from operations.Registry import get_global_registry
 
@@ -198,7 +194,6 @@ class TestPriority2_AutomatedParameterFlow:
             assert enhanced["robot_id"] == "Robot1", "Original param lost"
 
     def test_manual_variable_resolution_still_works(self):
-        """Test that manual $ variable references still work."""
         executor = SequenceExecutor(enable_verification=False, check_completion=False)
 
         # Set variable manually
@@ -215,7 +210,6 @@ class TestPriority2_AutomatedParameterFlow:
 
 
 class TestPriority3_UnifiedVerification:
-    """Test Priority 3: Unified safety verification."""
 
     @patch("operations.Verification.OperationVerifier")
     @patch("operations.CoordinationVerifier.CoordinationVerifier")
@@ -343,7 +337,6 @@ class TestPriority3_UnifiedVerification:
 
 
 class TestEndToEndIntegration:
-    """End-to-end integration tests combining all three priorities."""
 
     def test_all_priorities_in_sequence_executor(self):
         executor = SequenceExecutor(enable_verification=True, check_completion=False)
@@ -362,7 +355,6 @@ class TestEndToEndIntegration:
         print("SequenceExecutor has unified verification method")
 
     def test_system_info_summary(self):
-        """Print summary of system capabilities."""
         registry = get_global_registry()
         workflow_registry = get_global_workflow_registry()
 
@@ -393,5 +385,4 @@ class TestEndToEndIntegration:
 
 
 if __name__ == "__main__":
-    # Run tests
     pytest.main([__file__, "-v", "-s"])

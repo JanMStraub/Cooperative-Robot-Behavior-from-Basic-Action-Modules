@@ -1,13 +1,8 @@
-#!/usr/bin/env python3
-"""Unit tests for CollaborativeOperations.py"""
-
 from unittest.mock import Mock
 from operations.CollaborativeOperations import (
     stabilize_object,
     STABILIZE_OBJECT_OPERATION,
 )
-
-# Test Class: stabilize_object - Object Stabilization
 
 
 class TestStabilizeObject:
@@ -31,8 +26,8 @@ class TestStabilizeObject:
 
         assert result.success is True
         assert result.result is not None
-        assert result.result["duration_ms"] == 5000  # Default
-        assert result.result["force_limit"] == 10.0  # Default
+        assert result.result["duration_ms"] == 5000
+        assert result.result["force_limit"] == 10.0
 
     def test_stabilize_object_custom_duration(self, patch_command_broadcaster):
         result = stabilize_object("Robot1", "AssemblyPart", duration_ms=10000)
@@ -150,21 +145,13 @@ class TestStabilizeObject:
         assert result.error["code"] == "UNEXPECTED_ERROR"
 
 
-# Test Class: Dual-Arm Coordination Scenarios
-
-
 class TestDualArmStabilization:
-    """Test dual-arm coordination scenarios with stabilization."""
 
     def test_stabilize_for_partner_manipulation(self, patch_command_broadcaster):
-        # Robot1 stabilizes
         result1 = stabilize_object(
             "Robot1", "LargeBoard", duration_ms=10000, force_limit=20.0
         )
         assert result1.success is True
-
-        # This would be followed by Robot2 manipulation in real scenario
-        # (tested separately in integration tests)
 
     def test_short_duration_stabilization(self, patch_command_broadcaster):
         result = stabilize_object(
@@ -201,9 +188,6 @@ class TestDualArmStabilization:
         assert result.success is True
         assert result.result is not None
         assert result.result["force_limit"] == 45.0
-
-
-# Test Class: Operation Definition
 
 
 class TestStabilizeOperationDefinition:
@@ -255,12 +239,7 @@ class TestStabilizeOperationDefinition:
 
     def test_stabilize_operation_postconditions(self):
         op = STABILIZE_OBJECT_OPERATION
-
-        # Postconditions are empty (side-effects not verifiable as predicates)
         assert isinstance(op.postconditions, list)
-
-
-# Test Class: Concurrent Execution
 
 
 class TestStabilizationConcurrency:
@@ -308,16 +287,11 @@ class TestStabilizationConcurrency:
         for t in threads:
             t.join()
 
-        # All should succeed (Unity would handle queueing/rejection)
         assert len(results) == 3
         assert all(r.success for r in results)
 
 
-# Test Class: Edge Cases
-
-
 class TestStabilizationEdgeCases:
-    """Test edge cases for stabilization operations."""
 
     def test_stabilize_with_minimal_parameters(self, patch_command_broadcaster):
         result = stabilize_object("Robot1", "Object1")
@@ -376,9 +350,6 @@ class TestStabilizationEdgeCases:
         assert result.result is not None
         assert result.result["duration_ms"] == 30000
         assert result.result["force_limit"] == 1.0
-
-
-# Test Class: Parameter Validation
 
 
 class TestStabilizationParameterValidation:

@@ -39,20 +39,12 @@ def return_to_start_position(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
-                [
-                    "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
-                    "Check RobotManager in Unity for available robot IDs",
-                ],
             )
 
         if not (0.1 <= speed <= 2.0):
             return OperationResult.error_result(
                 "INVALID_SPEED",
                 f"Speed {speed} out of range [0.1, 2.0]",
-                [
-                    "Use speed between 0.1 (very slow) and 2.0 (fast)",
-                    "Typical values: 0.3 (safe), 1.0 (normal), 1.5 (fast)",
-                ],
             )
 
         def _ros_path():
@@ -103,11 +95,6 @@ def return_to_start_position(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity - no clients connected",
-                    [
-                        "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5007)",
-                        "Check Unity console for connection errors",
-                    ],
                 )
             logger.info(
                 f"Successfully sent return_to_start_position command to {robot_id}"
@@ -127,11 +114,7 @@ def return_to_start_position(
         logger.error(
             f"Unexpected error in return_to_start_position: {e}", exc_info=True
         )
-        return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            ["Check logs", "Verify parameters", "Retry"],
-        )
+        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
 
 
 def create_return_to_start_position_operation() -> BasicOperation:
@@ -141,11 +124,6 @@ def create_return_to_start_position_operation() -> BasicOperation:
         category=OperationCategory.NAVIGATION,
         complexity=OperationComplexity.BASIC,
         description="Return robot to initial start position using saved joint targets",
-        long_description="""
-            Restores the exact joint configuration from RobotManager registration.
-            Unlike move_to_coordinate (IK), directly sets joint angles for a known-safe state.
-            Useful after task completion, failed movements, or between operations.
-        """,
         usage_examples=[
             "Return to home after picking object: return_to_start_position(robot_id='Robot1')",
             "Slow return for safety: return_to_start_position(robot_id='Robot1', speed=0.3)",

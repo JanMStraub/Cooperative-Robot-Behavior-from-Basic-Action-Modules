@@ -61,29 +61,25 @@ def stabilize_object(
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
-                f"Robot ID must be a non-empty string",
-                ["Provide a valid robot ID"],
+                "Robot ID must be a non-empty string",
             )
 
         if not object_id or not isinstance(object_id, str):
             return OperationResult.error_result(
                 "INVALID_OBJECT_ID",
-                f"Object ID must be a non-empty string",
-                ["Provide a valid object ID"],
+                "Object ID must be a non-empty string",
             )
 
         if not (100 <= duration_ms <= 30000):
             return OperationResult.error_result(
                 "INVALID_DURATION",
                 f"Duration must be in range [100, 30000]ms, got: {duration_ms}",
-                ["Use duration between 100ms and 30000ms (30s)"],
             )
 
         if not (1.0 <= force_limit <= 50.0):
             return OperationResult.error_result(
                 "INVALID_FORCE_LIMIT",
                 f"Force limit must be in range [1.0, 50.0]N, got: {force_limit}",
-                ["Use force limit between 1N and 50N"],
             )
 
         kg_warning = _kg_both_robots_can_reach(object_id, robot_id)
@@ -128,7 +124,6 @@ def stabilize_object(
             return OperationResult.error_result(
                 "COMMUNICATION_FAILED",
                 "Failed to send command to Unity",
-                ["Ensure Unity is running"],
             )
 
         logger.info(f"Successfully activated stabilization for {robot_id}")
@@ -146,33 +141,10 @@ def stabilize_object(
 
     except Exception as e:
         logger.error(f"Unexpected error in stabilize_object: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            ["Check logs"],
-        )
+        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
 
 
-# REMOVED: stabilize_and_manipulate_collaboratively
-# This operation was REMOVED because it is non-atomic (combines grasp + hold + manipulate).
-# For collaborative manipulation workflows, see operations/WorkflowPatterns.py for the
-# STABILIZE_MANIPULATE_PATTERN showing how to chain atomic operations.
-#
-# The LLM should chain operations:
-# Robot1 (Stabilizer):
-# 1. move_to_coordinate(robot1, object_position)
-# 2. grasp_object(robot1, object_coords)
-# 3. stabilize_object(robot1, object_id, duration_ms=10000)
-#
-# Robot2 (Manipulator) - runs in parallel:
-# 1. wait_for_signal(robot2, "stabilization_active")
-# 2. move_to_coordinate(robot2, manipulation_position)
-# 3. [perform manipulation operation]
-# 4. signal(robot2, "manipulation_complete")
-#
-# Robot1 releases when done:
-# 5. wait_for_signal(robot1, "manipulation_complete")
-# 6. control_gripper(robot1, open=True)
+# stabilize_and_manipulate_collaboratively removed (non-atomic) — use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN
 
 
 def create_stabilize_object_operation() -> BasicOperation:
@@ -181,19 +153,11 @@ def create_stabilize_object_operation() -> BasicOperation:
         name="stabilize_object",
         category=OperationCategory.MANIPULATION,
         complexity=OperationComplexity.COMPLEX,
-        description="Hold object stable while partner robot manipulates it",
-        long_description="""
-            Commands a robot to grasp and hold an object stable, providing support
-            while a partner robot performs manipulation on the same object.
-
-            Trigger phrases: "keep it stable", "hold the object still", "keep it steady
-            while Robot2 works", "stabilize while partner manipulates", "brace the object",
-            "hold it in place", "support the object for the other robot", "don't move it".
-
-            Requires force control to maintain grip without crushing. The holding robot
-            stays stationary for the full duration while the partner manipulates.
-            Critical for assembly, insertion, and precision placement tasks.
-        """,
+        description=(
+            "Hold object stable while partner robot manipulates it. "
+            "Trigger phrases: 'keep it stable', 'hold the object still', 'brace the object', "
+            "'hold it in place', 'support the object for the other robot'."
+        ),
         usage_examples=[
             "stabilize_object('Robot1', 'LargeCube', duration_ms=5000)",
             "Robot1 holds board while Robot2 inserts pegs",
@@ -233,7 +197,7 @@ def create_stabilize_object_operation() -> BasicOperation:
             "robot_is_initialized(robot_id)",
         ],
         postconditions=[],
-        average_duration_ms=5000.0,  # Depends on duration parameter
+        average_duration_ms=5000.0,
         success_rate=0.88,
         failure_modes=[
             "Object slips during stabilization",
@@ -282,14 +246,12 @@ def place_for_partner(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 "Robot ID must be a non-empty string",
-                ["Provide a valid robot ID"],
             )
 
         if not zone_id or not isinstance(zone_id, str):
             return OperationResult.error_result(
                 "INVALID_ZONE_ID",
                 "Zone ID must be a non-empty string",
-                ["Provide a valid zone ID"],
             )
 
         try:
@@ -309,8 +271,7 @@ def place_for_partner(
             if zone is None:
                 return OperationResult.error_result(
                     "UNKNOWN_ZONE",
-                    f"Zone '{zone_id}' not found in WORKSPACE_REGIONS",
-                    [f"Valid zones: {list(WORKSPACE_REGIONS.keys())}"],
+                    f"Zone '{zone_id}' not found in WORKSPACE_REGIONS (valid: {list(WORKSPACE_REGIONS.keys())})",
                 )
             x = (zone["x_min"] + zone["x_max"]) / 2
             z = (zone["z_min"] + zone["z_max"]) / 2
@@ -342,11 +303,7 @@ def place_for_partner(
 
     except Exception as e:
         logger.error(f"Unexpected error in place_for_partner: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            ["Check logs"],
-        )
+        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
 
 
 def create_place_for_partner_operation() -> BasicOperation:
@@ -356,18 +313,13 @@ def create_place_for_partner_operation() -> BasicOperation:
         category=OperationCategory.MANIPULATION,
         complexity=OperationComplexity.INTERMEDIATE,
         description="Place a held object at a shared zone for the partner robot to pick up, then signal readiness",
-        long_description="""
-            Moves to the target shared zone, places the held object there, then emits a
-            signal (default: object_ready_at_<zone_id>) so the partner robot knows it can
-            proceed to pick the object up. Avoids the need for a live simultaneous handoff.
-        """,
         usage_examples=[
             "place_for_partner('Robot1') — places at shared_zone center, signals object_ready_at_shared_zone",
             "place_for_partner('Robot1', zone_id='center', signal_name='cube_dropped')",
         ],
         preconditions=[
             "robot_is_initialized(robot_id)",
-            "robot_is_holding_object(robot_id)",
+            "gripper_holding_object(robot_id)",
         ],
         postconditions=[
             "object_at_zone_center(zone_id)",

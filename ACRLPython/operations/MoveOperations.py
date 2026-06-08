@@ -134,12 +134,6 @@ def move_to_coordinate(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity - no clients connected",
-                    [
-                        "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5007)",
-                        "Check Unity console for connection errors",
-                        "Restart backend: python -m orchestrators.RunRobotController",
-                    ],
                 )
             logger.info(f"Successfully sent move_to_coordinate command to {robot_id}")
             return OperationResult.success_result(
@@ -158,16 +152,7 @@ def move_to_coordinate(
 
     except Exception as e:
         logger.error(f"Unexpected error in move_to_coordinate: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            [
-                "Check logs for detailed error information",
-                "Verify all parameters are correct types",
-                "Retry the operation",
-                "Report bug if error persists",
-            ],
-        )
+        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
 
 
 def create_move_to_coordinate_operation() -> BasicOperation:
@@ -177,19 +162,6 @@ def create_move_to_coordinate_operation() -> BasicOperation:
         category=OperationCategory.NAVIGATION,
         complexity=OperationComplexity.BASIC,
         description="Move the robot's end effector to a specific 3D coordinate in workspace",
-        long_description="""
-            This operation commands the robot arm to move its end effector (gripper tip)
-            to a specified 3D position in the robot's coordinate system. The robot will
-            use inverse kinematics to calculate the required joint angles and execute
-            a smooth trajectory to reach the target position.
-
-            The movement respects velocity and acceleration limits for safe operation.
-            Collision detection is active during movement. The operation supports different
-            movement speeds for precise positioning versus fast traversal.
-
-            This operation is asynchronous - it sends the command to Unity and returns
-            immediately. Unity executes the movement in the background using RobotController.
-        """,
         usage_examples=[
             "After detecting an object at (0.3, 0.15, 0.1), move there: move_to_coordinate(robot_id='Robot1', x=0.3, y=0.15, z=0.1)",
             "Move to home position: move_to_coordinate(robot_id='Robot1', x=0.0, y=0.0, z=0.3)",
@@ -283,7 +255,6 @@ def create_move_to_coordinate_operation() -> BasicOperation:
             typical_before=["manipulation_control_gripper_001"],
             typical_after=["perception_stereo_detect_001", "spatial_move_relative_001"],
         ),
-        # Link to the actual implementation function
         implementation=move_to_coordinate,
     )
 
@@ -429,13 +400,6 @@ def create_adjust_end_effector_orientation_operation() -> BasicOperation:
         category=OperationCategory.NAVIGATION,
         complexity=OperationComplexity.BASIC,
         description="Adjust end effector orientation (roll, pitch, yaw) without changing position",
-        long_description="""
-            This operation modifies only the gripper orientation while maintaining
-            the current position. Useful for adjusting grasp approach angle or
-            tool orientation.
-
-            Rotation order: Roll (X) → Pitch (Y) → Yaw (Z)
-        """,
         usage_examples=[
             "adjust_end_effector_orientation('Robot1', roll=90.0) - Side grasp",
             "adjust_end_effector_orientation('Robot1', pitch=-90.0) - Top-down grasp",
@@ -582,15 +546,7 @@ def pick_object_at_coordinate(
         logger.error(
             f"Unexpected error in pick_object_at_coordinate: {e}", exc_info=True
         )
-        return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            [
-                "Check logs for detailed error information",
-                "Verify all parameters are correct types",
-                "Retry the operation",
-            ],
-        )
+        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
 
 
 def create_pick_object_at_coordinate_operation() -> BasicOperation:
@@ -600,22 +556,10 @@ def create_pick_object_at_coordinate_operation() -> BasicOperation:
         category=OperationCategory.NAVIGATION,
         complexity=OperationComplexity.INTERMEDIATE,
         description=(
-            "Pick an object at a known 3D coordinate using hover → descent → grasp sequence"
+            "Pick an object at a known 3D coordinate using hover → descent → grasp sequence. "
+            "Use this instead of chaining move_to_coordinate + control_gripper — that closes "
+            "the gripper above the object and misses. For name-based picking use grasp_object."
         ),
-        long_description="""
-            Encodes the correct three-step pick pattern:
-            1. Open gripper (clear fingers during approach)
-            2. Move to hover position (approach_height above the object)
-            3. Descend straight down to contact position
-            4. Close gripper
-
-            Use this instead of manually chaining move_to_coordinate + control_gripper.
-            That naive pattern closes the gripper while the arm is still approach_height
-            above the object, missing the cube entirely.
-
-            For picking by object name (with full GraspPlanningPipeline, IK validation,
-            and collision filtering) use grasp_object instead.
-        """,
         usage_examples=[
             "pick_object_at_coordinate('Robot1', 0.3, 0.05, 0.1) - Pick cube at known coords",
             "pick_object_at_coordinate('Robot1', x, y, z, approach_height=0.15) - Taller clearance",

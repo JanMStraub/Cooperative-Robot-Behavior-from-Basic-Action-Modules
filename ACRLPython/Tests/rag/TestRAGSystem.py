@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Test Cases for RAG System Integration
-======================================
-
-Integration tests for the complete RAG system.
-"""
-
 import pytest
 from unittest.mock import Mock, patch
 import numpy as np
@@ -14,12 +6,9 @@ from rag.VectorStore import VectorStore
 
 
 class TestRAGSystemIntegration:
-    """Integration tests for RAG system"""
-
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_initialization(self, mock_embedding_gen, mock_registry):
-        """Test RAG system initialization"""
         # Mock components
         mock_reg = Mock()
         mock_reg.get_all_operations.return_value = []
@@ -37,7 +26,6 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_auto_load_index(self, mock_embedding_gen, mock_registry):
-        """Test automatic index loading on initialization"""
         # Mock loaded store — embedding_dimension is an instance attribute (set in
         # __init__), so spec=VectorStore excludes it; set it explicitly.
         mock_store = Mock(spec=VectorStore)
@@ -64,7 +52,6 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_index_operations(self, mock_embedding_gen, mock_registry):
-        """Test indexing operations"""
         # Mock operation
         mock_op = Mock()
         mock_op.operation_id = "op_001"
@@ -95,7 +82,6 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_search(self, mock_embedding_gen, mock_registry):
-        """Test searching for operations"""
         # Setup mocks
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
@@ -125,7 +111,6 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_search_not_ready(self, mock_embedding_gen, mock_registry):
-        """Test search when system not ready"""
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
 
@@ -140,7 +125,6 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_is_ready(self, mock_embedding_gen, mock_registry):
-        """Test checking if system is ready"""
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
 
@@ -161,7 +145,6 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_get_stats(self, mock_embedding_gen, mock_registry):
-        """Test getting RAG system statistics"""
         # Mock operation
         mock_op = Mock()
         mock_op.operation_id = "op_001"
@@ -212,7 +195,6 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_repr(self, mock_embedding_gen, mock_registry):
-        """Test string representation"""
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
 
@@ -230,7 +212,6 @@ class TestRAGSystemIntegration:
     def test_index_loading_failure_recovery(
         self, mock_exists, mock_embedding_gen, mock_registry
     ):
-        """Test RAG system recovers gracefully from index loading failures"""
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
 
@@ -253,7 +234,6 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_search_without_index(self, mock_embedding_gen, mock_registry):
-        """Test search returns empty list when index not built"""
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
 
@@ -270,7 +250,6 @@ class TestRAGSystemIntegration:
     def test_get_operation_context_without_index(
         self, mock_embedding_gen, mock_registry
     ):
-        """Test get_operation_context returns error dict when index not built"""
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
 
@@ -289,7 +268,6 @@ class TestRAGSystemIntegration:
     @patch("rag.EmbeddingGenerator")
     @pytest.mark.slow
     def test_large_scale_indexing_performance(self, mock_embedding_gen, mock_registry):
-        """Test indexing performance with large number of operations"""
         import time
 
         # Create 100 mock operations
@@ -336,7 +314,6 @@ class TestRAGSystemIntegration:
     def test_embedding_dimension_mismatch_handling(
         self, mock_embedding_gen, mock_registry
     ):
-        """Test handling of embedding dimension mismatches"""
         mock_op = Mock()
         mock_op.operation_id = "op_001"
         mock_op.name = "test_op"
@@ -384,7 +361,6 @@ class TestRAGSystemIntegration:
     @patch("rag.EmbeddingGenerator")
     @pytest.mark.slow
     def test_very_large_scale_performance(self, mock_embedding_gen, mock_registry):
-        """Test indexing and query performance with 1000+ operations"""
         import time
 
         # Create 1000 mock operations
@@ -446,7 +422,6 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_semantic_search_accuracy(self, mock_embedding_gen, mock_registry):
-        """Test semantic search returns relevant operations for natural language queries"""
         # Create mock operations with realistic names and descriptions
         move_op = Mock()
         move_op.operation_id = "move_001"
@@ -547,7 +522,6 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     def test_query_with_filters(self, mock_embedding_gen, mock_registry):
-        """Test search filtering by category and complexity"""
         # Create diverse operations
         ops = []
         categories = ["navigation", "manipulation", "perception"]

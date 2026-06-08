@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Unit tests for CommandServer.py"""
-
 import pytest
 import socket
 import struct
@@ -14,8 +11,6 @@ from servers.CommandServer import (
     get_command_broadcaster,
 )
 from core.UnityProtocol import UnityProtocol, MessageType
-
-# Fixtures
 
 
 @pytest.fixture
@@ -45,14 +40,9 @@ def mock_client_socket():
     return sock
 
 
-# Test Class: CommandBroadcaster
-
-
 class TestCommandBroadcaster:
-    """Test CommandBroadcaster singleton and command sending functionality."""
 
     def test_singleton_instance(self, command_broadcaster):
-        """Test that CommandBroadcaster is a singleton."""
         broadcaster1 = get_command_broadcaster()
         broadcaster2 = get_command_broadcaster()
 
@@ -93,7 +83,6 @@ class TestCommandBroadcaster:
     def test_send_result_backward_compatibility(
         self, command_broadcaster, command_server
     ):
-        """Test send_result() for backward compatibility with ResultsBroadcaster."""
         command_broadcaster.set_server(command_server)
         command_server.broadcast_to_all_clients = Mock(return_value=1)
 
@@ -106,36 +95,26 @@ class TestCommandBroadcaster:
     def test_completion_queue_lifecycle(self, command_broadcaster):
         request_id = 789
 
-        # Create queue
         command_broadcaster.create_completion_queue(request_id)
 
-        # Put completion
         completion = {"success": True, "result": "done"}
         command_broadcaster.put_completion(request_id, completion)
 
-        # Get completion
         retrieved = command_broadcaster.get_completion(request_id, timeout=0.5)
         assert retrieved == completion
 
-        # Remove queue
         command_broadcaster.remove_completion_queue(request_id)
 
     def test_get_completion_timeout(self, command_broadcaster):
-        """Test get_completion returns None on timeout."""
         request_id = 999
         command_broadcaster.create_completion_queue(request_id)
 
-        # Don't put anything, should timeout
         result = command_broadcaster.get_completion(request_id, timeout=0.1)
 
         assert result is None
 
     def test_put_completion_no_queue(self, command_broadcaster):
-        # Should not raise exception
         command_broadcaster.put_completion(999, {"data": "test"})
-
-
-# Test Class: CommandServer - Connection Management
 
 
 class TestCommandServerConnection:
@@ -148,15 +127,13 @@ class TestCommandServerConnection:
         assert server._broadcaster is not None
 
     def test_server_start_stop(self, command_server):
-        # Start server
         command_server.start()
-        time.sleep(0.1)  # Give it time to start
+        time.sleep(0.1)
 
         assert command_server.is_running()
 
-        # Stop server
         command_server.stop()
-        time.sleep(0.1)  # Give it time to stop
+        time.sleep(0.1)
 
         assert not command_server.is_running()
 
@@ -164,11 +141,9 @@ class TestCommandServerConnection:
         command_server.start()
         time.sleep(0.1)
 
-        # Mock client connections
         with patch.object(command_server, "handle_client_connection") as mock_handle:
             mock_handle.return_value = None
 
-            # Simulate multiple clients connecting
             command_server._client_threads.append(Mock())
             command_server._client_threads.append(Mock())
 
@@ -182,21 +157,14 @@ class TestCommandServerConnection:
         command_server.start()
         time.sleep(0.1)
 
-        # Simulate connection, disconnection, reconnection
         with patch.object(command_server, "handle_client_connection") as mock_handle:
-            # First connection
             mock_handle.return_value = None
             command_server._client_threads.append(Mock())
-
-            # Second connection (reconnect)
             command_server._client_threads.append(Mock())
 
             assert len(command_server._client_threads) >= 1
 
         command_server.stop()
-
-
-# Test Class: CommandServer - Command Handling
 
 
 class TestCommandServerCommands:
@@ -205,10 +173,8 @@ class TestCommandServerCommands:
         request_id = 123
         completion = {"success": True, "result": "movement complete"}
 
-        # Encode completion message
         message = UnityProtocol.encode_result_message(completion, request_id)
 
-        # Mock socket to return message
         mock_client_socket.recv = Mock(
             side_effect=[
                 message[:5],  # Header
@@ -224,8 +190,7 @@ class TestCommandServerCommands:
         assert result["request_id"] == request_id
 
     def test_receive_completion_invalid_type(self, command_server, mock_client_socket):
-        # Create message with wrong type
-        header = struct.pack("<B", 0xFF) + struct.pack("<I", 123)  # Invalid type
+        header = struct.pack("<B", 0xFF) + struct.pack("<I", 123)
         json_data = json.dumps({"test": "data"}).encode("utf-8")
         json_len = struct.pack("<I", len(json_data))
         message = header + json_len + json_data
@@ -239,7 +204,6 @@ class TestCommandServerCommands:
         assert result is None
 
     def test_receive_completion_too_large(self, command_server, mock_client_socket):
-        """Test receiving completion message that's too large."""
         from config.Servers import MAX_STRING_LENGTH
 
         header = struct.pack("<B", MessageType.RESULT) + struct.pack("<I", 1)
@@ -253,42 +217,29 @@ class TestCommandServerCommands:
         assert result is None
 
     def test_send_queued_results(self, command_server, mock_client_socket):
-        # Queue some results
         command_server._broadcaster.send_command({"type": "test1"}, 1)
         command_server._broadcaster.send_command({"type": "test2"}, 2)
 
-        # Simulate sending queued results
         command_server._send_queued_results(mock_client_socket)
 
-        # Should have called sendall for each queued result
         assert mock_client_socket.sendall.call_count >= 0
 
 
-# Test Class: CommandServer - Protocol V2
-
-
 class TestCommandServerProtocolV2:
-    """Test Protocol V2 request ID correlation."""
 
     def test_request_id_correlation(self, command_broadcaster, command_server):
-        """Test request ID is correctly correlated between command and completion."""
         command_broadcaster.set_server(command_server)
         command_server.broadcast_to_all_clients = Mock(return_value=1)
 
         request_id = 42
         command = {"command_type": "move", "robot_id": "Robot1"}
 
-        # Create completion queue
         command_broadcaster.create_completion_queue(request_id)
-
-        # Send command
         command_broadcaster.send_command(command, request_id)
 
-        # Simulate completion
         completion = {"success": True, "request_id": request_id}
         command_broadcaster.put_completion(request_id, completion)
 
-        # Retrieve completion
         result = command_broadcaster.get_completion(request_id, timeout=0.5)
 
         assert result is not None
@@ -298,16 +249,13 @@ class TestCommandServerProtocolV2:
     def test_multiple_pending_requests(self, command_broadcaster):
         request_ids = [1, 2, 3]
 
-        # Create queues for all requests
         for rid in request_ids:
             command_broadcaster.create_completion_queue(rid)
 
-        # Put completions in random order
         command_broadcaster.put_completion(2, {"id": 2})
         command_broadcaster.put_completion(1, {"id": 1})
         command_broadcaster.put_completion(3, {"id": 3})
 
-        # Retrieve in order
         result1 = command_broadcaster.get_completion(1, timeout=0.1)
         result2 = command_broadcaster.get_completion(2, timeout=0.1)
         result3 = command_broadcaster.get_completion(3, timeout=0.1)
@@ -317,14 +265,9 @@ class TestCommandServerProtocolV2:
         assert result3["id"] == 3
 
 
-# Test Class: CommandServer - Error Handling
-
-
 class TestCommandServerErrors:
-    """Test CommandServer error handling and recovery."""
 
     def test_malformed_json_handling(self, command_server, mock_client_socket):
-        """Test handling of malformed JSON in completion message."""
         header = struct.pack("<B", MessageType.RESULT) + struct.pack("<I", 1)
         json_data = b"{invalid json}"
         json_len = struct.pack("<I", len(json_data))
@@ -339,7 +282,6 @@ class TestCommandServerErrors:
         assert result is None
 
     def test_client_disconnect_during_receive(self, command_server, mock_client_socket):
-        # Simulate disconnection (recv returns empty bytes)
         mock_client_socket.recv = Mock(return_value=b"")
 
         result = command_server._receive_completion(mock_client_socket)
@@ -347,13 +289,8 @@ class TestCommandServerErrors:
         assert result is None
 
     def test_network_error_recovery(self, command_server, mock_client_socket):
-        """Test recovery from network errors."""
-        # Simulate network error
         mock_client_socket.recv = Mock(side_effect=OSError("Network error"))
 
-        # _recv_exact will raise the OSError since it doesn't catch it
-        # This is expected behavior - the error is handled at a higher level (in handle_client_connection)
-        # We just verify the method raises the error as expected
         with pytest.raises(OSError):
             command_server._receive_completion(mock_client_socket)
 
@@ -367,7 +304,6 @@ class TestCommandServerErrors:
             "objects": [],
         }
 
-        # Encode message
         message = UnityProtocol.encode_result_message(world_state_update, request_id)
 
         mock_client_socket.recv = Mock(
@@ -376,11 +312,7 @@ class TestCommandServerErrors:
 
         result = command_server._receive_completion(mock_client_socket)
 
-        # World state updates should not be returned as completions
         assert result is None
-
-
-# Integration Test
 
 
 class TestCommandServerIntegration:
@@ -392,18 +324,14 @@ class TestCommandServerIntegration:
         broadcaster = command_server._broadcaster
         request_id = 555
 
-        # Create completion queue
         broadcaster.create_completion_queue(request_id)
 
-        # Send command (will be queued since no clients)
         command = {"command_type": "test_command", "robot_id": "Robot1"}
         broadcaster.send_command(command, request_id)
 
-        # Simulate receiving completion
         completion = {"success": True, "result": "done"}
         broadcaster.put_completion(request_id, completion)
 
-        # Retrieve completion
         result = broadcaster.get_completion(request_id, timeout=0.5)
 
         assert result is not None

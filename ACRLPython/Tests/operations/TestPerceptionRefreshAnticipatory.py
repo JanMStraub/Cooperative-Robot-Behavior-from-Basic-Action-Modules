@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 
 
 def _make_loop():
-    """Construct a PerceptionRefreshLoop with mocked world_state."""
     from operations.PerceptionRefresh import PerceptionRefreshLoop
 
     mock_ws = MagicMock()
@@ -20,7 +19,6 @@ def _make_loop():
 
 
 class TestAnticipatoryRefresh:
-    """trigger_anticipatory_refresh queues object IDs for immediate re-detection."""
 
     def test_trigger_queues_object_ids(self):
         loop, _ = _make_loop()
@@ -85,10 +83,8 @@ class TestAnticipatoryRefresh:
 
 
 class TestIntentTriggersRefresh:
-    """Setting moving_toward_object in WorldState causes anticipatory refresh."""
 
     def test_trigger_from_external_caller(self):
-        """trigger_anticipatory_refresh can be called externally with any object list."""
         from operations.PerceptionRefresh import PerceptionRefreshLoop
 
         loop, _ = _make_loop()
@@ -98,7 +94,6 @@ class TestIntentTriggersRefresh:
 
 
 class TestGraspObjectSetsIntent:
-    """grasp_object sets moving_toward_object on WorldState before executing."""
 
     def test_grasp_sets_moving_toward_object(self):
         mock_ws = MagicMock()

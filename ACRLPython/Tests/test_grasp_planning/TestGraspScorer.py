@@ -1,18 +1,5 @@
-#!/usr/bin/env python3
-"""
-Unit tests for grasp scoring system.
-
-Tests multi-criteria scoring including IK quality, approach preference,
-depth, stability, and orientation consistency.
-"""
-
 import pytest
 import numpy as np
-import sys
-from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from grasp_planning.GraspScorer import GraspScorer
 from grasp_planning.GraspConfig import GraspConfig

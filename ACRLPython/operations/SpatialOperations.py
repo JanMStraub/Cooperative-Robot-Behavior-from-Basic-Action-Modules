@@ -43,11 +43,6 @@ def move_relative_to_object(
                 return OperationResult.error_result(
                     "OBJECT_NOT_FOUND",
                     f"Object '{object_ref}' not found in world state",
-                    [
-                        "Run object detection first to locate objects",
-                        "Verify object ID is correct",
-                        "Check that object is in camera view",
-                    ],
                 )
         else:
             position = object_ref
@@ -67,14 +62,12 @@ def move_relative_to_object(
             return OperationResult.error_result(
                 "INVALID_RELATION",
                 f"Invalid relation '{relation}'. Must be one of: {', '.join(valid_relations)}",
-                [f"Use one of the valid relations: {', '.join(valid_relations)}"],
             )
 
         if not (0.0 <= offset <= 0.5):
             return OperationResult.error_result(
                 "INVALID_OFFSET",
                 f"Offset {offset} out of range [0.0, 0.5]",
-                ["Use offset between 0.0 and 0.5 meters"],
             )
 
         x, y, z = position
@@ -129,11 +122,7 @@ def move_relative_to_object(
 
     except Exception as e:
         logger.error(f"Error in move_relative_to_object: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "EXECUTION_ERROR",
-            f"Unexpected error: {str(e)}",
-            ["Check logs for details", "Verify parameters are correct"],
-        )
+        return OperationResult.error_result("EXECUTION_ERROR", str(e))
 
 
 def create_move_relative_to_object_operation() -> BasicOperation:
@@ -143,11 +132,6 @@ def create_move_relative_to_object_operation() -> BasicOperation:
         category=OperationCategory.NAVIGATION,
         complexity=OperationComplexity.INTERMEDIATE,
         description="Move robot to a position relative to an object (left, right, above, etc.)",
-        long_description="""
-            Calculates and moves to a position relative to a detected object or specified location.
-            Supports spatial relations: left_of, right_of, above, below, in_front_of, behind.
-            Useful for approach movements, positioning near objects, or spatial task execution.
-        """,
         usage_examples=[
             "move_relative_to_object('Robot1', 'cube_01', 'above', offset=0.1)",
             "Position robot to the left of detected object",

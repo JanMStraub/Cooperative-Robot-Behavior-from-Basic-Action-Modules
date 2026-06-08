@@ -1,25 +1,5 @@
-#!/usr/bin/env python3
-"""
-Test Coordinate Transformation
-================================
-
-Verifies that world-to-local coordinate transformation works correctly
-for dual-robot ROS integration.
-
-The real _transform_world_to_local performs three steps:
-  1. Translate: Unity world → robot-centered Unity coordinates
-  2. Rotate: Apply robot's Y-axis rotation (for Robot2's 180° flip)
-  3. Axis conversion: Unity (Y-up, left-handed) → ROS (Z-up, right-handed)
-     Unity (X, Y, Z) → ROS (Z, -X, Y)
-"""
-
-import sys
-import os
 import math
 import numpy as np
-
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from utils.CoordinateTransforms import world_to_robot_frame_np, robot_to_world_frame_np
 
@@ -283,34 +263,3 @@ def test_np_matches_dict_robot2():
     print("\nNumPy vs dict equivalence (Robot2):")
     print(f"  dict: {ros_dict}, np: {ros_np}")
     print("  ✅ identical")
-
-
-if __name__ == "__main__":
-    try:
-        test_robot1_axis_conversion()
-        test_robot2_axis_conversion()
-        test_symmetric_world_positions_give_same_ros_coords()
-        test_lateral_offset_axis_conversion()
-
-        test_np_robot1_axis_conversion()
-        test_np_robot2_axis_conversion()
-        test_np_lateral_offset()
-        test_np_roundtrip_robot1()
-        test_np_roundtrip_robot2()
-        test_np_matches_dict_robot1()
-        test_np_matches_dict_robot2()
-
-        print("\n" + "=" * 60)
-        print("ALL COORDINATE TRANSFORMATION TESTS PASSED")
-        print("=" * 60)
-        sys.exit(0)
-
-    except AssertionError as e:
-        print(f"\n❌ Test failed: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\n❌ Unexpected error: {e}")
-        import traceback
-
-        traceback.print_exc()
-        sys.exit(1)

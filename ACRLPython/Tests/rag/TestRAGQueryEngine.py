@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Test Cases for RAG Query Engine
-================================
-
-Tests for the query and search module.
-"""
-
 import pytest
 import numpy as np
 from unittest.mock import Mock, patch
@@ -14,10 +6,7 @@ from rag.VectorStore import VectorStore
 
 
 class TestQueryEngine:
-    """Test query engine functionality"""
-
     def setup_method(self):
-        """Set up test fixtures"""
         # Create a mock vector store with test operations
         self.vector_store = VectorStore()
         self.vector_store.add_operation(
@@ -42,7 +31,6 @@ class TestQueryEngine:
     @patch("rag.QueryEngine.EmbeddingGenerator")
     @patch("operations.Registry.get_global_registry")
     def test_search_basic(self, mock_registry, mock_embedding_gen):
-        """Test basic search functionality"""
         # Mock embedding generator
         mock_emb = Mock()
         mock_emb.generate_embedding.return_value = np.array([1.0, 0.0, 0.0])
@@ -57,7 +45,6 @@ class TestQueryEngine:
 
     @patch("rag.QueryEngine.EmbeddingGenerator")
     def test_search_empty_query(self, mock_embedding_gen):
-        """Test search with empty query"""
         mock_emb = Mock()
         mock_embedding_gen.return_value = mock_emb
 
@@ -69,7 +56,6 @@ class TestQueryEngine:
     @patch("rag.QueryEngine.EmbeddingGenerator")
     @patch("operations.Registry.get_global_registry")
     def test_search_with_category_filter(self, mock_registry, mock_embedding_gen):
-        """Test search with category filtering"""
         mock_emb = Mock()
         mock_emb.generate_embedding.return_value = np.array([1.0, 0.0, 0.0])
         mock_embedding_gen.return_value = mock_emb
@@ -82,7 +68,6 @@ class TestQueryEngine:
     @patch("rag.QueryEngine.EmbeddingGenerator")
     @patch("operations.Registry.get_global_registry")
     def test_get_operation_context(self, mock_registry, mock_embedding_gen):
-        """Test getting full operation context"""
         # Mock registry
         mock_op = Mock()
         mock_op.operation_id = "op_001"
@@ -117,7 +102,6 @@ class TestQueryEngine:
 
     @patch("rag.QueryEngine.EmbeddingGenerator")
     def test_find_similar_operations(self, mock_embedding_gen):
-        """Test finding similar operations"""
         mock_emb = Mock()
         mock_embedding_gen.return_value = mock_emb
 
@@ -129,7 +113,6 @@ class TestQueryEngine:
 
     @patch("rag.QueryEngine.EmbeddingGenerator")
     def test_get_stats(self, mock_embedding_gen):
-        """Test getting query engine statistics"""
         mock_emb = Mock()
         mock_emb.is_using_lm_studio.return_value = True
         mock_embedding_gen.return_value = mock_emb

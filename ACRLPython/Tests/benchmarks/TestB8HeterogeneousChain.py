@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""Tests for B8 Heterogeneous Chain benchmark."""
-
 from __future__ import annotations
 
 

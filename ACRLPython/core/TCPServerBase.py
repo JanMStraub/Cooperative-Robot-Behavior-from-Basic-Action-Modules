@@ -33,8 +33,6 @@ logger = get_logger(__name__)
 
 
 class ConnectionState(Enum):
-    """Connection state."""
-
     CONNECTED = "connected"
     IDLE = "idle"
     RECEIVING = "receiving"
@@ -529,12 +527,6 @@ class TCPServerBase(ABC):
             )
 
     def _heartbeat_loop(self):
-        """
-        Periodic health logging thread.
-
-        Logs server uptime, active client count, and cumulative connection
-        metrics every HEARTBEAT_INTERVAL seconds. Exits when the server stops.
-        """
         import time
 
         while self._running:
@@ -564,13 +556,7 @@ class TCPServerBase(ABC):
                 )
 
     def get_stats(self) -> dict:
-        """
-        Return a snapshot of server health and connection metrics.
-
-        Returns:
-            Dict with keys: uptime_seconds, active_clients, total_connections,
-            total_disconnections, port.
-        """
+        """Return a snapshot of server health and connection metrics."""
         uptime = 0.0
         if self._start_time is not None:
             uptime = (datetime.now() - self._start_time).total_seconds()

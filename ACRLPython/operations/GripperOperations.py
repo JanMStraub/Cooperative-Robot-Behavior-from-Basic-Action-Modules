@@ -105,12 +105,6 @@ def control_gripper(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity - no clients connected",
-                    [
-                        "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5007)",
-                        "Check Unity console for connection errors",
-                        "Restart backend: python -m orchestrators.RunRobotController",
-                    ],
                 )
             logger.info(f"Successfully sent control_gripper command to {robot_id}")
             _update_gripper_world_state()
@@ -127,16 +121,7 @@ def control_gripper(
 
     except Exception as e:
         logger.error(f"Unexpected error in control_gripper: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            [
-                "Check logs for detailed error information",
-                "Verify all parameters are correct types",
-                "Retry the operation",
-                "Report bug if error persists",
-            ],
-        )
+        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
 
 
 def create_control_gripper_operation() -> BasicOperation:
@@ -146,17 +131,6 @@ def create_control_gripper_operation() -> BasicOperation:
         category=OperationCategory.MANIPULATION,
         complexity=OperationComplexity.ATOMIC,
         description="Controls the robot gripper to either open or close it completely.",
-        long_description="""
-            This operation commands the robot gripper to open or close completely.
-            The operation uses the GripperController component to control the gripper movement.
-
-            This operation is useful for grasping and releasing objects. When closing the gripper,
-            it will grip any object currently between the gripper jaws. When opening, it will
-            release any held object.
-
-            This operation is asynchronous - it sends the command to Unity and returns immediately.
-            Unity executes the movement in the background using GripperController.
-        """,
         usage_examples=[
             "After navigating to an object: control_gripper(robot_id='Robot1', open_gripper=False) # Close gripper to grasp object",
             "After navigating to a drop-off location: control_gripper(robot_id='Robot1', open_gripper=True) # Open gripper to release object",
@@ -234,15 +208,13 @@ def release_object(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
-                ["Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')"],
             )
 
         def _ros_path():
             from ros2.ROSBridge import ROSBridge
 
             bridge = ROSBridge.get_instance()
-            # 1.0 = fully open (normalized value)
-            result = bridge.control_gripper(1.0, robot_id=robot_id)
+            result = bridge.control_gripper(1.0, robot_id=robot_id)  # 1.0 = fully open
             if result and result.get("success"):
                 logger.info(f"ROS release_object command sent for {robot_id}")
                 return OperationResult.success_result(
@@ -270,10 +242,6 @@ def release_object(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity - no clients connected",
-                    [
-                        "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5007)",
-                    ],
                 )
             logger.info(f"Successfully sent release_object command to {robot_id}")
             return OperationResult.success_result(
@@ -288,11 +256,7 @@ def release_object(
 
     except Exception as e:
         logger.error(f"Unexpected error in release_object: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            ["Check logs for detailed error information", "Retry the operation"],
-        )
+        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
 
 
 def create_release_object_operation() -> BasicOperation:
@@ -301,20 +265,7 @@ def create_release_object_operation() -> BasicOperation:
         name="release_object",
         category=OperationCategory.MANIPULATION,
         complexity=OperationComplexity.ATOMIC,
-        description="Open gripper to release held object (atomic operation)",
-        long_description="""
-            This ATOMIC operation opens the gripper to release any held object.
-
-            IMPORTANT: This operation does NOT move the robot. It ONLY opens
-            the gripper at the current position.
-
-            For positioned release, you must chain operations:
-            1. move_to_coordinate(robot_id, target_position)
-            2. release_object(robot_id)
-
-            This atomicity is critical for LLM-driven control, as it allows
-            the LLM to see and control each step of a complex workflow.
-        """,
+        description="Open gripper at current position (atomic — doesn't move robot). Chain with move_to_coordinate for positioned release.",
         usage_examples=[
             "release_object('Robot1') - Release at current position",
             "Chain: move_to_coordinate('Robot1', x=0.3, y=0, z=0.1) → release_object('Robot1')",
@@ -450,7 +401,6 @@ def place_object(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
-                ["Provide a valid robot ID (e.g., 'Robot1')"],
             )
 
         effective_y = y
@@ -487,9 +437,7 @@ def place_object(
             # and avoids the ±360° flip that occurs at the w=0 singularity.
             top_down_orientation = {"x": 0.9999, "y": 0.0, "z": 0.0, "w": 0.0087}
 
-            # Step 1: Lift straight up to hover height at current XZ, keeping current
-            # orientation. Clears the held object from surrounding obstacles before any
-            # reorientation — matches the Unity TCP path behaviour.
+            # Lift before reorienting — clears held object from obstacles, matches TCP path.
             logger.info(f"place_object: lifting to safe height for {robot_id}")
             current_pos = _get_world_state().get_robot_position(robot_id)
             if current_pos is not None:
@@ -508,9 +456,7 @@ def place_object(
                     f"place_object: no current position for {robot_id}, skipping lift"
                 )
 
-            # Step 2: Orient gripper to top-down at the lifted position.
-            # Doing this after lifting avoids orientation-constrained planning failures
-            # that occur when starting far from top-down (e.g. after a yawed grasp).
+            # Orient after lifting — avoids constrained planning failures when starting far from top-down.
             logger.info(f"place_object: orienting to top-down for {robot_id}")
             orient_result = bridge.plan_orientation_change(
                 {"roll": 180, "pitch": 0, "yaw": 0},
@@ -523,7 +469,6 @@ def place_object(
 
             time.sleep(0.1)
 
-            # Step 3: Move to hover above target with top-down gripper orientation.
             logger.info(f"place_object: moving to hover above target for {robot_id}")
             hover_result = bridge.plan_and_execute(
                 position=hover_pos,
@@ -545,11 +490,8 @@ def place_object(
             # MoveIt samples the start state for the descent plan.
             time.sleep(0.1)
 
-            # Step 4: Descend to place height using free-space planning.
-            # plan_cartesian_descent is NOT used here: MoveIt's collision model does
-            # not include the held object, so a straight-line path through the
-            # object's swept volume frequently fails at 0% completion.
-            # Free-space planning (plan_and_execute) finds a collision-free path.
+            # Use free-space planning (not cartesian descent): MoveIt's collision model
+            # excludes the held object, causing straight-line paths to fail at 0%.
             logger.info(f"place_object: descending to place position for {robot_id}")
             descent_result = bridge.plan_and_execute(
                 position=place_pos,
@@ -567,14 +509,11 @@ def place_object(
                     f"place_object: descent failed ({err}), releasing at current height"
                 )
 
-            # Step 5: Open gripper and wait for Unity to detach the object before
-            # the ascent trajectory is published. The gripper command is a fire-and-forget
-            # ROS topic publish; 0.5s is well above the ~50ms ROS topic round-trip.
+            # 0.5s wait: gripper is fire-and-forget ROS topic; Unity needs time to detach before ascent.
             logger.info(f"place_object: releasing object for {robot_id}")
             bridge.control_gripper(1.0, robot_id=robot_id)
             time.sleep(0.5)
 
-            # Step 6: Ascend back to hover height to clear the placed object.
             logger.info(f"place_object: ascending after place for {robot_id}")
             bridge.plan_and_execute(
                 position=hover_pos,
@@ -615,10 +554,6 @@ def place_object(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity - no clients connected",
-                    [
-                        "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5007)",
-                    ],
                 )
             return OperationResult.success_result(
                 {
@@ -635,11 +570,7 @@ def place_object(
 
     except Exception as e:
         logger.error(f"Unexpected error in place_object: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            ["Check logs for detailed error information", "Retry the operation"],
-        )
+        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
 
 
 PLACE_OBJECT_OPERATION = BasicOperation(
@@ -648,20 +579,9 @@ PLACE_OBJECT_OPERATION = BasicOperation(
     category=OperationCategory.MANIPULATION,
     complexity=OperationComplexity.INTERMEDIATE,
     description=(
-        "Carefully place a held object at a target position with controlled descent and ascent"
+        "Place a held object at a target position: hover → descend → release → ascend. "
+        "Use this for positioned placement; use release_object only for immediate gripper open."
     ),
-    long_description="""
-        Performs a controlled place sequence that is the inverse of grasp_object:
-        1. Move to a hover position above the target (PLACE_HOVER_OFFSET = 15 cm).
-        2. Cartesian descent to just above the surface (PLACE_TCP_OFFSET = 5.5 cm).
-        3. Open gripper to release the object gently onto the surface.
-        4. Cartesian ascent back to hover height to clear the placed object.
-
-        Use this instead of release_object whenever you need the object to
-        land at a specific position (e.g. placing on a field, on a workbench,
-        or into a container).  release_object is only appropriate for an
-        explicit immediate gripper open at the current position.
-    """,
     usage_examples=[
         "place_object('Robot1', x=-0.18, y=0.06, z=0.05) — place at field G center",
         "Typical sequence: detect_field → move_to_coordinate (hover) → place_object",
@@ -759,7 +679,6 @@ def place_between_objects(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
-                ["Provide a valid robot ID (e.g., 'Robot1')"],
             )
 
         try:
@@ -783,19 +702,11 @@ def place_between_objects(
             return OperationResult.error_result(
                 "OBJECT_NOT_FOUND",
                 f"Object '{object_id_1}' not found in WorldState",
-                [
-                    f"Detect '{object_id_1}' with detect_object_stereo first",
-                    "Check object name matches WorldState entry",
-                ],
             )
         if pos2 is None:
             return OperationResult.error_result(
                 "OBJECT_NOT_FOUND",
                 f"Object '{object_id_2}' not found in WorldState",
-                [
-                    f"Detect '{object_id_2}' with detect_object_stereo first",
-                    "Check object name matches WorldState entry",
-                ],
             )
 
         mid_x = (pos1[0] + pos2[0]) / 2.0
@@ -828,11 +739,7 @@ def place_between_objects(
 
     except Exception as e:
         logger.error(f"Unexpected error in place_between_objects: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "UNEXPECTED_ERROR",
-            f"Unexpected error occurred: {str(e)}",
-            ["Check logs for detailed error information", "Retry the operation"],
-        )
+        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
 
 
 PLACE_BETWEEN_OBJECTS_OPERATION = BasicOperation(
@@ -840,15 +747,7 @@ PLACE_BETWEEN_OBJECTS_OPERATION = BasicOperation(
     name="place_between_objects",
     category=OperationCategory.MANIPULATION,
     complexity=OperationComplexity.INTERMEDIATE,
-    description=("Place a held object at the midpoint between two reference objects"),
-    long_description="""
-        Resolves both reference objects from WorldState, computes the XZ midpoint,
-        and executes a controlled place sequence (hover, descent, release, ascent).
-        Use this instead of manually averaging coordinates in the prompt.
-
-        Supports the same on_top_of and placed_object_height stacking options
-        as place_object for precise vertical placement.
-    """,
+    description="Place a held object at the XZ midpoint between two WorldState objects.",
     usage_examples=[
         "place_between_objects('Robot1', 'blue_cube', 'red_cube') — place at XZ midpoint, default Y",
         "place_between_objects('Robot1', 'blue_cube', 'red_cube', on_top_of='blue_cube') — stack height from blue_cube",

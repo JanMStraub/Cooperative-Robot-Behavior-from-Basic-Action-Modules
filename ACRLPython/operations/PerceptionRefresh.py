@@ -14,7 +14,6 @@ logger = get_logger(__name__)
 _DEFAULT_REFRESH_INTERVAL = 2.0
 _DEFAULT_STALE_THRESHOLD = 0.4
 
-# Module-level singleton reference for get_perception_refresh_daemon()
 _active_refresh_loop = None
 
 
@@ -63,10 +62,6 @@ class PerceptionRefreshLoop:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=self._refresh_interval + 2.0)
         logger.info("PerceptionRefreshLoop stopped")
-
-    # ------------------------------------------------------------------
-    # Internal loop
-    # ------------------------------------------------------------------
 
     def _refresh_loop(self) -> None:
         while not self._stop_event.wait(timeout=self._refresh_interval):

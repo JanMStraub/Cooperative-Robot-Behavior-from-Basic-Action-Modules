@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Unit tests for Verification.py
 
@@ -18,10 +17,8 @@ from operations.Base import OperationResult
 
 
 class TestPredicateViolation:
-    """Test PredicateViolation dataclass"""
 
     def test_predicate_violation_creation(self):
-        """Test creating a PredicateViolation"""
         violation = PredicateViolation(
             predicate="target_within_reach(robot_id, x, y, z)",
             reason="Target exceeds max reach of 0.8m",
@@ -35,7 +32,6 @@ class TestPredicateViolation:
         assert len(violation.recovery_suggestions) == 2
 
     def test_predicate_violation_defaults(self):
-        """Test default values for PredicateViolation"""
         violation = PredicateViolation(
             predicate="test_predicate()", reason="Test reason"
         )
@@ -45,10 +41,8 @@ class TestPredicateViolation:
 
 
 class TestVerificationResult:
-    """Test VerificationResult dataclass"""
 
     def test_verification_result_success(self):
-        """Test successful verification result"""
         result = VerificationResult(success=True)
 
         assert result.success is True
@@ -57,7 +51,6 @@ class TestVerificationResult:
         assert len(result.warnings) == 0
 
     def test_add_violation_error(self):
-        """Test adding error violation blocks execution"""
         result = VerificationResult(success=True)
 
         result.add_violation(
@@ -73,7 +66,6 @@ class TestVerificationResult:
         assert result.violations[0].severity == "error"
 
     def test_add_violation_warning(self):
-        """Test adding warning doesn't block execution"""
         result = VerificationResult(success=True)
 
         result.add_violation(
@@ -88,7 +80,6 @@ class TestVerificationResult:
         assert result.warnings[0].severity == "warning"
 
     def test_verification_result_to_dict(self):
-        """Test serialization to dictionary"""
         result = VerificationResult(success=True)
         result.add_violation(
             predicate="test_predicate()", reason="Test failure", severity="error"
@@ -105,10 +96,8 @@ class TestVerificationResult:
 
 
 class TestPredicateParser:
-    """Test PredicateParser"""
 
     def test_parse_simple_predicate(self):
-        """Test parsing predicate with no parameters"""
         parsed = PredicateParser.parse("operation_succeeded()")
 
         assert parsed is not None
@@ -117,7 +106,6 @@ class TestPredicateParser:
         assert param_names == []
 
     def test_parse_with_single_param(self):
-        """Test parsing predicate with one parameter"""
         parsed = PredicateParser.parse("robot_is_initialized(robot_id)")
 
         assert parsed is not None
@@ -126,7 +114,6 @@ class TestPredicateParser:
         assert param_names == ["robot_id"]
 
     def test_parse_with_multiple_params(self):
-        """Test parsing predicate with multiple parameters"""
         parsed = PredicateParser.parse("target_within_reach(robot_id, x, y, z)")
 
         assert parsed is not None
@@ -135,7 +122,6 @@ class TestPredicateParser:
         assert param_names == ["robot_id", "x", "y", "z"]
 
     def test_parse_with_spaces(self):
-        """Test parsing handles extra spaces"""
         parsed = PredicateParser.parse("  gripper_is_open( robot_id )  ")
 
         assert parsed is not None
@@ -144,13 +130,11 @@ class TestPredicateParser:
         assert param_names == ["robot_id"]
 
     def test_parse_invalid_format(self):
-        """Test invalid predicate format returns None"""
         parsed = PredicateParser.parse("not a valid predicate")
 
         assert parsed is None
 
     def test_resolve_parameters(self):
-        """Test resolving parameter names to values"""
         param_names = ["robot_id", "x", "y", "z"]
         operation_params = {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}
 
@@ -162,7 +146,6 @@ class TestPredicateParser:
         assert resolved["z"] == 0.1
 
     def test_resolve_parameters_missing(self):
-        """Test resolving with missing parameters"""
         param_names = ["robot_id", "missing_param"]
         operation_params = {"robot_id": "Robot1"}
 
@@ -173,7 +156,6 @@ class TestPredicateParser:
 
 
 class TestOperationVerifier:
-    """Test OperationVerifier"""
 
     @patch("operations.Verification.evaluate_predicate")
     def test_verify_preconditions_pass(
@@ -183,7 +165,6 @@ class TestOperationVerifier:
         mock_world_state,
         cleanup_world_state,
     ):
-        """Test all preconditions valid"""
         verifier = OperationVerifier()
 
         # Mock all predicates pass
@@ -207,7 +188,6 @@ class TestOperationVerifier:
         mock_world_state,
         cleanup_world_state,
     ):
-        """Test precondition violation blocks execution"""
         verifier = OperationVerifier()
 
         # Mock first predicate fails
@@ -235,7 +215,6 @@ class TestOperationVerifier:
         mock_world_state,
         cleanup_world_state,
     ):
-        """Test postconditions satisfied"""
         verifier = OperationVerifier()
 
         # Mock postcondition passes
@@ -262,7 +241,6 @@ class TestOperationVerifier:
         mock_world_state,
         cleanup_world_state,
     ):
-        """Test postcondition violation is warning"""
         verifier = OperationVerifier()
 
         # Mock postcondition fails
@@ -286,7 +264,6 @@ class TestOperationVerifier:
     def test_verify_postconditions_operation_failed(
         self, sample_operation_with_conditions, mock_world_state, cleanup_world_state
     ):
-        """Test postconditions fail when operation failed"""
         verifier = OperationVerifier()
 
         operation_result = OperationResult.error_result(
@@ -307,7 +284,6 @@ class TestOperationVerifier:
         assert "Operation failed" in result.violations[0].reason
 
     def test_suggest_recovery_target_within_reach(self, cleanup_world_state):
-        """Test recovery suggestions for target_within_reach"""
         verifier = OperationVerifier()
 
         suggestions = verifier._suggest_recovery_for_predicate(
@@ -320,7 +296,6 @@ class TestOperationVerifier:
         assert any("closer" in s.lower() for s in suggestions)
 
     def test_suggest_recovery_robot_initialized(self, cleanup_world_state):
-        """Test recovery suggestions for robot_is_initialized"""
         verifier = OperationVerifier()
 
         suggestions = verifier._suggest_recovery_for_predicate(
@@ -332,7 +307,6 @@ class TestOperationVerifier:
 
 
 class TestQuickVerifyOperation:
-    """Test quick_verify_operation helper"""
 
     @patch("operations.Verification.evaluate_predicate")
     def test_quick_verify_safe(
@@ -342,7 +316,6 @@ class TestQuickVerifyOperation:
         mock_world_state,
         cleanup_world_state,
     ):
-        """Test quick verification passes"""
         # Mock all predicates pass
         mock_evaluate.return_value = (True, "")
 
@@ -363,7 +336,6 @@ class TestQuickVerifyOperation:
         mock_world_state,
         cleanup_world_state,
     ):
-        """Test quick verification blocks unsafe operation"""
         # Mock predicate fails
         mock_evaluate.side_effect = [(False, "Target out of reach"), (True, "")]
 
@@ -584,7 +556,6 @@ class TestSpatialPredicateAccuracy:
         assert abs(distance - expected) < 0.0001
 
     def test_workspace_boundary_predicate(self, cleanup_world_state):
-        """Test workspace boundary checking with is_in_robot_workspace predicate."""
         from operations.SpatialPredicates import evaluate_predicate
         from config.Robot import ROBOT_WORKSPACE_ASSIGNMENTS, WORKSPACE_REGIONS
 
@@ -764,7 +735,6 @@ class TestSpatialPredicateAccuracy:
         assert abs(distance - expected) < 0.001
 
     def test_predicate_performance_with_1000_objects(self, cleanup_world_state):
-        """Test WorldState and predicate performance with 1000+ objects."""
         from operations.WorldState import get_world_state
         from operations.SpatialPredicates import evaluate_predicate
         import time
@@ -815,10 +785,8 @@ class TestSpatialPredicateAccuracy:
 
 
 class TestRecoverySuggestions:
-    """Test recovery suggestion generation and effectiveness."""
 
     def test_out_of_reach_recovery_suggestion(self, cleanup_world_state):
-        """Test recovery suggestion for out-of-reach target using OperationVerifier."""
         from operations.WorldState import get_world_state
         from operations.Verification import OperationVerifier
         from operations.Base import (

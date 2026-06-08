@@ -11,7 +11,6 @@ def _make_op_result(success: bool):
 
 
 def _make_executor(mock_ws=None):
-    """Build a SequenceExecutor with heavy deps mocked, injecting a mock WorldState."""
     ws = mock_ws or MagicMock()
     with (
         patch("core.Imports.get_global_registry") as mock_reg,
@@ -42,8 +41,6 @@ def _make_executor(mock_ws=None):
 
 
 class TestSequenceExecutorBroadcastIntegration:
-    """SequenceExecutor calls WorldState.broadcast_task_outcome after sequence completes."""
-
     def test_broadcast_called_on_successful_sequence(self):
         mock_ws = MagicMock()
         executor, registry, _ = _make_executor(mock_ws)

@@ -1,18 +1,5 @@
-#!/usr/bin/env python3
-"""
-Unit tests for grasp candidate generation.
-
-Tests candidate generation algorithm including approach variation,
-depth calculation, and antipodal scoring.
-"""
-
 import pytest
 import numpy as np
-import sys
-from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from grasp_planning.GraspCandidateGenerator import GraspCandidateGenerator
 from grasp_planning.GraspConfig import GraspConfig
@@ -22,12 +9,10 @@ class TestGraspCandidateGenerator:
 
     @pytest.fixture
     def config(self):
-        """Create default configuration."""
         return GraspConfig.create_default()
 
     @pytest.fixture
     def generator(self, config):
-        """Create generator with fixed seed for reproducibility."""
         return GraspCandidateGenerator(config, seed=42)
 
     def test_generator_initialization(self, config):
@@ -45,7 +30,6 @@ class TestGraspCandidateGenerator:
             object_position, object_rotation, object_size, gripper_position
         )
 
-        # Should generate 8 candidates per approach (3 approaches enabled)
         expected_count = 8 * 3
         assert len(candidates) == expected_count
 
@@ -79,7 +63,6 @@ class TestGraspCandidateGenerator:
         )
 
         for candidate in candidates:
-            # Pre-grasp should be farther from object than grasp point
             pre_grasp_dist = np.linalg.norm(
                 np.array(candidate.pre_grasp_position) - np.array(object_position)
             )
@@ -104,7 +87,6 @@ class TestGraspCandidateGenerator:
             object_position, object_rotation, object_size, gripper_position
         )
 
-        # Positions should match exactly with same seed
         for c1, c2 in zip(candidates1, candidates2):
             assert np.allclose(c1.grasp_position, c2.grasp_position, atol=1e-6)
             assert np.allclose(c1.pre_grasp_position, c2.pre_grasp_position, atol=1e-6)
@@ -125,7 +107,6 @@ class TestGraspCandidateGenerator:
             object_position, object_rotation, object_size, gripper_position
         )
 
-        # At least some positions should differ
         differences = 0
         for c1, c2 in zip(candidates1, candidates2):
             if not np.allclose(c1.grasp_position, c2.grasp_position, atol=1e-6):
@@ -154,7 +135,6 @@ class TestGraspCandidateGenerator:
             object_position, object_rotation, large_size, gripper_position
         )
 
-        # Large object should generally have larger pre-grasp distances
         small_avg_dist = np.mean([c.approach_distance for c in small_candidates])
         large_avg_dist = np.mean([c.approach_distance for c in large_candidates])
 
@@ -194,7 +174,6 @@ class TestGraspCandidateGenerator:
 
         for candidate in candidates:
             assert candidate.approach_type == "top"
-            # Pre-grasp should be above grasp point
             assert candidate.pre_grasp_position[1] > candidate.grasp_position[1]
 
     def test_approach_direction_normalized(self, generator):
@@ -224,7 +203,6 @@ class TestGraspCandidateGenerator:
 
         depths = [c.grasp_depth for c in candidates]
 
-        # Should have variation in depths
         assert len(set(depths)) > 1
         assert max(depths) > min(depths)
 
@@ -251,7 +229,6 @@ class TestGraspConfigIntegration:
     def test_disabled_approach_not_generated(self):
         config = GraspConfig.create_default()
 
-        # Disable front and side approaches
         for approach in config.enabled_approaches:
             if approach.approach_type in ["front", "side"]:
                 approach.enabled = False
@@ -267,7 +244,6 @@ class TestGraspConfigIntegration:
             object_position, object_rotation, object_size, gripper_position
         )
 
-        # Should only have top approach candidates
         approach_types = [c.approach_type for c in candidates]
         assert all(approach == "top" for approach in approach_types)
 

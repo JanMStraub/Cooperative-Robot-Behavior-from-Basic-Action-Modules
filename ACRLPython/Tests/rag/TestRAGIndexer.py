@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-Test Cases for RAG Indexer
-===========================
-
-Tests for the operation indexing module.
-"""
-
 import pytest
 import numpy as np
 from unittest.mock import Mock, patch
@@ -13,12 +5,9 @@ from rag.Indexer import OperationIndexer
 
 
 class TestOperationIndexer:
-    """Test operation indexer"""
-
     @patch("operations.Registry.get_global_registry")
     @patch("rag.Indexer.EmbeddingGenerator")
     def test_build_index(self, mock_embedding_gen, mock_registry):
-        """Test building index from operations"""
         # Mock registry with operations
         mock_op = Mock()
         mock_op.operation_id = "op_001"
@@ -50,7 +39,6 @@ class TestOperationIndexer:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.Indexer.EmbeddingGenerator")
     def test_build_index_empty_registry(self, mock_embedding_gen, mock_registry):
-        """Test building index with empty registry"""
         mock_reg = Mock()
         mock_reg.get_all_operations.return_value = []
         mock_registry.return_value = mock_reg
@@ -63,7 +51,6 @@ class TestOperationIndexer:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.Indexer.EmbeddingGenerator")
     def test_rebuild_index(self, mock_embedding_gen, mock_registry):
-        """Test rebuilding index"""
         mock_reg = Mock()
         mock_reg.get_all_operations.return_value = []
         mock_registry.return_value = mock_reg
@@ -76,7 +63,6 @@ class TestOperationIndexer:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.Indexer.EmbeddingGenerator")
     def test_get_indexer_stats(self, mock_embedding_gen, mock_registry):
-        """Test getting indexer statistics"""
         mock_reg = Mock()
         mock_reg.get_all_operations.return_value = [Mock()]
         mock_registry.return_value = mock_reg

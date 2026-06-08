@@ -174,7 +174,7 @@ def _grasp_via_ros_planned(
     else:
         pre_grasp_pos = _vec_to_pos(best_grasp.pre_grasp_position)
 
-    # Step 1: Clearance waypoint — always approach pre-grasp from above for reproducible joint config.
+    # Clearance waypoint — always approach pre-grasp from above for reproducible joint config.
     _pre_grasp_orientation = grasp_orientation if preferred_approach == "top" else None
     if pre_grasp_pos["y"] < PRE_GRASP_CLEARANCE_Y:
         clearance_pos = {
@@ -203,7 +203,7 @@ def _grasp_via_ros_planned(
         else:
             time.sleep(0.2)
 
-    # Step 2: Pre-grasp hover — no orientation for side/front (shrinks IK space at borderline reach).
+    # Pre-grasp hover — no orientation for side/front (shrinks IK space at borderline reach).
     logger.info(f"Moving to pre-grasp position for {robot_id}")
     pre_result = bridge.plan_and_execute(
         position=pre_grasp_pos,
@@ -221,7 +221,7 @@ def _grasp_via_ros_planned(
     # Settle pause: ROSJointStatePublisher 50Hz → 0.1s = 5 ticks before MoveIt samples start state.
     time.sleep(0.1)
 
-    # Step 3: Cartesian descent — constrains ee_link to straight-line so wrist can't flip to alternate IK.
+    # Cartesian descent — constrains ee_link to straight-line so wrist can't flip to alternate IK.
     logger.info(f"Descending to grasp position for {robot_id}")
     result = bridge.plan_cartesian_descent(
         position=grasp_pos,
@@ -256,10 +256,6 @@ def _grasp_via_ros_planned(
             OperationResult.error_result(
                 "GRASP_EXECUTION_FAILED",
                 f"Grasp execution failed for {robot_id}: {grasp_fail_reason}",
-                [
-                    "Check gripper hardware/simulation state",
-                    "Verify GripperContactSensor is active",
-                ],
             ),
             False,
         )
@@ -333,9 +329,8 @@ def _grasp_via_ros_position_only(
         f"pre_grasp_y={pre_grasp_position['y']:.3f}, grasp_y={grasp_position['y']:.3f}"
     )
 
-    # Step 1: Clearance waypoint — move to safe height before descending toward object.
-    # Mirrors VGN+ROS path (lines ~1460-1484): only insert when pre-grasp hover is below
-    # PRE_GRASP_CLEARANCE_Y so the arm sweeps over obstacles before committing to approach.
+    # Clearance waypoint: only insert when pre-grasp hover is below PRE_GRASP_CLEARANCE_Y
+    # so the arm sweeps over obstacles before committing to approach.
     clearance_pos = {
         "x": pre_grasp_position["x"],
         "y": PRE_GRASP_CLEARANCE_Y,
@@ -366,7 +361,7 @@ def _grasp_via_ros_position_only(
         else:
             time.sleep(0.2)
 
-    # Step 2: Move to pre-grasp hover position.
+    # Pre-grasp hover.
     # TODO: remove orientation=top_down_orientation once VGN is implemented — VGN will
     #       supply approach-aligned orientations, making this heuristic unnecessary.
     #       The top-down constraint shrinks the IK solution space at borderline reach
@@ -434,10 +429,6 @@ def _grasp_via_ros_position_only(
             OperationResult.error_result(
                 "GRASP_EXECUTION_FAILED",
                 f"Grasp execution failed for {robot_id}: {grasp_fail_reason}",
-                [
-                    "Check gripper hardware/simulation state",
-                    "Verify GripperContactSensor is active",
-                ],
             ),
             False,
         )

@@ -89,7 +89,7 @@ LMSTUDIO_BASE_URL = (
 DEFAULT_LMSTUDIO_MODEL = os.environ.get(
     "DEFAULT_LMSTUDIO_MODEL", "mistralai/magistral-small-2509"
 )
-DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.1"))
+DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.3"))
 
 # Maximum thinking tokens for reasoning models (e.g. ministral-3-14b-reasoning).
 # LM Studio exposes this as `budget_tokens` inside the `thinking` block.
@@ -136,9 +136,9 @@ SYSTEM_PROMPT_BASE = "You are an AI robot controller for a dual-arm AR4 robotic 
 VISION_MODELS = [
     "gemma-3-12b",
     "llama-3.2-vision",
-    "qwen3-vl-8b",
-    "mistral-3-3b",
+    "qwen/qwen3-vl-4b",
     "mistralai/ministral-3-14b-reasoning",
+    "mistralai/magistral-small-2509",
 ]
 
 # ============================================================================

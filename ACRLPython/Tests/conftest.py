@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import sys
 from pathlib import Path
 
@@ -14,16 +12,9 @@ import numpy as np
 import socket
 from unittest.mock import Mock, MagicMock
 
-# Singleton reset utility
-
 
 def _reset_singleton(module_path: str, class_name: str) -> None:
-    """
-    Reset a singleton's ``_instance`` to None.
-
-    Silent on ImportError or AttributeError so it is safe to call even when
-    the module has not been imported yet or the class name has changed.
-    """
+    # Silent on import/attribute errors — safe to call before a module is imported.
     try:
         mod = importlib.import_module(module_path)
         getattr(mod, class_name)._instance = None
@@ -147,7 +138,6 @@ def llm_result_dict():
 
 @pytest.fixture
 def mock_lmstudio_client():
-    """Create a mock LM Studio (OpenAI-compatible) client for testing"""
     client = MagicMock()
 
     # Mock models.list() for connection testing
@@ -167,12 +157,6 @@ def mock_lmstudio_client():
 
 @pytest.fixture
 def cleanup_singletons():
-    """
-    Fixture to clean up all known singleton instances before and after tests.
-
-    Cleans up before yielding to ensure clean state, then again after.
-    Uses ``_reset_singleton`` so it is safe even if a module is unavailable.
-    """
 
     def _cleanup():
         for module_path, class_name in _ALL_SINGLETONS:
@@ -219,22 +203,11 @@ def mock_get_global_registry():
     return _get_global_registry
 
 
-# Global Auto-Mocking for Operations Testing
-
-
 @pytest.fixture(autouse=False)
 def patch_command_broadcaster(monkeypatch, mock_command_broadcaster):
-    """
-    Patch _get_command_broadcaster functions in operations modules.
-
-    Use this fixture explicitly in tests that need CommandBroadcaster mocking.
-
-    This fixture patches the lazy import system at the core.Imports level to ensure
-    all operations modules get the mocked broadcaster.
-
-    Also disables ROS integration so operations use the TCP path (mocked broadcaster)
-    instead of attempting to connect to a ROS bridge that isn't running in tests.
-    """
+    # Patches at core.Imports level so all operation modules get the same mock.
+    # Also disables ROS so operations use the TCP path (mocked broadcaster)
+    # instead of trying to connect to a ROS bridge that isn't running in tests.
     # Disable ROS so operations use TCP path (the mocked broadcaster)
     try:
         import config.ROS as ros_config
@@ -279,11 +252,6 @@ def patch_command_broadcaster(monkeypatch, mock_command_broadcaster):
 
 @pytest.fixture(autouse=False)
 def patch_unified_image_storage(monkeypatch, mock_unified_image_storage):
-    """
-    Patch UnifiedImageStorage class for detection operations.
-
-    Use this fixture explicitly in tests that need image storage mocking.
-    """
 
     # Create a mock class that returns our mock instance
     def mock_unified_storage_class():
@@ -305,22 +273,13 @@ def patch_unified_image_storage(monkeypatch, mock_unified_image_storage):
 
 @pytest.fixture
 def patch_world_state():
-    """
-    Create a context manager for patching WorldState in coordination operations.
-
-    WorldState is imported inside functions with try/except, so we patch it at
-    the operations.WorldState module level where it's actually imported from.
-
-    Example:
-        def test_detect_robot(mock_world_state_multi_robot, patch_world_state):
-            with patch_world_state(mock_world_state_multi_robot):
-                result = detect_other_robot("Robot1", "Robot2")
-    """
+    # WorldState is imported inside functions, so we patch at the module level.
+    # Usage:
+    #   with patch_world_state(mock_world_state_instance):
+    #       result = detect_other_robot("Robot1", "Robot2")
     from unittest.mock import patch
 
     def _create_patch(mock_world_state_instance):
-        """Create patch context manager that returns the mock instance."""
-        # Patch at operations.WorldState.WorldState (the class itself)
         return patch(
             "operations.WorldState.WorldState", return_value=mock_world_state_instance
         )
@@ -330,23 +289,13 @@ def patch_world_state():
 
 @pytest.fixture
 def patch_yolo_detector():
-    """
-    Create a context manager for patching YOLODetector in field operations.
-
-    YOLODetector is imported inside functions, so we need to use patch() context manager.
-
-    Example:
-        def test_detect_field(patch_yolo_detector):
-            mock_detector = Mock()
-            mock_detector.detect_objects_stereo = Mock(return_value=results)
-
-            with patch_yolo_detector(mock_detector):
-                result = detect_field("Robot1", "A")
-    """
+    # YOLODetector is imported inside functions, so we need the patch() context manager.
+    # Usage:
+    #   with patch_yolo_detector(mock_detector):
+    #       result = detect_field("Robot1", "A")
     from unittest.mock import patch
 
     def _create_patch(mock_detector_instance):
-        """Create patch context manager that returns the mock detector."""
         return patch(
             "operations.FieldOperations.YOLODetector",
             return_value=mock_detector_instance,
@@ -360,9 +309,6 @@ def temp_output_dir(tmp_path):
     output_dir = tmp_path / "test_output"
     output_dir.mkdir(exist_ok=True)
     return output_dir
-
-
-# RAG System Fixtures
 
 
 @pytest.fixture
@@ -414,11 +360,6 @@ def temp_vector_store_path(tmp_path):
 
 @pytest.fixture
 def cleanup_rag_singletons():
-    """
-    Fixture to clean up RAG system singleton instances between tests
-
-    Yields control to the test, then resets singletons
-    """
     yield
 
     # Reset RAG singleton instances if they exist
@@ -432,11 +373,6 @@ def cleanup_rag_singletons():
 
 @pytest.fixture
 def clean_registry():
-    """
-    Fixture to clean up operation registry singleton between tests
-
-    Cleans before yielding to ensure clean state, then again after
-    """
 
     # Clean up BEFORE the test runs
     def _cleanup():
@@ -450,9 +386,6 @@ def clean_registry():
     _cleanup()  # Clean before test
     yield
     _cleanup()  # Clean after test
-
-
-# Phase 2/3: Spatial Reasoning and Verification Fixtures
 
 
 @pytest.fixture
@@ -475,7 +408,6 @@ def mock_world_state():
 
 @pytest.fixture
 def sample_robot_positions():
-    """Sample robot base positions for testing"""
     return {
         "Robot1": (-0.3, 0.0, 0.0),
         "Robot2": (0.3, 0.0, 0.0),
@@ -484,7 +416,6 @@ def sample_robot_positions():
 
 @pytest.fixture
 def sample_operation_with_conditions():
-    """BasicOperation with preconditions and postconditions for verification testing"""
     from operations.Base import OperationCategory, OperationComplexity
 
     op = Mock()
@@ -502,14 +433,7 @@ def sample_operation_with_conditions():
 
 @pytest.fixture(autouse=True)
 def cleanup_world_state():
-    """
-    Clean up WorldState singleton between tests
-
-    Resets singleton BEFORE test (clean state) and AFTER test (cleanup)
-
-    NOTE: autouse=True means this runs automatically for EVERY test,
-    preventing state pollution between test files.
-    """
+    # autouse=True: runs for every test to prevent state pollution between files.
     _reset_singleton("operations.WorldState", "WorldState")
     yield  # Test runs with clean state
     _reset_singleton("operations.WorldState", "WorldState")
@@ -517,7 +441,6 @@ def cleanup_world_state():
 
 @pytest.fixture
 def mock_world_state_with_objects():
-    """Mock WorldState with sample objects for spatial operations testing"""
     world_state = Mock()
 
     # Sample objects
@@ -539,7 +462,6 @@ def mock_world_state_with_objects():
 
 @pytest.fixture
 def mock_world_state_multi_robot():
-    """Mock WorldState with multiple robots for coordination testing"""
     from operations.WorldState import RobotState
 
     world_state = Mock()
@@ -579,27 +501,18 @@ def mock_world_state_multi_robot():
 
 @pytest.fixture
 def sample_navigation_params():
-    """Sample navigation operation parameters"""
     return {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}
 
 
 @pytest.fixture
 def sample_manipulation_params():
-    """Sample manipulation operation parameters"""
     return {"robot_id": "Robot1", "object_id": "cube_01", "action": "grasp"}
 
 
 @pytest.fixture
 def disable_yolo_detection():
-    """
-    Temporarily disable YOLO detection for HSV-based tests
-
-    This fixture is used for tests that rely on HSV color detection
-    with synthetic test images (pure color squares), which YOLO
-    may not detect well since it was trained on realistic cubes.
-
-    Yields control to test, then restores original USE_YOLO setting
-    """
+    # HSV tests use synthetic pure-color squares that YOLO (trained on realistic cubes)
+    # doesn't detect reliably — disable it so the HSV path runs instead.
     import config.Vision as vision_cfg
 
     original_use_yolo = vision_cfg.USE_YOLO
@@ -608,19 +521,8 @@ def disable_yolo_detection():
     vision_cfg.USE_YOLO = original_use_yolo
 
 
-# SYNCHRONIZATION OPERATION FIXTURES
-
-
 @pytest.fixture
 def cleanup_event_bus():
-    """
-    Clean EventBus singleton between tests
-
-    Ensures clean state for each test by resetting all events
-    and waiter counts after test completion.
-
-    Yields control to test, then resets EventBus.
-    """
     yield
     try:
         from operations.SyncOperations import EventBus
@@ -634,7 +536,6 @@ def cleanup_event_bus():
 
 @pytest.fixture
 def event_bus(cleanup_event_bus):
-    """Provide a clean EventBus instance"""
     from operations.SyncOperations import EventBus
 
     bus = EventBus()
@@ -646,7 +547,6 @@ def event_bus(cleanup_event_bus):
 def timing_helper():
 
     def verify_timing(actual_ms, expected_ms, tolerance_percent=10):
-        """Verify actual timing is within tolerance of expected"""
         tolerance = expected_ms * (tolerance_percent / 100.0)
         return abs(actual_ms - expected_ms) <= tolerance
 
@@ -655,11 +555,6 @@ def timing_helper():
 
 @pytest.fixture
 def thread_barrier():
-    """
-    Synchronization barrier for concurrent tests
-
-    Ensures all threads start simultaneously to test race conditions.
-    """
     import threading
 
     def create_barrier(num_threads):
@@ -670,14 +565,12 @@ def thread_barrier():
 
 @pytest.fixture
 def thread_error_collector():
-    """Thread-safe error collection for concurrent tests"""
     import threading
 
     errors = []
     lock = threading.Lock()
 
     def add_error(error):
-        """Thread-safe error addition"""
         with lock:
             errors.append(error)
 
@@ -689,7 +582,6 @@ def async_executor():
     import threading
 
     def execute_async(func, *args, **kwargs):
-        """Execute function in background daemon thread"""
         thread = threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True)
         thread.start()
         return thread
@@ -697,12 +589,8 @@ def async_executor():
     return execute_async
 
 
-# Spatial Operations Fixtures
-
-
 @pytest.fixture
 def mock_move(monkeypatch):
-    """Mock move_to_coordinate function for spatial operations testing"""
     from operations.Base import OperationResult
 
     def _mock_move(**kwargs):
@@ -721,7 +609,6 @@ def mock_move(monkeypatch):
 
 @pytest.fixture
 def mock_get_ws(monkeypatch):
-    """Mock get_world_state function for spatial operations testing"""
     mock = Mock()
     # Auto-patch into SpatialOperations module
     monkeypatch.setattr("operations.SpatialOperations.get_world_state", mock)

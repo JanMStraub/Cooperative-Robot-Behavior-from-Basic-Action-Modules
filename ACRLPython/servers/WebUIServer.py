@@ -216,6 +216,18 @@ os.makedirs(WEBUI_DIR, exist_ok=True)
 BENCHMARK_RESULTS_DIR = os.path.join(BASE_DIR, "benchmark_results")
 os.makedirs(BENCHMARK_RESULTS_DIR, exist_ok=True)
 
+
+def _iter_benchmark_files():
+    """Yield (file_path, relative_path) for all benchmark JSON files, walking subfolders."""
+    for root, dirs, files in os.walk(BENCHMARK_RESULTS_DIR):
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        for file in sorted(files):
+            if file.startswith("benchmark") and file.endswith(".json"):
+                file_path = os.path.join(root, file)
+                rel = os.path.relpath(file_path, BENCHMARK_RESULTS_DIR)
+                yield file_path, rel
+
+
 # Mount static files — only when fastapi is available
 if _FASTAPI_AVAILABLE:
     app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
@@ -314,27 +326,26 @@ async def api_get_benchmarks():
     try:
         results = []
         if os.path.exists(BENCHMARK_RESULTS_DIR):
-            for file in os.listdir(BENCHMARK_RESULTS_DIR):
-                if file.startswith("benchmark") and file.endswith(".json"):
-                    file_path = os.path.join(BENCHMARK_RESULTS_DIR, file)
-                    # Quickly parse just the top level metadata without the huge steps array if possible
-                    # but since files are small, we can just load to get metadata
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                        results.append(
-                            {
-                                "filename": file,
-                                "benchmark_id": data.get("benchmark_id"),
-                                "benchmark_name": data.get("benchmark_name"),
-                                "run_id": data.get("run_id"),
-                                "success": data.get("success"),
-                                "total_duration_ms": data.get("total_duration_ms"),
-                                "success_rate": data.get("success_rate"),
-                                "ops_executed": data.get("ops_executed"),
-                                "ops_succeeded": data.get("ops_succeeded"),
-                                "mtime": os.path.getmtime(file_path),
-                            }
-                        )
+            for file_path, rel in _iter_benchmark_files():
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                folder = os.path.dirname(rel)
+                results.append(
+                    {
+                        "filepath": rel,
+                        "filename": os.path.basename(rel),
+                        "folder": folder,
+                        "benchmark_id": data.get("benchmark_id"),
+                        "benchmark_name": data.get("benchmark_name"),
+                        "run_id": data.get("run_id"),
+                        "success": data.get("success"),
+                        "total_duration_ms": data.get("total_duration_ms"),
+                        "success_rate": data.get("success_rate"),
+                        "ops_executed": data.get("ops_executed"),
+                        "ops_succeeded": data.get("ops_succeeded"),
+                        "mtime": os.path.getmtime(file_path),
+                    }
+                )
         # Sort by mtime descending
         results.sort(key=lambda x: x["mtime"], reverse=True)
         return {"success": True, "files": results}
@@ -352,14 +363,12 @@ async def api_get_benchmarks_aggregate():
     try:
         groups: dict = defaultdict(list)
         if os.path.exists(BENCHMARK_RESULTS_DIR):
-            for file in os.listdir(BENCHMARK_RESULTS_DIR):
-                if file.startswith("benchmark") and file.endswith(".json"):
-                    file_path = os.path.join(BENCHMARK_RESULTS_DIR, file)
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    bid = data.get("benchmark_id")
-                    if bid is not None:
-                        groups[bid].append(data)
+            for file_path, _rel in _iter_benchmark_files():
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                bid = data.get("benchmark_id")
+                if bid is not None:
+                    groups[bid].append(data)
 
         result = {}
         for bid, runs in sorted(groups.items()):
@@ -447,41 +456,43 @@ async def api_get_benchmarks_aggregate():
         return {"success": False, "error": str(e)}
 
 
-@app.get("/api/benchmarks/export/{filename}")
-async def api_export_benchmark(filename: str):
+@app.get("/api/benchmarks/export/{filepath:path}")
+async def api_export_benchmark(filepath: str):
     """Download a benchmark JSON result file as an attachment."""
     try:
         from fastapi.responses import FileResponse
 
-        clean_name = os.path.basename(filename)
-        file_path = os.path.join(BENCHMARK_RESULTS_DIR, clean_name)
-        if not os.path.exists(file_path):
+        base = os.path.abspath(BENCHMARK_RESULTS_DIR)
+        abs_path = os.path.abspath(os.path.join(BENCHMARK_RESULTS_DIR, filepath))
+        if not abs_path.startswith(base + os.sep) and abs_path != base:
+            return {"success": False, "error": "Invalid path"}
+        if not os.path.exists(abs_path):
             return {"success": False, "error": "File not found"}
+        clean_name = os.path.basename(abs_path)
         return FileResponse(
-            file_path,
+            abs_path,
             media_type="application/json",
             headers={"Content-Disposition": f'attachment; filename="{clean_name}"'},
         )
     except Exception as e:
-        logger.error(f"Error exporting benchmark {filename}: {e}")
+        logger.error(f"Error exporting benchmark {filepath}: {e}")
         return {"success": False, "error": str(e)}
 
 
-@app.get("/api/benchmarks/{filename}")
-async def api_get_benchmark_detail(filename: str):
+@app.get("/api/benchmarks/{filepath:path}")
+async def api_get_benchmark_detail(filepath: str):
     try:
-        # Prevent directory traversal
-        clean_name = os.path.basename(filename)
-        file_path = os.path.join(BENCHMARK_RESULTS_DIR, clean_name)
-
-        if not os.path.exists(file_path):
+        base = os.path.abspath(BENCHMARK_RESULTS_DIR)
+        abs_path = os.path.abspath(os.path.join(BENCHMARK_RESULTS_DIR, filepath))
+        if not abs_path.startswith(base + os.sep) and abs_path != base:
+            return {"success": False, "error": "Invalid path"}
+        if not os.path.exists(abs_path):
             return {"success": False, "error": "File not found"}
-
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(abs_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             return {"success": True, "data": data}
     except Exception as e:
-        logger.error(f"Error reading benchmark file {filename}: {e}")
+        logger.error(f"Error reading benchmark file {filepath}: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -943,10 +954,7 @@ def broadcast_stereo_pointcloud(points: Any, colors: Any, scene_span: float = 1.
     """
     Broadcasts a stereo point cloud to connected Web UI clients.
 
-    Args:
-        points: (N, 3) float32 array in Unity LH world frame.
-        colors: (N, 3) uint8 array of RGB colours.
-        scene_span: approximate scene diameter in metres, used for point sizing.
+    points: (N,3) float32 Unity world, colors: (N,3) uint8 RGB, scene_span: scene diameter in metres.
     """
     if not manager.active_connections or not _main_loop:
         return
