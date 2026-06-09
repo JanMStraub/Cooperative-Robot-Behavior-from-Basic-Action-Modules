@@ -6,19 +6,6 @@ Uses the SequenceServer "EXEC:" prefix to bypass LLM parsing and feed operations
 directly into SequenceExecutor. Each step blocks until Unity confirms completion
 before the next step begins.
 
-Flat step sequence (each is an independent SE operation):
-  1. Robot1: grasp_object
-  2. Robot1: return_to_start_position  (deterministic joint config)
-  3. Robot1: move_to_coordinate        (→ HANDOFF_PRESENTATION_POSITION)
-  4. Robot1: adjust_end_effector_orientation(pitch=0,yaw=0,roll=0)  (lock wrist)
-  5a. Robot1: signal(r1_at_handoff)
-  5b. Robot2: wait_for_signal(r1_at_handoff)   [parallel with 5a]
-  6. Robot2: detect_object_stereo      (re-detect at presentation pos)
-  7a. Robot2: receive_handoff          (pre-approach + orient + slide in + close gripper)
-                                        emits r2_gripped after close
-  7b. Robot1: wait_for_signal(r2_gripped) + release_object  [parallel with 7a]
-  8. Robot1: return_to_start_position
-
 Usage:
     python tools/SendHandoff.py
     python tools/SendHandoff.py --object red_bar --grasper Robot1 --receiver Robot2

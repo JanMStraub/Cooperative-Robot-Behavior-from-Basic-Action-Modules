@@ -1,4 +1,3 @@
-import pytest
 from operations.WorldState import WorldState, RobotState
 
 

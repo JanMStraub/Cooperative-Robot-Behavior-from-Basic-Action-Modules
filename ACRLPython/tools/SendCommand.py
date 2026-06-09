@@ -3,8 +3,7 @@
 SendCommand.py — Send commands directly to Unity without going through the LLM.
 
 Connects to the SequenceServer (port 5008) and sends pre-parsed operations using
-the "EXEC:<json>" prefix, which bypasses CommandParser/LLM entirely and feeds the
-command list straight into SequenceExecutor → Unity. Response and completion
+the "EXEC:<json>" prefix, which bypasses CommandParser/LLM entirely and feeds the command list straight into SequenceExecutor → Unity. Response and completion
 tracking work exactly as they do for normal Unity-initiated commands.
 
 Usage:

@@ -7,21 +7,6 @@ This script runs INSIDE the Docker container as a ROS 2 node.
 It connects to MoveIt 2 move_group for PLANNING ONLY, then publishes
 the planned trajectory directly to Unity via a ROS topic.
 
-Architecture (Plan-Only / "Bypass" approach):
-    MoveIt's move_group expects a FollowJointTrajectory action server
-    for execution (normally provided by ros2_control). Since Unity is
-    our physics executor (not a real robot), we skip MoveIt's execution
-    entirely:
-
-    1. Python backend requests a plan via TCP:5020
-    2. This node asks MoveIt to plan (planning_only=True)
-    3. MoveIt returns a RobotTrajectory
-    4. This node extracts the JointTrajectory and publishes it
-       to /arm_controller/joint_trajectory
-    5. Unity's ROSTrajectorySubscriber receives and executes it
-
-    This avoids needing ros2_control or a fake hardware interface.
-
 Protocol:
     Request:  JSON terminated by newline
     Response: JSON terminated by newline

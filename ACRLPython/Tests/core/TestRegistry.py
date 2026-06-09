@@ -1,7 +1,7 @@
 import pytest
 import threading
 import time
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 
 from operations.Registry import OperationRegistry, get_global_registry
 from operations.Base import (

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import Mock, patch
 
 
 class TestPromptBuilderHint:

@@ -1,4 +1,3 @@
-import pytest
 import threading
 import time
 from unittest.mock import Mock, patch, MagicMock
@@ -123,7 +122,7 @@ class TestAutoRTHandler:
         mock_candidates = [task_valid1, task_invalid, task_valid2]
         mock_orchestrator.task_generator.generate_tasks.return_value = mock_candidates
 
-        def mock_evaluate(task, scene):
+        def mock_evaluate(task, _scene):
             verdict = MagicMock()
             verdict.warnings = []
             verdict.approved = task.description != "Invalid"
@@ -349,7 +348,7 @@ class TestAutoRTHandler:
         callback_called = threading.Event()
         received_tasks = []
 
-        def mock_callback(response, request_id=0):  # noqa: ARG001
+        def mock_callback(response, request_id=0):
             received_tasks.append(response)
             callback_called.set()
 

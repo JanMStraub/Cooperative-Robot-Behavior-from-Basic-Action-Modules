@@ -1,9 +1,8 @@
-import pytest
 import socket
 import struct
 import threading
 import time
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 from core.UnityProtocol import UnityProtocol, MessageType
 from core.TCPServerBase import ServerConfig

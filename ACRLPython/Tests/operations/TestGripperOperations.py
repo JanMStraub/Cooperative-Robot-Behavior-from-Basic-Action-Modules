@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 from operations.GripperOperations import (
     control_gripper,

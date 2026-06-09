@@ -1,5 +1,3 @@
-import pytest
-
 from rag.ConfidenceScorer import (
     get_confidence_level,
     calculate_parameter_match_score,

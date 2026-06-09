@@ -1,4 +1,3 @@
-import pytest
 import numpy as np
 
 from vision.DepthEstimator import estimate_depth_from_bbox

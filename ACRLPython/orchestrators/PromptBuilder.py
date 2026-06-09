@@ -235,7 +235,9 @@ _RE_SYNC = re.compile(
 _RE_DETECT_FIELD = re.compile(
     r"\b(detect\s+field|field[_\s]label|field\s+[A-I])\b", re.IGNORECASE
 )
-_RE_GRASP = re.compile(r"\b(pick\w*|grab\w*|grasp\w*|grip(?!per)\w*|hold\w*)\b", re.IGNORECASE)
+_RE_GRASP = re.compile(
+    r"\b(pick\w*|grab\w*|grasp\w*|grip(?!per)\w*|hold\w*)\b", re.IGNORECASE
+)
 _RE_PLACE = re.compile(r"\b(place|deposit|put\s+down|drop)\b", re.IGNORECASE)
 _RE_ROBOT1 = re.compile(r"\bRobot1\b")
 _RE_ROBOT2 = re.compile(r"\bRobot2\b")

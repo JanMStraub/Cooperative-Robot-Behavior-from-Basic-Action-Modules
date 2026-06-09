@@ -19,17 +19,13 @@ from .GraspConfig import GraspConfig
 try:
     from utils.QuaternionMath import quaternion_angle
     from utils.VectorMath import (
-        vector_normalize,
         vector_dot,
-        vector_cross,
         vector_distance,
     )
 except ImportError:
     from ..utils.QuaternionMath import quaternion_angle
     from ..utils.VectorMath import (
-        vector_normalize,
         vector_dot,
-        vector_cross,
         vector_distance,
     )
 

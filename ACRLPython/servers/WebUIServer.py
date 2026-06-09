@@ -12,7 +12,6 @@ import json
 import asyncio
 import logging
 import threading
-from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Any, List, Optional
 
 # Shared YOLO detector instance — set via set_shared_detector() to avoid loading

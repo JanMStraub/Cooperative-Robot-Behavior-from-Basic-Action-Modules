@@ -2,7 +2,6 @@ import os
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import pytest
 from knowledge_graph.Core import KnowledgeGraph
 from knowledge_graph.Schema import RobotNode
 

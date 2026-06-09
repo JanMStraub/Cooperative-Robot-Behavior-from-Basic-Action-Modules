@@ -23,23 +23,8 @@ def _is_unity_available() -> bool:
         return False
 
 
-def _is_ros_available() -> bool:
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1.0)
-        result = sock.connect_ex(("localhost", 5020))
-        sock.close()
-        return result == 0
-    except Exception:
-        return False
-
-
 _UNITY_AVAILABLE = _is_unity_available()
-_ROS_AVAILABLE = _is_ros_available()
 _SKIP_REASON = "Unity not running. Start Unity and backend servers to run these tests."
-_SKIP_REASON_ROS = (
-    "ROS/MoveIt not running. Start Docker with MoveIt to run these tests."
-)
 
 
 @pytest.mark.integration

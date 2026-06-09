@@ -13,6 +13,8 @@ Usage:
 
 from __future__ import annotations
 
+from typing import Any
+
 import argparse
 import socket
 import sys
@@ -80,7 +82,7 @@ def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig
     Instantiate the appropriate config type for a given benchmark.
     """
     live = not args.dry_run and benchmark_id not in _PARSE_ONLY_BENCHMARKS
-    kwargs = dict(
+    kwargs: dict[str, Any] = dict(
         dry_run=args.dry_run or benchmark_id in _PARSE_ONLY_BENCHMARKS,
         task_count=args.task_count,
         reflexion=not args.no_reflexion,

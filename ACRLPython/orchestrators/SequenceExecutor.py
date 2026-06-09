@@ -860,16 +860,24 @@ class SequenceExecutor:
     ) -> tuple[List[Optional[Dict[str, Any]]], int]:
         from collections import defaultdict
 
-        # Group commands by parallel_group number
+        # Group commands by parallel_group.  Sequential commands (no parallel_group)
+        # use a string key "_seq_<i>" that cannot collide with user-supplied integer
+        # group IDs (e.g. parallel_group=1 would otherwise collide with the command
+        # at index 1, merging them into the same concurrent batch).
+        # Execution order is determined by each group's first command index, not by
+        # the group ID value, so explicit group IDs (1, 2, …) slot in at the correct
+        # position in the original command list.
         groups = defaultdict(list)
+        group_first_seen: Dict[Any, int] = {}
         for i, cmd in enumerate(commands):
-            group_num = cmd.get(
-                "parallel_group", i
-            )  # Default: each cmd is its own group
+            raw_pg = cmd.get("parallel_group")
+            group_num = raw_pg if raw_pg is not None else f"_seq_{i}"
             groups[group_num].append((i, cmd))
+            if group_num not in group_first_seen:
+                group_first_seen[group_num] = i
 
-        # Sort groups by group number
-        sorted_groups = sorted(groups.items())
+        # Sort by position of each group's first command (preserves original sequence order)
+        sorted_groups = sorted(groups.items(), key=lambda kv: group_first_seen[kv[0]])
 
         results: List[Optional[Dict[str, Any]]] = [None] * len(
             commands
@@ -898,6 +906,51 @@ class SequenceExecutor:
                 # Parameter injection and resolution (thread-safe for reads)
                 params = self._auto_inject_parameters(operation, params)
                 params = self._resolve_variables(params)
+
+                # Guard: fail early if any param is still an unresolved $var after
+                # resolution.  VariableResolver returns the raw "$var.field" string on a
+                # miss, which causes confusing downstream errors (e.g. WorldState lookup
+                # for the literal key "$handoff_target.color").
+                def _parallel_has_unresolved(v):
+                    if isinstance(v, str) and v.startswith("$"):
+                        return v.lstrip("$").split(".")[0] not in self._variables
+                    if isinstance(v, list):
+                        return any(
+                            isinstance(e, str)
+                            and e.startswith("$")
+                            and e.lstrip("$").split(".")[0] not in self._variables
+                            for e in v
+                        )
+                    return False
+
+                _unresolved = [
+                    f"{_k}={_v}" for _k, _v in params.items() if _parallel_has_unresolved(_v)
+                ]
+                if _unresolved:
+                    _unres_str = ", ".join(_unresolved)
+                    logger.error(
+                        "[Group %d] Command %d (%s): unresolved variable(s): %s — aborting",
+                        group_num,
+                        index,
+                        operation,
+                        _unres_str,
+                    )
+                    with result_lock:
+                        thread_results[index] = (
+                            {
+                                "index": index,
+                                "operation": operation,
+                                "success": False,
+                                "result": None,
+                                "error": f"Unresolved variable(s): {_unres_str}",
+                                "error_code": "UNRESOLVED_VARIABLE",
+                                "duration_ms": 0,
+                                "parallel_group": group_num,
+                            },
+                            {"success": False, "error": f"Unresolved variable(s): {_unres_str}", "error_code": "UNRESOLVED_VARIABLE"},
+                            capture_var,
+                        )
+                    return
 
                 logger.info(f"[Group {group_num}] Executing: {operation}")
                 self._notify_progress(index, len(commands), operation, "executing")

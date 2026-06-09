@@ -6,7 +6,6 @@ Centralizes JSON extraction logic used across CommandParser, RobotLLMAgent,
 and RobotConstitution.  The canonical implementation follows CommandParser's
 3-stage approach (direct → markdown block → bare regex), with JS-style comment
 stripping on the code-block and bare-regex paths to handle LLMs that emit
-// line comments inside JSON.
 """
 
 import json

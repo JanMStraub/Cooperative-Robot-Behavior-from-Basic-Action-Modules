@@ -11,7 +11,6 @@ from core.LoggingSetup import setup_logging
 from ..Base import OperationResult
 from ._helpers import (
     _execute_grasp_with_follow_target,
-    _vec_to_pos,
     _yaw_from_world_state_or_robot,
 )
 

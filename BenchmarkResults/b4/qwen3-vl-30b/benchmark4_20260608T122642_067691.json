@@ -1,0 +1,69 @@
+{
+  "benchmark_id": 4,
+  "benchmark_name": "Pick and Place",
+  "run_id": "20260608T122642_067691",
+  "config_snapshot": {
+    "robot_id": "Robot1",
+    "timeout_per_step_s": 90.0,
+    "max_retries": 1,
+    "dry_run": false,
+    "task_count": 5,
+    "reflexion": true,
+    "check_completion": true,
+    "use_rag": true,
+    "reflexion_enabled": true,
+    "use_knowledge_graph": true,
+    "use_vgn": true,
+    "use_ros_movement": true,
+    "execution_mode": "live"
+  },
+  "success": false,
+  "total_duration_ms": 2.331972122192383,
+  "steps": [
+    {
+      "index": 0,
+      "operation": "control_gripper",
+      "success": true,
+      "duration_ms": 2.106904983520508,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    }
+  ],
+  "ops_executed": 1,
+  "ops_succeeded": 1,
+  "success_rate": 1.0,
+  "avg_step_duration_ms": 2.331972122192383,
+  "retry_count": 0,
+  "first_failure_step": null,
+  "chain_metrics": null,
+  "hallucinated_ops": 0,
+  "reflexion_recoveries": 0,
+  "negotiation_rounds": 0,
+  "ablation": null,
+  "ablation_baseline": null,
+  "feature_flags": {
+    "use_rag": true,
+    "use_vgn": true,
+    "use_knowledge_graph": true,
+    "use_ros_movement": true,
+    "reflexion_enabled": true,
+    "dry_run": false,
+    "use_negotiation": false
+  },
+  "parsed_plan": [
+    "control_gripper"
+  ],
+  "per_op_stats": {
+    "control_gripper": {
+      "count": 1,
+      "fail_count": 0,
+      "avg_duration_ms": 2.1
+    },
+    "_chain_match": false
+  },
+  "execution_mode": "live",
+  "task_breakdown": []
+}

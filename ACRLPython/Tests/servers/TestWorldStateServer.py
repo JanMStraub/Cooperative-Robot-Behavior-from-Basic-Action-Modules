@@ -21,6 +21,7 @@ def server_setup(request):
 
 
 class TestWorldStateServer:
+    server: WorldStateServer
 
     def setup_method(self):
         self.client = None

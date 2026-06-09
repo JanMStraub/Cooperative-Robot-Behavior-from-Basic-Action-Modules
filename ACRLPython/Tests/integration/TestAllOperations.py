@@ -1,4 +1,3 @@
-import os
 import threading
 import time
 from typing import Any, Dict
@@ -8,7 +7,6 @@ import pytest
 from BackendClient import (  # type: ignore[import]
     BackendClient,
     backend_available,
-    port_open,
     reset_simulation,
 )
 

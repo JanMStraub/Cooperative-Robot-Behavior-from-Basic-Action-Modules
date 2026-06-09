@@ -169,10 +169,6 @@ def test_execution_mode_live():
 
 def test_live_flag_parsed():
     import argparse
-    import sys
-
-    # Re-import cleanly
-    from benchmarks import Run as run_mod  # type: ignore[attr-defined]
 
     # Simulate parse_args call by creating a minimal parser copy
     parser = argparse.ArgumentParser()
@@ -364,7 +360,7 @@ def test_parse_steps_populates_retry_count():
     from benchmarks.Runner import BenchmarkRunner
 
     runner = BenchmarkRunner()
-    raw_results = [
+    raw_results: list[dict | None] = [
         {
             "index": 0,
             "operation": "move_to_coordinate",
