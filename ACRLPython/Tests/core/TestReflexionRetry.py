@@ -134,6 +134,7 @@ class TestSequenceExecutorReflexion:
         with patch("orchestrators.CommandParser.get_command_parser") as mock_get_parser:
             mock_parser = Mock()
             mock_parser.parse_with_hint.return_value = retry_parse
+            mock_parser.generate_reflection = Mock(return_value="")
             mock_get_parser.return_value = mock_parser
 
             result = executor.execute_sequence([self._make_cmd()])
@@ -161,6 +162,7 @@ class TestSequenceExecutorReflexion:
         with patch("orchestrators.CommandParser.get_command_parser") as mock_get_parser:
             mock_parser = Mock()
             mock_parser.parse_with_hint.return_value = retry_parse
+            mock_parser.generate_reflection = Mock(return_value="")
             mock_get_parser.return_value = mock_parser
 
             from config.Servers import REFLEXION_MAX_RETRIES
@@ -235,6 +237,7 @@ class TestSequenceExecutorReflexion:
                 return retry_parse
 
             mock_parser.parse_with_hint.side_effect = capture_hint
+            mock_parser.generate_reflection = Mock(return_value="")
             mock_get_parser.return_value = mock_parser
 
             with patch(
@@ -290,6 +293,7 @@ class TestSequenceExecutorReflexion:
         with patch("orchestrators.CommandParser.get_command_parser") as mock_get_parser:
             mock_parser = Mock()
             mock_parser.parse_with_hint.return_value = retry_parse
+            mock_parser.generate_reflection = Mock(return_value="")
             mock_get_parser.return_value = mock_parser
 
             with patch(
@@ -421,3 +425,211 @@ class TestInferCaptureVars:
         ]
         result = executor._infer_capture_vars(commands)
         assert result[0].get("capture_var") is None
+
+
+class TestGenerateReflection:
+    @pytest.fixture
+    def parser(self):
+        from orchestrators.CommandParser import CommandParser
+
+        return CommandParser(use_rag=False, use_cache=False)
+
+    def _mock_post(self, parser, response_body: dict, status_code: int = 200):
+        mock_resp = Mock()
+        mock_resp.status_code = status_code
+        mock_resp.json.return_value = {
+            "choices": [{"message": {"content": str(response_body)}}]
+        }
+        # Make content return JSON string so _extract_json_util can parse it
+        import json
+
+        mock_resp.json.return_value = {
+            "choices": [{"message": {"content": json.dumps(response_body)}}]
+        }
+        parser._session.post = Mock(return_value=mock_resp)
+        return mock_resp
+
+    def test_returns_combined_analysis_and_suggestion(self, parser):
+        """generate_reflection returns analysis + suggestion joined."""
+        self._mock_post(
+            parser,
+            {"analysis": "bad coords", "suggestion": "try smaller x value"},
+        )
+        result = parser.generate_reflection(
+            "move to (0.5, 0.0, 0.4)", "move_to_coordinate", "IK failed", {}, "Robot1"
+        )
+        assert "bad coords" in result
+        assert "try smaller x value" in result
+
+    def test_returns_empty_on_timeout(self, parser):
+        """generate_reflection returns empty string when LLM times out."""
+        import requests as req
+
+        parser._session.post = Mock(side_effect=req.exceptions.Timeout)
+        result = parser.generate_reflection(
+            "move to (0.5, 0.0, 0.4)", "move_to_coordinate", "IK failed", {}, "Robot1"
+        )
+        assert result == ""
+
+    def test_returns_empty_on_bad_status(self, parser):
+        """generate_reflection returns empty string on non-200 response."""
+        mock_resp = Mock()
+        mock_resp.status_code = 500
+        parser._session.post = Mock(return_value=mock_resp)
+        result = parser.generate_reflection(
+            "move to (0.5, 0.0, 0.4)", "move_to_coordinate", "IK failed", {}, "Robot1"
+        )
+        assert result == ""
+
+    def test_falls_back_to_raw_content_when_no_json_keys(self, parser):
+        """generate_reflection uses raw content (truncated) if JSON has no analysis/suggestion."""
+        self._mock_post(parser, {"other_key": "some value"})
+        result = parser.generate_reflection(
+            "move to (0.1, 0.1, 0.1)", "move_to_coordinate", "error", {}, "Robot1"
+        )
+        # Should not raise; result is either "" or truncated raw content
+        assert isinstance(result, str)
+
+
+class TestReflexionHintAccumulation:
+    @pytest.fixture
+    def executor(self):
+        from orchestrators.SequenceExecutor import SequenceExecutor
+
+        ex = SequenceExecutor()
+        ex.default_timeout = 5.0
+        return ex
+
+    def _make_cmd(self, operation="move_to_coordinate", robot_id="Robot1"):
+        return {
+            "operation": operation,
+            "params": {"robot_id": robot_id},
+            "_original_text": "move to (0.5, 0.0, 0.4)",
+        }
+
+    def test_hint_accumulates_attempt_history_on_second_retry(self, executor):
+        """Retry 2's hint includes a record of retry 1's failure."""
+        always_fail = {
+            "success": False,
+            "error": "IK solver failed",
+            "recovery_suggestions": [],
+        }
+        executor._execute_single_command = Mock(return_value=always_fail)
+
+        captured_hints = []
+
+        def capture_hint(*args, **kwargs):
+            captured_hints.append(kwargs.get("hint", ""))
+            return {
+                "success": True,
+                "commands": [
+                    {
+                        "operation": "move_to_coordinate",
+                        "params": {"robot_id": "Robot1"},
+                    }
+                ],
+            }
+
+        with patch("orchestrators.CommandParser.get_command_parser") as mock_get_parser:
+            mock_parser = Mock()
+            mock_parser.parse_with_hint.side_effect = capture_hint
+            mock_parser.generate_reflection = Mock(return_value="")
+            mock_get_parser.return_value = mock_parser
+
+            with patch(
+                "orchestrators.SequenceExecutor.get_world_state", return_value=None
+            ):
+                with patch(
+                    "orchestrators.SequenceExecutor.REFLEXION_SELF_REFLECT_ENABLED",
+                    False,
+                ):
+                    executor.execute_sequence([self._make_cmd()])
+
+        assert len(captured_hints) >= 2, "Expected at least 2 parse_with_hint calls"
+        # Second retry's hint must mention "Retry 1"
+        assert "Retry 1" in captured_hints[1]
+        assert "IK solver failed" in captured_hints[1]
+
+    def test_reflection_text_prepended_to_hint(self, executor):
+        """When generate_reflection returns text, it appears before the procedural hint."""
+        fail_result = {
+            "success": False,
+            "error": "IK failed",
+            "recovery_suggestions": [],
+        }
+        ok_result = {"success": True, "result": {}}
+        executor._execute_single_command = Mock(side_effect=[fail_result, ok_result])
+
+        captured_hints = []
+
+        def capture_hint(*args, **kwargs):
+            captured_hints.append(kwargs.get("hint", ""))
+            return {
+                "success": True,
+                "commands": [
+                    {
+                        "operation": "move_to_coordinate",
+                        "params": {"robot_id": "Robot1"},
+                    }
+                ],
+            }
+
+        with patch("orchestrators.CommandParser.get_command_parser") as mock_get_parser:
+            mock_parser = Mock()
+            mock_parser.parse_with_hint.side_effect = capture_hint
+            mock_parser.generate_reflection = Mock(
+                return_value="Arm exceeded workspace boundary. Reduce x by 0.1."
+            )
+            mock_get_parser.return_value = mock_parser
+
+            with patch(
+                "orchestrators.SequenceExecutor.get_world_state", return_value=None
+            ):
+                with patch(
+                    "orchestrators.SequenceExecutor.REFLEXION_SELF_REFLECT_ENABLED",
+                    True,
+                ):
+                    executor.execute_sequence([self._make_cmd()])
+
+        assert captured_hints, "parse_with_hint was never called"
+        assert "Arm exceeded workspace boundary" in captured_hints[0]
+        # Reflection text should come before the procedural context
+        refl_idx = captured_hints[0].index("Arm exceeded workspace boundary")
+        proc_idx = captured_hints[0].index("IK failed")
+        assert refl_idx < proc_idx
+
+    def test_retry_proceeds_when_reflection_returns_empty(self, executor):
+        """When generate_reflection returns '', retry still executes with procedural hint."""
+        fail_result = {
+            "success": False,
+            "error": "IK failed",
+            "recovery_suggestions": [],
+        }
+        ok_result = {"success": True, "result": {}}
+        executor._execute_single_command = Mock(side_effect=[fail_result, ok_result])
+
+        with patch("orchestrators.CommandParser.get_command_parser") as mock_get_parser:
+            mock_parser = Mock()
+            mock_parser.parse_with_hint.return_value = {
+                "success": True,
+                "commands": [
+                    {
+                        "operation": "move_to_coordinate",
+                        "params": {"robot_id": "Robot1"},
+                    }
+                ],
+            }
+            mock_parser.generate_reflection = Mock(return_value="")
+            mock_get_parser.return_value = mock_parser
+
+            with patch(
+                "orchestrators.SequenceExecutor.get_world_state", return_value=None
+            ):
+                with patch(
+                    "orchestrators.SequenceExecutor.REFLEXION_SELF_REFLECT_ENABLED",
+                    True,
+                ):
+                    result = executor.execute_sequence([self._make_cmd()])
+
+        assert result["success"] is True
+        mock_parser.parse_with_hint.assert_called_once()

@@ -21,6 +21,7 @@ try:
     from ..config.Servers import (
         REFLEXION_ENABLED,
         REFLEXION_MAX_RETRIES,
+        REFLEXION_SELF_REFLECT_ENABLED,
         GRASP_VERIFY_MIN_FORCE,
     )
 except ImportError:
@@ -31,6 +32,7 @@ except ImportError:
     from config.Servers import (
         REFLEXION_ENABLED,
         REFLEXION_MAX_RETRIES,
+        REFLEXION_SELF_REFLECT_ENABLED,
         GRASP_VERIFY_MIN_FORCE,
     )
 
@@ -520,7 +522,8 @@ class SequenceExecutor:
                             " OUTPUT: Return exactly ONE JSON command object"
                             ' {"operation": ..., "params": {...}} to replace the failed'
                             " operation. Do NOT return an array or a full plan."
-                            " Do NOT define capture_var — it will not execute."
+                            " Do NOT re-declare capture_var — the original capture"
+                            " binding is applied automatically if the retry succeeds."
                             " Only reference variables listed in 'Captured variables' above."
                         )
 
@@ -572,12 +575,41 @@ class SequenceExecutor:
 
                         parser = get_command_parser()
                         robot_id = params.get("robot_id", "Robot1")
+                        attempt_history: List[str] = []
+                        retry_op = operation
+                        retry_params = params
 
                         for retry_n in range(1, REFLEXION_MAX_RETRIES + 1):
                             logger.info(
                                 f"Reflexion retry {retry_n}/{REFLEXION_MAX_RETRIES} "
                                 f"for command {i + 1}: {operation}"
                             )
+
+                            # §19 — LLM self-reflection: ask model what went wrong
+                            # before re-parsing, prepend analysis to the procedural hint.
+                            if REFLEXION_SELF_REFLECT_ENABLED:
+                                _refl_op = retry_op
+                                _refl_params = retry_params
+                                logger.info(
+                                    "Reflexion: generating LLM self-reflection for retry %d",
+                                    retry_n,
+                                )
+                                reflection = parser.generate_reflection(
+                                    original_text,
+                                    _refl_op,
+                                    hint.split(".")[0],
+                                    _refl_params,
+                                    robot_id,
+                                )
+                                if reflection:
+                                    hint = reflection + "\n\n" + hint
+
+                            # §20 — prepend accumulated history so LLM sees prior attempts.
+                            if attempt_history:
+                                hint += "\n\nPrior attempt(s):\n" + "\n".join(
+                                    attempt_history
+                                )
+
                             retry_parse = parser.parse_with_hint(
                                 original_text,
                                 robot_id=robot_id,
@@ -700,6 +732,11 @@ class SequenceExecutor:
                             else:
                                 error_msg = retry_result.get("error", "Unknown error")
                                 recovery = retry_result.get("recovery_suggestions", [])
+                                # §20 — record what this retry tried before rebuilding hint.
+                                attempt_history.append(
+                                    f"Retry {retry_n}: operation={retry_op},"
+                                    f" error={error_msg}"
+                                )
                                 hint = f"Operation '{retry_op}' retry {retry_n} failed: {error_msg}."
                                 if recovery:
                                     hint += " Suggestions: " + "; ".join(recovery)
@@ -924,7 +961,9 @@ class SequenceExecutor:
                     return False
 
                 _unresolved = [
-                    f"{_k}={_v}" for _k, _v in params.items() if _parallel_has_unresolved(_v)
+                    f"{_k}={_v}"
+                    for _k, _v in params.items()
+                    if _parallel_has_unresolved(_v)
                 ]
                 if _unresolved:
                     _unres_str = ", ".join(_unresolved)
@@ -947,7 +986,11 @@ class SequenceExecutor:
                                 "duration_ms": 0,
                                 "parallel_group": group_num,
                             },
-                            {"success": False, "error": f"Unresolved variable(s): {_unres_str}", "error_code": "UNRESOLVED_VARIABLE"},
+                            {
+                                "success": False,
+                                "error": f"Unresolved variable(s): {_unres_str}",
+                                "error_code": "UNRESOLVED_VARIABLE",
+                            },
                             capture_var,
                         )
                     return

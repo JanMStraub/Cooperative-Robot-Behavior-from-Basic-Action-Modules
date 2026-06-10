@@ -1503,6 +1503,7 @@ function renderCompareKPIMatrix(runsData) {
           avgFmt: v => v.toFixed(0) + 'ms avg',
           higher: false },
         { key: 'hallucinated_ops',     label: 'Hallucinated Ops',     fmt: v => v, higher: false },
+        { key: 'reflexion_recoveries', label: 'Reflexion Recoveries', fmt: v => v ?? 0, higher: true  },
         { key: 'negotiation_rounds',   label: 'Negotiation Rounds',   fmt: v => v ?? 0, higher: false },
     ];
 

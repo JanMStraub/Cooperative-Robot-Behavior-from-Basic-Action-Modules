@@ -61,6 +61,9 @@ REFLEXION_ENABLED = os.environ.get("REFLEXION_ENABLED", "true").lower() in (
     "yes",
 )
 REFLEXION_MAX_RETRIES = int(os.environ.get("REFLEXION_MAX_RETRIES", "2"))
+REFLEXION_SELF_REFLECT_ENABLED = REFLEXION_ENABLED and os.environ.get(
+    "REFLEXION_SELF_REFLECT", "true"
+).lower() in ("true", "1", "yes")
 
 # Minimum contact force (N) to accept as a confirmed grasp when gripper_has_contact=False.
 # After Unity attaches the object, parent-child collision disables force callbacks, so

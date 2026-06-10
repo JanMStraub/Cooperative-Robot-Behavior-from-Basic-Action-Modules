@@ -1,30 +1,30 @@
 {
   "benchmark_id": 12,
   "benchmark_name": "Reflexion Ablation",
-  "run_id": "20260607T073830_a6c25a",
+  "run_id": "20260610T111450_b668a8",
   "config_snapshot": {
     "robot_id": "Robot1",
     "timeout_per_step_s": 90.0,
     "max_retries": 1,
     "dry_run": false,
     "task_count": 5,
-    "reflexion": false,
+    "reflexion": true,
     "check_completion": true,
     "use_rag": true,
-    "reflexion_enabled": false,
+    "reflexion_enabled": true,
     "use_knowledge_graph": true,
     "use_vgn": true,
     "use_ros_movement": true,
     "execution_mode": "live"
   },
   "success": true,
-  "total_duration_ms": 147290.68303108215,
+  "total_duration_ms": 115900.62403678894,
   "steps": [
     {
       "index": 0,
       "operation": "detect_object_stereo",
       "success": true,
-      "duration_ms": 758.0039501190186,
+      "duration_ms": 881.4480304718018,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -35,7 +35,7 @@
       "index": 1,
       "operation": "move_to_coordinate",
       "success": true,
-      "duration_ms": 13960.517168045044,
+      "duration_ms": 5336.575984954834,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -46,7 +46,7 @@
       "index": 2,
       "operation": "detect_object_stereo",
       "success": true,
-      "duration_ms": 836.8020057678223,
+      "duration_ms": 892.9159641265869,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -57,7 +57,7 @@
       "index": 3,
       "operation": "grasp_object",
       "success": true,
-      "duration_ms": 13263.890027999878,
+      "duration_ms": 13549.561262130737,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -68,7 +68,7 @@
       "index": 4,
       "operation": "move_to_coordinate",
       "success": true,
-      "duration_ms": 6018.58377456665,
+      "duration_ms": 4654.03413772583,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -79,7 +79,7 @@
       "index": 5,
       "operation": "detect_object_stereo",
       "success": true,
-      "duration_ms": 752.0246505737305,
+      "duration_ms": 827.8882503509521,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -90,7 +90,7 @@
       "index": 6,
       "operation": "grasp_object",
       "success": true,
-      "duration_ms": 12114.089012145996,
+      "duration_ms": 16751.554012298584,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -101,7 +101,7 @@
       "index": 7,
       "operation": "place_object",
       "success": true,
-      "duration_ms": 49653.22923660278,
+      "duration_ms": 36039.583921432495,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -112,7 +112,7 @@
       "index": 8,
       "operation": "move_to_coordinate",
       "success": true,
-      "duration_ms": 12341.884851455688,
+      "duration_ms": 4167.0191287994385,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -123,7 +123,7 @@
       "index": 9,
       "operation": "move_to_coordinate",
       "success": true,
-      "duration_ms": 18665.008068084717,
+      "duration_ms": 10989.71176147461,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -134,7 +134,7 @@
       "index": 10,
       "operation": "detect_object_stereo",
       "success": true,
-      "duration_ms": 847.6259708404541,
+      "duration_ms": 836.6029262542725,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -145,7 +145,7 @@
       "index": 11,
       "operation": "move_to_coordinate",
       "success": true,
-      "duration_ms": 3761.353015899658,
+      "duration_ms": 7660.353899002075,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -156,7 +156,7 @@
       "index": 12,
       "operation": "return_to_start_position",
       "success": true,
-      "duration_ms": 11266.223192214966,
+      "duration_ms": 10231.757879257202,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -167,7 +167,7 @@
   "ops_executed": 13,
   "ops_succeeded": 13,
   "success_rate": 1.0,
-  "avg_step_duration_ms": 11330.052540852474,
+  "avg_step_duration_ms": 8915.432618214534,
   "retry_count": 0,
   "first_failure_step": null,
   "chain_metrics": null,
@@ -175,7 +175,7 @@
   "reflexion_recoveries": 0,
   "negotiation_rounds": 0,
   "ablation": {
-    "condition": "disabled",
+    "condition": "enabled",
     "hallucinated_ops": 0,
     "reflexion_recoveries": 0,
     "negotiation_rounds": 0,
@@ -193,7 +193,7 @@
     "use_vgn": true,
     "use_knowledge_graph": true,
     "use_ros_movement": true,
-    "reflexion_enabled": false,
+    "reflexion_enabled": true,
     "dry_run": false,
     "use_negotiation": false
   },
@@ -202,27 +202,27 @@
     "detect_object_stereo": {
       "count": 4,
       "fail_count": 0,
-      "avg_duration_ms": 798.6
+      "avg_duration_ms": 859.7
     },
     "move_to_coordinate": {
       "count": 5,
       "fail_count": 0,
-      "avg_duration_ms": 10949.5
+      "avg_duration_ms": 6561.5
     },
     "grasp_object": {
       "count": 2,
       "fail_count": 0,
-      "avg_duration_ms": 12689.0
+      "avg_duration_ms": 15150.6
     },
     "place_object": {
       "count": 1,
       "fail_count": 0,
-      "avg_duration_ms": 49653.2
+      "avg_duration_ms": 36039.6
     },
     "return_to_start_position": {
       "count": 1,
       "fail_count": 0,
-      "avg_duration_ms": 11266.2
+      "avg_duration_ms": 10231.8
     }
   },
   "execution_mode": "live",

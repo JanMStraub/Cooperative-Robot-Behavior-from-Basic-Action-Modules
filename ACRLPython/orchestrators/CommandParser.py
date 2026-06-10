@@ -112,9 +112,14 @@ class CommandParser:
             USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
         )
 
-        # Perception-only commands have no physical motions - motion layer Stage 1
-        # would hallucinate a move plan and corrupt Stage 2 intent. Bypass it.
-        if motion_layer and self._is_perception_only_command(command_text):
+        # Perception-only, place, and atomic gripper commands have no motion
+        # decomposition benefit — Stage 1 would hallucinate approach coordinates
+        # and corrupt Stage 2 intent. Bypass the motion layer for all three.
+        if motion_layer and (
+            self._is_perception_only_command(command_text)
+            or self._is_place_command(command_text)
+            or self._is_atomic_gripper_command(command_text)
+        ):
             motion_layer = False
 
         if use_llm:
@@ -145,6 +150,15 @@ class CommandParser:
         motion_layer = (
             USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
         )
+
+        # Same bypasses as parse() — atomic gripper/place/perception commands
+        # must not go through Stage 1 decomposition on retries either.
+        if motion_layer and (
+            self._is_perception_only_command(command_text)
+            or self._is_place_command(command_text)
+            or self._is_atomic_gripper_command(command_text)
+        ):
+            motion_layer = False
 
         # Stage 1: decompose to motions if enabled (same as main parse() path)
         effective_command = command_text
@@ -194,6 +208,69 @@ class CommandParser:
                 "error": f"Reflexion LLM error: {e}",
             }
 
+    def generate_reflection(
+        self,
+        command_text: str,
+        operation: str,
+        error: str,
+        params: Dict[str, Any],
+        robot_id: str = "Robot1",
+    ) -> str:
+        """LLM self-reflection on a failed operation (Shinn et al. 2023).
+
+        Returns 1-3 sentences of verbal analysis: what went wrong and what
+        should change. Falls back to empty string on any LLM failure so the
+        caller still proceeds with the procedural hint.
+        """
+        import json as _json_mod
+
+        system = (
+            "You are a robot command analyzer. Return only JSON with keys "
+            '"analysis" (why the operation failed) and "suggestion" '
+            "(what specific change — coordinates, operation choice, object ID — "
+            "would fix it). Be concise: 1-2 sentences per key."
+        )
+        user = (
+            f'Original task: "{command_text}"\n'
+            f"Robot: {robot_id}\n"
+            f"Failed operation: {operation}\n"
+            f"Parameters tried: {_json_mod.dumps(params)}\n"
+            f"Error: {error}"
+        )
+        payload: Dict[str, Any] = {
+            "model": DEFAULT_LMSTUDIO_MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": DEFAULT_TEMPERATURE,
+            "max_tokens": 512,
+        }
+        if USE_STRUCTURED_OUTPUT:
+            payload["response_format"] = {"type": "json_object"}
+        try:
+            resp = self._session.post(
+                f"{LMSTUDIO_BASE_URL}/chat/completions",
+                json=payload,
+                timeout=min(LLM_REQUEST_TIMEOUT, 30.0),
+            )
+            if resp.status_code != 200:
+                logger.debug("generate_reflection: LLM returned %d", resp.status_code)
+                return ""
+            content = resp.json()["choices"][0]["message"]["content"]
+            parsed = _extract_json_util(content)
+            if isinstance(parsed, dict):
+                parts = [
+                    s
+                    for s in [parsed.get("analysis", ""), parsed.get("suggestion", "")]
+                    if s
+                ]
+                return " ".join(parts)
+            return content[:400]
+        except Exception as exc:
+            logger.debug("generate_reflection: fallback due to %s", exc)
+            return ""
+
     _PERCEPTION_ONLY_PATTERNS = re.compile(
         r"\b(analyze\s+(the\s+)?scene|describe\s+(the\s+)?(scene|workspace|environment)|"
         r"what\s+(do\s+you\s+see|objects?\s+are|can\s+you\s+see|'?s\s+on\s+the\s+table)|"
@@ -211,6 +288,14 @@ class CommandParser:
         r"\b(place|deposit|put\s+down|put\s+it)\b", re.IGNORECASE
     )
 
+    # Pure gripper state commands — no motion decomposition needed; Stage 1
+    # hallucinate approach coordinates and Stage 2 then picks move_to_coordinate,
+    # which triggers the navigation collision check erroneously.
+    _ATOMIC_GRIPPER_PATTERNS = re.compile(
+        r"\b(open\s+(the\s+)?gripper|close\s+(the\s+)?gripper|release|drop(\s+the\s+object)?)\b",
+        re.IGNORECASE,
+    )
+
     def _is_place_command(self, command_text: str) -> bool:
         """Return True if command intends to place/deposit an object.
 
@@ -219,6 +304,10 @@ class CommandParser:
         LLM to pick move_to_coordinate instead of place_object. Bypass it.
         """
         return bool(self._PLACE_PATTERNS.search(command_text))
+
+    def _is_atomic_gripper_command(self, command_text: str) -> bool:
+        """Return True for bare open/close gripper commands with no grasp target."""
+        return bool(self._ATOMIC_GRIPPER_PATTERNS.search(command_text))
 
     def _is_perception_only_command(self, command_text: str) -> bool:
         if re.match(r"\s*signal\s+\S", command_text, re.IGNORECASE):
