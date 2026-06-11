@@ -930,6 +930,22 @@ body.thesis-mode .export-row-label {
     opacity: 0.4;
 }
 
+/* Model x Task matrix: stretch the (few) columns evenly across the panel. */
+.model-matrix-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.model-matrix-table th,
+.model-matrix-table td {
+    max-width: none;
+}
+
+.model-matrix-table th:first-child,
+.model-matrix-table .heatmap-bm-label {
+    width: 12rem;
+}
+
 .coverage-cell--present {
     background: rgba(0, 158, 115, 0.25);
     color: var(--success);

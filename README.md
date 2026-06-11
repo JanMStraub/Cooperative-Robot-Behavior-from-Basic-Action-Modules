@@ -8,7 +8,7 @@ The goal of this project is to have two AR4 robot arms positioned facing each ot
 
 **Key Features**:
 
-- Unity 6000.3.0f1 simulation environment with physics-based ArticulationBody robots
+- Unity 6000.3.11f1 simulation environment with physics-based ArticulationBody robots
 - Damped least-squares inverse kinematics (6-DOF control)
 - Multi-robot coordination via signal/wait primitives and collaborative operations
 - Unified Python Backend: Single entry point (RunRobotController) orchestrates all servers
@@ -30,7 +30,7 @@ The goal of this project is to have two AR4 robot arms positioned facing each ot
 
 ### Prerequisites
 
-- **Unity Hub** with Unity Editor **6000.3.0f1** (exact version required)
+- **Unity Hub** with Unity Editor **6000.3.11f1** (exact version required)
 - **Python 3.8+** with virtual environment support
 - **Git** with submodule support
 - **LM Studio** (or other tool like it, for RAG embeddings and LLM-based task generation)
@@ -71,7 +71,7 @@ The goal of this project is to have two AR4 robot arms positioned facing each ot
 3. **Open Unity project**:
    - Open Unity Hub
    - Add project from `ACRLUnity/` folder
-   - Ensure Unity version **6000.3.0f1** is installed
+   - Ensure Unity version **6000.3.11f1** is installed
    - Open the project (dependencies will auto-install)
    - Alternativly use standalone version: `ACRLUnity_build.app` (MacOS)
 

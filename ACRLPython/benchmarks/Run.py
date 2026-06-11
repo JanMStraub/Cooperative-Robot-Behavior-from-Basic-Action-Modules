@@ -99,6 +99,38 @@ def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig
     return BenchmarkConfig(**kwargs)
 
 
+def _detect_model(args: argparse.Namespace) -> str:
+    """
+    Resolve the LLM model under test for result tagging.
+
+    Priority: explicit --model flag > live LM Studio /models > configured default.
+    Recorded in each result so analysis can break results out by model instead of
+    relying on the output directory layout.
+    """
+    if getattr(args, "model", None):
+        return args.model
+    try:
+        from config.Servers import LMSTUDIO_BASE_URL
+        import json as _json
+        import urllib.request
+
+        url = LMSTUDIO_BASE_URL.rstrip("/")
+        req = urllib.request.Request(f"{url}/models", method="GET")
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            data = _json.loads(resp.read())
+        models = data.get("data") or []
+        if models and models[0].get("id"):
+            return models[0]["id"]
+    except Exception:
+        pass
+    try:
+        from config.Servers import DEFAULT_LMSTUDIO_MODEL
+
+        return DEFAULT_LMSTUDIO_MODEL
+    except Exception:
+        return ""
+
+
 def _run_benchmarks(
     runner: BenchmarkRunner,
     benchmark_ids: list,
@@ -108,9 +140,11 @@ def _run_benchmarks(
     Execute the requested benchmarks and write results.
     """
     exit_code = 0
+    model = _detect_model(args)
     for bid in benchmark_ids:
         cfg = _make_config(bid, args)
         result = runner.run(bid, cfg)
+        result.model = model
         path = write_json(result, args.output_dir)
         print_summary(result)
         print(f"  JSON: {path}")
@@ -181,6 +215,11 @@ def main() -> None:
         "--output-dir",
         default="./benchmark_results",
         help="Directory for JSON result files (default: ./benchmark_results)",
+    )
+    parser.add_argument(
+        "--model",
+        default="",
+        help="LLM model id to tag results with (default: auto-detect from LM Studio)",
     )
     parser.add_argument(
         "--task-count",

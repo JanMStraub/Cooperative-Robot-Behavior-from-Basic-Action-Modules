@@ -1,3 +1,17 @@
+/**
+ * Fetch JSON with explicit HTTP-status checking.
+ *
+ * Throws on a non-2xx response or a network failure so callers can surface a
+ * real error instead of silently treating a 500 body as a successful payload.
+ */
+export async function fetchJson(url, opts) {
+    const resp = await fetch(url, opts);
+    if (!resp.ok) {
+        throw new Error(`${resp.status} ${resp.statusText}`);
+    }
+    return resp.json();
+}
+
 export class NetworkManager {
     constructor(ui, renderer, autort) {
         this.ui = ui;
@@ -18,13 +32,13 @@ export class NetworkManager {
         setInterval(poll, 3000);
     }
 
-    pollStatus() {
-        fetch('/api/status')
-            .then(r => r.json())
-            .then(status => {
-                this.updateStatusBadges(status);
-            })
-            .catch(() => this.updateStatusBadges({ ros: false, llm: false, unity: false }));
+    async pollStatus() {
+        try {
+            const status = await fetchJson('/api/status');
+            this.updateStatusBadges(status);
+        } catch {
+            this.updateStatusBadges({ ros: false, llm: false, unity: false });
+        }
     }
 
     updateStatusBadges(status) {
@@ -59,6 +73,7 @@ export class NetworkManager {
 
             this.ws.onopen = () => {
                 this.ui.logToConsole('WebSocket Connected to Backend.', 'success');
+                if (this.reconnectAttempts > 0) this.ui.toast('Reconnected to backend', 'success');
                 this.reconnectAttempts = 0;
                 const banner = document.getElementById('disconnect-banner');
                 if (banner) banner.style.display = 'none';
@@ -68,11 +83,19 @@ export class NetworkManager {
             };
 
             this.ws.onmessage = (event) => {
-                this.handleMessage(JSON.parse(event.data));
+                let msg;
+                try {
+                    msg = JSON.parse(event.data);
+                } catch (e) {
+                    this.ui.logToConsole(`Dropped malformed WS message: ${e}`, 'error');
+                    return;
+                }
+                this.handleMessage(msg);
             };
 
             this.ws.onclose = () => {
                 this.ui.logToConsole('WebSocket Disconnected. Reconnecting...', 'warning');
+                if (this.reconnectAttempts === 0) this.ui.toast('Backend disconnected', 'error');
                 const banner = document.getElementById('disconnect-banner');
                 if (banner) banner.style.display = 'flex';
                 this.updateStatusBadges({});
@@ -82,7 +105,7 @@ export class NetworkManager {
                 setTimeout(() => this.connectWebSocket(), timeout);
             };
 
-            this.ws.onerror = (error) => {
+            this.ws.onerror = () => {
                 this.ui.logToConsole('WebSocket Error occurred.', 'error');
             };
         } catch (e) {
@@ -112,7 +135,7 @@ export class NetworkManager {
                 if (this.renderer) this.renderer.updateStereoPointCloud(msg.data);
                 break;
             default:
-                console.log("Unknown msg:", msg);
+                this.ui.logToConsole(`Unknown message type: ${msg.type}`, 'warning');
         }
     }
 
@@ -127,67 +150,47 @@ export class NetworkManager {
             this.ui.showThinkingIndicator();
         } else {
             this.ui.logToConsole('Cannot send prompt: Disconnected', 'error');
+            this.ui.toast('Cannot send — backend disconnected', 'error');
         }
     }
 
-    jogRobot(direction) {
-        const stepSize = 0.05;
-        let offset = { x: 0, y: 0, z: 0 };
-
-        switch (direction) {
-            case 'X+': offset.x = stepSize; break;
-            case 'X-': offset.x = -stepSize; break;
-            case 'Y+': offset.y = stepSize; break;
-            case 'Y-': offset.y = -stepSize; break;
-            case 'Z+': offset.z = stepSize; break;
-            case 'Z-': offset.z = -stepSize; break;
-        }
-
-        const robot_id = document.getElementById('teleop-robot-id').value;
-        this.ui.logToConsole(`Jogging ${robot_id} ${direction}`, 'info');
-
-        fetch('/api/command', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                robot_id: robot_id,
-                command: { type: 'move_relative', offset: offset }
-            })
-        }).catch(err => this.ui.logToConsole(`Jog API failed: ${err}`, 'error'));
-    }
-
-    triggerReset() {
+    async triggerReset() {
+        const btn = document.getElementById('btn-reset');
+        if (btn) btn.disabled = true;
         this.ui.logToConsole('Resetting simulation...', 'info');
-        fetch('/api/reset', { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    this.ui.logToConsole('Simulation reset complete.', 'success');
-                } else {
-                    this.ui.logToConsole(`Reset failed: ${data.error}`, 'error');
-                }
-            })
-            .catch(err => this.ui.logToConsole(`Reset API failed: ${err}`, 'error'));
+        try {
+            const data = await fetchJson('/api/reset', { method: 'POST' });
+            if (data.success) {
+                this.ui.logToConsole('Simulation reset complete.', 'success');
+                this.ui.toast('Simulation reset', 'success');
+            } else {
+                this.ui.logToConsole(`Reset failed: ${data.error}`, 'error');
+                this.ui.toast(`Reset failed: ${data.error}`, 'error');
+            }
+        } catch (err) {
+            this.ui.logToConsole(`Reset API failed: ${err}`, 'error');
+            this.ui.toast(`Reset failed: ${err.message}`, 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     }
 
-    triggerEStop() {
+    async triggerEStop() {
+        const btn = document.getElementById('btn-estop');
+        if (btn) btn.disabled = true;
         this.ui.logToConsole('E-STOP TRIGGERED! Sending HALT to all modules...', 'error');
-        fetch('/api/command', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'estop', action: 'halt_all' })
-        }).catch(err => this.ui.logToConsole(`E-Stop API failed: ${err}`, 'error'));
-    }
-
-    sendGripperCmd(action) {
-        const robot_id = document.getElementById('teleop-robot-id').value;
-        fetch('/api/command', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                robot_id: robot_id,
-                command: { type: 'gripper', action: action }
-            })
-        }).catch(err => console.error('Gripper cmd failed:', err));
+        this.ui.toast('E-STOP sent', 'error');
+        try {
+            await fetchJson('/api/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'estop', action: 'halt_all' })
+            });
+        } catch (err) {
+            this.ui.logToConsole(`E-Stop API failed: ${err}`, 'error');
+            this.ui.toast(`E-Stop failed to send: ${err.message}`, 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     }
 }

@@ -1,7 +1,7 @@
-import { UIManager } from './ui.js?v=20260420_0004';
+import { UIManager } from './ui.js?v=20260611_0001';
 import { Renderer } from './renderer.js?v=20260420_0002';
-import { AutoRTManager } from './autort.js?v=20260420_0002';
-import { NetworkManager } from './network.js?v=20260420_0002';
+import { AutoRTManager } from './autort.js?v=20260611_0002';
+import { NetworkManager } from './network.js?v=20260611_0001';
 
 document.addEventListener('DOMContentLoaded', () => {
     const ui = new UIManager();
@@ -44,6 +44,16 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.promptInput.value = '';
     });
 
+    const exportBtn = document.getElementById('btn-export-mission');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => ui.exportMission());
+    }
+
+    const clearChatBtn = document.getElementById('btn-clear-chat');
+    if (clearChatBtn) {
+        clearChatBtn.addEventListener('click', () => ui.clearChat());
+    }
+
     document.getElementById('btn-reset').addEventListener('click', () => {
         network.triggerReset();
     });
@@ -60,11 +70,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.downloadLogs();
     });
 
-    const autoRtBtn = document.querySelector('.panel-actions .btn-icon[title="Toggle AutoRT"]');
-    if (autoRtBtn) {
-        autoRtBtn.addEventListener('click', () => autort.toggleAutoRT(autoRtBtn));
-    }
-
     const generateBtn = document.getElementById('btn-autort-generate');
     if (generateBtn) {
         generateBtn.addEventListener('click', () => autort.generateTasks());
@@ -78,26 +83,5 @@ document.addEventListener('DOMContentLoaded', () => {
     const perceptionCollapseBtn = document.getElementById('btn-perception-collapse');
     if (perceptionCollapseBtn) {
         perceptionCollapseBtn.addEventListener('click', () => ui.togglePerceptionPanel());
-    }
-
-    const teleopCollapseBtn = document.getElementById('btn-teleop-collapse');
-    if (teleopCollapseBtn) {
-        teleopCollapseBtn.addEventListener('click', () => ui.toggleTeleopPanel());
-    }
-
-    const jogBtns = document.querySelectorAll('.xyz-controls .btn-icon-small');
-    jogBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const title = e.currentTarget.getAttribute('title');
-            if (title) network.jogRobot(title);
-        });
-    });
-
-    // We replace the inline html onclicks for gripper with event listeners here
-    const gripperBtns = document.querySelectorAll('.gripper-controls .btn');
-    if (gripperBtns && gripperBtns.length >= 2) {
-        // Assume first is open, second is close based on UI layout
-        gripperBtns[0].addEventListener('click', () => network.sendGripperCmd('open'));
-        gripperBtns[1].addEventListener('click', () => network.sendGripperCmd('close'));
     }
 });

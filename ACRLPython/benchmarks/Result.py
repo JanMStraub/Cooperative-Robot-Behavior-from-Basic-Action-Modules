@@ -71,6 +71,8 @@ class BenchmarkResult:
     ops_succeeded: int
     success_rate: float
     avg_step_duration_ms: float
+    # LLM model under test. Empty for legacy runs (recovered from dir path by readers).
+    model: str = ""
     retry_count: int = 0
     first_failure_step: Optional[int] = None
     chain_metrics: Optional[ChainMetrics] = None

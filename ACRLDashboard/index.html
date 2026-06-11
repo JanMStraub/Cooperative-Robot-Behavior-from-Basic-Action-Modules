@@ -19,13 +19,15 @@
 
     <link rel="stylesheet" href="/static/css/variables.css?v=20260430_0001" />
     <link rel="stylesheet" href="/static/css/layout.css?v=20260430_0001" />
-    <link rel="stylesheet" href="/static/css/components.css?v=20260430_0001" />
+    <link rel="stylesheet" href="/static/css/components.css?v=20260611_0001" />
     <!-- Three.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   </head>
 
   <body class="dark-theme">
+    <!-- Transient notifications -->
+    <div id="toast-container" class="toast-container"></div>
     <div class="app-container">
       <!-- Disconnect Banner -->
       <div
@@ -101,8 +103,19 @@
           <div class="panel-header">
             <h2><i class="fa-solid fa-terminal"></i> Command & Control</h2>
             <div class="panel-actions">
-              <button class="btn-icon" title="Toggle AutoRT">
-                <i class="fa-solid fa-robot"></i> AutoRT
+              <button
+                class="btn-icon"
+                id="btn-export-mission"
+                title="Export mission transcript (Markdown)"
+              >
+                <i class="fa-solid fa-file-export"></i>
+              </button>
+              <button
+                class="btn-icon"
+                id="btn-clear-chat"
+                title="Clear chat history"
+              >
+                <i class="fa-solid fa-trash-can"></i>
               </button>
             </div>
           </div>
@@ -232,7 +245,7 @@
           <div class="autort-panel" id="autort-panel">
             <div class="panel-header">
               <h2>
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <i class="fa-solid fa-robot"></i>
                 AutoRT Tasks
                 <span
                   class="autort-badge"
@@ -245,6 +258,13 @@
                 <span class="autort-loop-badge" id="autort-loop-badge"
                   >STOPPED</span
                 >
+                <button
+                  class="btn-icon-small"
+                  id="btn-autort-generate"
+                  title="Generate tasks"
+                >
+                  <i class="fa-solid fa-robot"></i> Generate
+                </button>
                 <button
                   class="btn-icon-small"
                   id="btn-autort-collapse"
@@ -290,6 +310,6 @@
     <script>
       document.getElementById("nav-mission").classList.add("nav-pill--active");
     </script>
-    <script type="module" src="/static/js/main.js?v=20260328_0005"></script>
+    <script type="module" src="/static/js/main.js?v=20260611_0002"></script>
   </body>
 </html>

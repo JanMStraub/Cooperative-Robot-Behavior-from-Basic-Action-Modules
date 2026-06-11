@@ -227,6 +227,19 @@ def _iter_benchmark_files():
                 yield file_path, rel
 
 
+def _model_from_rel(rel: str) -> str:
+    """Recover the model name from a result's relative path.
+
+    Layout is ``bN/<model>/file.json`` (model x task benchmarks) or
+    ``bN/file.json`` (flat ablations). Returns ``"default"`` when no model
+    subdirectory is present.
+    """
+    parts = rel.replace("\\", "/").split("/")
+    if len(parts) >= 3:
+        return parts[1]
+    return "default"
+
+
 # Mount static files — only when fastapi is available
 if _FASTAPI_AVAILABLE:
     app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
@@ -294,14 +307,24 @@ async def api_status():
     """
     Return live connectivity status for all subsystems.
 
-    Polled by the dashboard every 5 seconds to update status badges.
+    Polled by the dashboard every 3 seconds to update status badges.
+
+    The probes do blocking I/O (notably the LM Studio HTTP check), so they run in
+    the default executor to avoid stalling the event loop for all other clients.
     """
+    loop = asyncio.get_running_loop()
+    ros, unity, camera, llm = await asyncio.gather(
+        loop.run_in_executor(None, _check_ros_connected),
+        loop.run_in_executor(None, _check_unity_connected),
+        loop.run_in_executor(None, _check_camera_available),
+        loop.run_in_executor(None, _check_llm_studio_connected),
+    )
     return {
         "backend": True,
-        "ros": _check_ros_connected(),
-        "unity": _check_unity_connected(),
-        "camera": _check_camera_available(),
-        "llm": _check_llm_studio_connected(),
+        "ros": ros,
+        "unity": unity,
+        "camera": camera,
+        "llm": llm,
     }
 
 
@@ -362,11 +385,14 @@ async def api_get_benchmarks_aggregate():
     try:
         groups: dict = defaultdict(list)
         if os.path.exists(BENCHMARK_RESULTS_DIR):
-            for file_path, _rel in _iter_benchmark_files():
+            for file_path, rel in _iter_benchmark_files():
                 with open(file_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 bid = data.get("benchmark_id")
                 if bid is not None:
+                    # Tag each run with its model (JSON field for new runs, else
+                    # recovered from the directory path) for the by_model breakout.
+                    data["_model"] = data.get("model") or _model_from_rel(rel)
                     groups[bid].append(data)
 
         result = {}
@@ -441,6 +467,27 @@ async def api_get_benchmarks_aggregate():
                 for op, v in op_buckets.items()
             }
             entry["per_robot_stats"] = dict(robot_buckets)
+
+            # Per-model breakout — the primary independent variable for b1-b11.
+            # Aggregating across models (as the top-level entry does) mixes models
+            # of very different capability, so expose each model separately.
+            model_buckets: dict = defaultdict(list)
+            for r in runs:
+                model_buckets[r.get("_model", "default")].append(r)
+            by_model = {}
+            for model, m_runs in sorted(model_buckets.items()):
+                m_sr = [r.get("success_rate", 0.0) for r in m_runs]
+                m_dur = [r.get("total_duration_ms", 0.0) for r in m_runs]
+                by_model[model] = {
+                    "run_count": len(m_runs),
+                    "pass_count": sum(1 for r in m_runs if r.get("success")),
+                    "mean_success_rate": statistics.mean(m_sr),
+                    "std_success_rate": (
+                        statistics.stdev(m_sr) if len(m_sr) > 1 else 0.0
+                    ),
+                    "mean_duration_ms": statistics.mean(m_dur),
+                }
+            entry["by_model"] = by_model
 
             plan_lengths = [len(r.get("parsed_plan", [])) for r in runs]
             entry["mean_plan_length"] = (

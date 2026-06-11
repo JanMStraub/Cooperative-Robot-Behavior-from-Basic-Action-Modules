@@ -322,12 +322,25 @@
             </div>
 
             <div id="analysis-charts" style="display: none">
+              <!-- Model × Task success matrix -->
+              <div class="analysis-panel glass-box">
+                <div class="analysis-panel-header">
+                  <span class="analysis-panel-title">
+                    <i class="fa-solid fa-table-cells"></i> Model × Task Success
+                    Matrix (B1–B11)
+                  </span>
+                </div>
+                <div class="analysis-chart-body analysis-chart-body--table">
+                  <div id="chartModelMatrix"></div>
+                </div>
+              </div>
+
               <!-- Chart A: Main Results -->
               <div class="analysis-panel glass-box">
                 <div class="analysis-panel-header">
                   <span class="analysis-panel-title">
                     <i class="fa-solid fa-trophy"></i> Main Results — Success
-                    Rate (B1–B8)
+                    Rate (B1–B10)
                   </span>
                   <div class="analysis-panel-actions">
                     <button
@@ -348,7 +361,7 @@
               <div class="analysis-panel glass-box">
                 <div class="analysis-panel-header">
                   <span class="analysis-panel-title">
-                    <i class="fa-solid fa-flask"></i> Ablation Study (B9–B14)
+                    <i class="fa-solid fa-flask"></i> Ablation Study (B11–B16)
                   </span>
                   <div class="analysis-panel-actions">
                     <select id="ablation-metric" class="metric-select">

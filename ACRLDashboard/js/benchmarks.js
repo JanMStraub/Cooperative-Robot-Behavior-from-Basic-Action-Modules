@@ -759,6 +759,7 @@ function renderAllAnalysisCharts(data) {
         panelD.style.display = 'none';
     }
 
+    renderModelMatrix(sorted);
     renderLatencyDecomposition(sorted);
     renderOperationHeatmap(sorted);
     renderComplexityScaling(sorted);
@@ -766,11 +767,54 @@ function renderAllAnalysisCharts(data) {
     renderCoverageMatrix(sorted);
 }
 
-// Chart A — Main Results: success rate for B1–B8 (horizontal bar)
+// Model × Task success matrix — capability benchmarks (B1–B11) broken out by
+// model. b1-b11 are run across several LLMs; the top-level success rate pools
+// them, so this matrix is the trustworthy per-model view.
+function renderModelMatrix(sortedEntries) {
+    const container = document.getElementById('chartModelMatrix');
+    if (!container) return;
+
+    const entries = sortedEntries.filter(
+        d => d.benchmark_id <= 11 && d.by_model && Object.keys(d.by_model).length > 0
+    );
+    if (entries.length === 0) {
+        container.innerHTML = '<p style="color:var(--text-dim);padding:1rem">No model data available.</p>';
+        return;
+    }
+
+    const models = [...new Set(entries.flatMap(d => Object.keys(d.by_model)))]
+        .sort((a, b) => a.localeCompare(b));
+
+    let html = '<div class="heatmap-scroll"><table class="heatmap-table model-matrix-table"><thead><tr><th>Model</th>';
+    entries.forEach(d => {
+        html += `<th title="B${d.benchmark_id}: ${d.benchmark_name}">B${d.benchmark_id}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    models.forEach(model => {
+        html += `<tr><td class="heatmap-bm-label" title="${model}">${model}</td>`;
+        entries.forEach(d => {
+            const m = d.by_model[model];
+            if (!m) { html += '<td class="heatmap-cell heatmap-cell--empty">—</td>'; return; }
+            const rate = m.mean_success_rate;
+            const bg = successColor(rate);
+            const textColor = (rate > 0.3 && rate < 0.8) ? '#1a1a1a' : '#fff';
+            html += `<td class="heatmap-cell" style="background:${bg};color:${textColor}" `
+                + `title="${model} · B${d.benchmark_id}: ${(rate * 100).toFixed(0)}% over ${m.run_count} runs">`
+                + `${(rate * 100).toFixed(0)}%</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+}
+
+// Chart A — Main Results: success rate for capability tasks B1–B10 (horizontal bar)
 function renderMainResultsChart(sortedEntries) {
     destroyChart('A');
 
-    const coreEntries = sortedEntries.filter(d => d.benchmark_id <= 8);
+    const coreEntries = sortedEntries.filter(d => d.benchmark_id <= 10);
     if (coreEntries.length === 0) return;
 
     const labels = coreEntries.map(d => `B${d.benchmark_id}: ${d.benchmark_name}`);
@@ -955,6 +999,7 @@ function renderAblationChart(data) {
 function renderDurationChart(sortedEntries) {
     destroyChart('C');
 
+    if (sortedEntries.length === 0) return;
     const labels = sortedEntries.map(d => `B${d.benchmark_id}`);
     const values = sortedEntries.map(d => +(d.mean_duration_ms / 1000).toFixed(2));
     const maxVal = Math.max(...values);

@@ -1,25 +1,24 @@
+import { fetchJson } from './network.js?v=20260611_0001';
+
 export class AutoRTManager {
     constructor(ui) {
         this.ui = ui;
         this.network = null; // Injected later
         this.autortTasks = new Map();
-        this.autoRtActive = false;
     }
 
     setNetwork(network) {
         this.network = network;
     }
 
-    fetchPendingTasks() {
+    async fetchPendingTasks() {
         if (!this.network) return;
-        fetch('/api/autort/tasks')
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    this.handleAutortTasks(data);
-                }
-            })
-            .catch(err => this.ui.logToConsole(`AutoRT tasks fetch failed: ${err}`, 'error'));
+        try {
+            const data = await fetchJson('/api/autort/tasks');
+            if (data.success) this.handleAutortTasks(data);
+        } catch (err) {
+            this.ui.logToConsole(`AutoRT tasks fetch failed: ${err}`, 'error');
+        }
     }
 
     handleAutortTasks(payload) {
@@ -40,73 +39,49 @@ export class AutoRTManager {
         this._updateTaskCountBadge();
     }
 
-    toggleAutoRT(btnElement) {
-        this.autoRtActive = !this.autoRtActive;
-        const action = this.autoRtActive ? 'start' : 'stop';
-
-        if (this.autoRtActive) {
-            btnElement.classList.add('active');
-            btnElement.style.color = 'var(--success)';
-            btnElement.style.borderColor = 'var(--success)';
-        } else {
-            btnElement.classList.remove('active');
-            btnElement.style.color = '';
-            btnElement.style.borderColor = '';
-        }
-
-        fetch('/api/command', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'autort', action: action })
-        })
-            .then(r => r.json())
-            .then(res => {
-                this.ui.logToConsole(`AutoRT ${action} response: ${res.success}`, res.success ? 'success' : 'error');
-                if (res.loop_running !== undefined) this._updateLoopBadge(res.loop_running);
-            })
-            .catch(err => this.ui.logToConsole(`AutoRT API error: ${err}`, 'error'));
-    }
-
-    generateTasks() {
+    async generateTasks() {
         const btn = document.getElementById('btn-autort-generate');
         if (btn) btn.disabled = true;
-
-        fetch('/api/autort/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ strategy: 'balanced' }),
-        })
-            .then(r => r.json())
-            .then(data => {
-                if (!data.success) {
-                    this.ui.logToConsole(`AutoRT generate failed: ${data.error}`, 'error');
-                } else {
-                    this.ui.logToConsole(`AutoRT generated ${data.tasks.length} task(s)`, 'info');
-                    if (data.tasks && data.tasks.length > 0) {
-                        this.handleAutortTasks(data);
-                    }
-                }
-            })
-            .catch(err => this.ui.logToConsole(`AutoRT generate error: ${err}`, 'error'))
-            .finally(() => { if (btn) btn.disabled = false; });
+        try {
+            const data = await fetchJson('/api/autort/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ strategy: 'balanced' }),
+            });
+            if (!data.success) {
+                this.ui.logToConsole(`AutoRT generate failed: ${data.error}`, 'error');
+                this.ui.toast(`Generate failed: ${data.error}`, 'error');
+            } else {
+                const n = (data.tasks || []).length;
+                this.ui.logToConsole(`AutoRT generated ${n} task(s)`, 'info');
+                this.ui.toast(n > 0 ? `Generated ${n} task(s)` : 'No tasks proposed', n > 0 ? 'success' : 'info');
+                if (n > 0) this.handleAutortTasks(data);
+            }
+        } catch (err) {
+            this.ui.logToConsole(`AutoRT generate error: ${err}`, 'error');
+            this.ui.toast(`Generate error: ${err.message}`, 'error');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     }
 
-    approveTask(taskId) {
+    async approveTask(taskId) {
         this._removeTaskCard(taskId);
         this.autortTasks.delete(taskId);
         this._updateTaskCountBadge();
-
-        fetch('/api/autort/execute', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ task_id: taskId }),
-        })
-            .then(r => r.json())
-            .then(data => {
-                const level = data.success ? 'info' : 'error';
-                this.ui.logToConsole(`Task ${taskId} execute: ${data.success ? 'started' : data.error}`, level);
-            })
-            .catch(err => this.ui.logToConsole(`Task execute error: ${err}`, 'error'));
+        try {
+            const data = await fetchJson('/api/autort/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task_id: taskId }),
+            });
+            const level = data.success ? 'info' : 'error';
+            this.ui.logToConsole(`Task ${taskId} execute: ${data.success ? 'started' : data.error}`, level);
+            if (!data.success) this.ui.toast(`Task failed: ${data.error}`, 'error');
+        } catch (err) {
+            this.ui.logToConsole(`Task execute error: ${err}`, 'error');
+            this.ui.toast(`Task execute error: ${err.message}`, 'error');
+        }
     }
 
     rejectTask(taskId) {
