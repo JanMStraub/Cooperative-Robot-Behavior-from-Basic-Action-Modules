@@ -48,6 +48,7 @@ def detect_field(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
+                ["Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')"],
             )
 
         field_label_lower = field_label.strip().lower()
@@ -55,6 +56,7 @@ def detect_field(
             return OperationResult.error_result(
                 "INVALID_FIELD_LABEL",
                 f"Field label must be single letter A-I, got: {field_label}",
+                ["Provide field label as 'A', 'B', 'C', etc."],
             )
 
         yolo_class = f"field_{field_label_lower}"  # trained class names: "field_a" etc.
@@ -71,6 +73,11 @@ def detect_field(
             return OperationResult.error_result(
                 "NO_STEREO_IMAGES",
                 "No stereo images available",
+                [
+                    "Ensure Unity is sending stereo images to ImageServer",
+                    "Check that ImageServer is running (port 5006)",
+                    "Verify stereo cameras are active in Unity scene",
+                ],
             )
 
         left_image, right_image, _, _, stereo_metadata = stereo_data
@@ -79,6 +86,7 @@ def detect_field(
             return OperationResult.error_result(
                 "INCOMPLETE_STEREO_PAIR",
                 "Stereo image pair incomplete",
+                ["Check both stereo cameras are sending images"],
             )
 
         try:
@@ -110,6 +118,12 @@ def detect_field(
             return OperationResult.error_result(
                 "FIELD_NOT_DETECTED",
                 f"Field '{field_label.upper()}' not detected in image",
+                [
+                    f"Verify field {field_label.upper()} is visible to cameras",
+                    "Check lighting conditions",
+                    f"Try lowering confidence_threshold (current: {confidence_threshold})",
+                    "Verify YOLO model is trained for field detection",
+                ],
             )
 
         detection = detections.detections[0]
@@ -120,6 +134,7 @@ def detect_field(
             return OperationResult.error_result(
                 "INVALID_DETECTION_CLASS",
                 f"Unexpected class name: {detection.color}",
+                ["Verify YOLO model is correct field detector model"],
             )
 
         detected_letter = detected_class[6:].upper()
@@ -128,6 +143,10 @@ def detect_field(
             return OperationResult.error_result(
                 "FIELD_LABEL_MISMATCH",
                 f"Requested field '{field_label.upper()}' but YOLO returned '{detected_letter}' — filter leak or model error",
+                [
+                    f"Verify YOLO model correctly distinguishes field_{field_label.lower()} from adjacent fields",
+                    "Check that filter_classes is respected by the detector",
+                ],
             )
 
         world_position = detection.world_position
@@ -136,6 +155,10 @@ def detect_field(
             return OperationResult.error_result(
                 "NO_3D_COORDINATES",
                 "Stereo detection did not produce 3D coordinates",
+                [
+                    "Check stereo camera calibration",
+                    "Verify depth estimation is working",
+                ],
             )
 
         logger.info(
@@ -192,7 +215,13 @@ def detect_field(
     except Exception as e:
         logger.error(f"Error in detect_field: {e}", exc_info=True)
         return OperationResult.error_result(
-            "DETECTION_ERROR", f"Field detection failed: {e}"
+            "DETECTION_ERROR",
+            f"Field detection failed: {e}",
+            [
+                "Check logs for details",
+                "Verify YOLO model is loaded correctly",
+                "Ensure stereo images are available",
+            ],
         )
 
 
@@ -208,6 +237,7 @@ def detect_all_fields(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
+                ["Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')"],
             )
         try:
             from vision.YOLODetector import YOLODetector
@@ -221,6 +251,7 @@ def detect_all_fields(
             return OperationResult.error_result(
                 "NO_STEREO_IMAGES",
                 "No stereo images available",
+                ["Ensure Unity is sending stereo images"],
             )
 
         left_image, right_image, _, _, stereo_metadata = stereo_data
@@ -229,6 +260,7 @@ def detect_all_fields(
             return OperationResult.error_result(
                 "INCOMPLETE_STEREO_PAIR",
                 "Stereo image pair incomplete",
+                ["Check both stereo cameras are active"],
             )
 
         try:
@@ -338,7 +370,9 @@ def detect_all_fields(
     except Exception as e:
         logger.error(f"Error in detect_all_fields: {e}", exc_info=True)
         return OperationResult.error_result(
-            "DETECTION_ERROR", f"Field detection failed: {e}"
+            "DETECTION_ERROR",
+            f"Field detection failed: {e}",
+            ["Check logs for details"],
         )
 
 

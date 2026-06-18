@@ -48,7 +48,7 @@ namespace Tests.PlayMode
         #region IK Solver Error Tests
 
         [Test]
-        public void IKSolver_UnreachableTarget_ReturnsNull()
+        public void SetTarget_UnreachableTarget_TargetStillAccepted()
         {
             TestHelpers.SetupMinimalArticulationChain(_robotController);
             LogAssert.Expect(LogType.Error, "Tag: EndEffector is not defined.");

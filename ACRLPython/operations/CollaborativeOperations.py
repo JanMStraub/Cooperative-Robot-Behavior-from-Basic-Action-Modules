@@ -62,24 +62,28 @@ def stabilize_object(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 "Robot ID must be a non-empty string",
+                ["Provide a valid robot ID"],
             )
 
         if not object_id or not isinstance(object_id, str):
             return OperationResult.error_result(
                 "INVALID_OBJECT_ID",
                 "Object ID must be a non-empty string",
+                ["Provide a valid object ID"],
             )
 
         if not (100 <= duration_ms <= 30000):
             return OperationResult.error_result(
                 "INVALID_DURATION",
                 f"Duration must be in range [100, 30000]ms, got: {duration_ms}",
+                ["Use duration between 100ms and 30000ms (30s)"],
             )
 
         if not (1.0 <= force_limit <= 50.0):
             return OperationResult.error_result(
                 "INVALID_FORCE_LIMIT",
                 f"Force limit must be in range [1.0, 50.0]N, got: {force_limit}",
+                ["Use force limit between 1N and 50N"],
             )
 
         kg_warning = _kg_both_robots_can_reach(object_id, robot_id)
@@ -124,6 +128,7 @@ def stabilize_object(
             return OperationResult.error_result(
                 "COMMUNICATION_FAILED",
                 "Failed to send command to Unity",
+                ["Ensure Unity is running"],
             )
 
         logger.info(f"Successfully activated stabilization for {robot_id}")
@@ -141,7 +146,11 @@ def stabilize_object(
 
     except Exception as e:
         logger.error(f"Unexpected error in stabilize_object: {e}", exc_info=True)
-        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            str(e),
+            ["Check logs"],
+        )
 
 
 # stabilize_and_manipulate_collaboratively removed (non-atomic) — use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN
@@ -246,12 +255,14 @@ def place_for_partner(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 "Robot ID must be a non-empty string",
+                ["Provide a valid robot ID"],
             )
 
         if not zone_id or not isinstance(zone_id, str):
             return OperationResult.error_result(
                 "INVALID_ZONE_ID",
                 "Zone ID must be a non-empty string",
+                ["Provide a valid zone ID"],
             )
 
         try:
@@ -272,6 +283,7 @@ def place_for_partner(
                 return OperationResult.error_result(
                     "UNKNOWN_ZONE",
                     f"Zone '{zone_id}' not found in WORKSPACE_REGIONS (valid: {list(WORKSPACE_REGIONS.keys())})",
+                    [f"Valid zones: {list(WORKSPACE_REGIONS.keys())}"],
                 )
             x = (zone["x_min"] + zone["x_max"]) / 2
             z = (zone["z_min"] + zone["z_max"]) / 2
@@ -303,7 +315,11 @@ def place_for_partner(
 
     except Exception as e:
         logger.error(f"Unexpected error in place_for_partner: {e}", exc_info=True)
-        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            str(e),
+            ["Check logs"],
+        )
 
 
 def create_place_for_partner_operation() -> BasicOperation:

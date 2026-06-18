@@ -1,13 +1,14 @@
 from operations.WorkflowPatterns import HANDOFF_PATTERN
 
-RECEIVE_HANDOFF_OP_ID = "coordination_receive_handoff_001"
-GRASP_OP_ID = "manipulation_grasp_object_001"
-RETURN_START_OP_ID = "motion_return_to_start_001"
-MOVE_OP_ID = "motion_move_to_coord_001"
-SIGNAL_OP_ID = "sync_signal_001"
-WAIT_OP_ID = "sync_wait_for_signal_001"
-DETECT_OP_ID = "perception_stereo_detect_001"
-RELEASE_OP_ID = "manipulation_release_object_001"
+# Pattern steps reference operations by registry name (see WorkflowPatterns.py)
+RECEIVE_HANDOFF_OP_ID = "receive_handoff"
+GRASP_OP_ID = "grasp_object"
+RETURN_START_OP_ID = "return_to_start_position"
+MOVE_OP_ID = "move_to_coordinate"
+SIGNAL_OP_ID = "signal"
+WAIT_OP_ID = "wait_for_signal"
+DETECT_OP_ID = "detect_object_stereo"
+RELEASE_OP_ID = "release_object"
 
 
 class TestHandoffPatternSteps:
@@ -22,10 +23,11 @@ class TestHandoffPatternSteps:
         assert HANDOFF_PATTERN.pattern_id == "workflow_handoff_001"
 
     def test_no_orient_gripper_for_handoff_receive(self):
-        assert "coordination_orient_for_handoff_receive_001" not in self._step_ids()
+        # receive_handoff orients the gripper internally; no separate step
+        assert "orient_for_handoff_receive" not in self._step_ids()
 
     def test_no_present_for_handoff(self):
-        assert "coordination_present_for_handoff_001" not in self._step_ids()
+        assert "present_for_handoff" not in self._step_ids()
 
     def test_grasp_step_present(self):
         assert GRASP_OP_ID in self._step_ids()
@@ -46,11 +48,11 @@ class TestHandoffPatternSteps:
 
     def test_adjust_orientation_step_present(self):
         ids = self._step_ids()
-        assert "motion_adjust_orientation_003" in ids
+        assert "adjust_end_effector_orientation" in ids
 
     def test_adjust_orientation_before_signal(self):
         ids = self._step_ids()
-        orient_lock_idx = ids.index("motion_adjust_orientation_003")
+        orient_lock_idx = ids.index("adjust_end_effector_orientation")
         signal_idx = next(
             i
             for i, s in enumerate(HANDOFF_PATTERN.steps)

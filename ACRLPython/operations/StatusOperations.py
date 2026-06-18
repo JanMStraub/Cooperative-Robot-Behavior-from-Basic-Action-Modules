@@ -29,12 +29,19 @@ def check_robot_status(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
+                [
+                    "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
+                    "Check RobotManager in Unity for available robot IDs",
+                ],
             )
 
         if not isinstance(detailed, bool):
             return OperationResult.error_result(
                 "INVALID_DETAILED_PARAMETER",
                 f"detailed must be a boolean, got: {type(detailed).__name__}",
+                [
+                    "Use detailed=True for full status or detailed=False for basic status",
+                ],
             )
 
         command = {
@@ -55,6 +62,12 @@ def check_robot_status(
             return OperationResult.error_result(
                 "COMMUNICATION_FAILED",
                 "Failed to send command to Unity - no clients connected",
+                [
+                    "Ensure Unity is running with UnifiedPythonReceiver active",
+                    "Verify CommandServer is running (port 5007)",
+                    "Check Unity console for connection errors",
+                    "Restart backend: python -m orchestrators.RunRobotController",
+                ],
             )
 
         logger.info(f"Successfully sent status check to {robot_id}")
@@ -70,7 +83,16 @@ def check_robot_status(
 
     except Exception as e:
         logger.error(f"Unexpected error in check_robot_status: {e}", exc_info=True)
-        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            str(e),
+            [
+                "Check logs for detailed error information",
+                "Verify all parameters are correct types",
+                "Retry the operation",
+                "Report bug if error persists",
+            ],
+        )
 
 
 def create_check_robot_status_operation() -> BasicOperation:

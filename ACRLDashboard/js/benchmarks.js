@@ -12,6 +12,17 @@ const PASS_COLOR = PALETTE.teal;
 const FAIL_COLOR = PALETTE.vermillion;
 const WARN_COLOR = PALETTE.orange;
 
+// Escape server-provided strings (model names, benchmark names) before
+// interpolating into innerHTML/title attributes.
+function escHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 let stepChartInstance = null;
 let analysisChartInstances = {};
 let compareStepChartInstance = null;
@@ -787,12 +798,13 @@ function renderModelMatrix(sortedEntries) {
 
     let html = '<div class="heatmap-scroll"><table class="heatmap-table model-matrix-table"><thead><tr><th>Model</th>';
     entries.forEach(d => {
-        html += `<th title="B${d.benchmark_id}: ${d.benchmark_name}">B${d.benchmark_id}</th>`;
+        html += `<th title="B${d.benchmark_id}: ${escHtml(d.benchmark_name)}">B${d.benchmark_id}</th>`;
     });
     html += '</tr></thead><tbody>';
 
     models.forEach(model => {
-        html += `<tr><td class="heatmap-bm-label" title="${model}">${model}</td>`;
+        const safeModel = escHtml(model);
+        html += `<tr><td class="heatmap-bm-label" title="${safeModel}">${safeModel}</td>`;
         entries.forEach(d => {
             const m = d.by_model[model];
             if (!m) { html += '<td class="heatmap-cell heatmap-cell--empty">—</td>'; return; }
@@ -800,7 +812,7 @@ function renderModelMatrix(sortedEntries) {
             const bg = successColor(rate);
             const textColor = (rate > 0.3 && rate < 0.8) ? '#1a1a1a' : '#fff';
             html += `<td class="heatmap-cell" style="background:${bg};color:${textColor}" `
-                + `title="${model} · B${d.benchmark_id}: ${(rate * 100).toFixed(0)}% over ${m.run_count} runs">`
+                + `title="${safeModel} · B${d.benchmark_id}: ${(rate * 100).toFixed(0)}% over ${m.run_count} runs">`
                 + `${(rate * 100).toFixed(0)}%</td>`;
         });
         html += '</tr>';

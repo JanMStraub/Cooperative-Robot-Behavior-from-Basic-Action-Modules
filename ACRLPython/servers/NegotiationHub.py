@@ -188,9 +188,9 @@ class NegotiationHub(SingletonBase):
                 accepted = self._run_evaluation_phase(session, proposal, world_state)
 
                 if accepted:
-                    # BUG 2 FIX: Validate raw LLM output BEFORE normalization.
+                    # Validate raw LLM output BEFORE normalization:
                     # _normalize_commands() silently drops commands missing "operation",
-                    # so validating after normalization misses those malformed entries.
+                    # so validating after normalization would miss malformed entries.
                     if VERIFY_NEGOTIATED_PLANS:
                         valid, validation_errors = self._validate_plan(
                             proposal.commands

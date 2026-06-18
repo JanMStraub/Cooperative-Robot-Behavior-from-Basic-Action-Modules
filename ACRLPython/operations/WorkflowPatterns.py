@@ -381,7 +381,7 @@ HANDOFF_PATTERN = WorkflowPattern(
         ),
     ],
     variable_bindings={
-        "object": "perception_stereo_detect_001.result",
+        "object": "detect_object_stereo.result",
     },
     success_criteria=[
         "Source robot successfully grasped object",

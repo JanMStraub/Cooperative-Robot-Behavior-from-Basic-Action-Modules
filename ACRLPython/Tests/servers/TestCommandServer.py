@@ -217,12 +217,15 @@ class TestCommandServerCommands:
         assert result is None
 
     def test_send_queued_results(self, command_server, mock_client_socket):
+        # Drain any leftovers from the singleton broadcaster so the count below
+        # reflects only this test's commands.
+        command_server._broadcaster.get_queued_results()
         command_server._broadcaster.send_command({"type": "test1"}, 1)
         command_server._broadcaster.send_command({"type": "test2"}, 2)
 
         command_server._send_queued_results(mock_client_socket)
 
-        assert mock_client_socket.sendall.call_count >= 0
+        assert mock_client_socket.sendall.call_count == 2
 
 
 class TestCommandServerProtocolV2:

@@ -45,18 +45,21 @@ def mock_deps():
 
 
 class TestHandoffGeometry:
-    def test_tcp_path_moves_to_object_center_not_near_face(self, mock_deps):
+    def test_tcp_path_stops_at_near_face(self, mock_deps):
         from operations.grasp._handoff import receive_handoff
 
         # obj at x=0.0, dims lx=0.04 → near_face = 0.0 + 1.0*0.02 = 0.02
-        # center_x = 0.0; robot2 is at x=+0.475 so approach_sign=+1
+        # robot2 is at x=+0.475 so approach_sign=+1.
+        # With roll=90° the jaws are vertical in Y and straddle the object at
+        # the near face — inserting further (to center_x) pushed the object
+        # away (see _handoff.py approach comments).
         receive_handoff("Robot2", "red_bar", "Robot1")
 
         move_call = mock_deps["move"].call_args
         actual_x = move_call.kwargs.get("x") or move_call[1].get("x")
-        assert actual_x == pytest.approx(0.0, abs=1e-6), (
-            f"TCP move should target object center (0.0), got {actual_x}. "
-            "Jaws must wrap around center, not push from the face."
+        assert actual_x == pytest.approx(0.02, abs=1e-6), (
+            f"TCP move should stop at the near face (0.02), got {actual_x}. "
+            "No X insertion — jaws straddle the object in Y at the face."
         )
 
     def test_gripper_closed_after_move(self, mock_deps):

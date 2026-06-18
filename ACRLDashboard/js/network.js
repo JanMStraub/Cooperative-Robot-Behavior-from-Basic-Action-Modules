@@ -20,6 +20,7 @@ export class NetworkManager {
 
         this.ws = null;
         this.reconnectAttempts = 0;
+        this.pollIntervalId = null;
 
         this.connectWebSocket();
         this.startStatusPolling();
@@ -27,9 +28,10 @@ export class NetworkManager {
 
     /* --- REST API / POLLING --- */
     startStatusPolling() {
+        if (this.pollIntervalId !== null) clearInterval(this.pollIntervalId);
         const poll = () => this.pollStatus();
         poll();
-        setInterval(poll, 3000);
+        this.pollIntervalId = setInterval(poll, 3000);
     }
 
     async pollStatus() {

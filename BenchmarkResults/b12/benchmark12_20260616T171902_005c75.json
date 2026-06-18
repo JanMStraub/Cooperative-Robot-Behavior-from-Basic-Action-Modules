@@ -1,7 +1,7 @@
 {
   "benchmark_id": 12,
   "benchmark_name": "Reflexion Ablation",
-  "run_id": "20260610T123954_8a2ddb",
+  "run_id": "20260616T171902_005c75",
   "config_snapshot": {
     "robot_id": "Robot1",
     "timeout_per_step_s": 90.0,
@@ -18,13 +18,13 @@
     "execution_mode": "live"
   },
   "success": true,
-  "total_duration_ms": 221826.04479789734,
+  "total_duration_ms": 107100.79336166382,
   "steps": [
     {
       "index": 0,
       "operation": "detect_object_stereo",
       "success": true,
-      "duration_ms": 839.940071105957,
+      "duration_ms": 765.2199268341064,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -35,7 +35,7 @@
       "index": 1,
       "operation": "move_to_coordinate",
       "success": true,
-      "duration_ms": 6194.095134735107,
+      "duration_ms": 5534.907102584839,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -46,7 +46,7 @@
       "index": 2,
       "operation": "detect_object_stereo",
       "success": true,
-      "duration_ms": 893.1550979614258,
+      "duration_ms": 782.85813331604,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -57,7 +57,7 @@
       "index": 3,
       "operation": "grasp_object",
       "success": true,
-      "duration_ms": 11411.150932312012,
+      "duration_ms": 11074.904918670654,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -68,7 +68,7 @@
       "index": 4,
       "operation": "move_to_coordinate",
       "success": true,
-      "duration_ms": 6659.682989120483,
+      "duration_ms": 3416.9440269470215,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -79,7 +79,7 @@
       "index": 5,
       "operation": "detect_object_stereo",
       "success": true,
-      "duration_ms": 870.7950115203857,
+      "duration_ms": 795.4628467559814,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -90,7 +90,7 @@
       "index": 6,
       "operation": "grasp_object",
       "success": true,
-      "duration_ms": 27799.374103546143,
+      "duration_ms": 12293.300867080688,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -101,7 +101,7 @@
       "index": 7,
       "operation": "place_object",
       "success": true,
-      "duration_ms": 31222.74899482727,
+      "duration_ms": 28580.442190170288,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -112,7 +112,7 @@
       "index": 8,
       "operation": "move_to_coordinate",
       "success": true,
-      "duration_ms": 6268.851041793823,
+      "duration_ms": 6962.61191368103,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -122,10 +122,10 @@
     {
       "index": 9,
       "operation": "move_to_coordinate",
-      "success": false,
-      "duration_ms": 125784.25407409668,
+      "success": true,
+      "duration_ms": 19805.777311325073,
       "error_code": null,
-      "error_message": "Operation timed out after 120.0s",
+      "error_message": null,
       "retry_count": 0,
       "robot_id": "Robot1",
       "parallel_group_id": null
@@ -134,7 +134,7 @@
       "index": 10,
       "operation": "detect_object_stereo",
       "success": true,
-      "duration_ms": 848.9389419555664,
+      "duration_ms": 849.2422103881836,
       "error_code": null,
       "error_message": null,
       "retry_count": 0,
@@ -144,19 +144,31 @@
     {
       "index": 11,
       "operation": "move_to_coordinate",
-      "success": false,
-      "duration_ms": 0.1709461212158203,
+      "success": true,
+      "duration_ms": 3384.4778537750244,
       "error_code": null,
-      "error_message": "Spatial feasibility: Path to (0.0016450046844676096, 0.0026733286049402394, -0.011210102552450585) appears blocked for Robot1",
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 12,
+      "operation": "return_to_start_position",
+      "success": true,
+      "duration_ms": 9766.571044921875,
+      "error_code": null,
+      "error_message": null,
       "retry_count": 0,
       "robot_id": "Robot1",
       "parallel_group_id": null
     }
   ],
-  "ops_executed": 12,
-  "ops_succeeded": 10,
-  "success_rate": 0.6,
-  "avg_step_duration_ms": 18485.50373315811,
+  "ops_executed": 13,
+  "ops_succeeded": 13,
+  "success_rate": 1.0,
+  "avg_step_duration_ms": 8238.522566281832,
+  "model": "mistralai/magistral-small-2509",
   "retry_count": 0,
   "first_failure_step": null,
   "chain_metrics": null,
@@ -168,9 +180,9 @@
     "hallucinated_ops": 0,
     "reflexion_recoveries": 0,
     "negotiation_rounds": 0,
-    "success_rate": 0.6,
-    "ops_executed": 12,
-    "ops_succeeded": 10,
+    "success_rate": 1.0,
+    "ops_executed": 13,
+    "ops_succeeded": 13,
     "condition_delta": 0.0,
     "hallucination_delta": 0,
     "grasp_sr": 0.0,
@@ -191,22 +203,27 @@
     "detect_object_stereo": {
       "count": 4,
       "fail_count": 0,
-      "avg_duration_ms": 863.2
+      "avg_duration_ms": 798.2
     },
     "move_to_coordinate": {
       "count": 5,
-      "fail_count": 2,
-      "avg_duration_ms": 28981.4
+      "fail_count": 0,
+      "avg_duration_ms": 7820.9
     },
     "grasp_object": {
       "count": 2,
       "fail_count": 0,
-      "avg_duration_ms": 19605.3
+      "avg_duration_ms": 11684.1
     },
     "place_object": {
       "count": 1,
       "fail_count": 0,
-      "avg_duration_ms": 31222.7
+      "avg_duration_ms": 28580.4
+    },
+    "return_to_start_position": {
+      "count": 1,
+      "fail_count": 0,
+      "avg_duration_ms": 9766.6
     }
   },
   "execution_mode": "live",

@@ -187,7 +187,7 @@ class VisionProcessor:
         if self.enable_visualization:
             try:
                 cv2.destroyWindow(self.viz_window_name)
-            except:
+            except Exception:
                 pass
 
     def _processing_loop(self):
@@ -348,7 +348,7 @@ class VisionProcessor:
                             if platform.system() == "Darwin":
                                 try:
                                     cv2.startWindowThread()
-                                except:
+                                except Exception:
                                     pass
                             cv2.namedWindow(self.viz_window_name, cv2.WINDOW_NORMAL)
                             cv2.resizeWindow(self.viz_window_name, 400, 300)

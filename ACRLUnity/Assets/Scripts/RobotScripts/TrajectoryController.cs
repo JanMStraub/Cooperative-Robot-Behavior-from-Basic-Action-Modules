@@ -109,12 +109,10 @@ namespace Robotics
             }
             else
             {
+                // Triangular profile (no cruise phase); time > tAccel here —
+                // the acceleration phase was handled by the outer branch.
                 float tTotal = 2f * tAccel;
-                if (time <= tAccel)
-                {
-                    return 0.5f * a * time * time;
-                }
-                else if (time < tTotal)
+                if (time < tTotal)
                 {
                     float tDecel = time - tAccel;
                     return profile.accelerationPhaseDistance

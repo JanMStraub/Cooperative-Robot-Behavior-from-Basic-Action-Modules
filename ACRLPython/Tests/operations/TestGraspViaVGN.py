@@ -136,17 +136,12 @@ class _VGNPatch:
         self.mock_broadcaster = MagicMock()
         self.mock_broadcaster.send_command.return_value = self.send_command_return
 
+        # _grasp_via_vgn calls _get_command_broadcaster from its own module namespace
         bc_patch = patch(
             "operations.grasp._vgn._get_command_broadcaster",
             return_value=self.mock_broadcaster if self.broadcaster_available else None,
         )
         self._patches.append(bc_patch.start())
-        # _grasp_via_vgn calls _get_command_broadcaster from its own module namespace
-        bc_vgn_patch = patch(
-            "operations.grasp._vgn._get_command_broadcaster",
-            return_value=self.mock_broadcaster if self.broadcaster_available else None,
-        )
-        self._patches.append(bc_vgn_patch.start())
 
         return self
 

@@ -269,7 +269,13 @@ namespace Robotics
             {
                 for (int j = i + 1; j < n; j++)
                     y[i] -= a[i, j] * y[j];
-                y[i] /= a[i, i];
+                // Columns skipped during factorization leave a zero pivot;
+                // zero that component instead of dividing (NaN would propagate
+                // into the joint deltas).
+                if (System.Math.Abs(a[i, i]) < 1e-12)
+                    y[i] = 0.0;
+                else
+                    y[i] /= a[i, i];
             }
         }
     }

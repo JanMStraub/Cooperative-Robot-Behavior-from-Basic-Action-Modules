@@ -64,6 +64,10 @@ def detect_other_robot(
             return OperationResult.error_result(
                 "TARGET_ROBOT_NOT_FOUND",
                 f"Target robot '{target_robot_id}' not found in world state",
+                [
+                    "Verify target robot is active in Unity",
+                    "Check WorldStatePublisher is sending data",
+                ],
             )
 
         detector_state = world_state.get_robot_state(robot_id)
@@ -71,6 +75,7 @@ def detect_other_robot(
             return OperationResult.error_result(
                 "DETECTOR_ROBOT_NOT_FOUND",
                 f"Detecting robot '{robot_id}' not found in world state",
+                ["Verify robot is active"],
             )
 
         import math
@@ -86,6 +91,7 @@ def detect_other_robot(
             return OperationResult.error_result(
                 "POSITION_DATA_MISSING",
                 "Robot position data missing",
+                ["Ensure WorldStatePublisher is active"],
             )
 
         dx, dy, dz = tuple(a - b for a, b in zip(_xyz(detector_pos), _xyz(target_pos)))
@@ -194,6 +200,7 @@ def mirror_movement_of_other_robot(
             return OperationResult.error_result(
                 "COMMUNICATION_FAILED",
                 "Failed to send command to Unity",
+                ["Ensure Unity is running"],
             )
 
         logger.info(f"Successfully activated mirroring for {robot_id}")
@@ -388,6 +395,10 @@ def check_partner_status(
             return OperationResult.error_result(
                 "PARTNER_NOT_FOUND",
                 f"Partner robot '{partner_robot_id}' not found in world state",
+                [
+                    "Verify partner robot is active in Unity",
+                    "Check WorldStatePublisher is sending data",
+                ],
             )
 
         gripper_state = _field(partner_state, "gripper_state", "unknown")

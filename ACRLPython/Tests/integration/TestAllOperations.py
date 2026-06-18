@@ -79,7 +79,7 @@ class TestSyncOps:
         """wait(duration=0.5) completes in reasonable wall-clock time."""
         start = time.time()
         result = _cmd(
-            "pause execution for 500 milliseconds",
+            "wait 0.5 seconds for Robot1",
             robot_id="Robot1",
             timeout=240.0,
             request_id=200,

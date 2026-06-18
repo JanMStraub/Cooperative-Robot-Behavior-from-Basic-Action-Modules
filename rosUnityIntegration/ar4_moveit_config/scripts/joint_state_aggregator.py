@@ -10,9 +10,9 @@ see all 16 joints (8 per robot) in one topic with unique prefixed names.
 """
 
 import threading
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import JointState
+import rclpy # type: ignore[import-not-found]
+from rclpy.node import Node # type: ignore[import-not-found]
+from sensor_msgs.msg import JointState # type: ignore[import-not-found]
 
 
 class JointStateAggregator(Node):

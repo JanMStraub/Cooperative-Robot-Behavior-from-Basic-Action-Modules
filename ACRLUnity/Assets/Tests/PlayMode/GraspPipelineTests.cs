@@ -225,7 +225,11 @@ namespace Tests.PlayMode
                 _mockEndEffector.position
             );
 
-            // Should filter out unreachable candidates
+            // The far-away candidate exceeds maxReachDistance and must be removed
+            Assert.IsFalse(
+                filteredCandidates.Contains(unreachableCandidate),
+                "Unreachable candidate should be filtered out"
+            );
             Assert.LessOrEqual(
                 filteredCandidates.Count,
                 candidates.Count,

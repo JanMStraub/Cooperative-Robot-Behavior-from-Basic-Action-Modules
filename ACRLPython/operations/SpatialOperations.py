@@ -43,6 +43,11 @@ def move_relative_to_object(
                 return OperationResult.error_result(
                     "OBJECT_NOT_FOUND",
                     f"Object '{object_ref}' not found in world state",
+                    [
+                        "Run object detection first to locate objects",
+                        "Verify object ID is correct",
+                        "Check that object is in camera view",
+                    ],
                 )
         else:
             position = object_ref
@@ -62,12 +67,14 @@ def move_relative_to_object(
             return OperationResult.error_result(
                 "INVALID_RELATION",
                 f"Invalid relation '{relation}'. Must be one of: {', '.join(valid_relations)}",
+                [f"Use one of the valid relations: {', '.join(valid_relations)}"],
             )
 
         if not (0.0 <= offset <= 0.5):
             return OperationResult.error_result(
                 "INVALID_OFFSET",
                 f"Offset {offset} out of range [0.0, 0.5]",
+                ["Use offset between 0.0 and 0.5 meters"],
             )
 
         x, y, z = position
@@ -122,7 +129,11 @@ def move_relative_to_object(
 
     except Exception as e:
         logger.error(f"Error in move_relative_to_object: {e}", exc_info=True)
-        return OperationResult.error_result("EXECUTION_ERROR", str(e))
+        return OperationResult.error_result(
+            "EXECUTION_ERROR",
+            str(e),
+            ["Check logs for details", "Verify parameters are correct"],
+        )
 
 
 def create_move_relative_to_object_operation() -> BasicOperation:

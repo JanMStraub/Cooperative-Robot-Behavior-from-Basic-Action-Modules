@@ -52,12 +52,20 @@ def grasp_object(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
+                [
+                    "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
+                    "Check RobotManager in Unity for available robot IDs",
+                ],
             )
 
         if not object_id or not isinstance(object_id, str):
             return OperationResult.error_result(
                 "INVALID_OBJECT_ID",
                 f"Object ID must be a non-empty string, got: {object_id}",
+                [
+                    "Provide a valid object ID or name",
+                    "Ensure object is detected and tracked in the scene",
+                ],
             )
 
         if object_id.startswith("$"):
@@ -65,6 +73,10 @@ def grasp_object(
                 "UNRESOLVED_VARIABLE",
                 f"object_id '{object_id}' is an unresolved variable reference — "
                 "run detect_object_stereo before grasp_object to capture the target",
+                [
+                    "Add a detect_object_stereo step before grasp_object",
+                    "Check that capture_var is set on the detection step",
+                ],
             )
 
         _approach_aliases = {"left": "left_side", "right": "right_side"}
@@ -76,6 +88,10 @@ def grasp_object(
             return OperationResult.error_result(
                 "INVALID_APPROACH",
                 f"Preferred approach must be one of {valid_approaches}, got: {preferred_approach}",
+                [
+                    "Use 'top' for standard top-down approach (default)",
+                    "Or specify 'front', 'side', or 'auto' explicitly",
+                ],
             )
 
         if (
@@ -91,6 +107,10 @@ def grasp_object(
                 return OperationResult.error_result(
                     "INVALID_APPROACH_VECTOR",
                     f"Custom approach vector must be a 3-element list [x, y, z], got: {custom_approach_vector}",
+                    [
+                        "Provide a valid 3D vector: [x, y, z]",
+                        "Example: [0, 1, 0] for upward approach",
+                    ],
                 )
 
         # Signal intent for joint-attention and anticipatory refresh
@@ -356,6 +376,10 @@ def grasp_object(
             return OperationResult.error_result(
                 "COMMUNICATION_ERROR",
                 "CommandBroadcaster not available",
+                [
+                    "Ensure CommandServer is running",
+                    "Check server initialization in orchestrator",
+                ],
             )
 
         logger.info(f"Sending grasp_object command: {robot_id} -> {object_id}")
@@ -376,11 +400,23 @@ def grasp_object(
             return OperationResult.error_result(
                 "COMMUNICATION_ERROR",
                 "Failed to send grasp command to Unity",
+                [
+                    "Check Unity is connected to CommandServer",
+                    "Verify network connectivity",
+                ],
             )
 
     except Exception as e:
         logger.exception(f"Exception in grasp_object operation: {e}")
-        return OperationResult.error_result("EXCEPTION", str(e))
+        return OperationResult.error_result(
+            "EXCEPTION",
+            str(e),
+            [
+                "Check stack trace in logs",
+                "Verify all parameters are correct",
+                "Ensure Unity is running and responsive",
+            ],
+        )
     finally:
         # Clear movement intent regardless of outcome
         try:

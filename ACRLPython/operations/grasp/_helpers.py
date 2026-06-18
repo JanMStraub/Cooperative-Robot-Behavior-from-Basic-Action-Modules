@@ -267,7 +267,11 @@ def _handle_ros_failure(error_msg: str, context: str):
     if _get_control_mode() == "hybrid":
         logger.warning(f"{context}: {error_msg}, falling back to TCP")
         return True, None
-    return False, OperationResult.error_result("ROS_PLANNING_FAILED", error_msg)
+    return False, OperationResult.error_result(
+        "ROS_PLANNING_FAILED",
+        error_msg,
+        ["Check MoveIt logs", "Verify object is reachable"],
+    )
 
 
 def _yaw_from_world_state_or_robot(

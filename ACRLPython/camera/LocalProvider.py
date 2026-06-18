@@ -76,7 +76,7 @@ class LocalProvider(CameraProvider):
         return None
 
     def get_depth_frame(self) -> Optional[np.ndarray]:
-        """Not yet implemented; wire in pyrealsense2 for Phase 4."""
+        """Not yet implemented."""
         return None
 
     def __del__(self):

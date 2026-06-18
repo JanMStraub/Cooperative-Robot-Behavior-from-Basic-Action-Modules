@@ -57,6 +57,10 @@ def analyze_scene(
             return OperationResult.error_result(
                 "NO_IMAGES",
                 "No stereo images available for analysis",
+                [
+                    "Ensure StereoCameraController is sending images",
+                    "Check camera_id parameter",
+                ],
             )
         _, image, _, _ = stereo_data
 
@@ -82,7 +86,11 @@ def analyze_scene(
 
     except Exception as e:
         logger.error(f"Scene analysis failed: {e}")
-        return OperationResult.error_result("ANALYSIS_FAILED", str(e))
+        return OperationResult.error_result(
+            "ANALYSIS_FAILED",
+            str(e),
+            ["Check LM Studio is running", "Verify model is loaded"],
+        )
 
 
 def create_analyze_scene_operation() -> BasicOperation:
@@ -251,13 +259,21 @@ def detect_object_stereo(
                 msg = f"Timeout waiting for stereo images from {camera_id}"
                 if available:
                     msg += f" (available: {available})"
-                return OperationResult.error_result("NO_IMAGES", msg)
+                return OperationResult.error_result(
+                    "NO_IMAGES",
+                    msg,
+                    hints,
+                )
         else:
             stereo_data = storage.get_stereo_pair(camera_id)
             if stereo_data is None:
                 return OperationResult.error_result(
                     "NO_CACHED_IMAGES",
                     f"No cached stereo images available for {camera_id}",
+                    [
+                        "Request fresh capture with request_fresh_capture=True",
+                        "Ensure Unity is sending stereo images",
+                    ],
                 )
 
         imgL, imgR, _ = stereo_data
@@ -392,12 +408,14 @@ def detect_object_stereo(
             return OperationResult.error_result(
                 "DETECTION_ERROR",
                 "Failed to get detection result",
+                ["Internal error: detection_result was not assigned"],
             )
 
         if not detection_result.detections:
             return OperationResult.error_result(
                 "NO_DETECTIONS",
                 "No objects detected in scene",
+                ["Ensure objects are visible", "Check lighting conditions"],
             )
 
         logger.debug(
@@ -424,6 +442,11 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "COLOR_NOT_FOUND",
                     f"No {color} objects detected (found: {detected_colors})",
+                    [
+                        f"Looking for {color} objects",
+                        f"Detected colors: {detected_colors}",
+                        "Check color parameter",
+                    ],
                 )
 
         detections = [d for d in detections if d.confidence >= min_confidence]
@@ -431,6 +454,7 @@ def detect_object_stereo(
             return OperationResult.error_result(
                 "LOW_CONFIDENCE",
                 f"No objects detected above confidence threshold {min_confidence}",
+                ["Lower min_confidence threshold", "Improve lighting conditions"],
             )
 
         if max_distance is not None:
@@ -450,6 +474,7 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "OUT_OF_RANGE",
                     f"No objects detected within {max_distance}m",
+                    ["Increase max_distance", "Move objects closer"],
                 )
 
         if selection == "left":
@@ -458,6 +483,7 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "NO_DEPTH",
                     "No detections have valid world positions",
+                    ["Object may be too close or too far", "Check stereo calibration"],
                 )
             best = min(valid_detections, key=lambda d: cast(tuple, d.world_position)[0])
 
@@ -477,6 +503,7 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "NO_DEPTH",
                     "No detections have valid world positions",
+                    ["Check stereo calibration", "Objects may be too close/far"],
                 )
             best = max(valid_detections, key=lambda d: cast(tuple, d.world_position)[0])
             logger.debug(
@@ -518,12 +545,14 @@ def detect_object_stereo(
             return OperationResult.error_result(
                 "INVALID_SELECTION",
                 f"Invalid selection strategy: {selection}",
+                ["Use 'left', 'right', 'closest', 'first', or 'all'"],
             )
 
         if best.world_position is None:
             return OperationResult.error_result(
                 "NO_DEPTH",
                 "Could not estimate depth for selected object",
+                ["Check stereo calibration", "Objects may be too close/far"],
             )
 
         result = {
@@ -613,7 +642,11 @@ def detect_object_stereo(
 
     except Exception as e:
         logger.error(f"Detection failed: {e}", exc_info=True)
-        return OperationResult.error_result("DETECTION_FAILED", str(e))
+        return OperationResult.error_result(
+            "DETECTION_FAILED",
+            str(e),
+            ["Check camera connection", "Ensure Python environment is configured"],
+        )
 
 
 def create_detect_object_stereo_operation() -> BasicOperation:

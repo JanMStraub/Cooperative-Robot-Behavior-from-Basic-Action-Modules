@@ -105,6 +105,12 @@ def control_gripper(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity - no clients connected",
+                    [
+                        "Ensure Unity is running with UnifiedPythonReceiver active",
+                        "Verify CommandServer is running (port 5007)",
+                        "Check Unity console for connection errors",
+                        "Restart backend: python -m orchestrators.RunRobotController",
+                    ],
                 )
             logger.info(f"Successfully sent control_gripper command to {robot_id}")
             _update_gripper_world_state()
@@ -121,7 +127,16 @@ def control_gripper(
 
     except Exception as e:
         logger.error(f"Unexpected error in control_gripper: {e}", exc_info=True)
-        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            str(e),
+            [
+                "Check logs for detailed error information",
+                "Verify all parameters are correct types",
+                "Retry the operation",
+                "Report bug if error persists",
+            ],
+        )
 
 
 def create_control_gripper_operation() -> BasicOperation:
@@ -208,6 +223,7 @@ def release_object(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
+                ["Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')"],
             )
 
         def _ros_path():
@@ -242,6 +258,10 @@ def release_object(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity - no clients connected",
+                    [
+                        "Ensure Unity is running with UnifiedPythonReceiver active",
+                        "Verify CommandServer is running (port 5007)",
+                    ],
                 )
             logger.info(f"Successfully sent release_object command to {robot_id}")
             return OperationResult.success_result(
@@ -256,7 +276,11 @@ def release_object(
 
     except Exception as e:
         logger.error(f"Unexpected error in release_object: {e}", exc_info=True)
-        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            str(e),
+            ["Check logs for detailed error information", "Retry the operation"],
+        )
 
 
 def create_release_object_operation() -> BasicOperation:
@@ -401,6 +425,7 @@ def place_object(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
+                ["Provide a valid robot ID (e.g., 'Robot1')"],
             )
 
         effective_y = y
@@ -554,6 +579,10 @@ def place_object(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity - no clients connected",
+                    [
+                        "Ensure Unity is running with UnifiedPythonReceiver active",
+                        "Verify CommandServer is running (port 5007)",
+                    ],
                 )
             return OperationResult.success_result(
                 {
@@ -570,7 +599,11 @@ def place_object(
 
     except Exception as e:
         logger.error(f"Unexpected error in place_object: {e}", exc_info=True)
-        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            str(e),
+            ["Check logs for detailed error information", "Retry the operation"],
+        )
 
 
 PLACE_OBJECT_OPERATION = BasicOperation(
@@ -679,6 +712,7 @@ def place_between_objects(
             return OperationResult.error_result(
                 "INVALID_ROBOT_ID",
                 f"Robot ID must be a non-empty string, got: {robot_id}",
+                ["Provide a valid robot ID (e.g., 'Robot1')"],
             )
 
         try:
@@ -702,11 +736,19 @@ def place_between_objects(
             return OperationResult.error_result(
                 "OBJECT_NOT_FOUND",
                 f"Object '{object_id_1}' not found in WorldState",
+                [
+                    f"Detect '{object_id_1}' with detect_object_stereo first",
+                    "Check object name matches WorldState entry",
+                ],
             )
         if pos2 is None:
             return OperationResult.error_result(
                 "OBJECT_NOT_FOUND",
                 f"Object '{object_id_2}' not found in WorldState",
+                [
+                    f"Detect '{object_id_2}' with detect_object_stereo first",
+                    "Check object name matches WorldState entry",
+                ],
             )
 
         mid_x = (pos1[0] + pos2[0]) / 2.0
@@ -739,7 +781,11 @@ def place_between_objects(
 
     except Exception as e:
         logger.error(f"Unexpected error in place_between_objects: {e}", exc_info=True)
-        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            str(e),
+            ["Check logs for detailed error information", "Retry the operation"],
+        )
 
 
 PLACE_BETWEEN_OBJECTS_OPERATION = BasicOperation(

@@ -171,6 +171,11 @@ def _execute_wait_for_signal(
             return OperationResult.error_result(
                 error_code="WAIT_TIMEOUT",
                 message=f"Timeout waiting for event '{event_name}' after {timeout_ms}ms",
+                recovery_suggestions=[
+                    f"Check if the signaling robot is executing signal('{event_name}')",
+                    "Increase timeout_ms if operation takes longer than expected",
+                    "Verify execution order - signal must come after wait_for_signal starts",
+                ],
             )
     except Exception as e:
         return OperationResult.error_result(
@@ -285,12 +290,14 @@ def _execute_reset_simulation(**_kwargs) -> OperationResult:
         return OperationResult.error_result(
             "COMMUNICATION_FAILED",
             "Failed to send reset_simulation to Unity or timed out",
+            ["Ensure Unity is running and connected to CommandServer (port 5007)"],
         )
 
     if not completion.get("success", False):
         return OperationResult.error_result(
             "RESET_FAILED",
             "Simulation reset did not complete successfully",
+            ["Check Unity console for SimulationManager errors"],
         )
 
     return OperationResult.success_result({"reset": True})
@@ -367,6 +374,11 @@ def yield_workspace(
                 f"Timeout waiting for workspace region '{region_id}' to be cleared "
                 f"after {timeout_ms}ms. Partner must call signal('region_clear_{region_id}')."
             ),
+            recovery_suggestions=[
+                f"Partner robot should call signal('region_clear_{region_id}') when leaving the region",
+                "Increase timeout_ms if the partner robot needs more time",
+                "Verify the partner robot's task sequence includes the clear signal",
+            ],
         )
 
     waited_ms = (time.time() - start_time) * 1000

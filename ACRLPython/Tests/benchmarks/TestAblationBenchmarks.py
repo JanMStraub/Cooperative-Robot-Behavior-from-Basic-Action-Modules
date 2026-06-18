@@ -425,16 +425,16 @@ def test_b11_ground_truth_list_matches_tasks():
     assert all(isinstance(op, str) and op for op in gt)
 
 
-def test_b12_negotiation_offline_produces_paired_conditions_with_delta():
-    """B12 offline must produce both conditions with delta fields."""
+def test_b12_reflexion_offline_produces_single_condition():
+    """B12 offline runs one condition per invocation, driven by reflexion_enabled."""
     from benchmarks.Runner import BenchmarkRunner
     from benchmarks.Config import DualRobotConfig
 
     runner = BenchmarkRunner()
-    cfg = DualRobotConfig(dry_run=True, execution_mode="offline", use_negotiation=True)
+    cfg = DualRobotConfig(dry_run=True, execution_mode="offline", reflexion_enabled=True)
     result = runner.run(12, cfg)
 
     assert result.ablation is not None
-    assert result.ablation_baseline is not None
-    assert isinstance(result.ablation.negotiation_rounds, int)
-    assert isinstance(result.ablation.condition_delta, float)
+    assert result.ablation_baseline is None
+    assert result.ablation.condition == "enabled"
+    assert result.ablation.reflexion_recoveries > 0

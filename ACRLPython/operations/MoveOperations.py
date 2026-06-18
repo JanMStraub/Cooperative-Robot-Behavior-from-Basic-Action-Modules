@@ -134,6 +134,12 @@ def move_to_coordinate(
                 return OperationResult.error_result(
                     "COMMUNICATION_FAILED",
                     "Failed to send command to Unity - no clients connected",
+                    [
+                        "Ensure Unity is running with UnifiedPythonReceiver active",
+                        "Verify CommandServer is running (port 5007)",
+                        "Check Unity console for connection errors",
+                        "Restart backend: python -m orchestrators.RunRobotController",
+                    ],
                 )
             logger.info(f"Successfully sent move_to_coordinate command to {robot_id}")
             return OperationResult.success_result(
@@ -152,7 +158,16 @@ def move_to_coordinate(
 
     except Exception as e:
         logger.error(f"Unexpected error in move_to_coordinate: {e}", exc_info=True)
-        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            str(e),
+            [
+                "Check logs for detailed error information",
+                "Verify all parameters are correct types",
+                "Retry the operation",
+                "Report bug if error persists",
+            ],
+        )
 
 
 def create_move_to_coordinate_operation() -> BasicOperation:
@@ -546,7 +561,15 @@ def pick_object_at_coordinate(
         logger.error(
             f"Unexpected error in pick_object_at_coordinate: {e}", exc_info=True
         )
-        return OperationResult.error_result("UNEXPECTED_ERROR", str(e))
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            str(e),
+            [
+                "Check logs for detailed error information",
+                "Verify all parameters are correct types",
+                "Retry the operation",
+            ],
+        )
 
 
 def create_pick_object_at_coordinate_operation() -> BasicOperation:

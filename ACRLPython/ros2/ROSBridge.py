@@ -69,8 +69,11 @@ class ROSBridge:
 
         self._socket = None
         self._connected = False
-        self._lock = threading.Lock()
-        self._recv_buffer = ""  # Persistent buffer; accessed only under self._lock
+        # Instance-level I/O lock (distinct from the class-level _lock that
+        # guards singleton creation): serializes request/response cycles on
+        # the single shared socket.
+        self._io_lock = threading.Lock()
+        self._recv_buffer = ""  # Persistent buffer; accessed only under self._io_lock
 
     @property
     def is_connected(self):
@@ -128,7 +131,7 @@ class ROSBridge:
             logger.error("Not connected to ROS bridge")
             return None
 
-        with self._lock:
+        with self._io_lock:
             try:
                 msg = json.dumps(command) + "\n"
                 self._socket.sendall(msg.encode("utf-8"))

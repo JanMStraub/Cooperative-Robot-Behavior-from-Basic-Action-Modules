@@ -17,6 +17,7 @@ EXPECTED_OP_CHAIN: list[str] = [
 OPTIONAL_OPS: list[str] = [
     "release_object",
     "return_to_start_position",
+    "control_gripper",
 ]
 
 OPTIONAL_SUFFIX_OPS: list[str] = [

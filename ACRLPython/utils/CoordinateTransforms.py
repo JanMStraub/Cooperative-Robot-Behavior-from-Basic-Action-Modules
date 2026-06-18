@@ -270,3 +270,6 @@ def add_robot_transform(
         "position": position,
         "y_rotation": y_rotation,
     }
+    # Keep the precomputed NumPy matrices in sync — the *_np functions read
+    # from _NP_TRANSFORM_CACHE, which is otherwise only built at import time.
+    _NP_TRANSFORM_CACHE.update(_build_np_transform_cache())

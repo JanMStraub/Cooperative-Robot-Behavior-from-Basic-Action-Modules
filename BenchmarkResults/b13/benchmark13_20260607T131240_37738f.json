@@ -525,6 +525,6 @@
     "_parallelism_ratio": 0.5135,
     "_ops_in_parallel": 19
   },
-  "execution_mode": "offline",
+  "execution_mode": "live",
   "task_breakdown": []
 }

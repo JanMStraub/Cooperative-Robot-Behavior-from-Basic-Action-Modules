@@ -199,3 +199,6 @@ ACRLUnity/unity-*-test.log
 ACRLPython/acrl/
 ACRLPython/benchmark_results/
 ACRLPython/kg_snapshots
+# README figures — keep tracked despite images/ and *.png rules above
+!Misc/images/
+!Misc/images/**

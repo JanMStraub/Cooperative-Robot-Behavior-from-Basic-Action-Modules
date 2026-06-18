@@ -12,6 +12,7 @@ otherwise recovered from the directory path (``benchmark_results/bN/<model>/...`
 from __future__ import annotations
 
 import json
+import math
 from collections import defaultdict
 from pathlib import Path
 
@@ -122,7 +123,7 @@ def plot_success_rate_by_model(groups: dict[int, list[dict]]) -> None:
         return
     ordered = models_in(groups, bids)
 
-    fig, ax = plt.subplots(figsize=(max(11, 1.1 * len(bids)), 5.5))
+    fig, ax = plt.subplots(figsize=(max(12, 1.2 * len(bids)), 6.5))
     x = np.arange(len(bids))
     n = len(ordered)
     width = 0.8 / max(n, 1)
@@ -130,11 +131,7 @@ def plot_success_rate_by_model(groups: dict[int, list[dict]]) -> None:
     for i, model in enumerate(ordered):
         means, stds = [], []
         for bid in bids:
-            srs = [
-                r["success_rate"]
-                for r in groups[bid]
-                if r["_model"] == model
-            ]
+            srs = [r["success_rate"] for r in groups[bid] if r["_model"] == model]
             means.append(np.mean(srs) if srs else np.nan)
             stds.append(np.std(srs) if srs else 0.0)
         offset = (i - (n - 1) / 2) * width
@@ -152,14 +149,13 @@ def plot_success_rate_by_model(groups: dict[int, list[dict]]) -> None:
 
     labels = [f"B{bid}\n{groups[bid][0]['benchmark_name']}" for bid in bids]
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_xticklabels(labels, fontsize=12, rotation=35, ha="right")
+    ax.tick_params(axis="y", labelsize=12)
     ax.set_ylim(0, 1.12)
-    ax.set_ylabel("Success Rate", fontsize=12)
-    ax.set_title(
-        "Task Success Rate by Model", fontsize=14, fontweight="bold"
-    )
+    ax.set_ylabel("Success Rate", fontsize=15)
+    ax.set_title("Task Success Rate by Model", fontsize=17, fontweight="bold")
     ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
-    ax.legend(fontsize=8, ncol=min(n, 3), loc="lower left")
+    ax.legend(fontsize=11, ncol=min(n, 3), loc="lower left")
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
@@ -191,7 +187,9 @@ def plot_model_task_heatmap(groups: dict[int, list[dict]]) -> None:
     ax.set_xticks(range(len(bids)))
     ax.set_xticklabels(
         [f"B{bid}  {groups[bid][0]['benchmark_name']}" for bid in bids],
-        fontsize=8, rotation=35, ha="right",
+        fontsize=8,
+        rotation=35,
+        ha="right",
     )
     ax.set_yticks(range(len(ordered)))
     ax.set_yticklabels(ordered, fontsize=10)
@@ -201,14 +199,16 @@ def plot_model_task_heatmap(groups: dict[int, list[dict]]) -> None:
             val = matrix[i, j]
             if not np.isnan(val):
                 ax.text(
-                    j, i, f"{val:.0%}",
-                    ha="center", va="center", fontsize=8,
+                    j,
+                    i,
+                    f"{val:.0%}",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
                     color="black" if 0.3 < val < 0.8 else "white",
                 )
 
-    ax.set_title(
-        "Model x Task Success Matrix", fontsize=14, fontweight="bold"
-    )
+    ax.set_title("Model x Task Success Matrix", fontsize=14, fontweight="bold")
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "02_model_task_heatmap.png", dpi=150)
     plt.close(fig)
@@ -290,8 +290,12 @@ def plot_duration_by_model(groups: dict[int, list[dict]]) -> None:
             val = matrix[i, j]
             if not np.isnan(val):
                 ax.text(
-                    j, i, f"{val:.0f}",
-                    ha="center", va="center", fontsize=8,
+                    j,
+                    i,
+                    f"{val:.0f}",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
                     color="white" if val > 0.55 * vmax else "black",
                 )
 
@@ -323,12 +327,15 @@ def plot_op_latency(groups: dict[int, list[dict]]) -> None:
     if not interesting_ops:
         return
 
+    ncols = math.ceil(math.sqrt(len(interesting_ops)))
+    nrows = math.ceil(len(interesting_ops) / ncols)
     fig, axes = plt.subplots(
-        1, len(interesting_ops),
-        figsize=(max(12, 2.5 * len(interesting_ops)), 5), sharey=False,
+        nrows,
+        ncols,
+        figsize=(3.5 * ncols, 4 * nrows),
+        sharey=False,
     )
-    if len(interesting_ops) == 1:
-        axes = [axes]
+    axes = axes.flatten() if nrows * ncols > 1 else [axes]
 
     for ax, op in zip(axes, interesting_ops):
         bid_data = op_bid_durations[op]
@@ -343,14 +350,18 @@ def plot_op_latency(groups: dict[int, list[dict]]) -> None:
             patch.set_facecolor(op_color(op))
             patch.set_alpha(0.8)
         ax.set_title(op.replace("_", "\n"), fontsize=8, fontweight="bold")
-        ax.set_ylabel("Duration (ms)" if op == interesting_ops[0] else "")
+        ax.set_ylabel("Duration (ms)")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.tick_params(axis="x", labelsize=8)
 
+    for ax in axes[len(interesting_ops):]:
+        ax.set_visible(False)
+
     fig.suptitle(
         "Per-Operation Step Duration by Benchmark (all models pooled)",
-        fontsize=13, fontweight="bold",
+        fontsize=13,
+        fontweight="bold",
     )
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "05_op_latency.png", dpi=150)
@@ -399,8 +410,12 @@ def plot_reliability_heatmap(groups: dict[int, list[dict]]) -> None:
             val = matrix[i, j]
             if not np.isnan(val):
                 ax.text(
-                    j, i, f"{val:.0%}",
-                    ha="center", va="center", fontsize=8,
+                    j,
+                    i,
+                    f"{val:.0%}",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
                     color="black" if 0.3 < val < 0.8 else "white",
                 )
 
@@ -456,17 +471,26 @@ def plot_coordination_timeline(groups: dict[int, list[dict]]) -> None:
             start = cursor[robot]
             y = robot_y.get(robot, 0)
             rect = mpatches.FancyBboxPatch(
-                (start, y - 0.35), dur, 0.7,
+                (start, y - 0.35),
+                dur,
+                0.7,
                 boxstyle="round,pad=0.02",
-                facecolor=color, edgecolor="white", linewidth=0.5,
+                facecolor=color,
+                edgecolor="white",
+                linewidth=0.5,
                 alpha=0.85 if step["success"] else 0.35,
             )
             ax.add_patch(rect)
             if dur > 0.5:
                 ax.text(
-                    start + dur / 2, y, op.replace("_", "\n"),
-                    ha="center", va="center", fontsize=5.5,
-                    color="white", fontweight="bold",
+                    start + dur / 2,
+                    y,
+                    op.replace("_", "\n"),
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color="black",
+                    fontweight="bold",
                 )
             cursor[robot] += dur
             if op not in legend_ops:
@@ -480,7 +504,9 @@ def plot_coordination_timeline(groups: dict[int, list[dict]]) -> None:
         ax.set_xlabel("Time (s)", fontsize=10)
         title_suffix = " [FAILED]" if not run["success"] else ""
         ax.set_title(f"B{bid}: {name}{title_suffix}", fontsize=12, fontweight="bold")
-        ax.legend(handles=patches, loc="upper right", fontsize=7, framealpha=0.9, ncol=2)
+        ax.legend(
+            handles=patches, loc="upper right", fontsize=7, framealpha=0.9, ncol=2
+        )
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         ax.grid(axis="x", linestyle="--", alpha=0.4)
@@ -572,13 +598,19 @@ def plot_ablation(groups: dict[int, list[dict]]) -> None:
     for j, bid in enumerate(abl_bids):
         cs = per_bid[bid]
         treat = next((c for c in ("enabled", "ros") if c in cs), None)
-        control = "disabled" if "disabled" in cs else ("unity" if "unity" in cs else None)
+        control = (
+            "disabled" if "disabled" in cs else ("unity" if "unity" in cs else None)
+        )
         if treat and control and treat != control:
             delta = np.mean(cs[treat]) - np.mean(cs[control])
             top = float(max(np.mean(cs[treat]), np.mean(cs[control])))
             ax.text(
-                j, top + 0.05, f"Δ {delta:+.0%}",
-                ha="center", fontsize=9, fontweight="bold",
+                j,
+                top + 0.05,
+                f"Δ {delta:+.0%}",
+                ha="center",
+                fontsize=9,
+                fontweight="bold",
                 color="#333333",
             )
 

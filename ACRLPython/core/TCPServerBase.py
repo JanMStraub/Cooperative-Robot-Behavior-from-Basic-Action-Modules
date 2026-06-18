@@ -531,7 +531,9 @@ class TCPServerBase(ABC):
 
         while self._running:
             # Sleep in small increments so we respond to stop() promptly.
-            for _ in range(int(self.HEARTBEAT_INTERVAL / 1.0)):
+            # max(1, ...) guards against a sub-second interval producing range(0),
+            # which would turn this loop into a busy spin.
+            for _ in range(max(1, int(self.HEARTBEAT_INTERVAL))):
                 if not self._running:
                     break
                 time.sleep(1.0)

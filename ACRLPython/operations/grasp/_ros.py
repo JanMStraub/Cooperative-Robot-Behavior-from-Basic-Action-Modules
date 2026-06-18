@@ -256,6 +256,10 @@ def _grasp_via_ros_planned(
             OperationResult.error_result(
                 "GRASP_EXECUTION_FAILED",
                 f"Grasp execution failed for {robot_id}: {grasp_fail_reason}",
+                [
+                    "Check gripper hardware/simulation state",
+                    "Verify GripperContactSensor is active",
+                ],
             ),
             False,
         )
@@ -429,6 +433,10 @@ def _grasp_via_ros_position_only(
             OperationResult.error_result(
                 "GRASP_EXECUTION_FAILED",
                 f"Grasp execution failed for {robot_id}: {grasp_fail_reason}",
+                [
+                    "Check gripper hardware/simulation state",
+                    "Verify GripperContactSensor is active",
+                ],
             ),
             False,
         )

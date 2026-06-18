@@ -38,6 +38,7 @@ def receive_handoff(
                 return OperationResult.error_result(
                     f"INVALID_{param.upper()}",
                     f"{param} must be a non-empty string, got: {value}",
+                    [f"Provide a valid {param} such as 'Robot2'"],
                 )
 
         try:
@@ -93,6 +94,7 @@ def receive_handoff(
             return OperationResult.error_result(
                 "OBJECT_NOT_IN_WORLD_STATE",
                 f"Object '{object_id}' position not found in WorldState",
+                ["Ensure detect_object_stereo was run before receive_handoff"],
             )
 
         if object_dimensions is None:
@@ -172,6 +174,10 @@ def receive_handoff(
                     "APPROACH_UNREACHABLE",
                     f"receive_handoff: approach position ({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f}) "
                     f"is outside {robot_id}'s reach — {reach_reason}",
+                    [
+                        "Ensure source robot moves object to shared zone before signalling",
+                        "Check handoff position is within receiving robot's workspace",
+                    ],
                 )
         except Exception as _e:
             logger.warning(
@@ -403,6 +409,10 @@ def receive_handoff(
             return OperationResult.error_result(
                 "MOVE_FAILED",
                 f"receive_handoff: approach failed — {approach_error}",
+                [
+                    "Check for workspace collision",
+                    "Verify approach_position is reachable",
+                ],
             )
 
         from ..GripperOperations import control_gripper
@@ -416,6 +426,7 @@ def receive_handoff(
             return OperationResult.error_result(
                 "GRIPPER_FAILED",
                 f"receive_handoff: gripper close failed — {gripper_result.error}",
+                ["Check gripper state", "Verify object is within gripper reach"],
             )
 
         # Destroy source robot's FixedJoint immediately after closing ours.
@@ -492,7 +503,11 @@ def receive_handoff(
 
     except Exception as e:
         logger.exception(f"Exception in receive_handoff: {e}")
-        return OperationResult.error_result("EXCEPTION", str(e))
+        return OperationResult.error_result(
+            "EXCEPTION",
+            str(e),
+            ["Check stack trace in logs", "Verify WorldState is populated"],
+        )
 
 
 RECEIVE_HANDOFF_OPERATION = BasicOperation(

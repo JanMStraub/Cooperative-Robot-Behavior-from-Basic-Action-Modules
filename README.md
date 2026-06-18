@@ -1,62 +1,65 @@
-# Auto-Cooperative Robot Learning
+# Building Cooperative Robot Behavior from Basic Action Modules
 
-A Unity-based simulation environment for dual AR4 robotic arms that collaboratively solve tasks through LLM-driven multi-agent coordination. This project is part of a master's thesis exploring autonomous cooperative behavior in robotic systems.
+LLM-driven collaborative control for two AR4 robotic arms. A locally hosted vision-language model translates natural-language instructions into coordinated dual-arm behavior by composing a structured pool of 29 robot operations — no task-specific training, no hard-coded sequencing logic, no cloud dependencies. Developed as a master's thesis at Heidelberg University (project codename **ACRL** — Auto-Cooperative Robot Learning).
 
-## Description
+<p align="center">
+  <img src="Misc/images/robot_env.png" width="560" alt="Unity simulation environment with two AR4 arms, manipulation objects, lettered placement fields, and stereo camera rig">
+</p>
 
-The goal of this project is to have two AR4 robot arms positioned facing each other that collaboratively solve tasks. The system uses inverse kinematics control, LLM-driven task planning, multi-robot coordination patterns, and vision-based object detection.
+Given a single prompt like *"Robot1 and Robot2 perform a handoff of the red cube"*, the LLM selects and sequences operations from the pool — detection, grasping, signaling, handoff reception — with the coordination emerging entirely from its use of `signal`/`wait_for_signal` primitives:
+
+<p align="center">
+  <img src="Misc/images/example_command_flow.png" width="800" alt="Example command flow: LLM-planned handoff sequence across both robots">
+</p>
+
+## Highlights
+
+- **100% task success** on all single-robot benchmarks (B1–B5, 25 runs) and the dual-robot handoff (B6) with Magistral Small 2509 (24B, 4-bit) — zero hallucinated operations, zero retries
+- **Sustained reliability**: chains of 20 heterogeneous sub-tasks (85 operations per run) complete without failure across all runs (B8)
+- **Emergent parallelism**: the planner identifies task-level independence and emits concurrent dual-robot plans without being told to (B10)
+- **Quantified ablations**: ROS/MoveIt routing +76 pp per-task success, reflexion +28 pp, negotiation +25 pp; knowledge-graph context injection and VGN are honestly reported as negative/null results
+- **Known limitation**: concurrent bimanual manipulation (B7) remains unsolved — the LLM decomposes simultaneous grasps into sequential plans that deadlock or violate separation constraints
 
 **Key Features**:
 
-- Unity 6000.3.11f1 simulation environment with physics-based ArticulationBody robots
-- Damped least-squares inverse kinematics (6-DOF control)
-- Multi-robot coordination via signal/wait primitives and collaborative operations
-- Unified Python Backend: Single entry point (RunRobotController) orchestrates all servers
-- Operations System: 29 registered operations including atomic actions, perception, sync primitives, and bimanual cooperative ops
-- AutoRT System: Autonomous task generation with LLM-based planning and human-in-the-loop approval
-- Knowledge Graph: Dynamic relation tracking for tracking complex topological environment states
-- ROS 2 & Docker Integration: Physical robot control capabilities via `ROSMotionClient` and containerized ROS deployments
-- Advanced Python Grasp Planning: Approach-aware motion (Top/Front/Side) generation and scoring via Python backend
-- LLM vision integration for scene understanding and natural language commands
-- Object detection with YOLO streaming support
-- Stereo Vision & VGN: 3D object localization, stereo depth map reconstruction, and VGN-based local grasp network
-- Camera/ & Hardware/ Abstraction: Sim2real switching via `--env sim|real` flag; no code changes required
-- Web UI (Mission Control): Optional dashboard served via `--web PORT`; REST/WebSocket endpoints
-- Protocol: Request ID correlation for reliable multi-robot communication
-- RAG System: Integrated semantic search for operation matching in natural language commands
-- Python-Unity TCP communication with persistent connections and health checks
+- Unity 6000.3.11f1 simulation with physics-based ArticulationBody robots and damped least-squares IK (6-DOF)
+- 29-operation registry in four complexity tiers (Atomic / Basic / Intermediate / Complex) with variable passing between operations
+- RAG-augmented command parsing: semantic retrieval narrows the LLM context to relevant operations
+- Reflexion-style failure recovery: structured error feedback drives corrective re-planning
+- Optional multi-agent negotiation protocol for role-ambiguous dual-robot tasks
+- ROS 2 / MoveIt collision-aware motion planning (Docker, planning-only — Unity executes)
+- Stereo vision + YOLO object detection; optional VGN neural grasp-pose prediction (runs on Apple Silicon)
+- AutoRT-style autonomous task generation with two-layer safety (semantic LLM + kinematic code checks)
+- Optional NetworkX knowledge graph for spatial reasoning
+- Sim2real hardware abstraction: `--env sim|real` switches camera/robot adapters, no code changes
+- Mission Control web dashboard (FastAPI) with benchmark analytics
 
 ## Getting Started
 
 ### Prerequisites
 
 - **Unity Hub** with Unity Editor **6000.3.11f1** (exact version required)
-- **Python 3.8+** with virtual environment support
+- **Python 3.12** with virtual environment support
+- **Docker** (for the ROS 2 / MoveIt stack — ROS is enabled by default; skip with `--without-ros`)
+- **LM Studio** serving:
+  - `mistralai/magistral-small-2509` (planning/reasoning model)
+  - `text-embedding-nomic-embed-text-v1.5` (RAG embeddings)
+  - OpenAI-compatible endpoint at `http://127.0.0.1:1234/v1` (default)
 - **Git** with submodule support
-- **LM Studio** (or other tool like it, for RAG embeddings and LLM-based task generation)
 
 ### Dependencies
 
-**Unity Packages** (managed via Package Manager):
+**Unity packages** (via Package Manager): NuGetForUnity (for MathNet.Numerics), Unity Input System, Universal Render Pipeline, Unity Test Framework.
 
-- NuGetForUnity (for MathNet.Numerics)
-- Unity Input System (1.14.2)
-- Universal Render Pipeline (17.2.0)
-- Unity Test Framework (1.5.1)
-
-**Python Dependencies**:
-
-- numpy, matplotlib (data processing)
-- opencv-python (computer vision, object detection)
-- openai (LLM integration)
+**Python**: everything is pinned in `ACRLPython/requirements.txt` (numpy, opencv-python, torch, ultralytics, open3d, fastapi, pytest, …). Optional extra: `pip install networkx` if you enable the knowledge graph (`KNOWLEDGE_GRAPH_ENABLED=true`).
 
 ### Installing
 
 1. **Clone the repository with submodules**:
 
    ```bash
-   git clone --recursive https://github.com/JanMStraub/Auto-Cooperative-Robot-Learning.git
-   cd Auto-Cooperative-Robot-Learning
+   git clone --recursive https://github.com/JanMStraub/Cooperative-Robot-Behavior-from-Basic-Action-Modules.git
+   cd Cooperative-Robot-Behavior-from-Basic-Action-Modules
    ```
 
 2. **Setup Python environment**:
@@ -69,328 +72,172 @@ The goal of this project is to have two AR4 robot arms positioned facing each ot
    ```
 
 3. **Open Unity project**:
-   - Open Unity Hub
-   - Add project from `ACRLUnity/` folder
+   - Open Unity Hub, add project from `ACRLUnity/`
    - Ensure Unity version **6000.3.11f1** is installed
-   - Open the project (dependencies will auto-install)
-   - Alternativly use standalone version: `ACRLUnity_build.app` (MacOS)
+   - Open the project (dependencies auto-install)
+   - Alternatively use the standalone build: `ACRLUnity_build.app` (macOS)
 
 4. **Install NuGet packages** (if not auto-installed):
-   - In Unity: NuGet > Manage NuGet Packages
-   - Install `MathNet.Numerics` (required for IK computation)
+   - In Unity: NuGet > Manage NuGet Packages > install `MathNet.Numerics` (required for IK)
 
-### Executing Program
+### Running the System
 
-#### Quick Start with Python Backend
+1. **Start the ROS stack** (skip if running `--without-ros`):
 
-1. **Start the unified Python backend** (single command):
+   ```bash
+   cd rosUnityIntegration
+   docker compose --profile dual up -d   # dual-robot MoveIt stack (default config)
+   # or: --profile solo                  # single-robot stack
+   ```
+
+2. **Start the unified Python backend**:
 
    ```bash
    cd ACRLPython
-   source acrl/bin/activate  # On Windows: acrl\Scripts\activate
-   ./start_servers.sh          # convenience script (or: python -m orchestrators.RunRobotController)
+   source acrl/bin/activate
+   ./start_servers.sh              # or: --without-ros | --env real | --web 8000
    ```
 
-   This starts all servers: ImageServer (5006), CommandServer (5007), SequenceServer (5008), WorldStateServer (5009), AutoRTServer (5010), WebUIServer (8000).
+   This starts all servers: ImageServer (5006), CommandServer (5007), SequenceServer (5008), WorldStateServer (5009), AutoRTServer (5010), and optionally WebUIServer (8000).
 
-2. **Run Unity simulation**:
-   - If you use the standalone version, skip this as it starts automatically
-   - Open `ACRLUnity/Assets/Scenes/1xAR4Scene.unity` for single robot testing
-   - Press Play in Unity Editor
-   - Use natural language commands via SequenceClient:
+3. **Run the Unity simulation**:
+   - Open `ACRLUnity/Assets/Scenes/1xAR4Scene.unity` and press Play (the standalone build starts automatically)
+   - Send natural-language commands via the SequenceClient or the Web UI:
 
      ```csharp
      SequenceClient.Instance.SendCommand("Detect the blue cube, move to it, close the gripper");
      ```
 
-     **OR** use the WebUI to send commands
+### Autonomous Task Generation (AutoRT)
 
-#### Testing and Development
+1. With the backend running, add an `AutoRTManager` GameObject to the scene and assign the `AutoRTConfig` asset from `Assets/Configuration/`
+2. Use the custom inspector: **Generate Tasks** → review proposals → **Execute** or **Reject**
+3. Optional: enable **Start Loop** for continuous autonomous operation, or run headless:
 
-**Run Unity Tests**:
+   ```bash
+   python -m orchestrators.RunAutoRT               # human-in-loop ON
+   python -m orchestrators.RunAutoRT --autonomous  # no approval gate
+   ```
 
-- Window > General > Test Runner
-- Select PlayMode or EditMode tests
-- Click "Run All" or run individual tests
+### Testing
 
-**Build Standalone**:
+- **Unity**: Window > General > Test Runner (PlayMode / EditMode)
+- **Python**: `python -m pytest tests/ -v`
 
-- File > Build Settings
-- Select platform (PC, Mac & Linux Standalone recommended)
-- Click "Build" or "Build and Run"
+## Architecture
 
-## Architecture Overview
+<p align="center">
+  <img src="Misc/images/system_flow.png" width="800" alt="Four-layer architecture: command input, RAG+LLM planning, sequence execution and coordination, robot execution via Unity IK or ROS/MoveIt">
+</p>
 
-### Core Systems
+A natural-language prompt flows through four layers: (1) command input, (2) RAG retrieval + LLM plan generation, (3) sequence execution with signal/wait synchronization and parallel-group dispatch, (4) physical execution on the two arms via Unity IK or ROS/MoveIt.
 
-**Core Singleton Managers**:
+**Core Unity components**:
 
-- **SimulationManager**: Top-level orchestrator controlling simulation state
-- **RobotManager**: Robot lifecycle management, configuration loading, target assignment
-- **AutoRTManager**: Autonomous task generation client with human-in-the-loop approval UI (port 5010)
+- **SimulationManager / RobotManager**: simulation state and robot lifecycle (singletons)
+- **Robot control stack**: TrajectoryController (trapezoidal profiles) → IKSolver (damped least-squares with velocity feedback) → RobotController (ArticulationBody physics)
+- **Grasp pipeline**: candidate generation (top/front/side) → IK filter → collision filter → scorer; grasp verification via GripperContactSensor (contact duration + force thresholds)
+- **Safety**: ProximityGuard runtime freeze (0.25 m), Python-side static pre-checks, workspace region allocation
 
-**Robot Control Layers**:
+**Python backend**:
 
-- **RobotController**: Inverse kinematics computation using damped least-squares method
-- **GripperController**: End-effector control with open/close commands
-
-**Vision & Perception Systems**:
-
-- **LLM Vision**: Scene understanding and natural language descriptions
-- **Object Detection**: Color-based HSV segmentation + YOLO streaming support
-- **Stereo Depth**: 3D localization using stereo disparity estimation
-- **UnifiedImageStorage**: Thread-safe singleton for centralized image access
-
-**Python Backend Architecture**:
-
-- **Unified Entry Point**: `RunRobotController` orchestrates all servers
-- **6 Active Servers**:
-  - **ImageServer** (5006): Stereo image receiver
-  - **CommandServer** (5007): Bidirectional commands and completions
-  - **SequenceServer** (5008): Multi-command sequence orchestration + AutoRT integration
-  - **WorldStateServer** (5009): Robot/object state streaming
-  - **AutoRTServer** (5010): Autonomous task generation
-  - **WebUIServer** (8000, optional): Mission Control dashboard (`--web PORT`)
-- **Camera/ & Hardware/ Abstraction**: Sim2real switching without code changes (`--env sim|real`)
-- **AutoRT Module**: LLM-based autonomous task generation with Pydantic validation
-- **Protocol**: Request ID correlation prevents race conditions in multi-robot scenarios
-- **Persistent Connections**: TCP keepalive with health checks and automatic recovery
-
-**LLM-Driven Control Systems**:
-
-- **Operations System**: 29 registered operations organized by complexity
+- **Unified entry point**: `RunRobotController` orchestrates all servers (ports 5006–5010, optional 8000)
+- **CommandParser + SequenceExecutor**: LLM/regex hybrid parsing, step-wise dispatch, variable passing (`detect → $target`, then `move to $target`), reflexion retries on eligible failures
+- **RAG system**: LM Studio embeddings + cosine-similarity vector store; indexes 29 operations, 9 workflow patterns, and 4 multi-robot context documents
+- **Operations registry** (29 ops in four tiers):
   - **Atomic** (8): `control_gripper`, `release_object`, `check_robot_status`, `signal`, `wait_for_signal`, `wait`, `reset_simulation`, `yield_workspace`
   - **Basic** (6): `move_to_coordinate`, `adjust_end_effector_orientation`, `return_to_start_position`, `generate_point_cloud`, `detect_field`, `detect_all_fields`
   - **Intermediate** (9): `pick_object_at_coordinate`, `place_object`, `place_between_objects`, `detect_object_stereo`, `analyze_scene`, `move_relative_to_object`, `detect_other_robot`, `check_partner_status`, `place_for_partner`
   - **Complex** (6): `grasp_object`, `mirror_movement_of_other_robot`, `receive_handoff`, `stabilize_object`, `synchronized_grasp`, `joint_transport`
-  - Variable passing: `detect -> $target`, then `move to $target`
-- **AutoRT System**: Autonomous task generation with LLM planning and human approval workflow
-- **Integrated RAG System**: Semantic search using LM Studio embeddings for natural language command parsing
-- **CommandParser**: LLM/regex hybrid parser with operation registry matching
-- **SequenceExecutor**: Sequential operation executor with state tracking
-
-**ROS 2 / MoveIt Integration** :
-
-- MoveIt used for **planning only** — Unity executes all trajectories via `ROSTrajectorySubscriber`
-- Three control modes via `ROSControlModeManager`: Unity (default IK), ROS (MoveIt plans), Hybrid (ROS priority with Unity fallback)
-- `ROSMotionClient` (Python) handles coordinate transforms (Unity Y-up left-handed → ROS Z-up right-handed) and sends plans over TCP to `ROSBridge` running in Docker
-- Containerized stack in `rosUnityIntegration/` — ROS 2 + MoveIt + `ros_tcp_endpoint` (port 10000)
-
-**Multi-Robot Negotiation** (disabled by default, enable via `NEGOTIATION_ENABLED=true`):
-
-- `NegotiationHub` (singleton in `servers/NegotiationHub.py`) — NOT a TCP server; called directly by `SequenceExecutor` before command parsing when collaboration keywords or 2+ robot IDs detected
-- Per-robot `RobotLLMAgent` instances run parallel Analysis → round-robin Proposal → parallel Evaluation, up to `MAX_NEGOTIATION_ROUNDS=3`
-- Falls back to normal `CommandParser` flow on timeout or failure
+- **ROS 2 / MoveIt**: planning-only backend — MoveIt computes joint trajectories, Unity executes them. Three control modes (Unity / ROS / Hybrid, default Hybrid). `ROSMotionClient` handles Unity↔ROS coordinate transforms and talks to the Dockerized `ROSBridge`
+- **Multi-robot negotiation** (optional, `NEGOTIATION_ENABLED=true`): per-robot LLM agents run Analysis → round-robin Proposal → Evaluation for up to 3 rounds before execution; falls back to single-LLM parsing
+- **AutoRT**: scene perception → LLM task generation → two-layer safety filter (semantic + kinematic) → strategy-based selection → execution
 
 ### Key Directories
 
 ```
-Auto-Cooperative-Robot-Learning/
+Cooperative-Robot-Behavior-from-Basic-Action-Modules/
 ├── ACRLDashboard/                       # Web UI source (served by WebUIServer on port 8000)
 ├── rosUnityIntegration/                 # Docker-based ROS 2 + MoveIt + ros_tcp_endpoint
-├── ACRLUnity/                           # Unity project root
-│   ├── Assets/
-│   │   ├── Configuration/               # Robot, simulation, and grasp config assets
-│   │   ├── Data/                        # Runtime data assets
-│   │   ├── Scenes/                      # 1xAR4Scene
-│   │   ├── Scripts/                     # C# source code
-│   │   │   ├── ConfigScripts/           # ScriptableObject configs
-│   │   │   ├── PythonCommunication/     # TCP clients and Protocol
-│   │   │   ├── RobotScripts/            # Robot control and IK
-│   │   │   ├── SimulationScripts/       # Coordination strategies
-│   │   │   └── *.cs                     # Core controllers and managers
-│   │   └── Prefabs/                     # Robot and environment prefabs
-│   ├── Packages/                        # Unity package dependencies
-│   └── ProjectSettings/                 # Unity project settings
-├── ACRLPython/                          # Python backend
-│   ├── core/                            # TCPServerBase, UnityProtocol, Imports, LoggingSetup
-│   ├── camera/                          # Sim2real camera abstraction (--env flag)
-│   │   ├── Provider.py                  # Abstract CameraProvider interface
-│   │   ├── UnityProvider.py             # Adapter for Unity ImageStorage
-│   │   └── LocalProvider.py             # Adapter for real cameras (USB/RealSense)
-│   ├── hardware/                        # Sim2real robot hardware abstraction
-│   │   ├── Interface.py                 # Abstract RobotHardwareInterface
-│   │   ├── UnityInterface.py            # Adapter for Unity robot control
-│   │   └── ROSInterface.py              # Adapter for ROS/MoveIt control
-│   ├── servers/                         # 6 active servers (+ 1 optional)
-│   │   ├── ImageServer.py               # Stereo image receiver (5006)
-│   │   ├── CommandServer.py             # Bidirectional commands (5007)
-│   │   ├── SequenceServer.py            # Multi-command sequences (5008)
-│   │   ├── WorldStateServer.py          # Robot/object state streaming (5009)
-│   │   ├── AutoRTServer.py              # Autonomous task generation (5010)
-│   │   ├── NegotiationHub.py            # Multi-robot negotiation (NOT a TCP server)
-│   │   ├── AutoRTIntegration.py         # AutoRTHandler singleton
-│   │   └── WebUIServer.py               # Mission Control dashboard (8000, optional)
-│   ├── autort/                          # Autonomous task generation
-│   │   ├── AutoRTLoop.py                # AutoRTOrchestrator main loop
-│   │   ├── TaskGenerator.py             # LLM-based task proposals
-│   │   ├── TaskSelector.py              # Task selection strategies (balanced/explore/exploit/random)
-│   │   ├── RobotConstitution.py         # Two-layer safety (semantic LLM + kinematic code)
-│   │   └── DataModels.py                # Pydantic models (ProposedTask, SceneDescription, TaskVerdict)
-│   ├── agents/                          # LLM agents
-│   │   └── RobotLLMAgent.py             # Per-robot LLM agents
-│   ├── knowledge_graph/                 # Optional spatial reasoning (disabled by default; KNOWLEDGE_GRAPH_ENABLED=false)
-│   │   ├── Core.py                      # Thread-safe KnowledgeGraph (NetworkX MultiDiGraph)
-│   │   ├── Schema.py                    # RobotNode, ObjectNode, RegionNode dataclasses
-│   │   ├── GraphBuilder.py              # WorldState → graph sync
-│   │   ├── QueryEngine.py               # Reachability, proximity, handoff planning
-│   │   └── _singleton.py                # Module-level singleton accessor
-│   ├── ros2/                            # ROSMotionClient, ROSBridge
-│   ├── vision/                          # Object detection, depth estimation
-│   ├── orchestrators/                   # Unified backend orchestrator
-│   │   ├── RunRobotController.py        # PRIMARY entry point
-│   │   ├── RunAutoRT.py                 # Standalone AutoRT entry point
-│   │   ├── CommandParser.py             # LLM/regex command parser
-│   │   └── SequenceExecutor.py          # Sequential operation executor
-│   ├── operations/                      # 29 registered operations (Atomic/Basic/Intermediate/Complex)
-│   │   ├── Base.py                      # Core operation classes
-│   │   ├── Registry.py                  # Operation registry (29 ops)
-│   │   ├── MoveOperations.py            # Navigation primitives
-│   │   ├── GripperOperations.py         # Gripper control
-│   │   ├── DetectionOperations.py       # Object detection + point cloud
-│   │   ├── VisionOperations.py          # Scene analysis
-│   │   ├── GraspOperations.py           # Grasp planning
-│   │   ├── IntermediateOperations.py    # Complex single-robot tasks
-│   │   ├── CoordinationOperations.py    # Multi-robot primitives
-│   │   ├── CollaborativeOperations.py   # Collaborative tasks
-│   │   └── WorldState.py                # Shared world state tracking
-│   ├── rag/                             # Integrated RAG system
-│   │   ├── Embeddings.py                # LM Studio embeddings
-│   │   ├── VectorStore.py               # Numpy vector storage
-│   │   └── QueryEngine.py               # Semantic search
-│   ├── config/                          # Configuration modules
-│   │   ├── AutoRT.py                    # AutoRT settings (LLM, safety, multi-robot)
-│   │   ├── Servers.py                   # Port assignments and server settings
-│   │   ├── Robot.py                     # Robot base positions and transforms
-│   │   ├── ROS.py                       # ROS integration settings
-│   │   └── KnowledgeGraph.py            # Knowledge graph settings
-│   ├── tests/                           # Comprehensive test suite (80+ files)
-│   ├── LLMConfig.py                     # Backward-compatible config aggregator
-│   └── acrl/                            # Python virtual environment
-└── README.md
+├── BenchmarkResults/                    # Benchmark run JSONs (b1–b16)
+├── Misc/images/                         # Thesis and benchmark figures
+├── ACRLUnity/                           # Unity project
+│   └── Assets/
+│       ├── Configuration/               # ScriptableObject .assets (robot, IK, grasp, gripper, …)
+│       ├── Scenes/                      # 1xAR4Scene
+│       ├── Scripts/
+│       │   ├── ConfigScripts/           # ScriptableObject definitions
+│       │   ├── PythonCommunication/     # TCP clients and protocol
+│       │   ├── RobotScripts/            # Robot control, IK, grasp pipeline, gripper, ROS components
+│       │   └── SimulationScripts/       # SimulationManager, WorkspaceManager
+│       └── Prefabs/                     # Robot and environment prefabs
+└── ACRLPython/                          # Python backend
+    ├── core/                            # TCPServerBase, UnityProtocol, lazy imports, logging
+    ├── camera/                          # Sim2real camera abstraction (Unity | USB/RealSense)
+    ├── hardware/                        # Sim2real robot abstraction (Unity | ROS/MoveIt)
+    ├── servers/                         # ImageServer, CommandServer, SequenceServer,
+    │                                    #   WorldStateServer, AutoRTServer, WebUIServer,
+    │                                    #   NegotiationHub (not a TCP server)
+    ├── operations/                      # 29 registered operations + registry
+    │   └── grasp/                       # Grasp implementation (_dispatcher, _handoff, _ros, _vgn)
+    ├── grasp_planning/                  # Python-side grasp pipeline (ROS/MoveIt path)
+    ├── orchestrators/                   # RunRobotController (entry), CommandParser, SequenceExecutor
+    ├── rag/                             # Embeddings, vector store, indexer, query engine
+    ├── agents/                          # Per-robot negotiation agents
+    ├── autort/                          # Task generation loop, selector, Robot Constitution
+    ├── knowledge_graph/                 # Optional NetworkX spatial reasoning
+    ├── ros2/                            # ROSMotionClient, ROSBridge
+    ├── vision/                          # YOLO detection, stereo depth (SGBM)
+    ├── benchmarks/                      # Benchmark framework (Run.py, cases/B1–B16)
+    ├── config/                          # All configuration modules (env-var overridable)
+    ├── tools/                           # CLI utilities incl. PlotBenchmarks
+    └── tests/                           # Test suite (~80 files)
 ```
 
 ## Configuration
 
-### Robot Configuration
+- **Robot/IK/grasp tuning** (Unity): `ACRLUnity/Assets/Configuration/*.asset` — `RobotProfile` (sim joint stiffness/damping/limits), `RealRobotProfile` (hardware compliance model), `IKConfig`, `GraspConfig`, `GripperConfig`, `TrajectoryConfig`
+- **Simulation**: `Simulation.asset` (time scale, auto-start, reset behavior)
+- **AutoRT**: `AutoRTConfig.asset` (Unity-side UI/loop) and `ACRLPython/config/AutoRT.py` (LLM settings, safety bounds, selection strategy)
+- **Python backend**: `ACRLPython/config/` — every parameter accepts an environment-variable override of the same name (ports, LLM model/timeouts, RAG thresholds, negotiation, knowledge graph)
 
-Edit robot parameters via ScriptableObject assets:
-
-```
-ACRLUnity/Assets/Configuration/RobotConfig_*.asset
-```
-
-Key parameters:
-
-- Joint stiffness, damping, force limits
-- IK convergence threshold and max joint step
-- Performance limits (max reach, velocity, acceleration)
-
-### Simulation Configuration
-
-Configure simulation via:
-
-```
-ACRLUnity/Assets/Configuration/SimulationConfig.asset
-```
-
-Options:
-
-- Time scale, auto-start, reset on error
-- Performance settings (target FPS, vSync)
-
-### AutoRT Configuration
-
-Configure autonomous task generation:
-
-```
-ACRLUnity/Assets/Configuration/DefaultAutoRTConfig.asset  (Unity)
-ACRLPython/config/AutoRT.py                               (Python)
-```
-
-Unity Options:
-
-- Max task candidates (1-5)
-- Task selection strategy (Balanced/Simple/Complex/Random)
-- Continuous loop settings (enable, delay)
-- Robot assignment and collaborative tasks
-- UI settings (max display tasks, refresh rate)
-
-Python Options:
-
-- LLM settings (LM Studio URL, models for generation/safety)
-- Loop settings (max tasks, delay, human-in-the-loop default)
-- Safety constraints (workspace bounds, velocity limits, separation)
-- Multi-robot configuration (default robots, collaborative tasks)
-
-## Benchmarks
-
-**Run Benchmarks**:
+## Benchmarks & Results
 
 ```bash
 cd ACRLPython
-source acrl/bin/activate
-# Ensure servers are running first (./start_servers.sh)
+source acrl/bin/activate    # servers must be running for --live
 
-# Run all benchmarks with the live Unity simulation
-python -m benchmarks.run --all --live
-
-# Run single benchmark (1-16)
-python -m benchmarks.run --benchmark 3
-
-# Dry-run (no hardware required)
-python -m benchmarks.run --all --dry-run
+python -m benchmarks.run --all --live      # full suite against the simulation
+python -m benchmarks.run --benchmark 3     # single benchmark (1–16)
+python -m benchmarks.run --all --dry-run   # no simulation required
 ```
 
-Benchmark cases:
+Per-run JSON results are written to `BenchmarkResults/bN/<model>/` (B1–B11 organized by model; B12–B16 ablations flat under `bN/`). Aggregate plots: `python -m tools.PlotBenchmarks`.
 
-- **B1**: Navigate to object (detect + grasp)
+<p align="center">
+  <img src="Misc/images/01_success_rate_by_model.png" width="800" alt="Task success rate per benchmark and model">
+</p>
+
+<p align="center">
+  <img src="Misc/images/08_ablation.png" width="800" alt="Ablation results: ROS/MoveIt +76pp, reflexion +28pp, negotiation +25pp">
+</p>
+
+**System benchmarks** (5 runs each, three LLM backends):
+
+- **B1**: Navigate to object (detect + move, no grasp)
 - **B2**: Sequential multi-target navigation
-- **B3**: Navigate and lift (approach-aware grasp)
+- **B3**: Navigate, grasp, and lift
 - **B4**: Pick and place
 - **B5**: Pose-aware grasp (oriented top-down)
 - **B6**: Robot handoff (one robot hands object to the other)
 - **B7**: Dual-robot reorient with sync barriers
-- **B8**: Heterogeneous chain (cycles B1/B3/B4 sub-tasks)
-- **B9**: Impossible task (parse-only; validates graceful failure)
-- **B10**: Parallel independent (dual-robot concurrent tasks)
-- **B11**: RAG ablation
-- **B12**: Reflexion ablation
-- **B13**: Negotiation ablation
-- **B14**: Knowledge Graph ablation (parse-only)
-- **B15**: VGN ablation
-- **B16**: ROS ablation
+- **B8**: Heterogeneous chain (5 cycles × 4 phases: 3 pick-and-place + 1 parallel scene survey; 20 sub-tasks, 85 operations per run)
+- **B9**: Impossible task (parse-only; validates graceful rejection)
+- **B10**: Parallel independent tasks (dual-robot concurrent pick-and-place)
 
-**For Autonomous Task Generation (AutoRT)**:
+**Ablations** (single feature flag toggled, all else constant):
 
-1. Ensure Python backend is running (see step 2 above)
-2. In Unity scene, add AutoRTManager GameObject:
-   - Create empty GameObject named "AutoRTManager"
-   - Add `AutoRTManager` component
-   - Assign `AutoRTConfig` asset from Configuration folder
-3. Use custom inspector UI:
-   - Click "Generate Tasks" button
-   - Review proposed tasks in inspector
-   - Click "Execute" to approve or "Reject" to discard
-   - Optional: Enable "Start Loop" for continuous autonomous operatio
-
-**Available Operations** (29 total, organized by complexity):
-
-**Atomic** (8):
-
-- `control_gripper`, `release_object`, `check_robot_status`, `signal`, `wait_for_signal`, `wait`, `reset_simulation`, `yield_workspace`
-
-**Basic** (6):
-
-- `move_to_coordinate`, `adjust_end_effector_orientation`, `return_to_start_position`, `generate_point_cloud`, `detect_field`, `detect_all_fields`
-
-**Intermediate** (9):
-
-- `pick_object_at_coordinate`, `place_object`, `place_between_objects`, `detect_object_stereo`, `analyze_scene`, `move_relative_to_object`, `detect_other_robot`, `check_partner_status`, `place_for_partner`
-
-**Complex** (6):
-
-- `grasp_object`, `mirror_movement_of_other_robot`, `receive_handoff`, `stabilize_object`, `synchronized_grasp`, `joint_transport`
+- **B11**: RAG · **B12**: Reflexion · **B13**: Negotiation · **B14**: Knowledge Graph (parse-only) · **B15**: VGN · **B16**: ROS/MoveIt vs. Unity IK
 
 ## License
 
@@ -409,7 +256,7 @@ If you use this work in your research, please cite:
 ```bibtex
 @mastersthesis{straub2026acrl,
   author = {Jan M. Straub},
-  title = {Auto-Cooperative Robot Learning},
+  title = {Building Cooperative Robot Behavior from Basic Action Modules},
   school = {Heidelberg University},
   year = {2026}
 }
@@ -420,4 +267,4 @@ If you use this work in your research, please cite:
 For questions or collaboration:
 
 - GitHub: [@JanMStraub](https://github.com/JanMStraub)
-- Repository: [Auto-Cooperative-Robot-Learning](https://github.com/JanMStraub/Auto-Cooperative-Robot-Learning)
+- Repository: [Cooperative-Robot-Behavior-from-Basic-Action-Modules](https://github.com/JanMStraub/Cooperative-Robot-Behavior-from-Basic-Action-Modules)
