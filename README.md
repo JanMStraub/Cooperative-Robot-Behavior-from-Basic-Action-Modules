@@ -3,13 +3,13 @@
 LLM-driven collaborative control for two AR4 robotic arms. A locally hosted model translates natural-language instructions into coordinated dual-arm behavior by composing a structured pool of 29 robot operations, no task-specific training, no hard-coded sequencing logic, no cloud dependencies. Developed as a master's thesis at Heidelberg University (project codename **ACRL** Auto-Cooperative Robot Learning).
 
 <p align="center">
-  <img src="Misc/images/robot_env.png" width="560" alt="Unity simulation environment with two AR4 arms, manipulation objects, lettered placement fields, and stereo camera rig">
+  <img src="Misc/images/13_robot_env.png" width="560" alt="Unity simulation environment with two AR4 arms, manipulation objects, lettered placement fields, and stereo camera rig">
 </p>
 
 Given a single prompt like *"Robot1 and Robot2 perform a handoff of the red cube"*, the LLM selects and sequences operations from the pool detection, grasping, signaling, handoff reception with the coordination emerging entirely from its use of `signal`/`wait_for_signal` primitives:
 
 <p align="center">
-  <img src="Misc/images/example_command_flow.png" width="800" alt="Example command flow: LLM-planned handoff sequence across both robots">
+  <img src="Misc/images/16_example_command_flow.png" width="800" alt="Example command flow: LLM-planned handoff sequence across both robots">
 </p>
 
 ## Highlights
@@ -127,7 +127,7 @@ Given a single prompt like *"Robot1 and Robot2 perform a handoff of the red cube
 ## Architecture
 
 <p align="center">
-  <img src="Misc/images/system_flow.png" width="800" alt="Four-layer architecture: command input, RAG+LLM planning, sequence execution and coordination, robot execution via Unity IK or ROS/MoveIt">
+  <img src="Misc/images/15_system_flow.png" width="800" alt="Four-layer architecture: command input, RAG+LLM planning, sequence execution and coordination, robot execution via Unity IK or ROS/MoveIt">
 </p>
 
 A natural-language prompt flows through four layers: (1) command input, (2) RAG retrieval + LLM plan generation, (3) sequence execution with signal/wait synchronization and parallel-group dispatch, (4) physical execution on the two arms via Unity IK or ROS/MoveIt.
