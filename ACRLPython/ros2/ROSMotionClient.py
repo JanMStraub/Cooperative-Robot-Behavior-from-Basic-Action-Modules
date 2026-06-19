@@ -180,7 +180,7 @@ class ROSMotionServer:
         (0.12, 0.12, 0.16),  # link_6: wrist block
     ]
 
-    # Executing commands that move the arm — must be serialized across robots.
+    # Executing commands that move the arm - must be serialized across robots.
     _EXECUTING_COMMANDS = frozenset(
         {
             "plan_and_execute",
@@ -589,14 +589,14 @@ class ROSMotionServer:
         """Transform a Unity quaternion to ROS base_link frame.
 
         Unity is left-handed (Y-up) and ROS is right-handed (Z-up). The axis
-        relabeling that transforms positions — (X,Y,Z)_unity → (Z,-X,Y)_ros —
+        relabeling that transforms positions - (X,Y,Z)_unity → (Z,-X,Y)_ros -
         applies component-wise to the quaternion vector part, with a w-sign flip
         for the handedness change:
 
             ros_x = unity_z
             ros_y = -unity_x
             ros_z = unity_y
-            ros_w = unity_w   (w is preserved — negating it inverts the rotation)
+            ros_w = unity_w   (w is preserved - negating it inverts the rotation)
 
         This is the same conversion used by Unity Robotics Hub / ros_tcp_endpoint.
 
@@ -607,7 +607,7 @@ class ROSMotionServer:
 
         Without this transform, orientation quaternions from the Python grasp
         planner (which produces Unity-frame quaternions) are passed raw to MoveIt,
-        which interprets them in ROS base_link space — a completely different
+        which interprets them in ROS base_link space - a completely different
         physical orientation. MoveIt then plans a trajectory to satisfy the
         misinterpreted orientation, causing joint 4 and the gripper to spin
         extensively before settling near the pre-grasp waypoint.
@@ -847,12 +847,12 @@ class ROSMotionServer:
         coordinate_space = request.get("coordinate_space", "unity_world")
         # constrain_joint6: when True, add a path constraint on joint_6 around its current
         # position. Window defaults to ±30°; pass joint6_window_rad to override (e.g. 1.5708
-        # for ±90° during handoff approach — wide enough for OMPL, blocks full 180°+ spin).
+        # for ±90° during handoff approach - wide enough for OMPL, blocks full 180°+ spin).
         constrain_joint6 = request.get("constrain_joint6", False)
         joint6_window_rad = request.get("joint6_window_rad", 0.5236)  # default ±30°
         # constrain_joint4: when True, add a ±90° path constraint on joint_4 around its
         # current position. Prevents RRTConnect from choosing the long-arc (~338°) IK
-        # solution for the pre-grasp hover — robot arrives at hover in the short-arc config
+        # solution for the pre-grasp hover - robot arrives at hover in the short-arc config
         # so the subsequent Cartesian descent starts from the correct joint configuration.
         constrain_joint4 = request.get("constrain_joint4", False)
         joint4_window_rad = request.get("joint4_window_rad", 1.5708)  # default ±90°
@@ -873,7 +873,7 @@ class ROSMotionServer:
         goal.request = MotionPlanRequest()
         goal.request.group_name = self._get_planning_group(robot_id)
         # Explicitly select OMPL pipeline and RRTConnect planner.
-        # pipeline_id="ompl" is required — without it, MoveIt 2 Humble may pick
+        # pipeline_id="ompl" is required - without it, MoveIt 2 Humble may pick
         # CHOMP (also installed) as the default, which does not support pose goals
         # and fails with "Start state violates joint limits" / INVALID_GOAL_CONSTRAINTS.
         goal.request.pipeline_id = "ompl"
@@ -919,7 +919,7 @@ class ROSMotionServer:
         # ArticulationBody physics can overshoot by a small amount at the end of
         # a trajectory (especially after settle timeout), causing OMPL to reject
         # the start state entirely with "invalid bounds" even for sub-milliradian
-        # violations — which aborts planning with error code 99999.
+        # violations - which aborts planning with error code 99999.
         with self._joint_states_lock:
             joint_state = self._current_joint_states.get(robot_id)
         if joint_state is not None:
@@ -934,7 +934,7 @@ class ROSMotionServer:
                     if abs(clamped - raw) > 1e-6:
                         logger.warning(
                             f"{robot_id} {name} position {raw:.6f} rad out of bounds "
-                            f"[{lower:.4f}, {upper:.4f}] — clamped to {clamped:.6f} for MoveIt start state"
+                            f"[{lower:.4f}, {upper:.4f}] - clamped to {clamped:.6f} for MoveIt start state"
                         )
                     filtered_js.name.append(_jprefix + name)
                     filtered_js.position.append(clamped)
@@ -947,7 +947,7 @@ class ROSMotionServer:
             )
             # keep remaining joints from MoveIt's current state.  Without is_diff=True,
             # unlisted joints default to 0 which can put the robot in collision with
-            # itself or the ground plane — triggering UNKNOWN_ERROR_99999.
+            # itself or the ground plane - triggering UNKNOWN_ERROR_99999.
             start_state.joint_state = filtered_js
             goal.request.start_state = start_state
 
@@ -1227,14 +1227,14 @@ class ROSMotionServer:
                     if last_ts < 1e-9:
                         logger.warning(
                             f"{robot_id}: MoveIt returned zero timestamps on all "
-                            f"{len(trajectory.points)} waypoints — TOTG did not run. "
+                            f"{len(trajectory.points)} waypoints - TOTG did not run. "
                             "Check move_group trajectory_processing pipeline and "
                             "velocity/acceleration scaling config. "
                             "Unity will use synthesized durations (smooth but not time-optimal)."
                         )
                     else:
                         logger.debug(
-                            f"{robot_id}: TOTG OK — last waypoint at {last_ts:.3f}s"
+                            f"{robot_id}: TOTG OK - last waypoint at {last_ts:.3f}s"
                         )
 
                 return trajectory, result.planning_time, None
@@ -1300,7 +1300,7 @@ class ROSMotionServer:
            boundary crossings where MoveIt emits +3.15 when the limit is ±π.
         2. Walk waypoints sequentially: if the delta between two consecutive
            waypoints exceeds π for a ±π-range joint (joint_4, joint_6), shift
-           the current waypoint by ±2π so the joint takes the shorter arc —
+           the current waypoint by ±2π so the joint takes the shorter arc -
            but ONLY if the shifted value stays within [lower, upper].
            This corrects MoveIt choosing the 333° arc when 27° is available
            across the ±π boundary.
@@ -1337,7 +1337,7 @@ class ROSMotionServer:
         # -2π shifts are meaningful options. Skip joints with smaller ranges
         # (joint_1 ±170°, joint_2/3 with asymmetric limits) where a shift
         # would likely leave the value out of bounds.
-        # Derive which keys are the ±π joints from the provided dict — handles
+        # Derive which keys are the ±π joints from the provided dict - handles
         # both unprefixed ("joint_4") and prefixed ("robot1_joint_4") names.
         FULL_ROTATION_JOINTS = {
             name
@@ -1481,7 +1481,7 @@ class ROSMotionServer:
         # from stale /joint_states unless we wait for physics to catch up.
         if feedback_status == "completed_with_timeout":
             logger.warning(
-                f"{robot_id}: Arm did not fully settle — waiting {self.SETTLE_WAIT_AFTER_TIMEOUT}s "
+                f"{robot_id}: Arm did not fully settle - waiting {self.SETTLE_WAIT_AFTER_TIMEOUT}s "
                 "for physics to catch up before planning next move"
             )
             time.sleep(self.SETTLE_WAIT_AFTER_TIMEOUT)
@@ -1726,7 +1726,7 @@ class ROSMotionServer:
         for i in range(1, n_waypoints + 1):
             t = i / n_waypoints
             if dot > 0.9995:
-                # Nearly identical — linear interpolation + renormalize
+                # Nearly identical - linear interpolation + renormalize
                 ix = cqx + t * (tqx - cqx)
                 iy = cqy + t * (tqy - cqy)
                 iz = cqz + t * (tqz - cqz)
@@ -1750,7 +1750,7 @@ class ROSMotionServer:
 
         # Shoulder-locked OMPL request used whenever GetCartesianPath is unavailable
         # or returns a low fraction. Locks joint_1/2/3 at current values so OMPL can
-        # only use wrist joints — prevents the arm from swinging through space.
+        # only use wrist joints - prevents the arm from swinging through space.
         _ompl_fallback_request = {
             "position": pos,
             "orientation": {"x": tqx, "y": tqy, "z": tqz, "w": tqw},
@@ -1761,13 +1761,13 @@ class ROSMotionServer:
         }
 
         # Use GetCartesianPath with the SLERP waypoints so IK is solved
-        # incrementally — no large joint swings possible between adjacent steps.
+        # incrementally - no large joint swings possible between adjacent steps.
         cartesian_client = self._cartesian_path_clients.get(robot_id)
         if cartesian_client is None or not cartesian_client.wait_for_service(
             timeout_sec=5.0
         ):
             logger.warning(
-                f"{robot_id}: Cartesian client unavailable for orientation change — falling back to shoulder-locked OMPL"
+                f"{robot_id}: Cartesian client unavailable for orientation change - falling back to shoulder-locked OMPL"
             )
             return self._plan_and_publish(_ompl_fallback_request, robot_id)
 
@@ -1813,7 +1813,7 @@ class ROSMotionServer:
 
         if not future.done() or future.result() is None:
             logger.warning(
-                f"{robot_id}: Cartesian orientation planning timed out — falling back to shoulder-locked OMPL"
+                f"{robot_id}: Cartesian orientation planning timed out - falling back to shoulder-locked OMPL"
             )
             return self._plan_and_publish(_ompl_fallback_request, robot_id)
 
@@ -1822,14 +1822,14 @@ class ROSMotionServer:
 
         if fraction < 0.95:
             logger.warning(
-                f"{robot_id}: Cartesian orientation path only {fraction * 100:.0f}% complete — falling back to shoulder-locked OMPL"
+                f"{robot_id}: Cartesian orientation path only {fraction * 100:.0f}% complete - falling back to shoulder-locked OMPL"
             )
             return self._plan_and_publish(_ompl_fallback_request, robot_id)
 
         trajectory = response.solution.joint_trajectory
         if not trajectory.points:
             logger.warning(
-                f"{robot_id}: Cartesian orientation path returned empty trajectory — falling back to shoulder-locked OMPL"
+                f"{robot_id}: Cartesian orientation path returned empty trajectory - falling back to shoulder-locked OMPL"
             )
             return self._plan_and_publish(_ompl_fallback_request, robot_id)
 
@@ -1870,7 +1870,7 @@ class ROSMotionServer:
         )
         if feedback_status == "completed_with_timeout":
             logger.warning(
-                f"{robot_id}: Orientation trajectory arm did not fully settle — "
+                f"{robot_id}: Orientation trajectory arm did not fully settle - "
                 f"waiting {self.SETTLE_WAIT_AFTER_TIMEOUT}s"
             )
             time.sleep(self.SETTLE_WAIT_AFTER_TIMEOUT)
@@ -1920,18 +1920,18 @@ class ROSMotionServer:
                     * 1e-9
                 )
                 logger.info(
-                    f"{robot_id}: Manual TOTG applied to Cartesian trajectory — "
+                    f"{robot_id}: Manual TOTG applied to Cartesian trajectory - "
                     f"last waypoint at {last_ts:.3f}s"
                 )
                 return robot_traj.joint_trajectory
             else:
                 logger.warning(
-                    f"{robot_id}: Manual TOTG failed — publishing untimed Cartesian trajectory"
+                    f"{robot_id}: Manual TOTG failed - publishing untimed Cartesian trajectory"
                 )
                 return trajectory
         except Exception as e:
             logger.warning(
-                f"{robot_id}: Manual TOTG unavailable ({e}) — applying linear time parameterization"
+                f"{robot_id}: Manual TOTG unavailable ({e}) - applying linear time parameterization"
             )
             return self._apply_linear_time_parameterization(
                 trajectory, vel_scaling, robot_id
@@ -1946,7 +1946,7 @@ class ROSMotionServer:
         assigns cumulative time_from_start to each waypoint.
 
         This produces a trajectory where each segment takes exactly as long as
-        the fastest joint needs at the scaled velocity — a conservative but
+        the fastest joint needs at the scaled velocity - a conservative but
         correct approximation of trapezoidal profiling.
 
 
@@ -1991,7 +1991,7 @@ class ROSMotionServer:
 
         last_ts = elapsed
         logger.info(
-            f"{robot_id}: Linear time parameterization applied to Cartesian trajectory — "
+            f"{robot_id}: Linear time parameterization applied to Cartesian trajectory - "
             f"{len(points)} waypoints, last at {last_ts:.3f}s"
         )
         return trajectory
@@ -2062,11 +2062,11 @@ class ROSMotionServer:
         req.group_name = self._get_planning_group(robot_id)
         req.link_name = self._get_ee_link(robot_id)
         req.waypoints = [target_pose.pose]
-        req.max_step = 0.01  # 1cm interpolation step — forces ~10 Cartesian waypoints per 10cm descent so the path is truly straight; larger values under-sample and cause joint-space interpolation which looks like gripper rotation
+        req.max_step = 0.01  # 1cm interpolation step - forces ~10 Cartesian waypoints per 10cm descent so the path is truly straight; larger values under-sample and cause joint-space interpolation which looks like gripper rotation
         req.jump_threshold = 2.0  # Catch IK solution flips (>~115° per segment) while allowing normal smooth motion; 0.0 let 180° wrist flips through silently
         req.avoid_collisions = avoid_collisions
 
-        # Fetch current joint state early — needed for both start_state and path constraints.
+        # Fetch current joint state early - needed for both start_state and path constraints.
         with self._joint_states_lock:
             joint_state = self._current_joint_states.get(robot_id)
 
@@ -2076,7 +2076,7 @@ class ROSMotionServer:
         # Without this constraint, GetCartesianPath solves each waypoint
         # independently and may choose a different J4/J6 configuration each time.
         # joint_4 constraint added alongside orientation to prevent MoveIt from
-        # choosing the long-arc (~338°) IK solution over the short-arc (~22°) one —
+        # choosing the long-arc (~338°) IK solution over the short-arc (~22°) one -
         # both are valid orientations but the long arc causes a large physical wrist swing.
         if lock_orientation and OrientationConstraint is not None:
             orient_constraint = OrientationConstraint()
@@ -2099,7 +2099,7 @@ class ROSMotionServer:
                 _j4_lower, _j4_upper = ARM_JOINT_LIMITS.get(
                     "joint_4", (-3.1405926535897932, 3.1405926535897932)
                 )
-                _j4_window = 1.5708  # ±90° — wide enough for normal descent, blocks long-arc flip
+                _j4_window = 1.5708  # ±90° - wide enough for normal descent, blocks long-arc flip
                 _j4_path_lower = max(_j4_lower, _j4_current - _j4_window)
                 _j4_path_upper = min(_j4_upper, _j4_current + _j4_window)
                 _j4_center = (_j4_path_lower + _j4_path_upper) / 2.0
@@ -2124,7 +2124,7 @@ class ROSMotionServer:
                 _j6_lower, _j6_upper = ARM_JOINT_LIMITS.get(
                     "joint_6", (-3.1405926535897932, 3.1405926535897932)
                 )
-                _j6_window = 1.5708  # ±90° — orientation constraint alone insufficient; two joint configs give identical EE pose
+                _j6_window = 1.5708  # ±90° - orientation constraint alone insufficient; two joint configs give identical EE pose
                 _j6_path_lower = max(_j6_lower, _j6_current - _j6_window)
                 _j6_path_upper = min(_j6_upper, _j6_current + _j6_window)
                 _j6_center = (_j6_path_lower + _j6_path_upper) / 2.0
@@ -2160,7 +2160,7 @@ class ROSMotionServer:
                     if abs(clamped - raw) > 1e-6:
                         logger.warning(
                             f"{robot_id} {name} position {raw:.6f} rad out of bounds "
-                            f"[{lower:.4f}, {upper:.4f}] — clamped for Cartesian start state"
+                            f"[{lower:.4f}, {upper:.4f}] - clamped for Cartesian start state"
                         )
                     filtered_js.name.append(_jprefix + name)
                     filtered_js.position.append(clamped)
@@ -2173,7 +2173,7 @@ class ROSMotionServer:
 
         future = cartesian_client.call_async(req)
 
-        # Poll for completion — do NOT call spin_until_future_complete (ros_spin thread is spinning)
+        # Poll for completion - do NOT call spin_until_future_complete (ros_spin thread is spinning)
         deadline = time.time() + 15.0
         while not future.done() and time.time() < deadline:
             time.sleep(0.05)
@@ -2196,13 +2196,13 @@ class ROSMotionServer:
                 # truly unreachable. Fall through to free-space OMPL which
                 # plans in joint space without Cartesian path constraints.
                 logger.warning(
-                    f"{robot_id}: Cartesian path {fraction * 100:.0f}% complete — "
+                    f"{robot_id}: Cartesian path {fraction * 100:.0f}% complete - "
                     "path constraints may over-constrain IK near workspace boundary; "
                     "retrying with free-space planner"
                 )
             else:
                 logger.warning(
-                    f"{robot_id}: Cartesian path only {fraction * 100:.0f}% complete — "
+                    f"{robot_id}: Cartesian path only {fraction * 100:.0f}% complete - "
                     "falling back to free-space plan"
                 )
             # Fall back to free-space planning if Cartesian path is mostly blocked
@@ -2287,7 +2287,7 @@ class ROSMotionServer:
         )
         if feedback_status == "completed_with_timeout":
             logger.warning(
-                f"{robot_id}: Cartesian trajectory arm did not fully settle — "
+                f"{robot_id}: Cartesian trajectory arm did not fully settle - "
                 f"waiting {self.SETTLE_WAIT_AFTER_TIMEOUT}s for physics to catch up"
             )
             time.sleep(self.SETTLE_WAIT_AFTER_TIMEOUT)
@@ -2356,7 +2356,7 @@ class ROSMotionServer:
 
         # Joint-space goal: use provided target angles or fall back to URDF zero pose.
         # Callers should pass the actual Unity start joint targets (in radians) so MoveIt
-        # plans to the same configuration the TCP path uses — not the URDF all-zeros pose,
+        # plans to the same configuration the TCP path uses - not the URDF all-zeros pose,
         # which may be singular or differ from the scene's initial robot position.
         target_joint_angles = request.get("target_joint_angles")
         joint_names = list(ARM_JOINT_LIMITS.keys())
@@ -2381,7 +2381,7 @@ class ROSMotionServer:
 
         # Path constraints: keep each joint within ±150° of its current position so
         # RRTConnect cannot route J3 the long way around.
-        # joint_4 and joint_6 are excluded — their ±π range makes windowing unreliable:
+        # joint_4 and joint_6 are excluded - their ±π range makes windowing unreliable:
         # when near the boundary the constraint center lands at ~0 while the goal target
         # is also ~0, causing MoveIt to report "incompatible constraints" and discard them.
         # The goal JointConstraint (tolerance ±0.01) already constrains them tightly.
@@ -2516,7 +2516,7 @@ class ROSMotionServer:
         # outstanding futures are serviced concurrently.  Firing every request
         # before we start polling converts O(N × 500ms) serial latency into
         # O(batch_timeout) parallel latency.
-        # NOTE: Do NOT call rclpy.spin_once() in the polling loop below — the
+        # NOTE: Do NOT call rclpy.spin_once() in the polling loop below - the
         # _ros_spin thread already owns the node's executor (see _call_move_group_plan).
         futures = []
         for i, candidate in enumerate(candidates):

@@ -113,7 +113,7 @@ class CommandParser:
         )
 
         # Perception-only, place, and atomic gripper commands have no motion
-        # decomposition benefit — Stage 1 would hallucinate approach coordinates
+        # decomposition benefit - Stage 1 would hallucinate approach coordinates
         # and corrupt Stage 2 intent. Bypass the motion layer for all three.
         if motion_layer and (
             self._is_perception_only_command(command_text)
@@ -151,7 +151,7 @@ class CommandParser:
             USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
         )
 
-        # Same bypasses as parse() — atomic gripper/place/perception commands
+        # Same bypasses as parse() - atomic gripper/place/perception commands
         # must not go through Stage 1 decomposition on retries either.
         if motion_layer and (
             self._is_perception_only_command(command_text)
@@ -227,7 +227,7 @@ class CommandParser:
         system = (
             "You are a robot command analyzer. Return only JSON with keys "
             '"analysis" (why the operation failed) and "suggestion" '
-            "(what specific change — coordinates, operation choice, object ID — "
+            "(what specific change - coordinates, operation choice, object ID - "
             "would fix it). Be concise: 1-2 sentences per key."
         )
         user = (
@@ -288,7 +288,7 @@ class CommandParser:
         r"\b(place|deposit|put\s+down|put\s+it)\b", re.IGNORECASE
     )
 
-    # Pure gripper state commands — no motion decomposition needed; Stage 1
+    # Pure gripper state commands - no motion decomposition needed; Stage 1
     # hallucinate approach coordinates and Stage 2 then picks move_to_coordinate,
     # which triggers the navigation collision check erroneously.
     _ATOMIC_GRIPPER_PATTERNS = re.compile(
@@ -397,7 +397,7 @@ class CommandParser:
         motion_context = "\n".join(f"  {i + 1}. {m}" for i, m in enumerate(motions))
         augmented_command = (
             f"{command_text}\n\n"
-            f"Motion plan ({len(motions)} steps — map each step to exactly one operation; "
+            f"Motion plan ({len(motions)} steps - map each step to exactly one operation; "
             f"steps are strictly sequential unless the step text says '+ ' or 'parallel with', "
             f"in which case those steps share the same parallel_group):\n{motion_context}"
         )
@@ -635,7 +635,7 @@ class CommandParser:
                         f"  - {obj['object_id']} ({obj['color']}, {dist_str}){held_str}"
                     )
 
-            # Cross-robot reachability map — tells the LLM which robot can reach each object
+            # Cross-robot reachability map - tells the LLM which robot can reach each object
             try:
                 all_robot_nodes = qe._graph.get_all_nodes(node_type="robot")
                 other_robots = [r for r in all_robot_nodes if r != robot_id]
@@ -663,7 +663,7 @@ class CommandParser:
             mentions_handoff = any(
                 kw in command_text.lower() for kw in _handoff_keywords
             )
-            # Handoff candidates — only inject when command mentions handoff intent
+            # Handoff candidates - only inject when command mentions handoff intent
             # to avoid polluting single-robot prompts with multi-robot context noise
             if reachable and mentions_handoff:
                 all_robots = qe._graph.get_all_nodes(node_type="robot")
@@ -901,7 +901,7 @@ class CommandParser:
     def _infer_capture_vars_for_validation(self, commands: List[Dict]) -> List[Dict]:
         """Backfill missing capture_var on perception ops so the validator sees correct definitions.
 
-        Mirrors SequenceExecutor._infer_capture_vars — keep in sync if the logic changes.
+        Mirrors SequenceExecutor._infer_capture_vars - keep in sync if the logic changes.
         """
         from operations.Base import OperationCategory
 

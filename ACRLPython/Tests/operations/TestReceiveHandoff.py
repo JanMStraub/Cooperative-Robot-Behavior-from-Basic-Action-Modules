@@ -51,7 +51,7 @@ class TestHandoffGeometry:
         # obj at x=0.0, dims lx=0.04 → near_face = 0.0 + 1.0*0.02 = 0.02
         # robot2 is at x=+0.475 so approach_sign=+1.
         # With roll=90° the jaws are vertical in Y and straddle the object at
-        # the near face — inserting further (to center_x) pushed the object
+        # the near face - inserting further (to center_x) pushed the object
         # away (see _handoff.py approach comments).
         receive_handoff("Robot2", "red_bar", "Robot1")
 
@@ -59,7 +59,7 @@ class TestHandoffGeometry:
         actual_x = move_call.kwargs.get("x") or move_call[1].get("x")
         assert actual_x == pytest.approx(0.02, abs=1e-6), (
             f"TCP move should stop at the near face (0.02), got {actual_x}. "
-            "No X insertion — jaws straddle the object in Y at the face."
+            "No X insertion - jaws straddle the object in Y at the face."
         )
 
     def test_gripper_closed_after_move(self, mock_deps):

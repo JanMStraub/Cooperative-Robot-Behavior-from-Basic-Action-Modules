@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from hardware.Interface import RobotHardwareInterface
 
-# Module-level singleton — set once by get_hardware_interface().
+# Module-level singleton - set once by get_hardware_interface().
 _instance: "RobotHardwareInterface | None" = None
 
 

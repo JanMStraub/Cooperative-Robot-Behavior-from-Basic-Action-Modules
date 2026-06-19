@@ -65,6 +65,29 @@ namespace Core
         /// </summary>
         public const float ROTATION_STALL_ACCEPTANCE_DEG = 8.0f;
 
+        /// <summary>
+        /// Consecutive stalled physics frames before the controller treats the stall as
+        /// sustained (not transient friction) and engages orientation relaxation / position
+        /// stall-acceptance. ~0.6 s at the 50 Hz FixedUpdate rate.
+        /// </summary>
+        public const int STALL_FRAMES_BEFORE_RELAX = 30;
+
+        /// <summary>
+        /// Orientation weight applied to the IK solve once a position stall is sustained.
+        /// Lowered from the default 1.0 so the arm prioritises reaching the target position
+        /// instead of an orientation it cannot satisfy near a wrist singularity (the cause of
+        /// B16 unity-mode move_to_coordinate stalling a few cm short and timing out).
+        /// </summary>
+        public const float STALL_ORIENTATION_RELAX_WEIGHT = 0.3f;
+
+        /// <summary>
+        /// Position acceptance threshold (meters) for a sustained stall. Mirrors
+        /// ROTATION_STALL_ACCEPTANCE_DEG for position: if the arm is settled within this band
+        /// after orientation relaxation, declare the target reached rather than fighting
+        /// ArticulationBody friction until the operation times out.
+        /// </summary>
+        public const float POSITION_STALL_ACCEPTANCE_M = 0.05f;
+
         // GameObject Naming
         /// <summary>
         /// Suffix for temporary grasp target GameObjects

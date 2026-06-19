@@ -86,7 +86,7 @@ def get_robot_config():
 
 
 def get_command_parser(**kwargs):
-    """Create a CommandParser instance. Not cached — each call creates a new instance."""
+    """Create a CommandParser instance. Not cached - each call creates a new instance."""
     try:
         from orchestrators.CommandParser import CommandParser
 
@@ -96,7 +96,7 @@ def get_command_parser(**kwargs):
 
 
 def get_sequence_executor(**kwargs):
-    """Create a SequenceExecutor instance. Not cached — each call creates a new instance."""
+    """Create a SequenceExecutor instance. Not cached - each call creates a new instance."""
     try:
         from orchestrators.SequenceExecutor import SequenceExecutor
 

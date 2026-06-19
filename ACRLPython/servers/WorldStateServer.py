@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WorldStateServer — receives unsolicited world state broadcasts from Unity's WorldStatePublisher
+WorldStateServer - receives unsolicited world state broadcasts from Unity's WorldStatePublisher
 on port 5009. One-way stream (Unity → Python), no responses sent back.
 """
 

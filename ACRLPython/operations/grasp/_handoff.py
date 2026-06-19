@@ -72,7 +72,7 @@ def receive_handoff(
                 )
             else:
                 logger.warning(
-                    f"receive_handoff: re-detect failed ({_det_result.error}) — "
+                    f"receive_handoff: re-detect failed ({_det_result.error}) - "
                     f"falling back to WorldState"
                 )
         except Exception as _det_err:
@@ -125,10 +125,10 @@ def receive_handoff(
                 logger.info(
                     f"receive_handoff: source {source_robot_id} EE at "
                     f"({source_ee_pos[0]:.3f}, {source_ee_pos[1]:.3f}, {source_ee_pos[2]:.3f})"
-                    " — used for Y correction only"
+                    " - used for Y correction only"
                 )
         except Exception as _src_e:
-            logger.warning(f"receive_handoff: could not read source EE — {_src_e}")
+            logger.warning(f"receive_handoff: could not read source EE - {_src_e}")
 
         ref_x = object_position[0]
         ref_z = object_position[2]
@@ -144,7 +144,7 @@ def receive_handoff(
         approach_sign = 1.0 if receiver_pos[0] > ref_x else -1.0
         near_face_x = ref_x + approach_sign * lx * 0.5
         # ap_x = near_face_x: approach target for reach check, pre-waypoint, and gripper close.
-        # With roll=90° (jaws vertical in Y), no X insertion needed — jaws straddle at the face.
+        # With roll=90° (jaws vertical in Y), no X insertion needed - jaws straddle at the face.
         ap_x = near_face_x
         obj_height = object_dimensions[1] if len(object_dimensions) > 1 else 0.02
         logger.info(
@@ -173,7 +173,7 @@ def receive_handoff(
                 return OperationResult.error_result(
                     "APPROACH_UNREACHABLE",
                     f"receive_handoff: approach position ({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f}) "
-                    f"is outside {robot_id}'s reach — {reach_reason}",
+                    f"is outside {robot_id}'s reach - {reach_reason}",
                     [
                         "Ensure source robot moves object to shared zone before signalling",
                         "Check handoff position is within receiving robot's workspace",
@@ -190,7 +190,7 @@ def receive_handoff(
             "receive_handoff: using robot-local yaw=0° (base rotation handles world facing)"
         )
 
-        # Guarantee maximum jaw opening before approach — avoids a partially-closed gripper
+        # Guarantee maximum jaw opening before approach - avoids a partially-closed gripper
         # (from a prior failed attempt) causing the jaw tips to contact the object face.
         from ..GripperOperations import control_gripper as _open_gripper
 
@@ -246,7 +246,7 @@ def receive_handoff(
             )
             if not pre_result or not pre_result.get("success"):
                 logger.warning(
-                    f"receive_handoff: pre-waypoint failed ({(pre_result or {}).get('error', 'no response')}) — trying hover pre-waypoint"
+                    f"receive_handoff: pre-waypoint failed ({(pre_result or {}).get('error', 'no response')}) - trying hover pre-waypoint"
                 )
                 # Fallback: approach from above (no orientation constraint so OMPL
                 # can find a path from any joint config), then descend in free-space.
@@ -262,13 +262,13 @@ def receive_handoff(
                 )
                 if not hover_result or not hover_result.get("success"):
                     logger.warning(
-                        f"receive_handoff: hover pre-waypoint also failed ({(hover_result or {}).get('error', 'no response')}) — proceeding to final position"
+                        f"receive_handoff: hover pre-waypoint also failed ({(hover_result or {}).get('error', 'no response')}) - proceeding to final position"
                     )
 
             # Re-read object position and source EE after pre-waypoint completes.
             # By now (~8s elapsed) Robot1 has settled at its handoff position.
             # Re-read WorldState at approach time (Robot1 has settled).
-            # If EE is >10cm above detected Y the object has been lifted —
+            # If EE is >10cm above detected Y the object has been lifted -
             # WorldState Y is stale. Use EE-derived Y instead.
             try:
                 _src2 = (
@@ -293,7 +293,7 @@ def receive_handoff(
                         _nr_y = _ee2[1] - obj_height / 2
                         logger.info(
                             f"receive_handoff: detected Y={_det_y2:.3f}m is "
-                            f"{_ee2[1] - _det_y2:.3f}m below EE — "
+                            f"{_ee2[1] - _det_y2:.3f}m below EE - "
                             f"using EE-derived Y={_nr_y:.3f}m"
                         )
                     else:
@@ -310,7 +310,7 @@ def receive_handoff(
                 )
             except Exception as _ee2_err:
                 logger.warning(
-                    f"receive_handoff: position re-read failed ({_ee2_err}) — using initial coords"
+                    f"receive_handoff: position re-read failed ({_ee2_err}) - using initial coords"
                 )
 
             # Locked-orientation Cartesian needs more start-state margin than free-space.
@@ -335,7 +335,7 @@ def receive_handoff(
             if not approach_success:
                 logger.warning(
                     f"receive_handoff: Cartesian approach failed ({approach_error})"
-                    " — retrying with free-space planning"
+                    " - retrying with free-space planning"
                 )
                 approach_result = bridge.plan_and_execute(
                     position={"x": ap_x, "y": ap_y, "z": ap_z},
@@ -350,7 +350,7 @@ def receive_handoff(
                 )
 
             # Approach stops at near_face_x. With roll=90° (jaws vertical in Y),
-            # the jaws straddle the object in Y — no X insertion needed.
+            # the jaws straddle the object in Y - no X insertion needed.
             # Inserting to center_x pushed the object away.
 
         else:
@@ -372,7 +372,7 @@ def receive_handoff(
                 logger.info("receive_handoff: ProximityGuard disabled for approach")
             except Exception as _pg_err:
                 logger.warning(
-                    f"receive_handoff: could not disable ProximityGuard — {_pg_err}"
+                    f"receive_handoff: could not disable ProximityGuard - {_pg_err}"
                 )
 
             _move = move_to_coordinate(
@@ -387,7 +387,7 @@ def receive_handoff(
             approach_error = _move.error
 
             if approach_success:
-                # move_to_coordinate (TCP) is fire-and-forget — Robot2 hasn't reached
+                # move_to_coordinate (TCP) is fire-and-forget - Robot2 hasn't reached
                 # the position yet when it returns. Poll WorldState until the arm
                 # actually stops before issuing the gripper close. Without this wait,
                 # control_gripper races the movement and creates a FixedJoint at the
@@ -399,7 +399,7 @@ def receive_handoff(
                 except Exception as _wait_err:
                     logger.warning(
                         f"receive_handoff: move-completion poll failed ({_wait_err})"
-                        " — falling back to 4s fixed delay"
+                        " - falling back to 4s fixed delay"
                     )
                     import time as _t_move
 
@@ -408,7 +408,7 @@ def receive_handoff(
         if not approach_success:
             return OperationResult.error_result(
                 "MOVE_FAILED",
-                f"receive_handoff: approach failed — {approach_error}",
+                f"receive_handoff: approach failed - {approach_error}",
                 [
                     "Check for workspace collision",
                     "Verify approach_position is reachable",
@@ -425,7 +425,7 @@ def receive_handoff(
         if not gripper_result.success:
             return OperationResult.error_result(
                 "GRIPPER_FAILED",
-                f"receive_handoff: gripper close failed — {gripper_result.error}",
+                f"receive_handoff: gripper close failed - {gripper_result.error}",
                 ["Check gripper state", "Verify object is within gripper reach"],
             )
 
@@ -446,14 +446,14 @@ def receive_handoff(
             )
             if _rel.success:
                 logger.info(
-                    f"receive_handoff: source {source_robot_id} released — "
+                    f"receive_handoff: source {source_robot_id} released - "
                     "dual-FixedJoint window closed"
                 )
             else:
                 logger.warning(f"receive_handoff: source release failed ({_rel.error})")
         except Exception as _rel_err:
             logger.warning(
-                f"receive_handoff: could not release source gripper — {_rel_err}"
+                f"receive_handoff: could not release source gripper - {_rel_err}"
             )
 
         if release_signal:
@@ -465,7 +465,7 @@ def receive_handoff(
                     f"receive_handoff: emitted release signal '{release_signal}'"
                 )
             except Exception as e:
-                logger.warning(f"receive_handoff: failed to emit release signal — {e}")
+                logger.warning(f"receive_handoff: failed to emit release signal - {e}")
 
         # Re-enable ProximityGuard now that the gripper has closed and transfer is done.
         # Only needed for the TCP path (ROS path never disabled it).
@@ -483,7 +483,7 @@ def receive_handoff(
                 logger.info("receive_handoff: ProximityGuard re-enabled")
             except Exception as _pg_re_err:
                 logger.warning(
-                    f"receive_handoff: could not re-enable ProximityGuard — {_pg_re_err}"
+                    f"receive_handoff: could not re-enable ProximityGuard - {_pg_re_err}"
                 )
 
         # GripperContactSensor: 100ms contact + 167ms force avg ≈ 270ms. 0.5s for side-grasp margin.

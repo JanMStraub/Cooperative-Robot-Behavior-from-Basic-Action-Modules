@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B7: Dual-Robot Reorient — B6 plus second sync barrier and parallel arm swings."""
+"""B7: Dual-Robot Reorient - B6 plus second sync barrier and parallel arm swings."""
 
 from __future__ import annotations
 

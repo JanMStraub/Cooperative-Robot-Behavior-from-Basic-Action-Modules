@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from camera.Provider import CameraProvider
 
-# Module-level singleton — set once by get_camera_provider().
+# Module-level singleton - set once by get_camera_provider().
 _instance: "CameraProvider | None" = None
 
 

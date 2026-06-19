@@ -174,7 +174,7 @@ namespace Robotics
 
         /// <summary>
         /// Checks all registered robots for target position changes and updates controllers accordingly.
-        /// Skips robots whose gripper is already holding the tracked target — once the robot has
+        /// Skips robots whose gripper is already holding the tracked target - once the robot has
         /// grasped the object it becomes kinematically parented to the arm, so every arm motion
         /// would move the object and re-trigger this check, creating a feedback loop that causes
         /// continuous IK re-arming and jittery motion.

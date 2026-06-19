@@ -2,7 +2,7 @@
 """
 Collaborative Manipulation Operations (Level 5): stabilize_object (ATOMIC).
 
-Non-atomic stabilize_and_manipulate_collaboratively removed — use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN.
+Non-atomic stabilize_and_manipulate_collaboratively removed - use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN.
 """
 
 import time
@@ -153,7 +153,7 @@ def stabilize_object(
         )
 
 
-# stabilize_and_manipulate_collaboratively removed (non-atomic) — use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN
+# stabilize_and_manipulate_collaboratively removed (non-atomic) - use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN
 
 
 def create_stabilize_object_operation() -> BasicOperation:
@@ -330,7 +330,7 @@ def create_place_for_partner_operation() -> BasicOperation:
         complexity=OperationComplexity.INTERMEDIATE,
         description="Place a held object at a shared zone for the partner robot to pick up, then signal readiness",
         usage_examples=[
-            "place_for_partner('Robot1') — places at shared_zone center, signals object_ready_at_shared_zone",
+            "place_for_partner('Robot1') - places at shared_zone center, signals object_ready_at_shared_zone",
             "place_for_partner('Robot1', zone_id='center', signal_name='cube_dropped')",
         ],
         preconditions=[

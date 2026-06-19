@@ -78,7 +78,7 @@ class SequenceExecutor:
     # Class-level atomic counter for request IDs (shared across all instances)
     _request_id_counter = 0
     _request_id_lock = threading.Lock()
-    # Monotonic sequence counter — ensures unique seq_ IDs even for concurrent requests
+    # Monotonic sequence counter - ensures unique seq_ IDs even for concurrent requests
     # arriving within the same millisecond.
     _seq_counter = 0
 
@@ -145,7 +145,7 @@ class SequenceExecutor:
             {}
         )  # Variable storage for passing results between operations
 
-        # Operation metrics — delegated to nested _MetricsTracker
+        # Operation metrics - delegated to nested _MetricsTracker
         self._metrics = self._MetricsTracker()
 
         if enable_verification:
@@ -322,7 +322,7 @@ class SequenceExecutor:
                         and _v.lstrip("$").split(".")[0] == capture_var
                     ):
                         logger.warning(
-                            "Pre-exec: param '%s' self-references capture_var '%s' — nulling out",
+                            "Pre-exec: param '%s' self-references capture_var '%s' - nulling out",
                             _k,
                             capture_var,
                         )
@@ -350,7 +350,7 @@ class SequenceExecutor:
                 if _unresolved:
                     _unres_str = ", ".join(_unresolved)
                     logger.error(
-                        "Command %d/%d (%s): unresolved variable(s): %s — aborting",
+                        "Command %d/%d (%s): unresolved variable(s): %s - aborting",
                         i + 1,
                         len(commands),
                         operation,
@@ -466,7 +466,7 @@ class SequenceExecutor:
                     )
 
                     # Reflexion retry: re-parse the original command with error context.
-                    # Only applies to NAVIGATION and MANIPULATION ops — re-planning a
+                    # Only applies to NAVIGATION and MANIPULATION ops - re-planning a
                     # status check or sync primitive with the LLM makes no sense and
                     # would block for LLM_REQUEST_TIMEOUT seconds if the LLM is unavailable.
                     reflexion_succeeded = False
@@ -522,13 +522,13 @@ class SequenceExecutor:
                             " OUTPUT: Return exactly ONE JSON command object"
                             ' {"operation": ..., "params": {...}} to replace the failed'
                             " operation. Do NOT return an array or a full plan."
-                            " Do NOT re-declare capture_var — the original capture"
+                            " Do NOT re-declare capture_var - the original capture"
                             " binding is applied automatically if the retry succeeds."
                             " Only reference variables listed in 'Captured variables' above."
                         )
 
                         # Inject WorldState context: held objects are inside the gripper and
-                        # invisible to cameras — the LLM must not try to re-detect them.
+                        # invisible to cameras - the LLM must not try to re-detect them.
                         # For perception failures also hint that returning to start clears occlusion.
                         try:
                             _ws_ctx = get_world_state()
@@ -541,7 +541,7 @@ class SequenceExecutor:
                                 if _held_info:
                                     hint += (
                                         f" Currently held objects: {', '.join(_held_info)}"
-                                        " — held objects are inside the gripper and NOT"
+                                        " - held objects are inside the gripper and NOT"
                                         " visible to cameras; use their WorldState position,"
                                         " do not re-detect them."
                                     )
@@ -585,7 +585,7 @@ class SequenceExecutor:
                                 f"for command {i + 1}: {operation}"
                             )
 
-                            # §19 — LLM self-reflection: ask model what went wrong
+                            # §19 - LLM self-reflection: ask model what went wrong
                             # before re-parsing, prepend analysis to the procedural hint.
                             if REFLEXION_SELF_REFLECT_ENABLED:
                                 _refl_op = retry_op
@@ -604,7 +604,7 @@ class SequenceExecutor:
                                 if reflection:
                                     hint = reflection + "\n\n" + hint
 
-                            # §20 — prepend accumulated history so LLM sees prior attempts.
+                            # §20 - prepend accumulated history so LLM sees prior attempts.
                             if attempt_history:
                                 hint += "\n\nPrior attempt(s):\n" + "\n".join(
                                     attempt_history
@@ -656,7 +656,7 @@ class SequenceExecutor:
                             ]
                             if _retry_unresolved:
                                 logger.warning(
-                                    "Reflexion retry %d/%d (%s): unresolved variable(s) %s — skipping",
+                                    "Reflexion retry %d/%d (%s): unresolved variable(s) %s - skipping",
                                     retry_n,
                                     REFLEXION_MAX_RETRIES,
                                     retry_op,
@@ -664,7 +664,7 @@ class SequenceExecutor:
                                 )
                                 continue
 
-                            # Re-inject camera_id for perception ops — SequenceServer
+                            # Re-inject camera_id for perception ops - SequenceServer
                             # normally does this but is bypassed in the Reflexion path.
                             _PERCEPTION_OPS = {"detect_object_stereo", "analyze_scene"}
                             if retry_op in _PERCEPTION_OPS:
@@ -732,7 +732,7 @@ class SequenceExecutor:
                             else:
                                 error_msg = retry_result.get("error", "Unknown error")
                                 recovery = retry_result.get("recovery_suggestions", [])
-                                # §20 — record what this retry tried before rebuilding hint.
+                                # §20 - record what this retry tried before rebuilding hint.
                                 attempt_history.append(
                                     f"Retry {retry_n}: operation={retry_op},"
                                     f" error={error_msg}"
@@ -767,7 +767,7 @@ class SequenceExecutor:
                                         if _held_info2:
                                             hint += (
                                                 f" Currently held objects: {', '.join(_held_info2)}"
-                                                " — NOT visible to cameras."
+                                                " - NOT visible to cameras."
                                             )
                                         if _op_category == OperationCategory.PERCEPTION:
                                             hint += (
@@ -968,7 +968,7 @@ class SequenceExecutor:
                 if _unresolved:
                     _unres_str = ", ".join(_unresolved)
                     logger.error(
-                        "[Group %d] Command %d (%s): unresolved variable(s): %s — aborting",
+                        "[Group %d] Command %d (%s): unresolved variable(s): %s - aborting",
                         group_num,
                         index,
                         operation,
@@ -1025,7 +1025,7 @@ class SequenceExecutor:
             # that shutdown(wait=False) is used on timeout/abort.  The context
             # manager form always calls shutdown(wait=True) on __exit__, which
             # would block here for the full operation timeout even after
-            # as_completed gives up — the root cause of the 30-second hang on
+            # as_completed gives up - the root cause of the 30-second hang on
             # graceful shutdown.
             pool = ThreadPoolExecutor(max_workers=len(group_commands))
             try:
@@ -1205,7 +1205,7 @@ class SequenceExecutor:
                     waypoint = _extract_waypoint_from_verification(verification_result)
                     if waypoint is not None and _replan_depth == 0:
                         logger.info(
-                            f"Proximity pre-check blocked {operation} — replanning via safe waypoint {waypoint}"
+                            f"Proximity pre-check blocked {operation} - replanning via safe waypoint {waypoint}"
                         )
                         robot_id = params.get("robot_id", "")
                         wp_result = self.registry.execute_operation_by_name(
@@ -1217,12 +1217,12 @@ class SequenceExecutor:
                             request_id=self._generate_request_id(),
                         )
                         if wp_result.success:
-                            # Waypoint dispatched — retry original command (no further replanning)
+                            # Waypoint dispatched - retry original command (no further replanning)
                             return self._execute_single_command(
                                 operation, params, timeout, _replan_depth=1
                             )
                         logger.warning(
-                            "Waypoint move failed — aborting original command"
+                            "Waypoint move failed - aborting original command"
                         )
                     _result = {
                         "success": False,
@@ -1307,7 +1307,7 @@ class SequenceExecutor:
 
             # Skip completion waiting for operations that self-managed completion
             # (ROS path blocks internally; tcp_executed means _tcp_wait_for_not_moving
-            # already handled the wait — Unity's completion signal is unreliable for
+            # already handled the wait - Unity's completion signal is unreliable for
             # orientation commands when the robot is holding an object).
             if op_result.result and op_result.result.get("status") in (
                 "ros_executed",

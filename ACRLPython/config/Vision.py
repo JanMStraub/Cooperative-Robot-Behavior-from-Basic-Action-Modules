@@ -176,12 +176,12 @@ YOLO_INPUT_SIZE: Optional[int] = (
 # A downsampled thumbnail (SCENE_DIFF_THUMB_SIZE × SCENE_DIFF_THUMB_SIZE pixels)
 # is computed once on store and compared cheaply each poll iteration.
 # If the mean absolute difference is below SCENE_DIFF_THRESHOLD the frame is
-# skipped — saving a full YOLO inference + SGBM disparity pass.
+# skipped - saving a full YOLO inference + SGBM disparity pass.
 #
 # Threshold calibration (pixel values 0-255, measured on this scene):
 #   Static scene noise floor (JPEG Q75): MAD ≈ 0.6
-#   Small object motion (robot joint):   MAD ≈ 15–50
-#   Large motion (arm sweep):            MAD ≈ 80–200
+#   Small object motion (robot joint):   MAD ≈ 15-50
+#   Large motion (arm sweep):            MAD ≈ 80-200
 # Default of 8.0 gives a 13× safety margin over the measured noise floor.
 # Set SCENE_DIFF_THUMB_SIZE=0 to disable scene-change detection entirely.
 _thumb_raw = os.environ.get("SCENE_DIFF_THUMB_SIZE", "64")

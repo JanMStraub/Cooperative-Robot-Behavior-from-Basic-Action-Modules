@@ -104,7 +104,7 @@ class UnifiedImageStorage:
         Produce a tiny grayscale thumbnail used for cheap scene-change detection.
 
         Computed once at store time so the comparison in VisionProcessor is free.
-        Uses nearest-neighbour resize (fastest) — quality doesn't matter here.
+        Uses nearest-neighbour resize (fastest) - quality doesn't matter here.
         """
         gray = (
             img[:, :, 0] if len(img.shape) == 3 else img
@@ -207,10 +207,10 @@ class UnifiedImageStorage:
         Lets VisionProcessor perform both the timestamp check and the scene-change
         comparison in a single lock acquisition, without copying the full images.
         The thumbnail is the pre-computed downsampled grayscale float32 array stored
-        at write time; it is returned as-is (no copy needed — read-only comparison).
+        at write time; it is returned as-is (no copy needed - read-only comparison).
 
         Returns:
-            (timestamp, thumbnail) — thumbnail is None when SCENE_DIFF_THUMB_SIZE=0.
+            (timestamp, thumbnail) - thumbnail is None when SCENE_DIFF_THUMB_SIZE=0.
         """
         with self._data_lock:
             if not self._stereo_images:

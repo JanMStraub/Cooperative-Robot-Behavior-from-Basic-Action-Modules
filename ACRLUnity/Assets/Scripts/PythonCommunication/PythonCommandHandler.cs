@@ -422,13 +422,6 @@ namespace PythonCommunication
             return false;
         }
 
-        // TODO: Future enhancement - expose grasp planning parameters to Python
-        // Example: Add to CommandParameters struct:
-        //   public bool use_grasp_planning;
-        //   public string grasp_approach;  // "top", "front", "side", or null for auto
-        // Then pass to controller.SetTarget() via GraspOptions struct
-        // This would enable LLM-driven grasp planning from Python operations
-
         private void ExecuteMoveToCoordinate(RobotCommand command)
         {
             try
@@ -1483,7 +1476,7 @@ namespace PythonCommunication
             if (gripperController.IsHoldingObject)
             {
                 Debug.LogWarning(
-                    $"{_logPrefix} place_object: release timeout for {robotId} — force-detaching object"
+                    $"{_logPrefix} place_object: release timeout for {robotId} - force-detaching object"
                 );
                 gripperController.DetachObject();
                 yield return new WaitForSeconds(0.1f);
@@ -2277,7 +2270,7 @@ namespace PythonCommunication
                 }
             }
 
-            // Step 4: Draw shape (placeholder - actual drawing would require LineRenderer or similar)
+            // Step 4: Draw shape. Rendering is not implemented; the action is logged only.
             Debug.Log($"Drawing {shape} at paper position");
             yield return new WaitForSeconds(1.0f);
 
@@ -2885,7 +2878,7 @@ namespace PythonCommunication
             );
         }
 
-        // In ROS mode, exits immediately — Python handles the trajectory via MoveIt after calling set_clear_target_on_complete.
+        // In ROS mode, exits immediately - Python handles the trajectory via MoveIt after calling set_clear_target_on_complete.
         private void ExecuteReturnToStartPosition(RobotCommand command)
         {
             // DEBUG: always log entry so we know the command reached Unity
@@ -2921,7 +2914,7 @@ namespace PythonCommunication
                     // In ROS mode Unity skips execution. Python must call set_clear_target_on_complete
                     // separately before pushing the return-to-start trajectory to MoveIt.
                     Debug.Log(
-                        $"[ReturnToStart] ROS mode — skipping Unity execution for '{command.robot_id}'"
+                        $"[ReturnToStart] ROS mode - skipping Unity execution for '{command.robot_id}'"
                     );
                     return;
                 }
@@ -2990,7 +2983,7 @@ namespace PythonCommunication
                 else
                 {
                     Debug.LogError(
-                        $"[ReturnToStart] No controller found for '{command.robot_id}' — neither RobotController nor SimpleRobotController"
+                        $"[ReturnToStart] No controller found for '{command.robot_id}' - neither RobotController nor SimpleRobotController"
                     );
                 }
 
@@ -3057,7 +3050,7 @@ namespace PythonCommunication
                 // DEBUG: log per-joint start vs target so we can see which joints move
                 // and whether start/target agree in units (both should be degrees here).
                 var dbgSB = new System.Text.StringBuilder();
-                dbgSB.AppendLine($"[ReturnToStart] {robotId} — joint diagnostics (degrees):");
+                dbgSB.AppendLine($"[ReturnToStart] {robotId} - joint diagnostics (degrees):");
                 for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                 {
                     var j = controller.robotJoints[i];
@@ -3146,8 +3139,8 @@ namespace PythonCommunication
                     yield return new WaitForFixedUpdate();
                 }
 
-                // Pin drive targets to exact final values (no teleport — just drive target).
-                // Critically: do NOT write jointPosition/jointVelocity/jointForce here —
+                // Pin drive targets to exact final values (no teleport - just drive target).
+                // Critically: do NOT write jointPosition/jointVelocity/jointForce here -
                 // causes a discontinuity that re-excites the wrist joints.
                 for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                 {
@@ -3165,7 +3158,7 @@ namespace PythonCommunication
                 // DEBUG: log final pinned state
                 var endSB = new System.Text.StringBuilder();
                 endSB.AppendLine(
-                    $"[ReturnToStart] {robotId} FINAL — pinned drive targets (degrees):"
+                    $"[ReturnToStart] {robotId} FINAL - pinned drive targets (degrees):"
                 );
                 for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                 {

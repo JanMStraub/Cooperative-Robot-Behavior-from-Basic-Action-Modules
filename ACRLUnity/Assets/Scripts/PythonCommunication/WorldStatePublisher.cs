@@ -204,7 +204,7 @@ namespace PythonCommunication
         {
             try
             {
-                // Reuse pre-allocated lists — clear in-place instead of allocating new ones
+                // Reuse pre-allocated lists - clear in-place instead of allocating new ones
                 _robotStates.Clear();
                 _objectStates.Clear();
 
@@ -321,7 +321,7 @@ namespace PythonCommunication
                 // Get joint angles into pre-allocated cache (grows if robot has more than 6 joints)
                 float[] jointAngles = GatherJointAngles(controller);
 
-                // Get ROS control mode if available — ToString().ToLower() only called when mode is present
+                // Get ROS control mode if available - ToString().ToLower() only called when mode is present
                 string controlMode = null;
                 var rosControlMode = controller.GetComponent<ROSControlModeManager>();
                 if (rosControlMode != null)
@@ -378,7 +378,7 @@ namespace PythonCommunication
 
             int count = controller.robotJoints.Length;
 
-            // Grow the cache only when needed — avoids allocation in the common case
+            // Grow the cache only when needed - avoids allocation in the common case
             if (_jointAnglesCache.Length < count)
                 _jointAnglesCache = new float[count];
 

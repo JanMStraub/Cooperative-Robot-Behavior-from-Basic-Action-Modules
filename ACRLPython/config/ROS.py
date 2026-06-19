@@ -12,7 +12,7 @@ ROS_ENABLED = True
 ROS_BRIDGE_HOST = "127.0.0.1"
 ROS_BRIDGE_PORT = 5020
 
-# MoveIt planning settings — used in ros2/ROSMotionClient.py planning requests
+# MoveIt planning settings - used in ros2/ROSMotionClient.py planning requests
 MOVEIT_PLANNING_TIME = (
     2.0  # Max planning time in seconds (RRTConnect typically plans in <0.5s)
 )
@@ -30,7 +30,7 @@ DEFAULT_CONTROL_MODE = "hybrid"
 # Auto-connect to ROS bridge on startup (wired into RunRobotController._auto_connect_ros)
 AUTO_CONNECT_ROS = True
 
-# Timeout for waiting on ROS motion execution — used in ros2/ROSBridge.py.
+# Timeout for waiting on ROS motion execution - used in ros2/ROSBridge.py.
 # Raised from 30s: handoff grasps with complex paths can require 40s+ for pre-grasp + descent.
 ROS_EXECUTION_TIMEOUT = 60.0
 

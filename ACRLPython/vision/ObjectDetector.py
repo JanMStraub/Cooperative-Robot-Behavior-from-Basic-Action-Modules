@@ -90,7 +90,7 @@ if USE_YOLO:
     except ImportError as e:
         logging.error(f"YOLO enabled in config but import failed: {e}")
         logging.error(
-            "Falling back to HSV color detection — install ultralytics to enable YOLO"
+            "Falling back to HSV color detection - install ultralytics to enable YOLO"
         )
 
 try:
@@ -195,7 +195,7 @@ class CubeDetector:
             except Exception as e:
                 logging.error(f"Failed to initialize YOLO detector: {e}")
                 logging.error(
-                    "Falling back to HSV color detection — YOLO is unavailable"
+                    "Falling back to HSV color detection - YOLO is unavailable"
                 )
                 self.use_yolo = False
 

@@ -53,7 +53,7 @@ def execute_with_ros_fallback(
                     "Failed to connect to ROS bridge (port 5020)",
                     [
                         "Ensure Docker ROS services are running: "
-                        "cd rosUnityIntegration && ./start_ros_endpoint.sh",
+                        "cd ACRLRosUnityIntegration && ./start_ros_endpoint.sh",
                         "Set DEFAULT_CONTROL_MODE='hybrid' in config/ROS.py "
                         "for automatic fallback",
                     ],

@@ -68,7 +68,7 @@ class QueryEngine:
         if self._world_state and robot_id:
             results = self._apply_world_constraints(results, robot_id, query)
 
-        # Deduplicate by name — operations indexed as both operation and workflow
+        # Deduplicate by name - operations indexed as both operation and workflow
         # can appear twice; keep the higher-ranked (first) occurrence.
         seen_names: set = set()
         deduped = []

@@ -36,7 +36,7 @@ class TestMoveOperations:
         assert result.success is True
         assert result.result is not None
         assert result.result["approach_offset"] == 0.05
-        # Y coordinate should be offset — approach_offset lifts along Unity Y (up-axis)
+        # Y coordinate should be offset - approach_offset lifts along Unity Y (up-axis)
         assert result.result["target_position"]["y"] == pytest.approx(
             0.25
         )  # 0.2 + 0.05

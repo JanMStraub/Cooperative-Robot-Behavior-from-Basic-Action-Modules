@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B14: Knowledge Graph Ablation — spatial context enrichment vs none."""
+"""B14: Knowledge Graph Ablation - spatial context enrichment vs none."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ KG_OBJECTS = (
 )
 KG_ROBOT_NEARBY = "Robot2"
 
-# Operations that semantically take object IDs as params — used by Runner to
+# Operations that semantically take object IDs as params - used by Runner to
 # detect wrong-object references when KG context is enabled.
 KG_AWARE_OPS: frozenset = frozenset(
     {

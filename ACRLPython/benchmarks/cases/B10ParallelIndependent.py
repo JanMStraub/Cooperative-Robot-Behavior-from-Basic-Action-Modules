@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B10: Parallel Independent Tasks — dual-robot, zero shared objects, no sync point."""
+"""B10: Parallel Independent Tasks - dual-robot, zero shared objects, no sync point."""
 
 from __future__ import annotations
 

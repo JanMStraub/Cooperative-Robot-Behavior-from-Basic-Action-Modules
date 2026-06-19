@@ -3,11 +3,11 @@
 CLI tool to inspect and visualise the ACRL Knowledge Graph.
 
 Modes:
-  stats   — print node/edge counts
-  dump    — print all nodes and edges as JSON
-  png     — render graph to PNG
-  graphml — export GraphML (opens in Gephi / Cytoscape)
-  b12     — populate the B12 synthetic KG, render it, then clear
+  stats   - print node/edge counts
+  dump    - print all nodes and edges as JSON
+  png     - render graph to PNG
+  graphml - export GraphML (opens in Gephi / Cytoscape)
+  b12     - populate the B12 synthetic KG, render it, then clear
 
 Usage:
   python -m tools.KGInspect stats
@@ -75,7 +75,7 @@ def cmd_snapshot(args) -> None:
 
     The running server writes graphml snapshots to KG_VIZ_OUTPUT_DIR when
     KG_VIZ_AUTO_SAVE is enabled. This command finds the newest file, loads it
-    into a fresh KG, and renders a PNG — bridging the process boundary.
+    into a fresh KG, and renders a PNG - bridging the process boundary.
     """
     import os
     import glob
@@ -100,7 +100,7 @@ def cmd_snapshot(args) -> None:
     elif png_files:
         latest = png_files[-1]
         print(f"Latest snapshot PNG: {latest}")
-        print("(No graphml found — copy the PNG path above to view it directly)")
+        print("(No graphml found - copy the PNG path above to view it directly)")
     else:
         print(f"No snapshots found in {search_dir}")
         print(

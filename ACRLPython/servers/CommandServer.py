@@ -43,7 +43,7 @@ class CommandBroadcaster:
 
     _instance = None
     _lock = threading.RLock()
-    # Atomic counter for request IDs. Starts at 1 — 0 is the protocol sentinel
+    # Atomic counter for request IDs. Starts at 1 - 0 is the protocol sentinel
     # meaning "no ID". itertools.count is thread-safe for next() calls in CPython
     # because GIL protects the integer increment, but we wrap it in the existing
     # _queue_lock anyway for correctness on all runtimes.
@@ -135,7 +135,7 @@ class CommandBroadcaster:
                 logger.debug(f"Completion queued for request {request_id}")
             elif request_id in self._recently_removed:
                 logger.warning(
-                    f"Late completion for request {request_id} (queue already removed — operation timed out or returned early)"
+                    f"Late completion for request {request_id} (queue already removed - operation timed out or returned early)"
                 )
             else:
                 logger.debug(
@@ -213,7 +213,7 @@ class CommandBroadcaster:
     def send_command_and_wait(
         self, command: Dict[str, Any], timeout: float = 5.0
     ) -> Optional[Dict[str, Any]]:
-        # Generate request ID — use caller-supplied ID if non-zero, otherwise
+        # Generate request ID - use caller-supplied ID if non-zero, otherwise
         # allocate the next value from the atomic counter.
         request_id = command.get("request_id", 0)
         if request_id == 0:
@@ -263,7 +263,7 @@ class CommandBroadcaster:
 
 
 class CommandServer(TCPServerBase):
-    """Bidirectional TCP server — sends commands to Unity, receives completion callbacks."""
+    """Bidirectional TCP server - sends commands to Unity, receives completion callbacks."""
 
     def __init__(self, config: Optional[ServerConfig] = None):
         if config is None:

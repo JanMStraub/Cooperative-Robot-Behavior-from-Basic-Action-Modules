@@ -76,7 +76,7 @@ def _grasp_via_vgn(
 
     client = VGNClient()
     if not client.is_available():
-        logger.info("[VGN] Model unavailable — will use geometric fallback")
+        logger.info("[VGN] Model unavailable - will use geometric fallback")
         return None
 
     pc_result = generate_point_cloud(robot_id=robot_id, request_id=request_id)
@@ -158,19 +158,19 @@ def _grasp_via_vgn(
         cam_rot=cam_rot,
     )
     if not grasps:
-        logger.info("[VGN] Returned no candidates — using geometric fallback")
+        logger.info("[VGN] Returned no candidates - using geometric fallback")
         return None
 
     logger.info(f"[VGN] Candidates received: {len(grasps)}")
 
     if grasps and grasps[0].get("_world_frame"):
         world_grasps = grasps
-        logger.info("[VGN] Grasps already in Unity world frame — skipping transform")
+        logger.info("[VGN] Grasps already in Unity world frame - skipping transform")
     else:
         world_grasps = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
     if not world_grasps:
         logger.warning(
-            "[VGN] Frame transform produced no valid poses — using geometric fallback"
+            "[VGN] Frame transform produced no valid poses - using geometric fallback"
         )
         return None
 
@@ -311,7 +311,7 @@ def _grasp_via_vgn_with_ros(
 
     client = VGNClient()
     if not client.is_available():
-        logger.info("[VGN+ROS] Model unavailable — falling back to geometric ROS")
+        logger.info("[VGN+ROS] Model unavailable - falling back to geometric ROS")
         return None
 
     pc_result = generate_point_cloud(robot_id=robot_id, request_id=request_id)
@@ -404,7 +404,7 @@ def _grasp_via_vgn_with_ros(
         )
     if yolo_bbox == (0, 0, 0, 0):
         logger.warning(
-            f"[VGN] No valid bbox found for '{object_id}' — masking will use all points"
+            f"[VGN] No valid bbox found for '{object_id}' - masking will use all points"
         )
 
     try:
@@ -445,7 +445,7 @@ def _grasp_via_vgn_with_ros(
         object_dimensions=_object_dimensions,
     )
     if not grasps:
-        logger.info("[VGN+ROS] No candidates returned — falling back to geometric ROS")
+        logger.info("[VGN+ROS] No candidates returned - falling back to geometric ROS")
         return None
 
     if grasps and grasps[0].get("_world_frame"):
@@ -457,7 +457,7 @@ def _grasp_via_vgn_with_ros(
         world_grasps = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
     if not world_grasps:
         logger.warning(
-            "[VGN+ROS] Frame transform produced no valid poses — falling back"
+            "[VGN+ROS] Frame transform produced no valid poses - falling back"
         )
         return None
 
@@ -511,7 +511,7 @@ def _grasp_via_vgn_with_ros(
                 key=lambda g: abs(g.get("approach_direction", [0, 0, 0])[0]),
             )
             logger.warning(
-                f"[VGN+ROS] No grasp with |X_approach| >= {_MIN_X_APPROACH} — "
+                f"[VGN+ROS] No grasp with |X_approach| >= {_MIN_X_APPROACH} - "
                 f"using most-horizontal candidate (X_approach={top['approach_direction'][0]:.2f})"
             )
     elif _approach_lower in ("left_side", "right_side"):
@@ -576,11 +576,11 @@ def _grasp_via_vgn_with_ros(
                 key=lambda g: abs(g.get("approach_direction", [0, 0, 0])[2]),
             )
             logger.warning(
-                f"[VGN+ROS] No grasp with |Z_approach| >= {_MIN_Z_APPROACH} — "
+                f"[VGN+ROS] No grasp with |Z_approach| >= {_MIN_Z_APPROACH} - "
                 f"using most-frontal candidate"
             )
     else:
-        # Default: top-down — prefer upward Y approach to avoid table collisions.
+        # Default: top-down - prefer upward Y approach to avoid table collisions.
         top_down_candidates = [
             g
             for g in world_grasps
@@ -598,7 +598,7 @@ def _grasp_via_vgn_with_ros(
                 world_grasps, key=lambda g: g.get("approach_direction", [0, 0, 0])[1]
             )
             logger.warning(
-                f"[VGN+ROS] No grasp with Y_approach >= {VGN_MIN_Y_APPROACH} — "
+                f"[VGN+ROS] No grasp with Y_approach >= {VGN_MIN_Y_APPROACH} - "
                 f"using most-top-down candidate (Y_approach={top['approach_direction'][1]:.2f})"
             )
     pos = top["position"]
@@ -624,7 +624,7 @@ def _grasp_via_vgn_with_ros(
         if not _reachable:
             logger.warning(
                 f"[VGN+ROS] Grasp position {[round(v,3) for v in pos]} unreachable "
-                f"for {robot_id}: {_reach_reason} — falling back to geometric ROS"
+                f"for {robot_id}: {_reach_reason} - falling back to geometric ROS"
             )
             return None
     except Exception:
@@ -731,15 +731,15 @@ def _grasp_via_vgn_with_ros(
         "z": pos[2] + pre_approach[2] * GRASP_TCP_OFFSET,
     }
 
-    # Clearance waypoint: top-down only — side/front don't sweep through table-height space.
+    # Clearance waypoint: top-down only - side/front don't sweep through table-height space.
     clearance_pos = {"x": pos[0], "y": PRE_GRASP_CLEARANCE_Y, "z": pos[2]}
     _is_top_down_approach = _approach_lower not in ("side", "front")
     if _is_top_down_approach and pre_grasp_pos["y"] < PRE_GRASP_CLEARANCE_Y:
-        # Pre-grasp is below clearance height — insert the waypoint.
+        # Pre-grasp is below clearance height - insert the waypoint.
         logger.info(f"[VGN+ROS] Clearance waypoint for {robot_id}: {clearance_pos}")
         clearance_result = bridge.plan_and_execute(
             position=clearance_pos,
-            orientation=None,  # no orientation needed at clearance height — constraint causes slow planning
+            orientation=None,  # no orientation needed at clearance height - constraint causes slow planning
             planning_time=3.0,
             robot_id=robot_id,
             max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
@@ -753,13 +753,13 @@ def _grasp_via_vgn_with_ros(
                 else "No response"
             )
             logger.warning(
-                f"[VGN+ROS] Clearance waypoint failed ({cl_err}) — "
+                f"[VGN+ROS] Clearance waypoint failed ({cl_err}) - "
                 "proceeding directly to pre-grasp"
             )
         else:
             time.sleep(0.2)
 
-    # No orientation for side/front pre-grasp — shrinks IK solution space near workspace boundaries.
+    # No orientation for side/front pre-grasp - shrinks IK solution space near workspace boundaries.
     _pre_grasp_orientation = orientation if _is_top_down_approach else None
     logger.info(f"[VGN+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")
     pre_result = bridge.plan_and_execute(
@@ -774,7 +774,7 @@ def _grasp_via_vgn_with_ros(
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
         logger.info(
-            f"[VGN+ROS] Pre-grasp with orientation failed ({pre_err}) — "
+            f"[VGN+ROS] Pre-grasp with orientation failed ({pre_err}) - "
             "retrying without orientation constraint"
         )
         # Position-only: constrain_joint6 prevents free-spin; constrain_joint4 prevents long-arc IK.
@@ -791,13 +791,13 @@ def _grasp_via_vgn_with_ros(
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
         logger.warning(
-            f"[VGN+ROS] Pre-grasp planning failed ({pre_err}) — "
+            f"[VGN+ROS] Pre-grasp planning failed ({pre_err}) - "
             "falling back to geometric ROS"
         )
         return None
 
     # Settle pause: arm needs ~0.4s after OMPL trajectory to damp PD oscillation below 1°/s;
-    # 0.15s was too short — residual motion caused ROSMotionClient to plan the Cartesian
+    # 0.15s was too short - residual motion caused ROSMotionClient to plan the Cartesian
     # descent from a still-moving start state, shifting the first waypoint and inducing rotation.
     time.sleep(0.4)
 
@@ -814,12 +814,12 @@ def _grasp_via_vgn_with_ros(
             descent_result.get("error", "Unknown") if descent_result else "No response"
         )
         logger.warning(
-            f"[VGN+ROS] Cartesian descent failed ({descent_err}) — "
+            f"[VGN+ROS] Cartesian descent failed ({descent_err}) - "
             "falling back to geometric ROS"
         )
         return None
 
-    # Arm has descended — do NOT return None from here; return error result.
+    # Arm has descended - do NOT return None from here; return error result.
     # XZ offset from object centre to the approach-side grasp target. Passed to
     # follow_target so drift correction targets the same side (e.g. left_side Z offset)
     # instead of the raw object centre, which may collide with a bracing partner robot.

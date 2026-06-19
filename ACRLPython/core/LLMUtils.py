@@ -51,13 +51,13 @@ def extract_json(content: str) -> Optional[Dict]:
     Extract a JSON object from an LLM response string.
 
     Stages (in order):
-    1. Direct ``json.loads`` — succeeds when the model emits clean JSON.
+    1. Direct ``json.loads`` - succeeds when the model emits clean JSON.
     2. Markdown code-block extraction (```json ... ``` or ``` ... ```) with
        JS ``//`` comment stripping on the extracted block. Also includes
        Stage 2b: JSONL fallback (newline-delimited JSON objects within the block).
     3. Bare ``{...}`` regex match with JS comment stripping for single objects
        embedded in prose.
-    3b. Bare JSONL — multiple ``{...}`` objects on separate lines without
+    3b. Bare JSONL - multiple ``{...}`` objects on separate lines without
        markdown fences, wrapped as ``{"commands": [...]}``.
 
     Returns ``None`` and logs an error if all stages fail.
@@ -89,7 +89,7 @@ def extract_json(content: str) -> Optional[Dict]:
             return json.loads(json_str_clean)
         except json.JSONDecodeError:
             pass
-        # Stage 2b-pre: wrap entire block in array brackets — handles multi-object
+        # Stage 2b-pre: wrap entire block in array brackets - handles multi-object
         # responses with or without commas between objects.
         # LLMs often emit JSONL-style (no commas): {...}\n{...}\n{...}
         for _candidate in (json_str, re.sub(r"\}\s*\{", "},{", json_str)):
@@ -101,7 +101,7 @@ def extract_json(content: str) -> Optional[Dict]:
                     return {"commands": _result}
             except json.JSONDecodeError:
                 pass
-        # Stage 2b: JSONL fallback — model emitted newline-delimited JSON objects
+        # Stage 2b: JSONL fallback - model emitted newline-delimited JSON objects
         # Wrap into {"commands": [...]} so downstream parser can handle it
         lines = [l.strip() for l in json_str.splitlines() if l.strip().startswith("{")]
         if len(lines) > 1:
@@ -126,12 +126,12 @@ def extract_json(content: str) -> Optional[Dict]:
         except json.JSONDecodeError:
             pass
 
-    # Stage 3b: bare JSONL — model emitted multiple {…} objects separated by
+    # Stage 3b: bare JSONL - model emitted multiple {…} objects separated by
     # commas/newlines without markdown fences.  Wrap into {"commands": [...]}.
     # NOTE: Stage 3b only fires if Stage 3's non-greedy regex failed to parse
     # a complete object (e.g., nested params dict causes {.*?} to stop early).
     # If the first bare object is flat (no nested dicts), Stage 3 parses it
-    # and returns it alone — Stage 3b will not run.  This is accepted behaviour
+    # and returns it alone - Stage 3b will not run.  This is accepted behaviour
     # for the project's use case where operations always have a "params" dict.
 
     # Stage 3b-pre: array-wrap attempt for bare multi-line multi-object content.

@@ -24,7 +24,7 @@ namespace PythonCommunication
 
         public event Action<LLMResult> OnLLMResultReceived;
 
-        // Single robust client for all results (port 5010)
+        // Single client for all results (port 5010)
         private ResultsClient _client;
 
         private const string _logPrefix = "[UNIFIED_RECEIVER]";

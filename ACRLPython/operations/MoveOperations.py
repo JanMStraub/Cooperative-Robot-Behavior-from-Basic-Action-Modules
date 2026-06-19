@@ -43,7 +43,7 @@ def move_to_coordinate(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """Move robot EE to specified 3D coordinate. Async — returns immediately, Unity executes in background. approach_offset lifts target along Y."""
+    """Move robot EE to specified 3D coordinate. Async - returns immediately, Unity executes in background. approach_offset lifts target along Y."""
     try:
         if err := validate_robot_id(robot_id):
             return err
@@ -261,7 +261,7 @@ def create_move_to_coordinate_operation() -> BasicOperation:
                 "manipulation_control_gripper_001": (
                     "Only pair with control_gripper when the task EXPLICITLY asks to open or close the gripper. "
                     "Pure navigation tasks ('move to X', 'detect and move to it') must NOT include any gripper operation. "
-                    "If grasping is needed, use pick_object_at_coordinate (coords) or grasp_object (by name) instead — "
+                    "If grasping is needed, use pick_object_at_coordinate (coords) or grasp_object (by name) instead - "
                     "never manually chain move_to_coordinate + control_gripper for picking."
                 ),
                 "status_check_robot_001": "Verify arrival at target position after movement",
@@ -303,7 +303,7 @@ def _tcp_wait_for_not_moving(
                 return
             time.sleep(poll_interval)
         logger.warning(
-            f"[tcp_orientation] {robot_id} still moving after {timeout}s — continuing anyway"
+            f"[tcp_orientation] {robot_id} still moving after {timeout}s - continuing anyway"
         )
     except Exception as e:
         logger.warning(
@@ -475,7 +475,7 @@ def pick_object_at_coordinate(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """Pick at known coords: open → hover → descend → close gripper. Don't manually chain move+control_gripper — use this instead."""
+    """Pick at known coords: open → hover → descend → close gripper. Don't manually chain move+control_gripper - use this instead."""
     try:
         if err := validate_robot_id(robot_id):
             return err
@@ -580,7 +580,7 @@ def create_pick_object_at_coordinate_operation() -> BasicOperation:
         complexity=OperationComplexity.INTERMEDIATE,
         description=(
             "Pick an object at a known 3D coordinate using hover → descent → grasp sequence. "
-            "Use this instead of chaining move_to_coordinate + control_gripper — that closes "
+            "Use this instead of chaining move_to_coordinate + control_gripper - that closes "
             "the gripper above the object and misses. For name-based picking use grasp_object."
         ),
         usage_examples=[

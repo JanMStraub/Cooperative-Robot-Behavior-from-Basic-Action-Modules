@@ -34,7 +34,6 @@ namespace Configuration
 #if UNITY_EDITOR
         private void OnValidate()
         {
-            // Force window size
             forceWindowSize = Mathf.Clamp(forceWindowSize, 3, 10);
 
             // Force thresholds

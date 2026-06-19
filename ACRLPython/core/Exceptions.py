@@ -27,7 +27,7 @@ class CommunicationError(ACRLError):
 
     Raised when a network connection fails, a message cannot be sent, or
     a protocol framing error is encountered. These errors are typically
-    recoverable — the server can log a warning and continue serving other
+    recoverable - the server can log a warning and continue serving other
     clients.
     """
 

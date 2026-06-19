@@ -67,7 +67,7 @@ def backend_available() -> bool:
     Return True when both the CommandServer (5007) and SequenceServer (5008)
     are reachable.
 
-    We probe port 5007 as a proxy for Unity being connected — that port is
+    We probe port 5007 as a proxy for Unity being connected - that port is
     only active once Unity has registered with the backend.  Port 5008 is
     the SequenceServer that tests actually send commands to.
     """

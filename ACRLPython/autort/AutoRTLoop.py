@@ -183,7 +183,7 @@ class AutoRTOrchestrator:
             logger.warning(f"Stereo detection failed: {e}")
 
         for obj_state in self.world_state.get_all_objects():
-            # Avoid duplicates — skip objects already detected by stereo within 5cm
+            # Avoid duplicates - skip objects already detected by stereo within 5cm
             already_detected = any(
                 np.linalg.norm(np.array(g.position) - np.array(obj_state.position))
                 < 0.05

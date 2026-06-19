@@ -58,10 +58,10 @@ public class SaveScreenshots : MonoBehaviour
     public float farSpawnBias = 0.75f;
 
     [Header("Visibility Randomization")]
-    [Tooltip("All cube GameObjects — a random subset will be shown each capture")]
+    [Tooltip("All cube GameObjects - a random subset will be shown each capture")]
     public GameObject[] allCubes;
 
-    [Tooltip("All field GameObjects — a random subset will be shown each capture")]
+    [Tooltip("All field GameObjects - a random subset will be shown each capture")]
     public GameObject[] allFields;
 
     [Range(0f, 1f)]
@@ -149,7 +149,7 @@ public class SaveScreenshots : MonoBehaviour
                 string cn = ExtractClassName(obj.name);
                 if (!classNameToId.TryGetValue(cn, out int cid))
                     Debug.LogError(
-                        $"[SaveScreenshots] No class ID for '{cn}' (GameObject: '{obj.name}') — fix the name or classNames array!"
+                        $"[SaveScreenshots] No class ID for '{cn}' (GameObject: '{obj.name}') - fix the name or classNames array!"
                     );
                 _objectClassCache[obj.GetInstanceID()] = (cid, cn);
             }
@@ -324,7 +324,7 @@ public class SaveScreenshots : MonoBehaviour
         if (cleaned.Contains("fieldi"))
             return "field_i";
 
-        // Cube colors — check multi-word colors before short ones
+        // Cube colors - check multi-word colors before short ones
         if (cleaned.Contains("magenta"))
             return "magenta_cube";
         if (cleaned.Contains("orange"))

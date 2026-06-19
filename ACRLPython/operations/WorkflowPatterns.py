@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reusable workflow patterns for RAG indexing — helps LLMs understand common operation sequences."""
+"""Reusable workflow patterns for RAG indexing - helps LLMs understand common operation sequences."""
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
@@ -148,7 +148,7 @@ PICK_AND_PLACE_PATTERN = WorkflowPattern(
         WorkflowStep(
             operation_id="grasp_object",
             parameter_bindings={"object_id": "$target.color"},
-            description="Grasp detected object — handles approach, descent, and grip; NO prior move_to_coordinate",
+            description="Grasp detected object - handles approach, descent, and grip; NO prior move_to_coordinate",
         ),
         WorkflowStep(
             operation_id="detect_field",
@@ -161,7 +161,7 @@ PICK_AND_PLACE_PATTERN = WorkflowPattern(
         WorkflowStep(
             operation_id="place_object",
             parameter_bindings={"x": "$field.x", "y": "$field.y", "z": "$field.z"},
-            description="Place held object at field coordinates — hover, descend, open gripper, ascend",
+            description="Place held object at field coordinates - hover, descend, open gripper, ascend",
         ),
     ],
     variable_bindings={
@@ -699,13 +699,13 @@ def get_global_workflow_registry() -> WorkflowPatternRegistry:
     return _global_workflow_registry
 
 
-# Text patterns for RAG indexing — guide LLMs on how to chain atomic operations
+# Text patterns for RAG indexing - guide LLMs on how to chain atomic operations
 
 HANDOFF_TEXT_PATTERN = """
 HANDOFF OPERATION: Explicit flat step sequence
 ==============================================
 
-Object handoff uses individual atomic operations — no composite present_for_handoff
+Object handoff uses individual atomic operations - no composite present_for_handoff
 or receive_handoff ops exist. Each step gets its own Unity ACK via SequenceExecutor.
 
 **Step-by-Step Atomic Operation Sequence:**
@@ -717,7 +717,7 @@ or receive_handoff ops exist. Each step gets its own Unity ACK via SequenceExecu
    → grasp_object(source_robot, object_id)
    NOTE: Do NOT use move_to_coordinate + control_gripper here.
 
-3. Source robot returns to start at reduced speed (object held — prevents pendulum oscillation)
+3. Source robot returns to start at reduced speed (object held - prevents pendulum oscillation)
    → return_to_start_position(source_robot, speed=0.3)
 
 4. Source robot moves to HANDOFF_PRESENTATION_POSITION at reduced speed (object held)
@@ -737,7 +737,7 @@ or receive_handoff ops exist. Each step gets its own Unity ACK via SequenceExecu
 7. Target robot re-detects the object at its new position
    → detect_object_stereo(target_robot, color=object_color)
 
-8. Target robot receives handoff (orient + move to approach + close gripper — fully atomic)
+8. Target robot receives handoff (orient + move to approach + close gripper - fully atomic)
    → receive_handoff(target_robot, object_id, source_robot_id=source_robot)
 
 9. Source robot releases
@@ -747,14 +747,14 @@ or receive_handoff ops exist. Each step gets its own Unity ACK via SequenceExecu
     → return_to_start_position(source_robot, speed=0.5)
 
 **Key Anti-Patterns to Avoid:**
-- Do NOT use move_to_coordinate + control_gripper for step 2 — use grasp_object
-- Do NOT use grasp_object for the receiving robot — use receive_handoff instead
-- Do NOT use orient_gripper_for_handoff_receive — it was removed; receive_handoff is the replacement
-- Do NOT skip step 3 — return_to_start is required for deterministic IK convergence
-- Do NOT skip step 4 — source MUST move to the presentation position before receiver approaches
-- Do NOT skip step 5 — adjust_end_effector_orientation(roll=90) rotates object long axis to Y and locks wrist
-- Do NOT place step 5 in the same parallel_group as step 4 — IK conflicts with active ROS trajectory → 60s timeout
-- Do NOT skip step 10 — source robot must return to start after releasing
+- Do NOT use move_to_coordinate + control_gripper for step 2 - use grasp_object
+- Do NOT use grasp_object for the receiving robot - use receive_handoff instead
+- Do NOT use orient_gripper_for_handoff_receive - it was removed; receive_handoff is the replacement
+- Do NOT skip step 3 - return_to_start is required for deterministic IK convergence
+- Do NOT skip step 4 - source MUST move to the presentation position before receiver approaches
+- Do NOT skip step 5 - adjust_end_effector_orientation(roll=90) rotates object long axis to Y and locks wrist
+- Do NOT place step 5 in the same parallel_group as step 4 - IK conflicts with active ROS trajectory → 60s timeout
+- Do NOT skip step 10 - source robot must return to start after releasing
 
 **Example LLM Usage:**
 "Robot1, hand the red bar to Robot2"

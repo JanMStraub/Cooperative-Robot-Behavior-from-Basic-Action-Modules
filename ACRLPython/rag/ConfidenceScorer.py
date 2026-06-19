@@ -63,7 +63,7 @@ def calculate_parameter_match_score(
 
     matches = len(param_terms & query_terms)
     if matches == 0:
-        return 0.5  # Neutral — query needn't mention params for op to be relevant
+        return 0.5  # Neutral - query needn't mention params for op to be relevant
 
     return min(1.0, 0.5 + (matches / len(param_terms)) * 0.5)
 

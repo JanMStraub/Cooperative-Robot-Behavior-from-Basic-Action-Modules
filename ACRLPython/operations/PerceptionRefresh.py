@@ -111,7 +111,7 @@ class PerceptionRefreshLoop:
         try:
             all_objects = self._world_state.get_all_objects()
             for obj in all_objects:
-                # Fields are static landmarks — never refresh via cube detector.
+                # Fields are static landmarks - never refresh via cube detector.
                 if getattr(obj, "object_type", None) == "field":
                     continue
                 color = getattr(obj, "color", None)
@@ -160,7 +160,7 @@ class PerceptionRefreshLoop:
                 description = result.result
 
             if color.lower() in description.lower():
-                # Object is still present but we have no depth — bump confidence
+                # Object is still present but we have no depth - bump confidence
                 # and last_seen without touching position.
                 try:
                     with self._world_state._lock:

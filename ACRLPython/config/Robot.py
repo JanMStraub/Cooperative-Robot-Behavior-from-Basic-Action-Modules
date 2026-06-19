@@ -70,7 +70,7 @@ DEFAULT_HANDOFF_OBJECT_DIMENSIONS = (0.02, 0.02, 0.02)
 # Fixed world-space position where Robot A presents the object for handoff.
 # Chosen to be reachable by both AR4 arms and clear of the table surface.
 # Robot B approaches this same point from the side (pitch=90°) while Robot A
-# holds still top-down — the different gripper planes prevent finger collision.
+# holds still top-down - the different gripper planes prevent finger collision.
 HANDOFF_PRESENTATION_POSITION = (
     float(os.environ.get("HANDOFF_PRESENTATION_X", "0.0")),
     float(os.environ.get("HANDOFF_PRESENTATION_Y", "0.35")),
@@ -98,7 +98,7 @@ FOLLOW_TARGET_DRIFT_THRESHOLD = float(
 )
 
 # How far (meters) to lift the gripper above the grasp Y before replanning to a
-# drifted object — prevents dragging the gripper along the table surface.
+# drifted object - prevents dragging the gripper along the table surface.
 FOLLOW_TARGET_RETRACT_HEIGHT = float(
     os.environ.get("FOLLOW_TARGET_RETRACT_HEIGHT", "0.10")
 )

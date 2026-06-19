@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark result reporter — JSON file output + stdout summary."""
+"""Benchmark result reporter - JSON file output + stdout summary."""
 
 from __future__ import annotations
 

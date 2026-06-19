@@ -35,7 +35,7 @@ namespace Simulation
 
         private RobotManager _robotManager;
 
-        // Pre-allocated controller cache — rebuilt only when robot count changes, not per-frame.
+        // Pre-allocated controller cache - rebuilt only when robot count changes, not per-frame.
         private RobotController[] _cache = new RobotController[0];
         private int _cacheCount = 0;
         private int _lastCount = 0;
@@ -62,7 +62,7 @@ namespace Simulation
             _robotManager = RobotManager.Instance;
             if (_robotManager == null)
             {
-                Debug.LogError($"{LOG} RobotManager not found — disabling ProximityGuard.");
+                Debug.LogError($"{LOG} RobotManager not found - disabling ProximityGuard.");
                 enabled = false;
                 return;
             }
@@ -144,13 +144,13 @@ namespace Simulation
             {
                 r.IsFrozenByProximity = true;
                 if (_verboseLogging)
-                    Debug.LogWarning($"{LOG} Froze {r.robotId} — proximity violation");
+                    Debug.LogWarning($"{LOG} Froze {r.robotId} - proximity violation");
             }
             else if (resolved && r.IsFrozenByProximity)
             {
                 r.IsFrozenByProximity = false;
                 if (_verboseLogging)
-                    Debug.Log($"{LOG} Unfroze {r.robotId} — separation restored");
+                    Debug.Log($"{LOG} Unfroze {r.robotId} - separation restored");
             }
         }
 

@@ -108,22 +108,22 @@ Please fix these issues and generate a valid task following the parameter schema
                         return task
                     last_error = f"Parameter validation failed: {error_msg}"
                     logger.warning(
-                        f"[AutoRT slot {slot_index} attempt {attempt + 1}] REJECTED — {error_msg}"
+                        f"[AutoRT slot {slot_index} attempt {attempt + 1}] REJECTED - {error_msg}"
                     )
 
                 if not tasks:
                     last_error = "No tasks generated"
                     logger.warning(
-                        f"[AutoRT slot {slot_index} attempt {attempt + 1}] EMPTY — LLM returned no parseable tasks"
+                        f"[AutoRT slot {slot_index} attempt {attempt + 1}] EMPTY - LLM returned no parseable tasks"
                     )
 
             except (json.JSONDecodeError, ValidationError, ValueError) as e:
                 last_error = f"JSON/Schema error: {e}"
                 logger.warning(
-                    f"[AutoRT slot {slot_index} attempt {attempt + 1}] PARSE ERROR — {e}"
+                    f"[AutoRT slot {slot_index} attempt {attempt + 1}] PARSE ERROR - {e}"
                 )
                 if hasattr(e, "doc"):
-                    # JSONDecodeError — show chars around the failure point
+                    # JSONDecodeError - show chars around the failure point
                     pos = getattr(e, "pos", 0)
                     snippet = e.doc[max(0, pos - 80) : pos + 80]  # type: ignore[union-attr]
                     logger.info(f"  ↳ context around char {pos}: ...{snippet!r}...")
@@ -138,7 +138,7 @@ Please fix these issues and generate a valid task following the parameter schema
 
     def _query_llm(self, prompt: str) -> str:
         try:
-            # Type ignore needed for LM Studio compat — OpenAI SDK expects TypedDict but accepts plain dicts
+            # Type ignore needed for LM Studio compat - OpenAI SDK expects TypedDict but accepts plain dicts
             messages = [
                 {
                     "role": "system",
@@ -334,7 +334,7 @@ Output compact JSON array only, no markdown"""
             stripped = raw_response.strip()
             if stripped and stripped[-1] not in ("}", "]"):
                 logger.error(
-                    f"JSON truncated — response cut off mid-stream (last char={stripped[-1]!r}). "
+                    f"JSON truncated - response cut off mid-stream (last char={stripped[-1]!r}). "
                     f"Increase max_tokens or reduce thinking budget. Preview: {raw_response[:200]}"
                 )
                 raise ValueError(
@@ -384,7 +384,7 @@ Output compact JSON array only, no markdown"""
                     f"with {len(nested)} nested ops"
                 )
                 flat.extend(nested)
-            # Format B: type field is "parallel_group" — degenerate, skip
+            # Format B: type field is "parallel_group" - degenerate, skip
             elif item.get("type") == "parallel_group":
                 logger.warning(
                     "Dropping degenerate operation with type='parallel_group'; LLM confused group wrapper with op type"
@@ -462,7 +462,7 @@ Output compact JSON array only, no markdown"""
                         return (
                             False,
                             f"Operation #{i} '{op.type}': {op.robot_id} cannot reach "
-                            f"object '{object_id}' — assign to {allowed_str} instead",
+                            f"object '{object_id}' - assign to {allowed_str} instead",
                         )
 
                 # Handoff color constraint: handoff/receive_handoff only allowed for red objects.
@@ -472,7 +472,7 @@ Output compact JSON array only, no markdown"""
                         return (
                             False,
                             f"Operation #{i} '{op.type}': handoffs are only allowed with "
-                            f"the red object, but object '{object_id}' is '{color}' — "
+                            f"the red object, but object '{object_id}' is '{color}' - "
                             f"use grasp_object + place_object for non-red objects",
                         )
 
@@ -494,7 +494,7 @@ Output compact JSON array only, no markdown"""
                         return (
                             False,
                             f"Operation #{i} 'place_object' references on_top_of='{on_top_of}' "
-                            f"but detect_field('{field_letter}') does not precede it — "
+                            f"but detect_field('{field_letter}') does not precede it - "
                             f"add detect_field for '{field_letter}' before this placement",
                         )
 
@@ -559,7 +559,7 @@ Output compact JSON array only, no markdown"""
         if self._operations_summary_cache is not None:
             return self._operations_summary_cache
 
-        # Ops excluded from AutoRT — superseded by higher-level composite ops.
+        # Ops excluded from AutoRT - superseded by higher-level composite ops.
         # grasp_object > pick_object_at_coordinate (ID-based vs coord-based)
         # handoff/receive_handoff > manual move+signal+release sequences
         # place_object/place_between_objects > release_object for placement

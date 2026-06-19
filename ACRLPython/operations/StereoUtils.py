@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse Unity stereo metadata dicts into typed CameraConfig + extrinsics — shared by all vision operations."""
+"""Parse Unity stereo metadata dicts into typed CameraConfig + extrinsics - shared by all vision operations."""
 
 from dataclasses import dataclass
 from typing import List, Optional

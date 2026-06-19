@@ -7,12 +7,12 @@ Controls the NetworkX-based knowledge graph for spatial reasoning
 and multi-hop relationship queries.
 
 Environment variable overrides:
-    KNOWLEDGE_GRAPH_ENABLED=true      — activate the knowledge graph
-    KG_NEAR_THRESHOLD=0.15            — override the NEAR edge distance (meters)
-    KG_VIZ_AUTO_SAVE=true             — save a PNG after every graph update
-    KG_VIZ_OUTPUT_DIR=./kg_snapshots  — directory for auto-saved PNGs
-    KG_VIZ_DPI=150                    — PNG resolution
-    KG_VIZ_FIGSIZE=14x10              — figure size in inches (WxH)
+    KNOWLEDGE_GRAPH_ENABLED=true      - activate the knowledge graph
+    KG_NEAR_THRESHOLD=0.15            - override the NEAR edge distance (meters)
+    KG_VIZ_AUTO_SAVE=true             - save a PNG after every graph update
+    KG_VIZ_OUTPUT_DIR=./kg_snapshots  - directory for auto-saved PNGs
+    KG_VIZ_DPI=150                    - PNG resolution
+    KG_VIZ_FIGSIZE=14x10              - figure size in inches (WxH)
 """
 
 import logging

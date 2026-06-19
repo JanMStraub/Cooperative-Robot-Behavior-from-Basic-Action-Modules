@@ -253,6 +253,6 @@ def compute_end_effector_position(
     base_position: Tuple[float, float, float],
     base_yaw_rad: float = 0.0,
 ) -> Tuple[float, float, float]:
-    """Convenience wrapper — returns only position (x, y, z) in Unity world frame."""
+    """Convenience wrapper - returns only position (x, y, z) in Unity world frame."""
     pos, _ = compute_end_effector_pose(joint_angles, base_position, base_yaw_rad)
     return pos

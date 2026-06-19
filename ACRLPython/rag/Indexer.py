@@ -101,7 +101,7 @@ class OperationIndexer:
         Pattern 2: Sequential Handoff
         When transferring object from Robot1 to Robot2, use the HANDOFF RULE from the system prompt.
         Key operations: grasp_object (Robot1), receive_handoff (Robot2), release_object (Robot1).
-        Never use control_gripper for handoff — use grasp_object and receive_handoff instead.
+        Never use control_gripper for handoff - use grasp_object and receive_handoff instead.
 
         Pattern 3: One Robot Waits While Other Works
         When Robot2 depends on Robot1 completing a task:

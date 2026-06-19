@@ -421,7 +421,7 @@ namespace Tests.PlayMode
             _gripperController.gripSpeed = 0.05f; // Slower for longer interpolation
             _gripperController.OpenGrippers();
 
-            // Wait a short time (not enough to converge) — a few frames only
+            // Wait a short time (not enough to converge) - a few frames only
             yield return null;
             yield return null;
 

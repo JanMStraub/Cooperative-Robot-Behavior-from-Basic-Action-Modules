@@ -416,7 +416,7 @@ class TestCommandParserErrors:
 
     def test_parse_unicode_command(self, command_parser, mock_registry):
         """Test parsing command with Unicode characters."""
-        unicode_command = "move to (0.3, 0.2, 0.1) 🤖"
+        unicode_command = "move to (0.3, 0.2, 0.1) café"
 
         with patch.object(command_parser, "registry", mock_registry):
             # Should handle gracefully

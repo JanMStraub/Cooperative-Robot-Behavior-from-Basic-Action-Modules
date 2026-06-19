@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B13: Negotiation Ablation — LLM negotiation vs direct single-LLM plan."""
+"""B13: Negotiation Ablation - LLM negotiation vs direct single-LLM plan."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ def get_tasks(config=None) -> List[str]:
     All tasks have ambiguous or unspecified role assignment so negotiation
     must add value: resolving who leads, ordering sequential dependencies,
     or arbitrating resource contention. Tasks with explicit per-robot
-    instructions (like B6/B7) are excluded — the direct planner can follow
+    instructions (like B6/B7) are excluded - the direct planner can follow
     those without negotiation, making the enabled/disabled delta uninformative.
     """
     return [

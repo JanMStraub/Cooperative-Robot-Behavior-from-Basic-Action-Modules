@@ -257,7 +257,7 @@ class TestApproachDirectionDiversity:
     direction (all +X or all -X for side; all +Z or all -Z for front).
 
     After the fix, _get_approach_basis is called per candidate, so each
-    candidate independently samples its sign — giving mix of +X/-X and +Z/-Z.
+    candidate independently samples its sign - giving mix of +X/-X and +Z/-Z.
     """
 
     def test_side_approach_has_both_positive_and_negative_x_directions(self):
@@ -266,7 +266,7 @@ class TestApproachDirectionDiversity:
         across enough trials (multiple seeds) to confirm independence.
 
         We run several seeded generators and check that at least one produces
-        a mix — if all seeds produce only one direction, the bug has returned.
+        a mix - if all seeds produce only one direction, the bug has returned.
         """
         config = GraspConfig.create_default()
         # Keep only side approach so we only look at side candidates
@@ -345,7 +345,7 @@ class TestApproachDirectionDiversity:
         With a fixed seed and enough candidates, we must see both +X and -X
         directions, since each candidate independently draws its sign.
 
-        Expected number of +X candidates ~ Binomial(n=32, p=0.5) — probability
+        Expected number of +X candidates ~ Binomial(n=32, p=0.5) - probability
         of all-same sign is (0.5)^31 ≈ 5e-10, so this test is essentially deterministic.
         """
         config = GraspConfig.create_default()

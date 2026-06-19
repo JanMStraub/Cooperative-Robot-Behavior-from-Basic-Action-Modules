@@ -66,7 +66,7 @@ class TestDeferredFlush:
         with store._lock:
             store._flush_pending_vectors()
             shape_first = store.vectors.shape
-            store._flush_pending_vectors()  # second call — nothing pending
+            store._flush_pending_vectors()  # second call - nothing pending
             shape_second = store.vectors.shape
 
         assert shape_first == shape_second == (3, 4)

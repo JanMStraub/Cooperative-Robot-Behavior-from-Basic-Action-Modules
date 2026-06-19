@@ -29,7 +29,7 @@ namespace PythonCommunication.Core
     /// - message_type (1 byte): Identifies the message type
     /// - request_id (4 bytes): Unsigned integer for request/response correlation
     ///
-    /// This enables robust request tracking, timeout handling, and proper message routing.
+    /// This enables request tracking, timeout handling, and message routing.
     /// </summary>
     public static class UnityProtocol
     {
@@ -55,7 +55,7 @@ namespace PythonCommunication.Core
         {
             byte[] header = new byte[HEADER_SIZE];
             header[0] = (byte)messageType;
-            // Direct byte writes — zero allocation, avoids BitConverter.GetBytes heap alloc
+            // Direct byte writes - zero allocation, avoids BitConverter.GetBytes heap alloc
             header[1] = (byte)(requestId);
             header[2] = (byte)(requestId >> 8);
             header[3] = (byte)(requestId >> 16);
@@ -85,7 +85,7 @@ namespace PythonCommunication.Core
             messageType = (MessageType)data[offset];
             offset += TYPE_SIZE;
 
-            // Explicit little-endian decode — matches EncodeHeader's bit-shift writes
+            // Explicit little-endian decode - matches EncodeHeader's bit-shift writes
             // and avoids BitConverter's platform-endian dependency.
             requestId =
                 (uint)data[offset]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B5: Pose-Aware Grasp — detect red object, orient gripper downward, grasp it."""
+"""B5: Pose-Aware Grasp - detect red object, orient gripper downward, grasp it."""
 
 from __future__ import annotations
 

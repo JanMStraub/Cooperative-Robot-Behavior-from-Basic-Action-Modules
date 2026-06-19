@@ -26,7 +26,7 @@ def _build_segmentation_mask(
 
     bx, by, bw, bh = yolo_bbox
     if bw <= 0 or bh <= 0:
-        # Degenerate bbox — return all points
+        # Degenerate bbox - return all points
         return np.ones(N, dtype=bool)
 
     # Pinhole focal length in pixels from horizontal FOV
@@ -78,14 +78,14 @@ def _build_segmentation_mask(
                 f"hint={depth_hint:.3f} ± {depth_margin:.3f} m"
             )
             # If the actual median depth differs from the hint by more than the
-            # margin, the WorldState hint is stale or the stereo is off — use the
+            # margin, the WorldState hint is stale or the stereo is off - use the
             # actual median as the filter centre instead.
             _effective_hint = depth_hint
             if abs(_depth_median - depth_hint) > depth_margin:
                 _log.warning(
                     f"[mask] depth_hint {depth_hint:.3f} m differs from bbox median "
                     f"{_depth_median:.3f} m by {abs(_depth_median - depth_hint):.3f} m "
-                    f"(> margin {depth_margin:.3f} m) — using bbox median as filter centre"
+                    f"(> margin {depth_margin:.3f} m) - using bbox median as filter centre"
                 )
                 _effective_hint = _depth_median
             depth_mask = (
@@ -95,19 +95,19 @@ def _build_segmentation_mask(
             )
             _n_depth = int(np.count_nonzero(depth_mask))
             if _n_depth >= max(10, _n_2d // 4):
-                # Depth filter kept at least 25% of 2D points — apply it.
+                # Depth filter kept at least 25% of 2D points - apply it.
                 mask = depth_mask
                 _log.info(f"[mask] depth filter applied: {_n_2d} → {_n_depth} points")
             else:
-                # Too aggressive — skip depth filter entirely to avoid starvation.
+                # Too aggressive - skip depth filter entirely to avoid starvation.
                 _log.warning(
                     f"[mask] depth filter would leave only {_n_depth}/{_n_2d} points "
-                    f"— skipping depth filter"
+                    f"- skipping depth filter"
                 )
 
     approach = preferred_approach.lower()
     if approach == "side":
-        # Keep only left/right halves — exclude centre 50 % of bbox width
+        # Keep only left/right halves - exclude centre 50 % of bbox width
         obj_cx = (x0 + x1) / 2.0
         half_w = float(bw) * 0.25  # 25 % from each edge
         side_mask = (u <= (obj_cx - half_w)) | (u >= (obj_cx + half_w))

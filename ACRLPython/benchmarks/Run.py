@@ -65,7 +65,7 @@ def _parse_benchmark_arg(value: str) -> list[int]:
             raise argparse.ArgumentTypeError(f"Invalid benchmark range: {value!r}")
         if lo < 1 or hi > 16 or lo > hi:
             raise argparse.ArgumentTypeError(
-                f"Range must be within 1–16 and lo ≤ hi, got {value!r}"
+                f"Range must be within 1-16 and lo ≤ hi, got {value!r}"
             )
         return list(range(lo, hi + 1))
     try:
@@ -73,7 +73,7 @@ def _parse_benchmark_arg(value: str) -> list[int]:
     except ValueError:
         raise argparse.ArgumentTypeError(f"Invalid benchmark id: {value!r}")
     if n < 1 or n > 16:
-        raise argparse.ArgumentTypeError(f"Benchmark id must be 1–16, got {n}")
+        raise argparse.ArgumentTypeError(f"Benchmark id must be 1-16, got {n}")
     return [n]
 
 
@@ -164,13 +164,13 @@ def main() -> None:
         "--benchmark",
         type=str,
         metavar="N or N-M",
-        help="Run benchmark(s) 1–16; accepts single id (e.g. 3) or range (e.g. 1-6)",
+        help="Run benchmark(s) 1-16; accepts single id (e.g. 3) or range (e.g. 1-6)",
     )
-    group.add_argument("--all", action="store_true", help="Run all benchmarks (1–16)")
+    group.add_argument("--all", action="store_true", help="Run all benchmarks (1-16)")
     group.add_argument(
         "--ablation",
         action="store_true",
-        help="Run ablation benchmarks only (11–16, no server required for 11 and 14)",
+        help="Run ablation benchmarks only (11-16, no server required for 11 and 14)",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Use mock operations (no hardware)"

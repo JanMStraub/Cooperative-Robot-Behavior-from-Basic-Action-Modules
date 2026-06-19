@@ -193,7 +193,7 @@ namespace Robotics
                 _detachInFixedUpdate = true;
             }
 
-            // Stop closure when both fingers contact an object — prevents drive-vs-contact oscillation.
+            // Stop closure when both fingers contact an object - prevents drive-vs-contact oscillation.
             // Uses targeted check when a target object is registered, generic check otherwise
             // (e.g. when _attachObjectOnGrasp is disabled and SetTargetObject was never called).
             bool isContactStop =
@@ -226,7 +226,7 @@ namespace Robotics
                     SetDriveTarget(rightGripper, holdRight);
                     _currentPhysicalTarget = holdLeft;
                     // Update targetPosition so isAtGoal stays true after _targetObjectToGrasp
-                    // is cleared — prevents jaws from re-driving toward 0 through the held object.
+                    // is cleared - prevents jaws from re-driving toward 0 through the held object.
                     targetPosition = Mathf.Clamp01(MapPhysicalToNormalized(holdLeft));
                 }
                 if (_wasMoving)
@@ -597,7 +597,7 @@ namespace Robotics
 
             // Tell RobotManager to stop tracking this object as a live target.
             // Once the object is kinematically parented to the arm, any arm motion moves the
-            // object — causing CheckForTargetChanges to detect "drift" and repeatedly call
+            // object - causing CheckForTargetChanges to detect "drift" and repeatedly call
             // SetTarget, which re-arms the IK and produces jittery post-grasp motion.
             RobotController rc = GetComponentInParent<RobotController>();
             if (rc != null && RobotManager.Instance != null)

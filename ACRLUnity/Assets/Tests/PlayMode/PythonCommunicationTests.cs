@@ -245,7 +245,7 @@ namespace Tests.PlayMode
         {
             // With Python backend unavailable, client should handle connection failure gracefully
             // (Auto-reconnect is implemented in TCPClientBase)
-            // NOTE: WaitForSeconds is intentional here — TCP connection attempts take real time to fail
+            // NOTE: WaitForSeconds is intentional here - TCP connection attempts take real time to fail
             yield return new WaitForSeconds(TestConstants.SHORT_TIMEOUT);
 
             // Client should still be valid even if connection failed

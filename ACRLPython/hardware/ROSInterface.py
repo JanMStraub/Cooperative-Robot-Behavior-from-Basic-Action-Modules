@@ -2,7 +2,7 @@
 """
 ROSInterface.py - ROS/MoveIt Hardware Adapter (stub)
 
-Wraps ROSBridge for real robot execution.  Currently a stub — methods raise
+Wraps ROSBridge for real robot execution.  Currently a stub - methods raise
 NotImplementedError until physical hardware integration is implemented in Phase 4
 of the Sim-to-Real Decoupling roadmap.
 

@@ -154,7 +154,7 @@ namespace Robotics
         }
 
         // Two passes: (1) free Target-tagged objects via OverlapSphere, (2) objects held by another gripper
-        // (handoff case — AttachObject clears the "Target" tag so pass 1 misses them).
+        // (handoff case - AttachObject clears the "Target" tag so pass 1 misses them).
         private GameObject FindNearestGraspableObject()
         {
             // Finger tips sit closer to the object than ee_link/gripper_focus.
@@ -205,7 +205,7 @@ namespace Robotics
                 }
             }
 
-            if (nearest == null) // Pass 2: handoff — scan other grippers for held objects
+            if (nearest == null) // Pass 2: handoff - scan other grippers for held objects
             {
                 GripperController[] allGrippers = FindObjectsByType<GripperController>(
                     FindObjectsSortMode.None
@@ -239,7 +239,7 @@ namespace Robotics
             {
                 if (candidateCount > 1)
                     Debug.LogWarning(
-                        $"{_logPrefix} {candidateCount} graspable objects within {searchRadius * 100f:F0}cm — "
+                        $"{_logPrefix} {candidateCount} graspable objects within {searchRadius * 100f:F0}cm - "
                             + $"attaching to nearest ('{nearest.name}' at {nearestDist * 100f:F1}cm). "
                             + "Wrong object may be grasped in dense scenes."
                     );

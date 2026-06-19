@@ -151,7 +151,7 @@ class GraphBuilder:
     def _update_object_nodes(self, state_data: Dict[str, Any]):
         objects = state_data.get("objects", [])
         seen_object_ids = set()
-        # Build lookup once — O(N) total instead of O(N²)
+        # Build lookup once - O(N) total instead of O(N²)
         world_objs_by_id = {o.object_id: o for o in self._world_state.get_all_objects()}
 
         for obj_data in objects:
@@ -159,7 +159,7 @@ class GraphBuilder:
             if not object_id:
                 continue
 
-            # Skip robot IDs — robots appear in the Unity objects array but
+            # Skip robot IDs - robots appear in the Unity objects array but
             # are tracked as robot nodes, not object nodes.
             if object_id in ROBOT_BASE_POSITIONS:
                 continue

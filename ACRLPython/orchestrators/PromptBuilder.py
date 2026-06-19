@@ -61,7 +61,7 @@ Ordering constraints (derive parallel_group numbers yourself):
 - Robot1 returns to start after releasing.
 
 Hard constraints:
-- Receiving robot always uses receive_handoff — never grasp_object.
+- Receiving robot always uses receive_handoff - never grasp_object.
 - Handoff coordinate is exactly ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}); no approach_offset on that move.
 - Robot2's detect color must match Robot1's detect color (never null).
 - signal + wait_for_signal must share the same parallel_group."""
@@ -272,7 +272,7 @@ class PromptBuilder:
         _robot_id_line = (
             f'Default robot_id: "{robot_id}"'
             if len(_named_robots) <= 1
-            else f'Robots in task: {", ".join(sorted(_named_robots))} — assign robot_id per-op as named in the task'
+            else f'Robots in task: {", ".join(sorted(_named_robots))} - assign robot_id per-op as named in the task'
         )
 
         sections: List[str] = [
@@ -427,7 +427,7 @@ class PromptBuilder:
                             ops_added += 1
 
                 if ops_added == 0:
-                    # No RAG op hits or all lookups failed — list all ops as fallback
+                    # No RAG op hits or all lookups failed - list all ops as fallback
                     for op in self.registry.get_all_operations():
                         params = self.format_parameters(op.parameters)
                         summary_lines.append(f"- {op.name}({params}): {op.description}")

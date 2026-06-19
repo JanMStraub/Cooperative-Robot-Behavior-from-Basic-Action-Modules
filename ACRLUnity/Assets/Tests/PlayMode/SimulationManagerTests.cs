@@ -471,7 +471,7 @@ namespace Tests.PlayMode
             };
 
             // In the no-robot scene the manager is in Error state after Setup().
-            // PauseSimulation/StartSimulation are no-ops in Error — use ResetSimulation()
+            // PauseSimulation/StartSimulation are no-ops in Error - use ResetSimulation()
             // instead, which always fires Error->Resetting->Paused (two transitions).
             _manager.ResetSimulation();
             yield return null; // Wait for Resetting->Paused coroutine

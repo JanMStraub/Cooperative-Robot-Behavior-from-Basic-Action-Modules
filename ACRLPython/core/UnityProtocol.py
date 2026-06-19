@@ -121,7 +121,7 @@ class UnityProtocol:
     HEADER_SIZE = TYPE_SIZE + INT_SIZE  # type + request_id
 
     # ===========================================================================
-    # HEADER PROTOCOL — Message framing and header encode/decode
+    # HEADER PROTOCOL - Message framing and header encode/decode
     # ===========================================================================
 
     @staticmethod
@@ -184,7 +184,7 @@ class UnityProtocol:
         return message_type, request_id, offset
 
     # ===========================================================================
-    # IMAGE FAMILY — 0x01 (single camera), 0x07 (stereo)
+    # IMAGE FAMILY - 0x01 (single camera), 0x07 (stereo)
     # ===========================================================================
 
     @staticmethod
@@ -258,7 +258,7 @@ class UnityProtocol:
             raise ValueError(f"Failed to decode image message: {e}")
 
     # ===========================================================================
-    # RESULT FAMILY — 0x02
+    # RESULT FAMILY - 0x02
     # ===========================================================================
 
     @staticmethod
@@ -316,7 +316,7 @@ class UnityProtocol:
             raise ValueError(f"Failed to decode result message: {e}")
 
     # ===========================================================================
-    # INTERNAL PARSING HELPERS — _read_string, _read_bytes
+    # INTERNAL PARSING HELPERS - _read_string, _read_bytes
     # ===========================================================================
 
     @staticmethod
@@ -373,7 +373,7 @@ class UnityProtocol:
         return byte_data, offset
 
     # ===========================================================================
-    # RAG FAMILY — 0x03 (query), 0x04 (response)
+    # RAG FAMILY - 0x03 (query), 0x04 (response)
     # ===========================================================================
 
     @staticmethod
@@ -507,7 +507,7 @@ class UnityProtocol:
             raise ValueError(f"Failed to decode RAG response: {e}")
 
     # ===========================================================================
-    # STATUS FAMILY — 0x05 (query), 0x06 (response)
+    # STATUS FAMILY - 0x05 (query), 0x06 (response)
     # ===========================================================================
 
     @staticmethod
@@ -632,7 +632,7 @@ class UnityProtocol:
             raise ValueError(f"Failed to decode status response: {e}")
 
     # ===========================================================================
-    # AUTORT FAMILY — 0x09 (command), 0x0A (response)
+    # AUTORT FAMILY - 0x09 (command), 0x0A (response)
     # ===========================================================================
 
     @staticmethod

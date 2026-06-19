@@ -63,8 +63,8 @@ class TestImageMessageEncoding:
         assert len(encoded) > 0
 
     def test_encode_unicode_strings(self):
-        camera_id = "Camera_日本語"
-        prompt = "What do you see? 🤖"
+        camera_id = "Camera_Ünïcödé"
+        prompt = "What do you see? café"
         image_bytes = b"IMAGE"
         request_id = 999
 
@@ -137,8 +137,8 @@ class TestImageMessageDecoding:
         assert decoded_image == image_bytes
 
     def test_decode_unicode(self):
-        camera_id = "Camera_日本語"
-        prompt = "Test 🤖"
+        camera_id = "Camera_Ünïcödé"
+        prompt = "Test café"
         image_bytes = b"IMAGE"
         request_id = 100
 
@@ -229,8 +229,8 @@ class TestResultMessageEncoding:
 
     def test_encode_unicode_result(self):
         result = {
-            "response": "I see 日本語 characters 🤖",
-            "camera_id": "Camera_日本語",
+            "response": "I see Ünïcödé characters café",
+            "camera_id": "Camera_Ünïcödé",
         }
         request_id = 50
 
@@ -278,7 +278,7 @@ class TestResultMessageDecoding:
         assert decoded == original
 
     def test_decode_unicode(self):
-        original = {"response": "Unicode test 日本語 🤖"}
+        original = {"response": "Unicode test Ünïcödé café"}
         request_id = 99
 
         encoded = UnityProtocol.encode_result_message(original, request_id)
@@ -323,8 +323,8 @@ class TestResultMessageDecoding:
 class TestRoundTripEncoding:
 
     def test_image_message_roundtrip(self):
-        camera_id = "TestCamera_日本語"
-        prompt = "Describe the scene 🤖"
+        camera_id = "TestCamera_Ünïcödé"
+        prompt = "Describe the scene café"
         image_bytes = bytes(range(256))  # All byte values
         request_id = 456
 
@@ -350,7 +350,7 @@ class TestRoundTripEncoding:
             "metadata": {
                 "model": "detection_v1",
                 "duration": 0.123,
-                "unicode": "日本語 🤖",
+                "unicode": "Ünïcödé café",
             },
         }
         request_id = 789

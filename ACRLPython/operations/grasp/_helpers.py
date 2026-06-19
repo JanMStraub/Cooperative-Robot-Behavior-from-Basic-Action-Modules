@@ -72,7 +72,7 @@ def _execute_grasp_with_follow_target(
         for correction in range(FOLLOW_TARGET_MAX_CORRECTIONS):
             if _is_aborted():
                 logger.info(
-                    f"[follow_target] {robot_id}: sequence aborted — stopping correction"
+                    f"[follow_target] {robot_id}: sequence aborted - stopping correction"
                 )
                 return False, "sequence aborted"
 
@@ -90,7 +90,7 @@ def _execute_grasp_with_follow_target(
 
             if drift <= FOLLOW_TARGET_DRIFT_THRESHOLD:
                 logger.info(
-                    f"[follow_target] {robot_id}: object drift {drift * 100:.1f} cm — within threshold, ready to close"
+                    f"[follow_target] {robot_id}: object drift {drift * 100:.1f} cm - within threshold, ready to close"
                 )
                 break
 
@@ -116,14 +116,14 @@ def _execute_grasp_with_follow_target(
             )
             if not retract_result or not retract_result.get("success"):
                 logger.warning(
-                    f"[follow_target] {robot_id}: retract failed — "
+                    f"[follow_target] {robot_id}: retract failed - "
                     f"{retract_result.get('error') if retract_result else 'no response'}, aborting correction"
                 )
                 break
 
             # Apply the same XZ approach offset as the original grasp so the corrected
             # target stays at the correct side of the object (e.g. left_side) rather
-            # than the raw centre — which could be occupied by a bracing robot.
+            # than the raw centre - which could be occupied by a bracing robot.
             corrected = {
                 "x": live_pos[0] + approach_offset_xz[0],
                 "y": live_pos[1] + tcp_y_offset,
@@ -136,7 +136,7 @@ def _execute_grasp_with_follow_target(
             }
             current_position = corrected
 
-            # Hover without orientation constraint — constraining at hover shrinks IK
+            # Hover without orientation constraint - constraining at hover shrinks IK
             # solution space and causes OMPL to fail at borderline reach distances.
             # Orientation is enforced at descent where it matters.
             logger.info(
@@ -153,7 +153,7 @@ def _execute_grasp_with_follow_target(
             if not hover_result or not hover_result.get("success"):
                 hover_err = hover_result.get("error") if hover_result else "no response"
                 logger.warning(
-                    f"[follow_target] {robot_id}: hover move failed — {hover_err}"
+                    f"[follow_target] {robot_id}: hover move failed - {hover_err}"
                 )
                 return False, f"hover move failed: {hover_err}"
 
@@ -161,12 +161,12 @@ def _execute_grasp_with_follow_target(
 
             if _is_aborted():
                 logger.info(
-                    f"[follow_target] {robot_id}: sequence aborted after hover — stopping"
+                    f"[follow_target] {robot_id}: sequence aborted after hover - stopping"
                 )
                 return False, "sequence aborted"
 
-            # Free-space planner (OMPL) rather than Cartesian descent — the retract
-            # above already cleared the table, and OMPL is more robust at workspace edges.
+            # Free-space planner (OMPL) rather than Cartesian descent - the retract
+            # above already cleared the table, and OMPL is more stable at workspace edges.
             logger.info(
                 f"[follow_target] {robot_id}: moving to corrected grasp position"
             )
@@ -185,8 +185,8 @@ def _execute_grasp_with_follow_target(
                     else "no response"
                 )
                 logger.warning(
-                    f"[follow_target] {robot_id}: corrective move failed — {corr_err}"
-                    " — retrying without orientation constraint"
+                    f"[follow_target] {robot_id}: corrective move failed - {corr_err}"
+                    " - retrying without orientation constraint"
                 )
                 correction_result = bridge.plan_and_execute(
                     position=corrected,
@@ -203,16 +203,16 @@ def _execute_grasp_with_follow_target(
                     else "no response"
                 )
                 logger.warning(
-                    f"[follow_target] {robot_id}: corrective move failed — {corr_err}"
+                    f"[follow_target] {robot_id}: corrective move failed - {corr_err}"
                 )
                 return False, f"corrective move failed: {corr_err}"
     else:
         if not FOLLOW_TARGET_ENABLED:
             logger.debug(
-                f"[follow_target] disabled — closing gripper at planned position"
+                f"[follow_target] disabled - closing gripper at planned position"
             )
 
-    # Arm is at (corrected) grasp position. ROS plan_and_execute is synchronous —
+    # Arm is at (corrected) grasp position. ROS plan_and_execute is synchronous -
     # arm velocity is already ~0 on return. Close immediately.
     logger.info(f"[follow_target] {robot_id}: closing gripper")
     gripper_result = bridge.control_gripper(0.0, robot_id=robot_id)

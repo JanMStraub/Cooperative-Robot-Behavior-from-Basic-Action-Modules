@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Status check operations — read-only robot state queries, no movement."""
+"""Status check operations - read-only robot state queries, no movement."""
 
 import time
 
@@ -23,7 +23,7 @@ from ._imports import get_command_broadcaster as _get_command_broadcaster
 def check_robot_status(
     robot_id: str, detailed: bool = False, request_id: int = 0
 ) -> OperationResult:
-    """Async status query — sends to Unity and returns immediately; response arrives via LLMResultsReceiver."""
+    """Async status query - sends to Unity and returns immediately; response arrives via LLMResultsReceiver."""
     try:
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(

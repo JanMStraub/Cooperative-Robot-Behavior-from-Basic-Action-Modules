@@ -47,7 +47,7 @@ class TestPriority1_RAGWorkflowIntegration:
         using_tfidf = not rag.embedding_generator.is_using_lm_studio()
 
         if using_tfidf:
-            print("⚠️  Using TF-IDF fallback (LM Studio not available)")
+            print("WARNING: Using TF-IDF fallback (LM Studio not available)")
             # TF-IDF requires queries with exact vocabulary from indexed documents
             # Use simpler queries that match workflow document text with lower threshold
             test_queries = [
@@ -74,9 +74,9 @@ class TestPriority1_RAGWorkflowIntegration:
 
         if using_tfidf and len(all_results) == 0:
             # TF-IDF may not work well without LM Studio - skip test
-            print("⚠️  TF-IDF fallback did not return results (vocabulary mismatch)")
+            print("WARNING: TF-IDF fallback did not return results (vocabulary mismatch)")
             print(
-                "⚠️  Skipping test - workflows are indexed but TF-IDF cannot search them"
+                "WARNING: Skipping test - workflows are indexed but TF-IDF cannot search them"
             )
             pytest.skip(
                 "TF-IDF fallback insufficient for semantic search - requires LM Studio"
@@ -94,7 +94,7 @@ class TestPriority1_RAGWorkflowIntegration:
         if using_tfidf and not has_workflow:
             # TF-IDF may return operations instead of workflows - that's acceptable
             print(
-                "⚠️  TF-IDF returned results but no workflows in top results (acceptable)"
+                "WARNING: TF-IDF returned results but no workflows in top results (acceptable)"
             )
         else:
             assert has_workflow, "No workflow patterns found in search results"
@@ -117,7 +117,7 @@ class TestPriority1_RAGWorkflowIntegration:
             assert metadata["step_count"] > 0, "Workflow has invalid step count"
             print(f"Workflow metadata includes step_count: {metadata['step_count']}")
         else:
-            print("⚠️ No workflows in top 3 results (may be normal depending on query)")
+            print("WARNING: No workflows in top 3 results (may be normal depending on query)")
 
 
 class TestPriority2_AutomatedParameterFlow:
@@ -189,7 +189,7 @@ class TestPriority2_AutomatedParameterFlow:
         else:
             # Parameter flows may not be defined yet in real operations
             print(
-                "⚠️  Parameter flows not configured in real operations (expected - define in VisionOperations.py)"
+                "WARNING: Parameter flows not configured in real operations (expected - define in VisionOperations.py)"
             )
             assert enhanced["robot_id"] == "Robot1", "Original param lost"
 
@@ -377,7 +377,7 @@ class TestEndToEndIntegration:
         print(f"Priority 3: Unified Verification")
         print(f"  - Single pre-execution safety check")
         print(f"  - Combines operation preconditions + coordination checks")
-        print(f"  - Comprehensive error reporting with details")
+        print(f"  - Detailed error reporting")
         print()
         print("=" * 60)
         print("ALL THREE PRIORITIES IMPLEMENTED AND INTEGRATED")

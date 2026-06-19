@@ -6,7 +6,7 @@ namespace Simulation
 {
     /// <summary>
     /// Workspace region definition for multi-robot spatial geometry.
-    /// Allocation decisions belong in Python's WorldState — this class is geometry only.
+    /// Allocation decisions belong in Python's WorldState - this class is geometry only.
     /// </summary>
     [Serializable]
     public class WorkspaceRegion

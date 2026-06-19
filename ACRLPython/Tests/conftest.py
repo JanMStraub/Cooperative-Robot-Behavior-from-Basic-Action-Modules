@@ -14,7 +14,7 @@ from unittest.mock import Mock, MagicMock
 
 
 def _reset_singleton(module_path: str, class_name: str) -> None:
-    # Silent on import/attribute errors — safe to call before a module is imported.
+    # Silent on import/attribute errors - safe to call before a module is imported.
     try:
         mod = importlib.import_module(module_path)
         getattr(mod, class_name)._instance = None
@@ -512,7 +512,7 @@ def sample_manipulation_params():
 @pytest.fixture
 def disable_yolo_detection():
     # HSV tests use synthetic pure-color squares that YOLO (trained on realistic cubes)
-    # doesn't detect reliably — disable it so the HSV path runs instead.
+    # doesn't detect reliably - disable it so the HSV path runs instead.
     import config.Vision as vision_cfg
 
     original_use_yolo = vision_cfg.USE_YOLO

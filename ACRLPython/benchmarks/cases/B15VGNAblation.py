@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""B15: VGN Ablation — neural grasp prediction vs geometric fallback."""
+"""B15: VGN Ablation - neural grasp prediction vs geometric fallback."""
 
 from __future__ import annotations
 
 from typing import List
 
-# Fixed operation chains for live-mode execution — bypasses LLM so both VGN and
+# Fixed operation chains for live-mode execution - bypasses LLM so both VGN and
 # geometric conditions execute identical sequences, isolating grasp-pose quality only.
 FIXED_OP_CHAINS: list[list[dict]] = [
     # "Grasp blue cube, lift to y=0.2"
@@ -23,7 +23,7 @@ FIXED_OP_CHAINS: list[list[dict]] = [
             "params": {"robot_id": "Robot1", "x": 0.0, "y": 0.2, "z": 0.0},
         },
     ],
-    # "Grasp magenta cube, place in field H" — magenta spawns in right_workspace (Robot2)
+    # "Grasp magenta cube, place in field H" - magenta spawns in right_workspace (Robot2)
     [
         {
             "operation": "detect_object_stereo",
@@ -59,7 +59,7 @@ FIXED_OP_CHAINS: list[list[dict]] = [
             "params": {"robot_id": "Robot1", "object_id": "$last_detected"},
         },
     ],
-    # "Robot1 grasp red cube and hand it to Robot2" — full B6 handoff protocol
+    # "Robot1 grasp red cube and hand it to Robot2" - full B6 handoff protocol
     [
         {
             "operation": "detect_object_stereo",
@@ -105,7 +105,7 @@ def get_tasks(config=None) -> List[str]:
 
     With VGN enabled, grasp_object calls VGNClient (TSDF+VGN inference,
     6-DOF poses). With VGN disabled, grasp_object uses the geometric
-    top-down fallback. Tasks mirror B3–B6 scenarios but use cfg.robot_id
+    top-down fallback. Tasks mirror B3-B6 scenarios but use cfg.robot_id
     so the ablation is repeatable with either robot.
     """
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Formal pre/postcondition verification using predicate logic — checks operation safety before execution."""
+"""Formal pre/postcondition verification using predicate logic - checks operation safety before execution."""
 
 import re
 from typing import List, Dict, Any, Optional, Tuple
@@ -132,7 +132,7 @@ class OperationVerifier:
                 )
                 result.add_violation(
                     predicate=precondition,
-                    reason="Predicate could not be parsed — verify syntax (expected: 'predicate_name(param1, ...)')",
+                    reason="Predicate could not be parsed - verify syntax (expected: 'predicate_name(param1, ...)')",
                     severity="warning",
                 )
                 continue
@@ -225,7 +225,7 @@ class OperationVerifier:
                 )
                 result.add_violation(
                     predicate=postcondition,
-                    reason="Predicate could not be parsed — verify syntax (expected: 'predicate_name(param1, ...)')",
+                    reason="Predicate could not be parsed - verify syntax (expected: 'predicate_name(param1, ...)')",
                     severity="warning",
                 )
                 continue

@@ -88,7 +88,7 @@ class _VGNPatch:
         self.mock_broadcaster: MagicMock = MagicMock()
 
     def __enter__(self) -> "_VGNPatch":
-        # VGNClient mock — patch in its own module
+        # VGNClient mock - patch in its own module
         self.mock_client = MagicMock()
         self.mock_client.is_available.return_value = self.vgn_available
         self.mock_client.predict_grasps.return_value = self.raw_grasps
@@ -521,7 +521,7 @@ class _VGNROSPatch:
         )
         self._patches.append(bridge_patch.start())
 
-        # Follow-target + gripper helper mock — returns (success, reason) tuple
+        # Follow-target + gripper helper mock - returns (success, reason) tuple
         _follow_rv = (
             self.gripper_success,
             "" if self.gripper_success else "gripper close command failed",

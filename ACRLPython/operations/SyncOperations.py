@@ -22,7 +22,7 @@ class EventBus(SingletonBase):
 
     Uses Condition + generation counter instead of threading.Event to avoid a race: with Event,
     Robot1 can clear the event before Robot2 wakes, causing Robot2 to block forever. Generation
-    counter never clears — late waiters record their baseline before waiting and return when
+    counter never clears - late waiters record their baseline before waiting and return when
     gen > baseline, so they can't miss a signal that fired while they were scheduling.
     """
 
@@ -42,7 +42,7 @@ class EventBus(SingletonBase):
 
     @property
     def _events(self) -> Dict[str, threading.Condition]:
-        """Backward-compat alias. Tests: use _is_signaled() — Conditions don't have is_set()."""
+        """Backward-compat alias. Tests: use _is_signaled() - Conditions don't have is_set()."""
         return self._conditions
 
     def _is_signaled(self, event_name: str) -> bool:
@@ -88,7 +88,7 @@ class EventBus(SingletonBase):
                 self._generations[event_name] = 0
 
     def reset(self) -> None:
-        """Clear all events and waiter counts — use between task rounds or in test teardown."""
+        """Clear all events and waiter counts - use between task rounds or in test teardown."""
         with self._event_lock:
             self._conditions.clear()
             self._generations.clear()

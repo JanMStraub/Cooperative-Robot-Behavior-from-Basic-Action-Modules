@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-BenchmarkRunner — sends benchmark tasks to the running SequenceServer over TCP.
+BenchmarkRunner - sends benchmark tasks to the running SequenceServer over TCP.
 
-B1–B5 and B8 send natural language task strings; the LLM parses them into
-operations. B6–B7 use explicit op lists with parallel_group fields that the
+B1-B5 and B8 send natural language task strings; the LLM parses them into
+operations. B6-B7 use explicit op lists with parallel_group fields that the
 LLM cannot express, sent via the EXEC: prefix.
 """
 
@@ -237,7 +237,7 @@ class BenchmarkRunner:
         """
         Send reset_simulation to Unity via EXEC: prefix and wait for completion.
 
-        Silently ignores errors — a failed reset should not fail the benchmark result.
+        Silently ignores errors - a failed reset should not fail the benchmark result.
         """
         try:
             reset_op = [{"operation": "reset_simulation", "params": {}}]
@@ -612,8 +612,8 @@ class BenchmarkRunner:
         Run B9 Impossible Task: verify the parser gracefully rejects an unexecutable task.
 
         A graceful rejection means the parser explicitly returned success=False with
-        zero commands — NOT that it raised an exception. Crashes are failures.
-        No Unity connection required — parse-only.
+        zero commands - NOT that it raised an exception. Crashes are failures.
+        No Unity connection required - parse-only.
         """
         from orchestrators.CommandParser import CommandParser
 
@@ -628,7 +628,7 @@ class BenchmarkRunner:
             parse_exception = exc
 
         if parse_exception is not None:
-            # Parser threw — this is a bug, not a graceful rejection
+            # Parser threw - this is a bug, not a graceful rejection
             gracefully_rejected = False
         else:
             commands = parse_result.get("commands", [])
@@ -658,7 +658,7 @@ class BenchmarkRunner:
         Each task has a ground-truth primary operation. The metric is strict exact
         match on the first parsed operation name. Run with RAG enabled (default)
         and again with --no-rag to compare accuracy across conditions.
-        No Unity connection required — parse-only.
+        No Unity connection required - parse-only.
         """
         from orchestrators.CommandParser import CommandParser
         from .Result import AblationMetrics
@@ -851,7 +851,7 @@ class BenchmarkRunner:
         )
 
         # Success: ops executed, and if reflexion is on, it actually fired recoveries
-        # (the disabled condition is expected to fail every task by mock design — that
+        # (the disabled condition is expected to fail every task by mock design - that
         # is the harness working correctly, not a benchmark failure).
         success = ops_executed > 0 and (not reflexion_on or total_recoveries > 0)
 
@@ -1285,7 +1285,7 @@ class BenchmarkRunner:
             _flags = BenchmarkFeatureFlags(use_ros=ros_on)
             if ros_on:
                 # Warmup: send return_to_start_position so MoveIt initialises before
-                # timing-sensitive B1/B2 payloads.  B3–B5 have ~20 s grasp steps that
+                # timing-sensitive B1/B2 payloads.  B3-B5 have ~20 s grasp steps that
                 # naturally prime MoveIt; B1/B2 reach plan_and_execute within ~1 s of
                 # the condition starting, which causes "No response from ROS bridge".
                 _warmup = [
@@ -1411,11 +1411,11 @@ class BenchmarkRunner:
         Run B14 KG ablation: parse spatial tasks with KG context on or off.
 
         Condition is driven by cfg.use_knowledge_graph (--no-kg to disable).
-        Measures whether parsed ops reference correct KG object IDs — checked
+        Measures whether parsed ops reference correct KG object IDs - checked
         in both conditions, since a model can in principle name the right
         object from task text alone even without KG context. Run once with
         KG enabled (default) and again with --no-kg to compare conditions.
-        No Unity required — parse-only.
+        No Unity required - parse-only.
         """
         import config.KnowledgeGraph as _kg_cfg
         from orchestrators.CommandParser import CommandParser

@@ -1,4 +1,4 @@
-"""Grasp sub-package — public API."""
+"""Grasp sub-package - public API."""
 
 try:
     from ._dispatcher import GRASP_OBJECT_OPERATION, grasp_object  # type: ignore[import]

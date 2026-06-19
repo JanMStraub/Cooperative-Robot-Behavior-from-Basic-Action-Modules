@@ -149,7 +149,7 @@ class SequenceQueryHandler(SingletonBase):
                         "error": "EXEC: payload must be a JSON array",
                     }
             except json.JSONDecodeError as e:
-                return {"success": False, "error": f"EXEC: invalid JSON — {e}"}
+                return {"success": False, "error": f"EXEC: invalid JSON - {e}"}
 
             logger.info(
                 f"Direct execution (no LLM): {len(commands)} command(s) for {robot_id}"

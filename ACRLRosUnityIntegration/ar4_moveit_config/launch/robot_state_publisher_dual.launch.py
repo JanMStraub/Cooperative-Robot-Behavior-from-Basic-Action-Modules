@@ -1,7 +1,7 @@
 """Launch robot_state_publisher for dual AR4 mk3 (shared planning scene).
 
 Uses ar4_dual.urdf and subscribes to /joint_states (aggregated from both robots).
-No robot namespace — publishes to /robot_description directly.
+No robot namespace - publishes to /robot_description directly.
 """
 
 import os

@@ -51,7 +51,7 @@ def _backend_available() -> bool:
 
 _STEREO_AVAILABLE = _backend_available()
 _STEREO_SKIP = (
-    "Backend not reachable on port 5008 — run Unity and start the backend servers"
+    "Backend not reachable on port 5008 - run Unity and start the backend servers"
 )
 
 
@@ -239,7 +239,7 @@ class TestGeneratePointCloud:
         assert callable(GENERATE_POINT_CLOUD_OPERATION.implementation)
 
 
-# Integration tests (require live Unity + stereo camera — skipped by default)
+# Integration tests (require live Unity + stereo camera - skipped by default)
 
 
 @pytest.mark.integration
@@ -316,4 +316,4 @@ class TestGeneratePointCloudIntegration:
         cam_pos = r.get("camera_position", [0, 0, 0])
         assert any(
             abs(v) > 1e-3 for v in cam_pos
-        ), "camera_position is all zeros — check Unity stereo camera metadata"
+        ), "camera_position is all zeros - check Unity stereo camera metadata"

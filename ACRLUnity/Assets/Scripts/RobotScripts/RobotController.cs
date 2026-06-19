@@ -33,6 +33,7 @@ namespace Robotics
         private float _distanceToTarget;
         private bool _hasReachedTarget = true;
         private bool _isGraspingTarget = false;
+        private int _stallFrameCount = 0;
         private Transform _targetTransform;
 
         private bool _isManuallyDriven = false;
@@ -469,8 +470,11 @@ namespace Robotics
                 currentVelocity.sqrMagnitude < RobotConstants.VELOCITY_SETTLE_THRESHOLD_SQR;
 
             bool isStalled = isSettled && (!isPosReached || !isRotReached);
+            _stallFrameCount = isStalled ? _stallFrameCount + 1 : 0;
+            bool isSustainedStall = _stallFrameCount >= RobotConstants.STALL_FRAMES_BEFORE_RELAX;
 
-            // Stall acceptance: stop rather than fight ArticulationBody friction forever
+            // Stall acceptance: stop rather than fight ArticulationBody friction forever.
+            // Rotation residual when position is already reached.
             if (
                 isStalled
                 && isPosReached
@@ -481,6 +485,26 @@ namespace Robotics
                 {
                     Debug.Log(
                         $"{_logPrefix} [{robotId}] TARGET REACHED (stall accept): dist={_distanceToTarget:F4}m, ang={angleError:F1}°"
+                    );
+                    SetTargetReached(true);
+                }
+                return;
+            }
+
+            // Position stall acceptance: after a sustained stall (orientation already relaxed
+            // below), accept a small residual position error within the acceptance band rather
+            // than looping until the operation times out. Mirrors the rotation case above.
+            if (
+                isSustainedStall
+                && _distanceToTarget < RobotConstants.POSITION_STALL_ACCEPTANCE_M
+                && angleError < RobotConstants.ROTATION_STALL_ACCEPTANCE_DEG
+            )
+            {
+                if (!_hasReachedTarget)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} [{robotId}] TARGET REACHED (position stall accept): "
+                            + $"dist={_distanceToTarget:F4}m, ang={angleError:F1}°, frames={_stallFrameCount}"
                     );
                     SetTargetReached(true);
                 }
@@ -521,7 +545,14 @@ namespace Robotics
 
             // Boost gain when stalled to overcome static friction
             float kpMult = isStalled ? 2.5f : 1.0f;
-            float orientationWeight = 1.0f;
+
+            // On a sustained position stall, drop orientation weight so the solver prioritises
+            // reaching the position instead of an orientation it cannot satisfy near a wrist
+            // singularity (otherwise the arm parks a few cm short and the operation times out).
+            float orientationWeight =
+                (isSustainedStall && !isPosReached)
+                    ? RobotConstants.STALL_ORIENTATION_RELAX_WEIGHT
+                    : 1.0f;
 
             Vector3 constrainedTargetPos = _targetLocalPosition;
             Quaternion constrainedTargetRot = _targetLocalRotation;
@@ -624,6 +655,7 @@ namespace Robotics
             _targetTransform = targetTransform;
             _closeGripperAfterReach = options.closeGripperOnReach;
             SetTargetReached(false);
+            _stallFrameCount = 0;
 
             _isTrackingMovingTarget = originalObject != null;
             if (_isTrackingMovingTarget)
@@ -762,7 +794,7 @@ namespace Robotics
 
             if (_graspPipeline == null)
             {
-                // No pipeline — fall back to simple move-to-object
+                // No pipeline - fall back to simple move-to-object
                 Debug.LogWarning(
                     $"{_logPrefix} SetTargetWithExternalCandidates: no GraspPlanningPipeline, "
                         + "using plain SetTarget"
@@ -805,7 +837,7 @@ namespace Robotics
                 return;
             }
 
-            // All candidates rejected — plain SetTarget as last resort
+            // All candidates rejected - plain SetTarget as last resort
             Debug.LogWarning(
                 $"{_logPrefix} SetTargetWithExternalCandidates: all candidates failed, "
                     + "falling back to SetTarget"
@@ -949,7 +981,7 @@ namespace Robotics
             if (endEffectorBase == null)
                 return;
 
-            // Reuse cached object — no heap alloc
+            // Reuse cached object - no heap alloc
             GameObject temp = GetCachedTempObject(
                 ref _cachedTempTargetMove,
                 RobotConstants.TEMP_TARGET_SUFFIX
@@ -968,7 +1000,7 @@ namespace Robotics
 
             Debug.Log(
                 $"{_logPrefix} [{robotId}] IK target synced to current EE pose "
-                    + $"({endEffectorBase.position}) — IK quiesced"
+                    + $"({endEffectorBase.position}) - IK quiesced"
             );
         }
 

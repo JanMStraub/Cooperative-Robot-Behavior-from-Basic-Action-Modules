@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SendCommand.py — Send commands directly to Unity without going through the LLM.
+SendCommand.py - Send commands directly to Unity without going through the LLM.
 
 Connects to the SequenceServer (port 5008) and sends pre-parsed operations using
 the "EXEC:<json>" prefix, which bypasses CommandParser/LLM entirely and feeds the command list straight into SequenceExecutor → Unity. Response and completion
@@ -36,7 +36,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5008
 DEFAULT_ROBOT = "Robot1"
 DEFAULT_CAMERA = "TableStereoCamera"
-DEFAULT_TIMEOUT = 120  # grasp + trajectory can take 60–90 s
+DEFAULT_TIMEOUT = 120  # grasp + trajectory can take 60-90 s
 
 DIRECT_EXEC_PREFIX = "EXEC:"
 
@@ -227,7 +227,7 @@ def add_common(p: argparse.ArgumentParser):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Send operations directly to Unity via SequenceServer — no LLM.",
+        description="Send operations directly to Unity via SequenceServer - no LLM.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

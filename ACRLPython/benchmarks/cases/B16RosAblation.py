@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B16: ROS vs Unity Movement Ablation — MoveIt planning path vs direct TCP path."""
+"""B16: ROS vs Unity Movement Ablation - MoveIt planning path vs direct TCP path."""
 
 from __future__ import annotations
 
@@ -11,12 +11,12 @@ from benchmarks.cases.B3NavigateAndLift import get_task as _b3
 from benchmarks.cases.B4PickAndPlace import get_task as _b4
 from benchmarks.cases.B5PoseAwareGrasp import get_task as _b5
 
-# Fixed operation chains for live-mode execution — bypasses LLM so both ROS and
+# Fixed operation chains for live-mode execution - bypasses LLM so both ROS and
 # Unity conditions execute identical sequences, isolating routing overhead only.
-# Derived from B1–B5 EXPECTED_OP_CHAIN values with explicit params.
+# Derived from B1-B5 EXPECTED_OP_CHAIN values with explicit params.
 FIXED_OP_CHAINS: list[list[dict]] = [
     # B1: detect blue cube → move above it (approach_offset lifts target 10 cm above cube;
-    # avoids near-table IK struggles when cubes sit at y≈0.01–0.02 m)
+    # avoids near-table IK struggles when cubes sit at y≈0.01-0.02 m)
     [
         {
             "operation": "detect_object_stereo",
@@ -102,7 +102,7 @@ FIXED_OP_CHAINS: list[list[dict]] = [
 
 def get_tasks(_config=None) -> List[str]:
     """
-    Return B1–B5 movement tasks for ROS/MoveIt vs Unity-TCP ablation.
+    Return B1-B5 movement tasks for ROS/MoveIt vs Unity-TCP ablation.
 
     With ROS enabled, move_to_coordinate routes through ROSDispatcher →
     ROSBridge (TCP:5020) → MoveIt → /arm_controller/joint_trajectory → Unity.

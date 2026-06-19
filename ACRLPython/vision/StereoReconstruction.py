@@ -10,7 +10,7 @@ Functions
 stereo_reconstruct(imgL, imgR, ...)
     Reconstruct from two in-memory images (offline / test use).
 stereo_reconstruct_stream(imgL, imgR, ...)
-    Same as above, but intended for live streaming — no disk I/O.
+    Same as above, but intended for live streaming - no disk I/O.
 reconstruct_from_storage(camera_pair_id=None)
     Pull the latest stereo pair from UnifiedImageStorage and reconstruct.
 
@@ -118,9 +118,9 @@ def _make_3d(
     # (the -1/cam_dist denominator row makes Z = -f*b/d).
     # VGNClient undoes the X-negate and works in this frame throughout.
     # Q-matrix output coordinate frame (with denominator row [0,0,-1/b,0]):
-    #   X = (w/2 - u) * b / d  — negative denominator flips sign → X-right
-    #   Y = (v - h/2) * b / (-d) = -(v-h/2)*b/d  — Y-up (negative for below-centre)
-    #   Z = f * b / (-d) = -f*b/d  — Z-negative (depth into scene)
+    #   X = (w/2 - u) * b / d  - negative denominator flips sign → X-right
+    #   Y = (v - h/2) * b / (-d) = -(v-h/2)*b/d  - Y-up (negative for below-centre)
+    #   Z = f * b / (-d) = -f*b/d  - Z-negative (depth into scene)
     # So output is (X-right, Y-up, Z-negative).  To reach Unity camera frame
     # (X-right, Y-up, Z-forward) only Z needs to be negated downstream.
     Q = np.array(
@@ -250,7 +250,7 @@ def reconstruct_from_storage(
     else:
         result = storage.get_latest_stereo_image()
         if result is None:
-            logger.warning("No stereo images in storage — is Unity streaming?")
+            logger.warning("No stereo images in storage - is Unity streaming?")
             return None
         imgL, imgR, _, _, metadata = result
 
@@ -359,11 +359,11 @@ def _visualize_point_cloud(point_cloud: Dict[str, np.ndarray]) -> None:
         pcd.colors = o3d.utility.Vector3dVector(
             point_cloud["colors"].astype(np.float64) / 255.0
         )
-        logger.info("Opening open3d viewer — close the window to exit.")
+        logger.info("Opening open3d viewer - close the window to exit.")
         o3d.visualization.draw_geometries([pcd])  # type: ignore[attr-defined]
     except ImportError:
         logger.warning(
-            "open3d not installed — cannot visualize. "
+            "open3d not installed - cannot visualize. "
             "Install with: pip install open3d"
         )
         pts = point_cloud["points"]

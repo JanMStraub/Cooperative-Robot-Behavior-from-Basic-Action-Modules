@@ -32,7 +32,7 @@ namespace Tests.EditMode
         [Test]
         public void Constructor_UsesDefaultGains_WhenNotSpecified()
         {
-            // Arrange & Act — use shared instance for default-gains test
+            // Arrange & Act - use shared instance for default-gains test
             var controller = _controller;
 
             // Compute correction to verify gains are applied
@@ -542,10 +542,10 @@ namespace Tests.EditMode
             };
             var profile = VelocityProfile.CreateTrapezoidal(0f, 0.5f, 1.0f);
 
-            // Act — should not throw
+            // Act - should not throw
             var (targetPos, targetVel, _) = controller.GetTrajectoryState(0f, path, profile);
 
-            // Assert — position should be the single waypoint; velocity should be zero
+            // Assert - position should be the single waypoint; velocity should be zero
             Assert.AreEqual(
                 path.waypoints[0].position,
                 targetPos,
@@ -566,7 +566,7 @@ namespace Tests.EditMode
             // clear ArgumentException or produce a valid (non-NaN) profile.
             // This test documents the expected behavior.
 
-            // Act & Assert — document that zero acceleration is caught early
+            // Act & Assert - document that zero acceleration is caught early
             Assert.Throws<ArgumentException>(
                 () =>
                     VelocityProfile.CreateTrapezoidal(

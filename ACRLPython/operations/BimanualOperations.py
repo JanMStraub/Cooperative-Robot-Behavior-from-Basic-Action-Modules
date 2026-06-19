@@ -2,7 +2,7 @@
 """
 Bimanual Operations (Level 5): synchronized_grasp, joint_transport.
 
-Both robots cooperate on a single large object — simultaneous approach/grasp
+Both robots cooperate on a single large object - simultaneous approach/grasp
 and rigid cooperative transport.
 """
 
@@ -202,7 +202,7 @@ def create_synchronized_grasp_operation() -> BasicOperation:
         description="Both robots simultaneously approach and grasp the same large object from opposite sides (bimanual grasping)",
         long_description=(
             "Coordinates both robots to approach and grasp a single large object simultaneously "
-            "from opposite sides — one robot takes the left side, the other the right. "
+            "from opposite sides - one robot takes the left side, the other the right. "
             "Supports ROS (MoveIt) and Unity TCP paths. "
             "Follow with joint_transport to move the object, then release_object on both robots."
         ),

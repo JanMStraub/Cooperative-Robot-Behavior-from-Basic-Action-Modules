@@ -194,7 +194,7 @@ def detect_object_stereo(
             if _held:
                 obj = _held[0]
                 logger.info(
-                    f"Robot {robot_id} already holds {obj.color} object — skipping vision detection"
+                    f"Robot {robot_id} already holds {obj.color} object - skipping vision detection"
                 )
                 return OperationResult.success_result(
                     {
@@ -209,13 +209,13 @@ def detect_object_stereo(
                     }
                 )
         except Exception:
-            pass  # WorldState unavailable — fall through to normal detection
+            pass  # WorldState unavailable - fall through to normal detection
 
     try:
         storage = get_unified_image_storage()
         broadcaster = get_command_broadcaster()
 
-        # streaming keeps images fresh — skip fresh capture round-trip
+        # streaming keeps images fresh - skip fresh capture round-trip
         if ENABLE_VISION_STREAMING:
             request_fresh_capture = False
 
@@ -385,7 +385,7 @@ def detect_object_stereo(
                 camera_position=camera_position,
             )
 
-            # Retry once (0.4 s delay) if nothing was found — streaming frames
+            # Retry once (0.4 s delay) if nothing was found - streaming frames
             # can briefly miss a held/elevated object between captures.
             # Re-fetch the stereo pair so Unity's latest frame is used, not the
             # stale one captured before the sleep.
@@ -574,7 +574,7 @@ def detect_object_stereo(
 
             world_state = get_world_state()
             ws_object_id = best.color if best.color else "unknown_object"
-            # don't overwrite field entries — those are owned by detect_field
+            # don't overwrite field entries - those are owned by detect_field
             is_field = ws_object_id.lower().startswith("field_")
             existing = (
                 world_state.get_object_state(ws_object_id) if not is_field else None
@@ -604,12 +604,12 @@ def detect_object_stereo(
                     f"({best.world_position[0]:.3f}, {best.world_position[1]:.3f}, {best.world_position[2]:.3f}){dim_str}"
                 )
         except Exception as e:
-            # ERROR not WARNING — WorldState write failure breaks next grasp_object call
+            # ERROR not WARNING - WorldState write failure breaks next grasp_object call
             logger.error(
                 f"Failed to update WorldState after detection: {e}", exc_info=True
             )
 
-        # sync to KG now — don't wait for WorldStatePublisher 10Hz cycle
+        # sync to KG now - don't wait for WorldStatePublisher 10Hz cycle
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
 
@@ -655,7 +655,7 @@ def create_detect_object_stereo_operation() -> BasicOperation:
         name="detect_object_stereo",
         category=OperationCategory.PERCEPTION,
         complexity=OperationComplexity.INTERMEDIATE,
-        description="Stereo detection with 3D world coordinates — optional color filter, configurable selection strategy",
+        description="Stereo detection with 3D world coordinates - optional color filter, configurable selection strategy",
         usage_examples=[
             "Detect blue cube (default): detect_object_stereo(color='blue')",
             "Detect all objects: detect_object_stereo(color=None)",

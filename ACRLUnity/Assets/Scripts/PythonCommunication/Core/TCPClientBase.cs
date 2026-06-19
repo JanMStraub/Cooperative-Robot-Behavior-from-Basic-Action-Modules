@@ -405,7 +405,7 @@ namespace PythonCommunication.Core
                         )
                     )
                 {
-                    // ReadTimeout expired — rethrow as SocketException so callers
+                    // ReadTimeout expired - rethrow as SocketException so callers
                     // can distinguish a timeout from a genuine connection close.
                     // WouldBlock is the macOS equivalent of TimedOut for non-blocking sockets.
                     throw sockEx;

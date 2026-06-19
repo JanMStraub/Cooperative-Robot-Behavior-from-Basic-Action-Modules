@@ -183,7 +183,7 @@ def quaternion_from_axis_angle(
     """
     Create a quaternion from an axis-angle representation.
     """
-    # Normalize axis — guard against zero-length axis
+    # Normalize axis - guard against zero-length axis
     norm = np.linalg.norm(axis)
     if norm < 1e-8:
         return (0.0, 0.0, 0.0, 1.0)

@@ -304,8 +304,8 @@ class TestSaveResponse:
 
     def test_save_response_unicode_content(self, tmp_path):
         result = {
-            "response": "I see 日本語 characters 🤖",
-            "camera_id": "Camera_日本語",
+            "response": "I see Ünïcödé characters café",
+            "camera_id": "Camera_Ünïcödé",
         }
 
         output_path = tmp_path / "unicode_test"
@@ -317,8 +317,8 @@ class TestSaveResponse:
         with open(json_file, "r", encoding="utf-8") as f:
             saved_data = json.load(f)
             assert saved_data["response"] == result["response"]
-            assert "日本語" in saved_data["response"]
-            assert "🤖" in saved_data["response"]
+            assert "Ünïcödé" in saved_data["response"]
+            assert "café" in saved_data["response"]
 
 
 class TestLMStudioVisionProcessorMetadata:

@@ -65,7 +65,7 @@ class TestTransformGraspnetPosesToUnity:
     def test_camera_translation_is_added(self):
         """Camera world position is added after rotating the flipped grasp position."""
         cam_pos = [0.5, 1.0, 2.0]
-        cam_rot = [0.0, 0.0, 0.0, 1.0]  # identity — no rotation
+        cam_rot = [0.0, 0.0, 0.0, 1.0]  # identity - no rotation
 
         grasps = [
             {
@@ -122,7 +122,7 @@ class TestTransformGraspnetPosesToUnity:
 
         assert len(result) == 1
         approach = result[0]["approach_direction"]
-        # Approach should be near (0, -1, 0) in world — pointing down
+        # Approach should be near (0, -1, 0) in world - pointing down
         np.testing.assert_allclose(approach, [0.0, -1.0, 0.0], atol=1e-5)
 
     def test_score_and_width_preserved(self):

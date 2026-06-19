@@ -515,7 +515,7 @@ class TestNegotiationHub:
             ],
         )
 
-        # Run evaluation — Robot2 has can_contribute=False, so its LLM should never be called
+        # Run evaluation - Robot2 has can_contribute=False, so its LLM should never be called
         hub._run_evaluation_phase(session, proposal, {})
 
         # mock_post should never be called because Robot2 is filtered out,
@@ -726,7 +726,7 @@ class TestNegotiationVerifier:
 
         verifier = NegotiationVerifier()
         result = verifier.verify_plan(commands)
-        # Targets are 0.6m apart — should be safe; no spatial errors
+        # Targets are 0.6m apart - should be safe; no spatial errors
         spatial_errors = [e for e in result.errors if "apart" in e]
         assert len(spatial_errors) == 0
 

@@ -296,7 +296,7 @@ class TestPredictGraspsOutputContract:
 
     def test_predict_grasps_returns_none_on_too_few_points(self, tmp_path):
         client = self._make_client(tmp_path)
-        # Only 10 points — not enough to pass the ≥50 check
+        # Only 10 points - not enough to pass the ≥50 check
         pts = _make_points(10)
 
         with _VGNPatchedClient(n_grasps=3):
@@ -331,7 +331,7 @@ class TestPredictGraspsOutputContract:
             )
 
         if result is None:
-            pytest.skip("VGN mock produced None — check test setup")
+            pytest.skip("VGN mock produced None - check test setup")
         assert result is not None
         for g in result:
             q = np.array(g["rotation"])
@@ -359,7 +359,7 @@ class TestPredictGraspsOutputContract:
             )
 
         if result is None:
-            pytest.skip("VGN mock produced None — check test setup")
+            pytest.skip("VGN mock produced None - check test setup")
         assert result is not None
         assert len(result) <= top_k
 
@@ -373,7 +373,7 @@ class TestSegmentationMaskLabelBugFix:
             "confidence": 0.95,
             "bbox": {"x": 100, "y": 100, "width": 200, "height": 200},
         }
-        # Crucially, there is NO "label" key — only "color"
+        # Crucially, there is NO "label" key - only "color"
         assert "label" not in detection_with_color
         assert detection_with_color.get("color") == "red_cube"
 

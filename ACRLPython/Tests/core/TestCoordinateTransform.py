@@ -68,7 +68,7 @@ def test_robot1_axis_conversion():
     assert abs(ros_pos["y"] - 0.0) < 0.001, f"ROS Y (-Unity X) wrong: {ros_pos['y']}"
     assert abs(ros_pos["z"] - 0.05) < 0.001, f"ROS Z (Unity Y) wrong: {ros_pos['z']}"
 
-    print("  ✅ Robot1 axis conversion correct")
+    print("  PASS: Robot1 axis conversion correct")
 
 
 def test_robot2_axis_conversion():
@@ -92,7 +92,7 @@ def test_robot2_axis_conversion():
     assert abs(ros_pos["y"] - 0.0) < 0.001, f"ROS Y wrong: {ros_pos['y']}"
     assert abs(ros_pos["z"] - 0.05) < 0.001, f"ROS Z (height) wrong: {ros_pos['z']}"
 
-    print("  ✅ Robot2 axis conversion correct")
+    print("  PASS: Robot2 axis conversion correct")
 
 
 def test_symmetric_world_positions_give_same_ros_coords():
@@ -120,7 +120,7 @@ def test_symmetric_world_positions_give_same_ros_coords():
     assert abs(ros_right["y"] - 0.0) < 0.001, f"Robot2 ROS Y: {ros_right['y']}"
     assert abs(ros_right["z"] - 0.1) < 0.001, f"Robot2 ROS Z: {ros_right['z']}"
 
-    print("  ✅ Symmetric positions give equal ROS coordinates")
+    print("  PASS: Symmetric positions give equal ROS coordinates")
 
 
 def test_lateral_offset_axis_conversion():
@@ -141,7 +141,7 @@ def test_lateral_offset_axis_conversion():
 
     print("\nLateral offset test:")
     print(f"  0.1m right of Robot1 → ROS Y = {ros_pos['y']:.3f} (expect -0.1)")
-    print("  ✅ Unity X → ROS -Y correct")
+    print("  PASS: Unity X → ROS -Y correct")
 
 
 # Direct tests of world_to_robot_frame_np / robot_to_world_frame_np
@@ -160,7 +160,7 @@ def test_np_robot1_axis_conversion():
 
     print("\nNumPy Robot1 axis conversion:")
     print(f"  world_pos={world_pos} → ros_pos={ros_pos}")
-    print("  ✅ matches mock")
+    print("  PASS: matches mock")
 
 
 def test_np_robot2_axis_conversion():
@@ -174,7 +174,7 @@ def test_np_robot2_axis_conversion():
 
     print("\nNumPy Robot2 axis conversion:")
     print(f"  world_pos={world_pos} → ros_pos={ros_pos}")
-    print("  ✅ matches mock")
+    print("  PASS: matches mock")
 
 
 def test_np_lateral_offset():
@@ -188,7 +188,7 @@ def test_np_lateral_offset():
 
     print("\nNumPy lateral offset test:")
     print(f"  0.1m right of Robot1 → ROS Y={ros_pos[1]:.3f} (expect -0.1)")
-    print("  ✅ correct")
+    print("  PASS: correct")
 
 
 def test_np_roundtrip_robot1():
@@ -201,7 +201,7 @@ def test_np_roundtrip_robot1():
     ), f"Roundtrip Robot1 failed: {original} → {ros} → {recovered}"
     print("\nNumPy roundtrip Robot1:")
     print(f"  {original} → ros {ros} → {recovered}")
-    print("  ✅ roundtrip exact")
+    print("  PASS: roundtrip exact")
 
 
 def test_np_roundtrip_robot2():
@@ -214,7 +214,7 @@ def test_np_roundtrip_robot2():
     ), f"Roundtrip Robot2 failed: {original} → {ros} → {recovered}"
     print("\nNumPy roundtrip Robot2:")
     print(f"  {original} → ros {ros} → {recovered}")
-    print("  ✅ roundtrip exact")
+    print("  PASS: roundtrip exact")
 
 
 def test_np_matches_dict_robot1():
@@ -238,7 +238,7 @@ def test_np_matches_dict_robot1():
 
     print("\nNumPy vs dict equivalence (Robot1):")
     print(f"  dict: {ros_dict}, np: {ros_np}")
-    print("  ✅ identical")
+    print("  PASS: identical")
 
 
 def test_np_matches_dict_robot2():
@@ -262,4 +262,4 @@ def test_np_matches_dict_robot2():
 
     print("\nNumPy vs dict equivalence (Robot2):")
     print(f"  dict: {ros_dict}, np: {ros_np}")
-    print("  ✅ identical")
+    print("  PASS: identical")

@@ -2,7 +2,7 @@
 """
 Multi-Robot Coordination Operations (Level 4): detect_other_robot, mirror_movement_of_other_robot (ATOMIC).
 
-hand_over_object_to_another_robot removed (non-atomic) — use WorkflowPatterns.HANDOFF_PATTERN.
+hand_over_object_to_another_robot removed (non-atomic) - use WorkflowPatterns.HANDOFF_PATTERN.
 """
 
 import time
@@ -101,7 +101,7 @@ def detect_other_robot(
             f"Robot {robot_id} detected {target_robot_id} at distance {distance:.3f}m"
         )
 
-        # KG enrichment is additive — safe to skip if disabled
+        # KG enrichment is additive - safe to skip if disabled
         kg_proximity = None
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
@@ -367,7 +367,7 @@ def check_partner_status(
 ) -> OperationResult:
     """Query a partner robot's full state before planning a joint task.
 
-    Pure WorldState read — no Unity command sent.
+    Pure WorldState read - no Unity command sent.
     """
     import math
 
@@ -426,7 +426,7 @@ def check_partner_status(
             status = "idle"
 
         logger.info(
-            f"check_partner_status: {robot_id} queried {partner_robot_id} — "
+            f"check_partner_status: {robot_id} queried {partner_robot_id} - "
             f"status={status}, distance={distance}"
         )
 

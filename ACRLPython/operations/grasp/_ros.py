@@ -122,7 +122,7 @@ def _grasp_via_ros_planned(
     # with yaw θ around ROS Z.  q_x180=(1,0,0,0); q_yaw=(0,0,sin(θ/2),cos(θ/2)).
     # Product (q_yaw * q_x180): x=cos(θ/2), y=-sin(θ/2), z=0, w=0.
     # w=0 is unavoidable for any 180° rotation; MoveIt normalises internally so the
-    # axis direction is what matters — and now it is correct (pointing down).
+    # axis direction is what matters - and now it is correct (pointing down).
     if best_grasp.approach_type == "top":
         # Fold yaw into (-π/2, π/2] (jaw 180° symmetry).
         yaw_ros = yaw_unity  # Unity Y-axis == ROS Z-axis
@@ -156,12 +156,12 @@ def _grasp_via_ros_planned(
             if ros_w < 0.0:
                 ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
             logger.debug(
-                f"[_grasp_via_ros_planned] Yaw {math.degrees(_yaw):.1f}° outside (-90°,90°] — "
+                f"[_grasp_via_ros_planned] Yaw {math.degrees(_yaw):.1f}° outside (-90°,90°] - "
                 f"applied 180° wrist flip to minimise joint-6 travel."
             )
     grasp_orientation = {"x": ros_x, "y": ros_y, "z": ros_z, "w": ros_w}
 
-    # GRASP_TCP_OFFSET lifts ee_link above contact surface — without it, fingers penetrate table.
+    # GRASP_TCP_OFFSET lifts ee_link above contact surface - without it, fingers penetrate table.
     grasp_pos = _vec_to_pos(best_grasp.grasp_position, GRASP_TCP_OFFSET)
 
     # Caller's pre_grasp_distance overrides GraspCandidateGenerator's min (5cm too small for 2cm cubes).
@@ -174,7 +174,7 @@ def _grasp_via_ros_planned(
     else:
         pre_grasp_pos = _vec_to_pos(best_grasp.pre_grasp_position)
 
-    # Clearance waypoint — always approach pre-grasp from above for reproducible joint config.
+    # Clearance waypoint - always approach pre-grasp from above for reproducible joint config.
     _pre_grasp_orientation = grasp_orientation if preferred_approach == "top" else None
     if pre_grasp_pos["y"] < PRE_GRASP_CLEARANCE_Y:
         clearance_pos = {
@@ -185,7 +185,7 @@ def _grasp_via_ros_planned(
         logger.info(f"[ROS planned] Clearance waypoint for {robot_id}: {clearance_pos}")
         clearance_result = bridge.plan_and_execute(
             position=clearance_pos,
-            orientation=None,  # no orientation needed at clearance height — constraint causes slow planning
+            orientation=None,  # no orientation needed at clearance height - constraint causes slow planning
             planning_time=3.0,
             robot_id=robot_id,
             max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
@@ -198,12 +198,12 @@ def _grasp_via_ros_planned(
                 else "No response"
             )
             logger.warning(
-                f"[ROS planned] Clearance waypoint failed ({cl_err}) — proceeding to pre-grasp"
+                f"[ROS planned] Clearance waypoint failed ({cl_err}) - proceeding to pre-grasp"
             )
         else:
             time.sleep(0.2)
 
-    # Pre-grasp hover — no orientation for side/front (shrinks IK space at borderline reach).
+    # Pre-grasp hover - no orientation for side/front (shrinks IK space at borderline reach).
     logger.info(f"Moving to pre-grasp position for {robot_id}")
     pre_result = bridge.plan_and_execute(
         position=pre_grasp_pos,
@@ -221,7 +221,7 @@ def _grasp_via_ros_planned(
     # Settle pause: ROSJointStatePublisher 50Hz → 0.1s = 5 ticks before MoveIt samples start state.
     time.sleep(0.1)
 
-    # Cartesian descent — constrains ee_link to straight-line so wrist can't flip to alternate IK.
+    # Cartesian descent - constrains ee_link to straight-line so wrist can't flip to alternate IK.
     logger.info(f"Descending to grasp position for {robot_id}")
     result = bridge.plan_cartesian_descent(
         position=grasp_pos,
@@ -346,7 +346,7 @@ def _grasp_via_ros_position_only(
         )
         clearance_result = bridge.plan_and_execute(
             position=clearance_pos,
-            orientation=None,  # no orientation needed at clearance height — constraint causes slow planning
+            orientation=None,  # no orientation needed at clearance height - constraint causes slow planning
             planning_time=3.0,
             robot_id=robot_id,
             max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
@@ -359,14 +359,14 @@ def _grasp_via_ros_position_only(
                 else "No response"
             )
             logger.warning(
-                f"[ROS pos-only] Clearance waypoint failed ({cl_err}) — "
+                f"[ROS pos-only] Clearance waypoint failed ({cl_err}) - "
                 "proceeding directly to pre-grasp"
             )
         else:
             time.sleep(0.2)
 
     # Pre-grasp hover.
-    # TODO: remove orientation=top_down_orientation once VGN is implemented — VGN will
+    # TODO: remove orientation=top_down_orientation once VGN is implemented - VGN will
     #       supply approach-aligned orientations, making this heuristic unnecessary.
     #       The top-down constraint shrinks the IK solution space at borderline reach
     #       distances and can cause OMPL to fail before planning even starts.

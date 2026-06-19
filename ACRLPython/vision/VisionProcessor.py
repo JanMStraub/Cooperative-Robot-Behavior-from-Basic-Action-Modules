@@ -216,7 +216,7 @@ class VisionProcessor:
         scene_diff_enabled = bool(SCENE_DIFF_THUMB_SIZE)
         logger.debug(
             f"VisionProcessor loop started (target: {self.fps} FPS, "
-            f"depth={'enabled' if needs_depth else 'disabled — no consumer'}, "
+            f"depth={'enabled' if needs_depth else 'disabled - no consumer'}, "
             f"scene_diff={'enabled (thresh={})'.format(SCENE_DIFF_THRESHOLD) if scene_diff_enabled else 'disabled'})"
         )
 
@@ -244,7 +244,7 @@ class VisionProcessor:
                         time.sleep(frame_interval * 0.5)
                         continue
 
-                # New, visually distinct frame — pay the full copy cost now
+                # New, visually distinct frame - pay the full copy cost now
                 stereo_data = storage.get_latest_stereo_image()
                 if stereo_data is None:
                     time.sleep(frame_interval)

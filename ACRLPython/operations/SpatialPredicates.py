@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Boolean predicates for spatial relationships and robot state — used by the verification system to check preconditions."""
+"""Boolean predicates for spatial relationships and robot state - used by the verification system to check preconditions."""
 
 import math
 from typing import Tuple, Dict, Callable, Optional
@@ -68,7 +68,7 @@ def target_within_reach(
             )
 
         # XZ-plane proximity check: targets directly above/below the robot base
-        # are in the near-singularity column where IK cannot find a solution —
+        # are in the near-singularity column where IK cannot find a solution -
         # the arm cannot reach positions along its own vertical axis.
         _BASE_COLUMN_RADIUS = 0.12
         xz_dist = math.sqrt(dx * dx + dz * dz)
@@ -76,7 +76,7 @@ def target_within_reach(
             return (
                 False,
                 f"Target ({x:.3f}, {y:.3f}, {z:.3f}) is in near-singularity column above "
-                f"{robot_id} base (XZ distance {xz_dist:.3f}m < {_BASE_COLUMN_RADIUS}m) — "
+                f"{robot_id} base (XZ distance {xz_dist:.3f}m < {_BASE_COLUMN_RADIUS}m) - "
                 f"move the target away from x={base_pos[0]:.3f}, z={base_pos[2]:.3f}",
             )
 
@@ -169,7 +169,7 @@ def robot_is_initialized(robot_id: str, world_state=None) -> Tuple[bool, str]:
                         return False, f"Robot '{robot_id}' is not initialized"
                     return True, ""
                 else:
-                    # query_sent but no Unity response yet — basic check fallback
+                    # query_sent but no Unity response yet - basic check fallback
                     logger.debug(
                         f"Robot '{robot_id}' status pending, using basic check"
                     )
@@ -358,7 +358,7 @@ def _calculate_segment_distance(
 
     denominator = a * c - b * b
     if abs(denominator) < 1e-10:
-        # parallel segments — need all 4 endpoint distances; single projection fails for adjacent/overlapping
+        # parallel segments - need all 4 endpoint distances; single projection fails for adjacent/overlapping
         def _point_to_seg1_dist(pt: Tuple[float, float, float]) -> float:
             t = max(
                 0.0,
@@ -516,7 +516,7 @@ def stereo_images_available(
     try:
         from servers.ImageStorageCore import UnifiedImageStorage
     except ImportError:
-        return False, "ImageStorageCore unavailable — cannot verify stereo images"
+        return False, "ImageStorageCore unavailable - cannot verify stereo images"
 
     storage = UnifiedImageStorage()
     if storage is None:
@@ -526,7 +526,7 @@ def stereo_images_available(
     if latest_ts == 0.0:
         return False, "No stereo images in storage"
 
-    # LLM sometimes passes None or 0 — clamp to sensible default
+    # LLM sometimes passes None or 0 - clamp to sensible default
     effective_max_age = (
         max_age_seconds
         if (max_age_seconds is not None and max_age_seconds > 0)

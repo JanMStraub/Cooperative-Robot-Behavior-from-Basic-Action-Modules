@@ -184,7 +184,7 @@ class KnowledgeGraph:
             node_count = self._graph.number_of_nodes()
             edge_count = self._graph.number_of_edges()
 
-        # GraphML only supports str/int/float/bool — convert everything else
+        # GraphML only supports str/int/float/bool - convert everything else
         import json as _json
 
         def _graphml_safe(v):
@@ -274,7 +274,7 @@ class KnowledgeGraph:
             graph_copy = self._graph.copy()
 
         if graph_copy.number_of_nodes() == 0:
-            logger.warning("Graph is empty — nothing to render")
+            logger.warning("Graph is empty - nothing to render")
             return
 
         fig, ax = plt.subplots(figsize=_figsize)

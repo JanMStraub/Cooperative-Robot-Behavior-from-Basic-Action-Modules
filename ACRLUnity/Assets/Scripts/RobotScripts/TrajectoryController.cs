@@ -36,7 +36,7 @@ namespace Robotics
             _velocityGains = velocityGains;
         }
 
-        /// <summary>Sample trajectory at current time. Call from FixedUpdate only — result is cached per-frame.</summary>
+        /// <summary>Sample trajectory at current time. Call from FixedUpdate only - result is cached per-frame.</summary>
         public (Vector3 targetPos, Vector3 targetVel, Vector3 targetAccel) GetTrajectoryState(
             float currentTime,
             CartesianPath path,
@@ -109,7 +109,7 @@ namespace Robotics
             }
             else
             {
-                // Triangular profile (no cruise phase); time > tAccel here —
+                // Triangular profile (no cruise phase); time > tAccel here -
                 // the acceleration phase was handled by the outer branch.
                 float tTotal = 2f * tAccel;
                 if (time < tTotal)

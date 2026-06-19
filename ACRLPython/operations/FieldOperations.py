@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Field detection using YOLO (field_a–field_i classes) with stereo 3D coordinates."""
+"""Field detection using YOLO (field_a-field_i classes) with stereo 3D coordinates."""
 
 import time
 import logging
@@ -142,7 +142,7 @@ def detect_field(
         if detected_letter != field_label.strip().upper():
             return OperationResult.error_result(
                 "FIELD_LABEL_MISMATCH",
-                f"Requested field '{field_label.upper()}' but YOLO returned '{detected_letter}' — filter leak or model error",
+                f"Requested field '{field_label.upper()}' but YOLO returned '{detected_letter}' - filter leak or model error",
                 [
                     f"Verify YOLO model correctly distinguishes field_{field_label.lower()} from adjacent fields",
                     "Check that filter_classes is respected by the detector",
@@ -176,7 +176,7 @@ def detect_field(
         else:
             center_dict = {"x": 0.0, "y": 0.0, "z": 0.0}
 
-        # "field" type skips confidence decay — fields don't move
+        # "field" type skips confidence decay - fields don't move
         try:
             from core.Imports import get_world_state
 
@@ -272,7 +272,7 @@ def detect_all_fields(
 
         field_classes = [
             f"field_{chr(ord('a') + i)}" for i in range(9)
-        ]  # field_a–field_i
+        ]  # field_a-field_i
 
         try:
             from config.Vision import YOLO_MODEL_PATH

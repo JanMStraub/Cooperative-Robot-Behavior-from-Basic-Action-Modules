@@ -179,7 +179,7 @@ def _make_ws_two_objects():
     ws = Mock()
 
     def _resolve(obj_id):
-        return obj_id  # pass-through — IDs already canonical
+        return obj_id  # pass-through - IDs already canonical
 
     def _get_pos(obj_id):
         return {"blue": (0.1, 0.0, 0.2), "red": (0.5, 0.0, 0.6)}.get(obj_id)
@@ -287,7 +287,7 @@ class TestPlaceBetweenObjects:
         assert abs(result.result["placed_at"]["y"] - 0.08) < 1e-6
 
 
-# Test Class: place_object — on_top_of stacking
+# Test Class: place_object - on_top_of stacking
 
 
 def _make_world_state(

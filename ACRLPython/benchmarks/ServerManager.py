@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ServerManager — subprocess lifecycle for live benchmark runs.
+ServerManager - subprocess lifecycle for live benchmark runs.
 
 Spawns RunRobotController as a child process group, polls ports 5007+5008
 until ready, and tears down on stop() or context manager exit.

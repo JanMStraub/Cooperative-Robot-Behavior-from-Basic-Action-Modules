@@ -35,7 +35,7 @@ def generate_launch_description():
     with open(srdf_path, "r") as f:
         robot_description_semantic = f.read()
 
-    # Planning plugin/adapters inlined as scalars — YAML namespace prefix breaks nested keys
+    # Planning plugin/adapters inlined as scalars - YAML namespace prefix breaks nested keys
     kinematics_yaml = os.path.join(pkg_dir, "config", "kinematics.yaml")
     joint_limits_yaml = os.path.join(pkg_dir, "config", "joint_limits.yaml")
     ompl_planning_yaml = os.path.join(pkg_dir, "config", "ompl_planning.yaml")
@@ -88,7 +88,7 @@ def generate_launch_description():
                             "move_group/MoveGroupMoveAction "
                             "move_group/MoveGroupPlanService"
                         ),
-                        # controller_names/moveit_controller_manager need string array — set
+                        # controller_names/moveit_controller_manager need string array - set
                         # via moveit_controllers.yaml; octomap params suppress sensor plugin ERROR.
                         "octomap_resolution": 0.1,
                         "max_range": 5.0,

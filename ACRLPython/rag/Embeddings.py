@@ -68,7 +68,7 @@ class EmbeddingGenerator:
                 raise Exception("Invalid response from LM Studio")
 
         except Exception as e:
-            logger.warning(f"⚠ Failed to connect to LM Studio: {e}")
+            logger.warning(f"WARNING: Failed to connect to LM Studio: {e}")
             if RAG_USE_TFIDF_FALLBACK:
                 logger.info("  Falling back to TF-IDF embeddings")
                 self.use_lm_studio = False

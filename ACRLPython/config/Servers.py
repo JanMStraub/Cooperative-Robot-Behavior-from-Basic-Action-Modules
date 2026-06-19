@@ -72,7 +72,7 @@ REFLEXION_SELF_REFLECT_ENABLED = REFLEXION_ENABLED and os.environ.get(
 GRASP_VERIFY_MIN_FORCE = float(os.environ.get("GRASP_VERIFY_MIN_FORCE", "0.0"))
 
 # Intermediate motion layer (RT-H style): when True, CommandParser sends the
-# command to the LLM twice — Stage 1 decomposes to motion strings, Stage 2
+# command to the LLM twice - Stage 1 decomposes to motion strings, Stage 2
 # maps those to operations. Disabled by default to preserve existing behaviour.
 USE_MOTION_LAYER = os.environ.get("PARSER_USE_MOTION_LAYER", "true").lower() in (
     "true",
@@ -107,7 +107,7 @@ LLM_THINKING_ENABLED = os.environ.get("LLM_THINKING_ENABLED", "true").lower() ==
 LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "16384"))
 
 # ============================================================================
-# VGN (Volumetric Grasp Network) — Local Mac Inference
+# VGN (Volumetric Grasp Network) - Local Mac Inference
 # ============================================================================
 
 # Path to the VGN checkpoint file (vgn_conv.pth).
@@ -132,7 +132,7 @@ VGN_USE_VLM_REFINEMENT = os.environ.get("VGN_USE_VLM_REFINEMENT", "false").lower
 
 # A concise domain preamble injected into every LLM call as the system message.
 # Individual role-specific prompts (CommandParser, RobotLLMAgent, etc.) extend
-# this with their own instructions — they should NOT repeat this context.
+# this with their own instructions - they should NOT repeat this context.
 SYSTEM_PROMPT_BASE = "You are an AI robot controller for a dual-arm AR4 robotic system running inside a Unity simulation. The workspace is a tabletop environment with two 6-DOF robot arms: Robot1 (left side, base at x = -0.475) and Robot2 (right side, base at x = +0.475). Workspace bounds: x between -0.6 and 0.6, y between 0.0 and 0.6, z between -0.5 and 0.5. Operations are executed sequentially or in named parallel_groups. Robots communicate via signal/wait_for_signal events. You must ONLY use operations, object IDs, and coordinate values explicitly provided in the user message and never invent names, IDs, or positions. Output only valid JSON. Never include markdown fences, reasoning text, or [THINK] tags."
 
 # Popular vision models (for reference)

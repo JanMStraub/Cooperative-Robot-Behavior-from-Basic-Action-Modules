@@ -29,7 +29,7 @@ from core.LoggingSetup import get_logger
 logger = get_logger(__name__)
 
 # Operations that intentionally colocate EEs (serialized via signal/wait and with
-# ProximityGuard disabled internally) — skip path-collision check for these.
+# ProximityGuard disabled internally) - skip path-collision check for these.
 _HANDOFF_EXEMPT_OPERATIONS = frozenset(
     {
         "receive_handoff",
@@ -120,7 +120,7 @@ class CoordinationVerifier:
 
         other_robots = [rid for rid in ROBOT_BASE_POSITIONS.keys() if rid != robot_id]
 
-        # Skipped for handoff-class operations — they intentionally colocate EEs and
+        # Skipped for handoff-class operations - they intentionally colocate EEs and
         # manage safety internally via signal/wait serialization and ProximityGuard disable.
         if (
             operation_category == OperationCategory.NAVIGATION
@@ -254,7 +254,7 @@ class CoordinationVerifier:
         other_robot_id: str,
         world_state,
     ) -> Optional[Tuple[float, float, float]]:
-        """Lifts target 0.10m upward and checks MIN_ROBOT_SEPARATION. None if no trivial fix — caller serializes instead."""
+        """Lifts target 0.10m upward and checks MIN_ROBOT_SEPARATION. None if no trivial fix - caller serializes instead."""
         other_state = world_state._robot_states.get(other_robot_id)
         if other_state is None or other_state.position is None:
             return None

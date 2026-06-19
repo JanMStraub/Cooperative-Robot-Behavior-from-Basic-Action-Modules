@@ -45,7 +45,7 @@ namespace Robotics
 
         [Header("Settle Detection")]
         [Tooltip(
-            "Max joint velocity (deg/s) to consider settled. 5 deg/s recommended — joints 2/3 oscillate at 2–4 deg/s from PD ringing even on-target."
+            "Max joint velocity (deg/s) to consider settled. 5 deg/s recommended - joints 2/3 oscillate at 2-4 deg/s from PD ringing even on-target."
         )]
         [SerializeField]
         private float _settleVelocityThresholdDegPerSec = 5.0f;
@@ -200,7 +200,7 @@ namespace Robotics
                     );
                     Debug.Log(sb.ToString());
 
-                    // Flag any consecutive jump > 90° — indicates redundant-IK solution flip.
+                    // Flag any consecutive jump > 90° - indicates redundant-IK solution flip.
                     for (int p = 1; p < msg.points.Length; p++)
                     {
                         double prev = msg.points[p - 1].positions[ji] * Mathf.Rad2Deg;
@@ -305,7 +305,7 @@ namespace Robotics
                     }
                 }
 
-                // Check velocities — MoveIt plans at full speed; Unity executes at
+                // Check velocities - MoveIt plans at full speed; Unity executes at
                 // _speedScaling, so the physical velocity = planned * _speedScaling.
                 // Warn once per joint (not per point) to avoid log spam.
                 if (point.velocities != null && p == 0)
@@ -317,7 +317,7 @@ namespace Robotics
                         {
                             Debug.LogWarning(
                                 $"{_logPrefix} Joint {j} planned velocity {point.velocities[j]:F2} rad/s "
-                                    + $"exceeds scaled limit {effectiveLimit:F2} — will be clamped during execution."
+                                    + $"exceeds scaled limit {effectiveLimit:F2} - will be clamped during execution."
                             );
                         }
                     }
@@ -381,7 +381,7 @@ namespace Robotics
 
                     // MoveIt often includes a start-state duplicate at waypoint 0 with
                     // time_from_start = 0.0, giving rawSegmentDuration = 0. Skip interpolation
-                    // and do NOT call SetDriveTargets — snapping joints to MoveIt's (possibly
+                    // and do NOT call SetDriveTargets - snapping joints to MoveIt's (possibly
                     // stale) planned start state causes a visible jump when the actual physics
                     // position differs by even a few degrees. The first real segment uses
                     // _startPositions (actual joint positions) as its from-state instead.
@@ -532,7 +532,7 @@ namespace Robotics
                 }
                 double totalDurationSynth = cumulative;
 
-                // Single global start — sweep all segments without stopping
+                // Single global start - sweep all segments without stopping
                 float globalStart = Time.time;
 
                 while (true)
@@ -564,7 +564,7 @@ namespace Robotics
                         (seg == 0) ? _startPositions : msg.points[seg - 1].positions;
                     double[] toPositions = msg.points[seg].positions;
 
-                    // Linear interpolation with shortest-path delta (Hermite skipped — velocities are from original 0.02s MoveIt segments).
+                    // Linear interpolation with shortest-path delta (Hermite skipped - velocities are from original 0.02s MoveIt segments).
                     if (toPositions != null && fromPositions != null)
                     {
                         for (
@@ -712,7 +712,7 @@ namespace Robotics
             {
                 if (ClearTargetOnComplete)
                 {
-                    // Clear IK target — SyncIKTargetToCurrentPose would cause IK to re-engage against the PD drive.
+                    // Clear IK target - SyncIKTargetToCurrentPose would cause IK to re-engage against the PD drive.
                     _robotController.ClearTarget();
                 }
                 else

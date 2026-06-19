@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B3: Navigate and Lift — detect red object, approach from above, grasp it."""
+"""B3: Navigate and Lift - detect red object, approach from above, grasp it."""
 
 from __future__ import annotations
 

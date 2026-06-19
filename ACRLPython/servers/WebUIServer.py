@@ -14,7 +14,7 @@ import logging
 import threading
 from typing import TYPE_CHECKING, Dict, Any, List, Optional
 
-# Shared YOLO detector instance — set via set_shared_detector() to avoid loading
+# Shared YOLO detector instance - set via set_shared_detector() to avoid loading
 # a duplicate model. Falls back to creating its own if not set.
 _shared_detector = None
 
@@ -60,7 +60,7 @@ from core.Imports import get_command_broadcaster, get_world_state
 
 logger = logging.getLogger(__name__)
 
-# The running uvicorn event loop — captured at startup so background threads
+# The running uvicorn event loop - captured at startup so background threads
 # can schedule coroutines on it via run_coroutine_threadsafe().
 _main_loop: Optional[asyncio.AbstractEventLoop] = None
 
@@ -74,7 +74,7 @@ def get_startup_event() -> threading.Event:
     return _startup_complete
 
 
-# SequenceQueryHandler singleton — initialized once to avoid repeated LLM model loading.
+# SequenceQueryHandler singleton - initialized once to avoid repeated LLM model loading.
 _sequence_handler: Optional[Any] = None
 
 
@@ -240,7 +240,7 @@ def _model_from_rel(rel: str) -> str:
     return "default"
 
 
-# Mount static files — only when fastapi is available
+# Mount static files - only when fastapi is available
 if _FASTAPI_AVAILABLE:
     app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
     if os.path.exists(UNITY_URDF_DIR):
@@ -416,7 +416,7 @@ async def api_get_benchmarks_aggregate():
                 ),
             }
 
-            # Ablation metrics — split by condition (enabled/disabled)
+            # Ablation metrics - split by condition (enabled/disabled)
             ablation_runs = [r for r in runs if r.get("ablation")]
             if ablation_runs:
                 by_condition: dict = defaultdict(list)
@@ -468,7 +468,7 @@ async def api_get_benchmarks_aggregate():
             }
             entry["per_robot_stats"] = dict(robot_buckets)
 
-            # Per-model breakout — the primary independent variable for b1-b11.
+            # Per-model breakout - the primary independent variable for b1-b11.
             # Aggregating across models (as the top-level entry does) mixes models
             # of very different capability, so expose each model separately.
             model_buckets: dict = defaultdict(list)

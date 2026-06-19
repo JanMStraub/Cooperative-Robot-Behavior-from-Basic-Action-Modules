@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SendHandoff.py — Test the explicit handoff pipeline in Unity without the LLM.
+SendHandoff.py - Test the explicit handoff pipeline in Unity without the LLM.
 
 Uses the SequenceServer "EXEC:" prefix to bypass LLM parsing and feed operations
 directly into SequenceExecutor. Each step blocks until Unity confirms completion
@@ -97,7 +97,7 @@ def send_ops(
     Send an operation list to the SequenceServer and store the result in `out`.
 
     Designed to run in a thread so grasper and receiver can be dispatched
-    simultaneously — they synchronise internally via signal/wait_for_signal.
+    simultaneously - they synchronise internally via signal/wait_for_signal.
     """
     print(f"  → [{label}] dispatching {len(ops)} op(s) for {robot_id}")
     try:
@@ -234,7 +234,7 @@ def run_handoff(
         )
         req += 1
         if not results.get("orient_wrist", {}).get("success", False):
-            print("  [WARN] orient_wrist failed — continuing anyway")
+            print("  [WARN] orient_wrist failed - continuing anyway")
 
     if not grasp_only and not receive_only:
         print()
@@ -330,7 +330,7 @@ def run_handoff(
         )
         req += 1
         if not results.get("detect", {}).get("success", False):
-            print("  [WARN] detect_object_stereo failed — continuing anyway")
+            print("  [WARN] detect_object_stereo failed - continuing anyway")
 
     if not grasp_only:
         print()

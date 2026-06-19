@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B2: Sequential Navigation — detect and navigate to three cubes by color."""
+"""B2: Sequential Navigation - detect and navigate to three cubes by color."""
 
 from __future__ import annotations
 

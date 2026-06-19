@@ -12,7 +12,7 @@ namespace Simulation
     /// TF frame (no TF parent) into a dedicated container. Child frames are managed by
     /// TFSystem itself and will nest correctly once TF data establishes the tree.
     ///
-    /// Self-bootstraps via RuntimeInitializeOnLoadMethod — no scene setup required.
+    /// Self-bootstraps via RuntimeInitializeOnLoadMethod - no scene setup required.
     /// </summary>
     public class TFFrameOrganizer : MonoBehaviour
     {

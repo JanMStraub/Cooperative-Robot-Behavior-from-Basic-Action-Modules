@@ -1,12 +1,12 @@
 # Building Cooperative Robot Behavior from Basic Action Modules
 
-LLM-driven collaborative control for two AR4 robotic arms. A locally hosted vision-language model translates natural-language instructions into coordinated dual-arm behavior by composing a structured pool of 29 robot operations — no task-specific training, no hard-coded sequencing logic, no cloud dependencies. Developed as a master's thesis at Heidelberg University (project codename **ACRL** — Auto-Cooperative Robot Learning).
+LLM-driven collaborative control for two AR4 robotic arms. A locally hosted model translates natural-language instructions into coordinated dual-arm behavior by composing a structured pool of 29 robot operations, no task-specific training, no hard-coded sequencing logic, no cloud dependencies. Developed as a master's thesis at Heidelberg University (project codename **ACRL** Auto-Cooperative Robot Learning).
 
 <p align="center">
   <img src="Misc/images/robot_env.png" width="560" alt="Unity simulation environment with two AR4 arms, manipulation objects, lettered placement fields, and stereo camera rig">
 </p>
 
-Given a single prompt like *"Robot1 and Robot2 perform a handoff of the red cube"*, the LLM selects and sequences operations from the pool — detection, grasping, signaling, handoff reception — with the coordination emerging entirely from its use of `signal`/`wait_for_signal` primitives:
+Given a single prompt like *"Robot1 and Robot2 perform a handoff of the red cube"*, the LLM selects and sequences operations from the pool detection, grasping, signaling, handoff reception with the coordination emerging entirely from its use of `signal`/`wait_for_signal` primitives:
 
 <p align="center">
   <img src="Misc/images/example_command_flow.png" width="800" alt="Example command flow: LLM-planned handoff sequence across both robots">
@@ -14,11 +14,11 @@ Given a single prompt like *"Robot1 and Robot2 perform a handoff of the red cube
 
 ## Highlights
 
-- **100% task success** on all single-robot benchmarks (B1–B5, 25 runs) and the dual-robot handoff (B6) with Magistral Small 2509 (24B, 4-bit) — zero hallucinated operations, zero retries
+- **100% task success** on all single-robot benchmarks (B1-B5, 25 runs) and the dual-robot handoff (B6) with Magistral Small 2509 (24B, 4-bit) - zero hallucinated operations, zero retries
 - **Sustained reliability**: chains of 20 heterogeneous sub-tasks (85 operations per run) complete without failure across all runs (B8)
 - **Emergent parallelism**: the planner identifies task-level independence and emits concurrent dual-robot plans without being told to (B10)
-- **Quantified ablations**: ROS/MoveIt routing +76 pp per-task success, reflexion +28 pp, negotiation +25 pp; knowledge-graph context injection and VGN are honestly reported as negative/null results
-- **Known limitation**: concurrent bimanual manipulation (B7) remains unsolved — the LLM decomposes simultaneous grasps into sequential plans that deadlock or violate separation constraints
+- **Quantified ablations**: ROS/MoveIt routing +76 pp per-task success, negotiation +25 pp, reflexion +16 pp; knowledge-graph context injection and VGN are honestly reported as negative
+- **Known limitation**: concurrent bimanual manipulation (B7) remains unsolved - the LLM decomposes simultaneous grasps into sequential plans that deadlock or violate separation constraints
 
 **Key Features**:
 
@@ -27,7 +27,7 @@ Given a single prompt like *"Robot1 and Robot2 perform a handoff of the red cube
 - RAG-augmented command parsing: semantic retrieval narrows the LLM context to relevant operations
 - Reflexion-style failure recovery: structured error feedback drives corrective re-planning
 - Optional multi-agent negotiation protocol for role-ambiguous dual-robot tasks
-- ROS 2 / MoveIt collision-aware motion planning (Docker, planning-only — Unity executes)
+- ROS 2 / MoveIt collision-aware motion planning (Docker, planning-only - Unity executes)
 - Stereo vision + YOLO object detection; optional VGN neural grasp-pose prediction (runs on Apple Silicon)
 - AutoRT-style autonomous task generation with two-layer safety (semantic LLM + kinematic code checks)
 - Optional NetworkX knowledge graph for spatial reasoning
@@ -40,7 +40,7 @@ Given a single prompt like *"Robot1 and Robot2 perform a handoff of the red cube
 
 - **Unity Hub** with Unity Editor **6000.3.11f1** (exact version required)
 - **Python 3.12** with virtual environment support
-- **Docker** (for the ROS 2 / MoveIt stack — ROS is enabled by default; skip with `--without-ros`)
+- **Docker** (for the ROS 2 / MoveIt stack - ROS is enabled by default; skip with `--without-ros`)
 - **LM Studio** serving:
   - `mistralai/magistral-small-2509` (planning/reasoning model)
   - `text-embedding-nomic-embed-text-v1.5` (RAG embeddings)
@@ -72,10 +72,10 @@ Given a single prompt like *"Robot1 and Robot2 perform a handoff of the red cube
    ```
 
 3. **Open Unity project**:
-   - Open Unity Hub, add project from `ACRLUnity/`
+   - Open Unity Hub, add project from `ACRLUnity/.`
    - Ensure Unity version **6000.3.11f1** is installed
    - Open the project (dependencies auto-install)
-   - Alternatively use the standalone build: `ACRLUnity_build.app` (macOS)
+   - Alternatively, use the standalone build: `ACRLUnity/ACRLUnity_build.app` (macOS)
 
 4. **Install NuGet packages** (if not auto-installed):
    - In Unity: NuGet > Manage NuGet Packages > install `MathNet.Numerics` (required for IK)
@@ -85,7 +85,7 @@ Given a single prompt like *"Robot1 and Robot2 perform a handoff of the red cube
 1. **Start the ROS stack** (skip if running `--without-ros`):
 
    ```bash
-   cd rosUnityIntegration
+   cd ACRLRosUnityIntegration
    docker compose --profile dual up -d   # dual-robot MoveIt stack (default config)
    # or: --profile solo                  # single-robot stack
    ```
@@ -141,7 +141,7 @@ A natural-language prompt flows through four layers: (1) command input, (2) RAG 
 
 **Python backend**:
 
-- **Unified entry point**: `RunRobotController` orchestrates all servers (ports 5006–5010, optional 8000)
+- **Unified entry point**: `RunRobotController` orchestrates all servers (ports 5006-5010, optional 8000)
 - **CommandParser + SequenceExecutor**: LLM/regex hybrid parsing, step-wise dispatch, variable passing (`detect → $target`, then `move to $target`), reflexion retries on eligible failures
 - **RAG system**: LM Studio embeddings + cosine-similarity vector store; indexes 29 operations, 9 workflow patterns, and 4 multi-robot context documents
 - **Operations registry** (29 ops in four tiers):
@@ -149,7 +149,7 @@ A natural-language prompt flows through four layers: (1) command input, (2) RAG 
   - **Basic** (6): `move_to_coordinate`, `adjust_end_effector_orientation`, `return_to_start_position`, `generate_point_cloud`, `detect_field`, `detect_all_fields`
   - **Intermediate** (9): `pick_object_at_coordinate`, `place_object`, `place_between_objects`, `detect_object_stereo`, `analyze_scene`, `move_relative_to_object`, `detect_other_robot`, `check_partner_status`, `place_for_partner`
   - **Complex** (6): `grasp_object`, `mirror_movement_of_other_robot`, `receive_handoff`, `stabilize_object`, `synchronized_grasp`, `joint_transport`
-- **ROS 2 / MoveIt**: planning-only backend — MoveIt computes joint trajectories, Unity executes them. Three control modes (Unity / ROS / Hybrid, default Hybrid). `ROSMotionClient` handles Unity↔ROS coordinate transforms and talks to the Dockerized `ROSBridge`
+- **ROS 2 / MoveIt**: planning-only backend - MoveIt computes joint trajectories, Unity executes them. Three control modes (Unity / ROS / Hybrid, default Hybrid). `ROSMotionClient` handles Unity↔ROS coordinate transforms and talks to the Dockerized `ROSBridge`
 - **Multi-robot negotiation** (optional, `NEGOTIATION_ENABLED=true`): per-robot LLM agents run Analysis → round-robin Proposal → Evaluation for up to 3 rounds before execution; falls back to single-LLM parsing
 - **AutoRT**: scene perception → LLM task generation → two-layer safety filter (semantic + kinematic) → strategy-based selection → execution
 
@@ -158,8 +158,8 @@ A natural-language prompt flows through four layers: (1) command input, (2) RAG 
 ```
 Cooperative-Robot-Behavior-from-Basic-Action-Modules/
 ├── ACRLDashboard/                       # Web UI source (served by WebUIServer on port 8000)
-├── rosUnityIntegration/                 # Docker-based ROS 2 + MoveIt + ros_tcp_endpoint
-├── BenchmarkResults/                    # Benchmark run JSONs (b1–b16)
+├── ACRLRosUnityIntegration/             # Docker-based ROS 2 + MoveIt + ros_tcp_endpoint
+├── Misc/benchmark_results/              # Benchmark run JSONs (b1-b16)
 ├── Misc/images/                         # Thesis and benchmark figures
 ├── ACRLUnity/                           # Unity project
 │   └── Assets/
@@ -188,18 +188,18 @@ Cooperative-Robot-Behavior-from-Basic-Action-Modules/
     ├── knowledge_graph/                 # Optional NetworkX spatial reasoning
     ├── ros2/                            # ROSMotionClient, ROSBridge
     ├── vision/                          # YOLO detection, stereo depth (SGBM)
-    ├── benchmarks/                      # Benchmark framework (Run.py, cases/B1–B16)
+    ├── benchmarks/                      # Benchmark framework (Run.py, cases/B1-B16)
     ├── config/                          # All configuration modules (env-var overridable)
     ├── tools/                           # CLI utilities incl. PlotBenchmarks
-    └── tests/                           # Test suite (~80 files)
+    └── tests/                           # Test suite (~100 files)
 ```
 
 ## Configuration
 
-- **Robot/IK/grasp tuning** (Unity): `ACRLUnity/Assets/Configuration/*.asset` — `RobotProfile` (sim joint stiffness/damping/limits), `RealRobotProfile` (hardware compliance model), `IKConfig`, `GraspConfig`, `GripperConfig`, `TrajectoryConfig`
+- **Robot/IK/grasp tuning** (Unity): `ACRLUnity/Assets/Configuration/*.asset` - `RobotProfile` (sim joint stiffness/damping/limits), `RealRobotProfile` (hardware compliance model), `IKConfig`, `GraspConfig`, `GripperConfig`, `TrajectoryConfig`
 - **Simulation**: `Simulation.asset` (time scale, auto-start, reset behavior)
 - **AutoRT**: `AutoRTConfig.asset` (Unity-side UI/loop) and `ACRLPython/config/AutoRT.py` (LLM settings, safety bounds, selection strategy)
-- **Python backend**: `ACRLPython/config/` — every parameter accepts an environment-variable override of the same name (ports, LLM model/timeouts, RAG thresholds, negotiation, knowledge graph)
+- **Python backend**: `ACRLPython/config/` - every parameter accepts an environment-variable override of the same name (ports, LLM model/timeouts, RAG thresholds, negotiation, knowledge graph)
 
 ## Benchmarks & Results
 
@@ -207,19 +207,19 @@ Cooperative-Robot-Behavior-from-Basic-Action-Modules/
 cd ACRLPython
 source acrl/bin/activate    # servers must be running for --live
 
-python -m benchmarks.run --all --live      # full suite against the simulation
-python -m benchmarks.run --benchmark 3     # single benchmark (1–16)
-python -m benchmarks.run --all --dry-run   # no simulation required
+python -m benchmarks.Run --all --live      # full suite against the simulation
+python -m benchmarks.Run --benchmark 3     # single benchmark (1-16)
+python -m benchmarks.Run --all --dry-run   # no simulation required
 ```
 
-Per-run JSON results are written to `BenchmarkResults/bN/<model>/` (B1–B11 organized by model; B12–B16 ablations flat under `bN/`). Aggregate plots: `python -m tools.PlotBenchmarks`.
+Per-run JSON results are written to `ACRLPython/benchmark_results/bN/<model>/` (B1-B11 organized by model; B12-B16 ablations flat under `bN/`). Aggregate plots: `python -m tools.PlotBenchmarks`.
 
 <p align="center">
   <img src="Misc/images/01_success_rate_by_model.png" width="800" alt="Task success rate per benchmark and model">
 </p>
 
 <p align="center">
-  <img src="Misc/images/08_ablation.png" width="800" alt="Ablation results: ROS/MoveIt +76pp, reflexion +28pp, negotiation +25pp">
+  <img src="Misc/images/08_ablation.png" width="800" alt="Ablation results: ROS/MoveIt +76pp, negotiation +25pp, reflexion +16pp">
 </p>
 
 **System benchmarks** (5 runs each, three LLM backends):

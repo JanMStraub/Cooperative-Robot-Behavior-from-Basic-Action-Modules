@@ -8,7 +8,7 @@ import dataclasses
 
 @dataclasses.dataclass
 class BenchmarkConfig:
-    """Configuration for single-robot benchmarks (B1–B5)."""
+    """Configuration for single-robot benchmarks (B1-B5)."""
 
     robot_id: str = "Robot1"
     timeout_per_step_s: float = 90.0
@@ -29,7 +29,7 @@ class BenchmarkConfig:
 
 @dataclasses.dataclass
 class DualRobotConfig(BenchmarkConfig):
-    """Configuration for dual-robot benchmarks (B6–B8)."""
+    """Configuration for dual-robot benchmarks (B6-B8)."""
 
     robot_id_a: str = "Robot1"
     robot_id_b: str = "Robot2"

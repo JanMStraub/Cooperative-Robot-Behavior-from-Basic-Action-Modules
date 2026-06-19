@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B9: Solve impossible task — verify parser rejects unexecutable requests."""
+"""B9: Solve impossible task - verify parser rejects unexecutable requests."""
 
 from __future__ import annotations
 

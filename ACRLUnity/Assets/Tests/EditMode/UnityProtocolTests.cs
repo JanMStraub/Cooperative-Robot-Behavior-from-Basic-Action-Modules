@@ -472,7 +472,7 @@ namespace Tests.EditMode
             headerOnly[0] = (byte)MessageType.IMAGE;
             // request_id bytes left as 0
 
-            // BitConverter.ToInt32 at offset 5 would read out of bounds — expect any exception subclass
+            // BitConverter.ToInt32 at offset 5 would read out of bounds - expect any exception subclass
             Assert.That(
                 () => UnityProtocol.DecodeImageMessage(headerOnly, out _, out _, out _, out _),
                 Throws.InstanceOf<Exception>()

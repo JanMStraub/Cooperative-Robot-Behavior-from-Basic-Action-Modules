@@ -52,7 +52,7 @@ namespace Tests.EditMode
         [Test]
         public void ComputeJointDeltas_Returns_Null_When_Converged()
         {
-            // Arrange — use Vector3.up axis (no X-Y plane movement needed; convergence test only)
+            // Arrange - use Vector3.up axis (no X-Y plane movement needed; convergence test only)
             var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
             var currentState = new IKState(
                 position: new Vector3(1f, 0f, 0f),
@@ -620,7 +620,7 @@ namespace Tests.EditMode
             // Production code clamps joint velocities at ±5 rad/sec; this test verifies that
             // the clamp prevents NaN/Infinity from propagating to callers.
 
-            // Arrange — very low damping factor approaches pseudo-inverse singularity
+            // Arrange - very low damping factor approaches pseudo-inverse singularity
             var solver = new IKSolver(jointCount: 2, dampingFactor: 0.01f);
 
             var currentState = new IKState(
@@ -646,7 +646,7 @@ namespace Tests.EditMode
                 convergenceThreshold: 0.001f
             );
 
-            // Assert — deltas may be null (converged) or non-null, but must never be NaN/Infinity
+            // Assert - deltas may be null (converged) or non-null, but must never be NaN/Infinity
             if (deltas != null)
             {
                 AssertDeltasAreFinite(deltas, "near-singular Jacobian");

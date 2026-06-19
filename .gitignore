@@ -179,6 +179,9 @@ summaries/
 *.png
 *.jpg
 *.txt
+*.pdf
+*.tex
+*.bib
 
 # Git worktrees
 .worktrees/
@@ -202,3 +205,4 @@ ACRLPython/kg_snapshots
 # README figures — keep tracked despite images/ and *.png rules above
 !Misc/images/
 !Misc/images/**
+Misc/thesis

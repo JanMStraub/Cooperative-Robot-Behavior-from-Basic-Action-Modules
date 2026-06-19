@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B11: RAG Ablation — operation selection accuracy with and without RAG retrieval.
+"""B11: RAG Ablation - operation selection accuracy with and without RAG retrieval.
 
 Each task is ambiguous: multiple operations could plausibly apply, but only one
 is correct given the system's semantics. RAG provides workflow context and richer
@@ -18,11 +18,11 @@ TASKS: List[Tuple[str, str]] = [
         "yield_workspace",
     ),
     (
-        "you are currently holding the box — keep it stable while Robot2 manipulates it",
+        "you are currently holding the box - keep it stable while Robot2 manipulates it",
         "stabilize_object",
     ),
     (
-        "you are currently holding the cube — deposit it at the shared handoff zone for Robot2 to pick up",
+        "you are currently holding the cube - deposit it at the shared handoff zone for Robot2 to pick up",
         "place_for_partner",
     ),
     (

@@ -106,7 +106,7 @@ class AutoRTHandler:
             logger.info("AutoRTOrchestrator initialized successfully")
             if not UNITY_INTEGRATION_ENABLED:
                 logger.warning(
-                    "AUTORT_UNITY_INTEGRATION=false — tasks will be generated "
+                    "AUTORT_UNITY_INTEGRATION=false - tasks will be generated "
                     "but not pushed to Unity"
                 )
         except Exception as e:
@@ -239,7 +239,7 @@ class AutoRTHandler:
                 logger.warning("Safety validation DISABLED - accepting all tasks")
                 validated_tasks = candidates
 
-            # Select tasks using TaskSelector — while loop ensures we fill the
+            # Select tasks using TaskSelector - while loop ensures we fill the
             # requested count even when the selector filters some candidates.
             selected_tasks = []
             while len(selected_tasks) < num_tasks and validated_tasks:
@@ -452,7 +452,7 @@ class AutoRTHandler:
                     pending_count = len(self._pending_tasks)
                 if pending_count > 0:
                     logger.debug(
-                        f"Loop skipping generation — {pending_count} tasks already pending"
+                        f"Loop skipping generation - {pending_count} tasks already pending"
                     )
                     self._loop_stop_event.wait(timeout=self._loop_delay)
                     continue

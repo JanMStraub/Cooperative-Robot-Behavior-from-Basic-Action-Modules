@@ -275,7 +275,7 @@ class RobotController:
                     self._graph_builder.on_state_update
                 )
                 logger.info(
-                    "KnowledgeGraph wired — graph updates on every world state push"
+                    "KnowledgeGraph wired - graph updates on every world state push"
                 )
             else:
                 logger.debug(
@@ -286,12 +286,12 @@ class RobotController:
             # (e.g. detect_object_stereo, detect_field) without waiting for the
             # next Unity WorldStateServer packet.
             world_state.register_object_observer(self._graph_builder.on_object_updated)
-            logger.info("KnowledgeGraph wired — updates on Python object detections")
+            logger.info("KnowledgeGraph wired - updates on Python object detections")
 
         except Exception as e:
             logger.warning(f"Failed to wire KnowledgeGraph: {e}")
             logger.debug(
-                "Non-critical — knowledge graph will not be updated automatically"
+                "Non-critical - knowledge graph will not be updated automatically"
             )
 
     def _start_perception_refresh(self):
@@ -306,7 +306,7 @@ class RobotController:
             logger.info("PerceptionRefreshLoop started")
         except Exception as exc:
             logger.warning(f"Failed to start PerceptionRefreshLoop: {exc}")
-            logger.debug("Non-critical — stale objects will not be auto-refreshed")
+            logger.debug("Non-critical - stale objects will not be auto-refreshed")
 
     def _auto_connect_ros(self):
         """Try to connect to the ROS bridge in the background so a missing Docker won't block startup."""
@@ -324,7 +324,7 @@ class RobotController:
                 logger.info("ROS bridge connected")
             else:
                 logger.warning(
-                    "ROS bridge auto-connect failed — Docker may not be running. "
+                    "ROS bridge auto-connect failed - Docker may not be running. "
                     "Motion commands will fall back to Unity IK."
                 )
 
@@ -369,12 +369,12 @@ class RobotController:
             self._world_state_server.start()
         elif PERCEPTION_ONLY_MODE:
             logger.info(
-                "PERCEPTION_ONLY_MODE=true: WorldStateServer disabled — "
+                "PERCEPTION_ONLY_MODE=true: WorldStateServer disabled - "
                 "WorldState populated by FK + stereo perception"
             )
         else:
             logger.info(
-                "Real env: WorldStateServer disabled — WorldState populated by perception only"
+                "Real env: WorldStateServer disabled - WorldState populated by perception only"
             )
 
         # Start AutoRTServer (port 5010) - autonomous task generation
@@ -424,7 +424,7 @@ class RobotController:
 
         self._running = True
 
-        # All servers started — now safe to open the log file
+        # All servers started - now safe to open the log file
         enable_file_logging()
 
         # When the Web UI is active, images are already being streamed into ImageStorage
@@ -432,7 +432,7 @@ class RobotController:
         enable_streaming = ENABLE_VISION_STREAMING or bool(self._web_port)
         if self._web_port and not ENABLE_VISION_STREAMING:
             logger.info(
-                "Web UI active — enabling vision streaming mode "
+                "Web UI active - enabling vision streaming mode "
                 "(detect_object_stereo will use cached images)"
             )
 
@@ -673,7 +673,7 @@ def main():
         web_port=args.web,
     )
 
-    # Handle shutdown signals — abort in-flight ops, clean up, then force-exit
+    # Handle shutdown signals - abort in-flight ops, clean up, then force-exit
     # so Ctrl+C always terminates even when threads are blocked mid-movement.
     _shutdown_called = False
 
@@ -683,7 +683,7 @@ def main():
             logger.info("Forced exit")
             os._exit(1)
         _shutdown_called = True
-        logger.info("Shutdown signal received — stopping servers (force-exit in 5s)")
+        logger.info("Shutdown signal received - stopping servers (force-exit in 5s)")
 
         # Abort any in-flight sequence so operation threads unblock sooner.
         try:

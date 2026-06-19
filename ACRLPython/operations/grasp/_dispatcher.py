@@ -71,7 +71,7 @@ def grasp_object(
         if object_id.startswith("$"):
             return OperationResult.error_result(
                 "UNRESOLVED_VARIABLE",
-                f"object_id '{object_id}' is an unresolved variable reference — "
+                f"object_id '{object_id}' is an unresolved variable reference - "
                 "run detect_object_stereo before grasp_object to capture the target",
                 [
                     "Add a detect_object_stereo step before grasp_object",
@@ -178,7 +178,7 @@ def grasp_object(
                 )
 
                 if object_position is None:
-                    # WorldState is empty — detection either wasn't run or failed silently.
+                    # WorldState is empty - detection either wasn't run or failed silently.
                     # Log stored keys so the mismatch (e.g. "red" vs "red_cube") is visible.
                     stored_keys = list(world_state._objects.keys())
                     logger.warning(
@@ -202,7 +202,7 @@ def grasp_object(
                             request_id=request_id,
                         )
                         if det_result and det_result["success"]:
-                            # Re-query WorldState — detection should have written the position
+                            # Re-query WorldState - detection should have written the position
                             object_position = world_state.get_object_position(object_id)
                             if object_position is not None:
                                 logger.info(
@@ -225,7 +225,7 @@ def grasp_object(
 
                 if object_position is None:
                     should_fallback, err = _handle_ros_failure(
-                        f"Object {object_id} not in WorldState after detection attempt — "
+                        f"Object {object_id} not in WorldState after detection attempt - "
                         f"verify detect_object_stereo precedes grasp_object",
                         "grasp_object",
                     )
@@ -241,7 +241,7 @@ def grasp_object(
                     object_dimensions = world_state.get_object_dimensions(object_id)
                     robot_state = world_state.get_robot_state(robot_id)
 
-                    # PATH 1: VGN+MoveIt (highest priority — provides 6-DOF orientation for angled targets)
+                    # PATH 1: VGN+MoveIt (highest priority - provides 6-DOF orientation for angled targets)
                     if _vgn_enabled:
                         assert bridge is not None
                         result = _grasp_via_vgn_with_ros(
@@ -327,7 +327,7 @@ def grasp_object(
             if vgn_result is not None:
                 return vgn_result
             logger.info(
-                "[VGN] Unavailable or returned no candidates — "
+                "[VGN] Unavailable or returned no candidates - "
                 "falling back to geometric pipeline"
             )
 
@@ -505,7 +505,7 @@ GRASP_OBJECT_OPERATION = BasicOperation(
         OperationParameter(
             name="custom_approach_vector",
             type="list",
-            description="Custom approach direction [x, y, z] (overrides preferred_approach). OMIT entirely when not needed — do NOT pass an empty list [].",
+            description="Custom approach direction [x, y, z] (overrides preferred_approach). OMIT entirely when not needed - do NOT pass an empty list [].",
             required=False,
             default=None,
         ),

@@ -302,7 +302,7 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator IKSolver_MemoryAllocation_PreallocatedMatrices()
         {
-            // Directly exercise IKSolver math in a tight loop — no Unity frames in the hot path
+            // Directly exercise IKSolver math in a tight loop - no Unity frames in the hot path
             // so we measure only our code's allocations, not the Unity physics/rendering baseline.
             const int jointCount = 6;
             var solver = new IKSolver(jointCount, 0.05f);

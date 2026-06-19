@@ -18,8 +18,8 @@ SKIP_REASON = (
 
 # Robot workspace coordinates (within reach of the AR4 arm).
 # Robot1 → left workspace (x negative), Robot2 → right workspace (x positive).
-_R1_COORD = (-0.25, 0.30, 0.10)  # x, y, z  — Robot1 reachable point
-_R2_COORD = (0.25, 0.30, 0.10)  # x, y, z  — Robot2 reachable point
+_R1_COORD = (-0.25, 0.30, 0.10)  # x, y, z  - Robot1 reachable point
+_R2_COORD = (0.25, 0.30, 0.10)  # x, y, z  - Robot2 reachable point
 
 
 def _cmd(
@@ -404,7 +404,7 @@ class TestGraspOps:
 
         Robot2 first grasps redCube, then places it at a nearby coordinate.
         The test accepts a structured error (e.g. IK infeasible) as a valid
-        response — the important thing is that the operation is dispatched and
+        response - the important thing is that the operation is dispatched and
         returns a well-formed result rather than crashing or timing out.
         """
         # Grasp first so there is something to place.

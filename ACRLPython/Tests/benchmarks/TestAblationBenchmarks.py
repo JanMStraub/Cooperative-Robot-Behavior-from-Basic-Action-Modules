@@ -211,12 +211,12 @@ def test_b11_offline_captures_negotiation_rounds(monkeypatch):
     )
     result = runner.run(11, cfg)
     assert result.ablation is not None
-    # negotiation_rounds may be 0 when negotiation is disabled — verify field exists
+    # negotiation_rounds may be 0 when negotiation is disabled - verify field exists
     assert hasattr(result.ablation, "negotiation_rounds")
 
 
 def test_b10_returns_ablation_condition():
-    """B11 RAG ablation is parse-only — returns single condition matching cfg.use_rag."""
+    """B11 RAG ablation is parse-only - returns single condition matching cfg.use_rag."""
     from benchmarks.Runner import BenchmarkRunner
     from benchmarks.Config import BenchmarkConfig
 
@@ -239,7 +239,7 @@ def test_b10_returns_ablation_condition():
 
 
 def test_b11_is_always_parse_only():
-    """B11 is parse-only — accuracy metric is returned regardless of execution_mode."""
+    """B11 is parse-only - accuracy metric is returned regardless of execution_mode."""
     from benchmarks.Runner import BenchmarkRunner
     from benchmarks.Config import BenchmarkConfig
 
@@ -284,7 +284,7 @@ def test_benchmark_result_has_ablation_baseline_field():
 
 def test_b10_tasks_are_drawn_from_b1_to_b5():
     # B11 was redesigned to use ambiguous collaborative-op descriptions for RAG
-    # discrimination instead of B1–B5 verbatim strings.  Verify task and
+    # discrimination instead of B1-B5 verbatim strings.  Verify task and
     # ground-truth lists are consistent and non-empty.
     from ACRLPython.benchmarks.cases import B11RagAblation
     from benchmarks.Config import BenchmarkConfig

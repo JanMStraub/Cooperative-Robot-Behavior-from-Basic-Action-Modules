@@ -506,7 +506,7 @@ class WorldState(SingletonBase):
 
         Creates the object if not yet in WorldState (source="unity").
         If already present (populated by vision), only fills in missing
-        dimensions/rotation/color/type — never overwrites position.
+        dimensions/rotation/color/type - never overwrites position.
         Does not fire object observers since no position change occurs for
         already-tracked objects.
         """
@@ -528,7 +528,7 @@ class WorldState(SingletonBase):
                 )
             else:
                 obj = self._objects[object_id]
-                # Fill missing metadata only — never overwrite position set by vision
+                # Fill missing metadata only - never overwrite position set by vision
                 if dimensions is not None and obj.dimensions is None:
                     obj.dimensions = dimensions
                 if rotation is not None and obj.rotation is None:
@@ -768,7 +768,7 @@ class WorldState(SingletonBase):
             to_delete = []
 
             for obj_id, obj in self._objects.items():
-                # Fields are static landmarks not tracked by Unity — skip decay.
+                # Fields are static landmarks not tracked by Unity - skip decay.
                 if getattr(obj, "object_type", None) == "field":
                     continue
                 if obj_id in seen_object_ids:

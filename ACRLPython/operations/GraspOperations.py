@@ -1,4 +1,4 @@
-"""Backward-compatible re-export — implementation in operations/grasp/."""
+"""Backward-compatible re-export - implementation in operations/grasp/."""
 
 try:
     from .grasp import (

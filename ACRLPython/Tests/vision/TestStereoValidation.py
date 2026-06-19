@@ -83,7 +83,7 @@ class TestStereoValidation:
         det_left = DetectionObject(
             object_id=1, color="red_cube", bbox=(100, 100, 50, 50), confidence=0.9
         )
-        # Area ratio: |2500-3200|/3200=0.21875 — within 0.3, Y-aligned
+        # Area ratio: |2500-3200|/3200=0.21875 - within 0.3, Y-aligned
         det_right = DetectionObject(
             object_id=2, color="red_cube", bbox=(50, 105, 80, 40), confidence=0.9
         )
@@ -93,7 +93,7 @@ class TestStereoValidation:
         )
         assert len(matches) == 1
 
-        # Area ratio: |2500-4000|/4000=0.375 — exceeds 0.3
+        # Area ratio: |2500-4000|/4000=0.375 - exceeds 0.3
         det_right_large = DetectionObject(
             object_id=3, color="red_cube", bbox=(40, 105, 100, 40), confidence=0.9
         )

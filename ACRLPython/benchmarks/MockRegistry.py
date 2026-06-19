@@ -5,7 +5,7 @@ Dry-run mock for OperationRegistry.
 Intercepts get_operation_by_name() on the global registry singleton and returns
 _MockOperation wrappers that return OperationResult without contacting Unity.
 
-No pytest dependency — safe for standalone use.
+No pytest dependency - safe for standalone use.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Callable, Optional
 
 PROFILES = ("always_succeed", "10pct_failure", "detect_fails", "first_fail_nav")
 
-# Per-op call counter for the first_fail_nav profile — reset on each install_mock call.
+# Per-op call counter for the first_fail_nav profile - reset on each install_mock call.
 _call_counts: dict = {}
 
 

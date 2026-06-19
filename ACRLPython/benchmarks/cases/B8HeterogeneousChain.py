@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B8: Heterogeneous Chain — rotating cube colors, field targets, and three phase types per cycle."""
+"""B8: Heterogeneous Chain - rotating cube colors, field targets, and three phase types per cycle."""
 
 from __future__ import annotations
 

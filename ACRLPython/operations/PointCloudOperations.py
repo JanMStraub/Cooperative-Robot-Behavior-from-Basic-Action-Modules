@@ -19,7 +19,7 @@ from core.LoggingSetup import setup_logging
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
-# Module-level lazy imports — imported here so tests can monkeypatch them
+# Module-level lazy imports - imported here so tests can monkeypatch them
 # while still respecting the layered architecture (no server→operation circular dep).
 try:
     from core.Imports import get_unified_image_storage
@@ -173,7 +173,7 @@ def _clean_point_cloud(
     points = points[depth_mask]
     colors = colors[depth_mask]
     logger.debug(
-        f"Depth clip [{POINT_CLOUD_MIN_DEPTH}m–{POINT_CLOUD_MAX_DEPTH}m]: "
+        f"Depth clip [{POINT_CLOUD_MIN_DEPTH}m-{POINT_CLOUD_MAX_DEPTH}m]: "
         f"{depth_mask.sum()} / {len(depth_mask)} points kept"
     )
 
@@ -218,7 +218,7 @@ def _clean_point_cloud(
         )
     except ImportError:
         logger.debug(
-            "open3d not installed — skipping statistical outlier removal. "
+            "open3d not installed - skipping statistical outlier removal. "
             "Install with: pip install open3d"
         )
 
@@ -301,7 +301,7 @@ def generate_point_cloud(
         # The default of 128 is too small: for fov=45°, w=1920, baseline=0.05m,
         # an object at 0.8m needs ~145px disparity, exceeding the 128 cap.
         # SGBM then finds the best wrong in-range match (~79px), reporting ~1.47m
-        # instead of 0.8m — a systematic ~1.8x overestimate of depth.
+        # instead of 0.8m - a systematic ~1.8x overestimate of depth.
         # Cap at 512 for performance; covers objects down to f_px*b/512 (~0.23m).
         import math as _math
 
@@ -312,7 +312,7 @@ def generate_point_cloud(
         )
         _f_norm = 1.0 / (2.0 * _math.tan(_math.radians(_horiz_fov / 2.0)))
         _f_px = _f_norm * img_left.shape[1]  # pixel focal length
-        _min_depth = 0.25  # metres — closest expected object in robot workspace
+        _min_depth = 0.25  # metres - closest expected object in robot workspace
         _max_disp_needed = int(_math.ceil(_f_px * baseline / _min_depth))
         _max_disp_needed = min(((_max_disp_needed + 15) // 16) * 16, 512)
         logger.info(
@@ -369,7 +369,7 @@ def generate_point_cloud(
                     "EMPTY_POINT_CLOUD_AFTER_CLEANING",
                     "All points were removed during background/outlier cleaning",
                     [
-                        "Check POINT_CLOUD_BG_COLORS in config/Vision.py — tolerance may be too broad",
+                        "Check POINT_CLOUD_BG_COLORS in config/Vision.py - tolerance may be too broad",
                         "Disable cleaning with POINT_CLOUD_CLEANING_ENABLED=false to inspect raw cloud",
                         "Check POINT_CLOUD_MIN_DEPTH / POINT_CLOUD_MAX_DEPTH range",
                     ],
@@ -404,7 +404,7 @@ def generate_point_cloud(
         # VGNClient does its own transform from raw camera-frame points.
         if SAVE_DEBUG_POINT_CLOUDS:
             # Convert Q-matrix output to Unity camera frame before rotating.
-            # Q output is (X-right, Y-up, Z-negative) — only Z needs negating to
+            # Q output is (X-right, Y-up, Z-negative) - only Z needs negating to
             # reach Unity camera frame (X-right, Y-up, Z-forward).
             debug_pts = raw_points.copy().astype(np.float32)
             debug_pts[:, 2] *= -1.0  # Z-negative → Z-forward (positive)

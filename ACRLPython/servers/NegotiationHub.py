@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Multi-robot negotiation coordinator. Not a TCP server — called directly by SequenceExecutor.
+Multi-robot negotiation coordinator. Not a TCP server - called directly by SequenceExecutor.
 Output matches CommandParser.parse() format, consumable by SequenceExecutor.execute_sequence().
 """
 
@@ -89,7 +89,7 @@ class NegotiationHub(SingletonBase):
         text_lower = command_text.lower()
 
         # Independence keywords suppress negotiation even when multiple robots
-        # are referenced — signals that robots act separately, no shared plan needed.
+        # are referenced - signals that robots act separately, no shared plan needed.
         for keyword in neg_cfg.INDEPENDENCE_KEYWORDS:
             if keyword in text_lower:
                 logger.info(
@@ -285,7 +285,7 @@ class NegotiationHub(SingletonBase):
         if not contributors:
             all_analyses = list(session.analyses.values())
             logger.warning(
-                f"All {len(all_analyses)} robots returned can_contribute=False — "
+                f"All {len(all_analyses)} robots returned can_contribute=False - "
                 f"promoting all to contributors (likely a solo-vs-collaborative "
                 f"misinterpretation by the model)"
             )
@@ -347,7 +347,7 @@ class NegotiationHub(SingletonBase):
             missing = set(session.robot_ids) - robots_in_plan
             if missing:
                 logger.warning(
-                    f"[{proposer_id}] Proposal missing commands for {missing} — "
+                    f"[{proposer_id}] Proposal missing commands for {missing} - "
                     f"discarding (single-robot plan for multi-robot task)"
                 )
                 return None

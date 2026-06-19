@@ -217,7 +217,7 @@ def release_object(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """Open gripper at current position (atomic — doesn't move robot). Chain with move_to_coordinate for positioned release."""
+    """Open gripper at current position (atomic - doesn't move robot). Chain with move_to_coordinate for positioned release."""
     try:
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
@@ -289,7 +289,7 @@ def create_release_object_operation() -> BasicOperation:
         name="release_object",
         category=OperationCategory.MANIPULATION,
         complexity=OperationComplexity.ATOMIC,
-        description="Open gripper at current position (atomic — doesn't move robot). Chain with move_to_coordinate for positioned release.",
+        description="Open gripper at current position (atomic - doesn't move robot). Chain with move_to_coordinate for positioned release.",
         usage_examples=[
             "release_object('Robot1') - Release at current position",
             "Chain: move_to_coordinate('Robot1', x=0.3, y=0, z=0.1) → release_object('Robot1')",
@@ -397,7 +397,7 @@ def _resolve_placement_y(
     _, obj_height, _ = obj_dims
     computed_y = obj_pos[1] + obj_height / 2.0 + placed_object_height / 2.0
     logger.info(
-        f"place_object: stacking on '{canonical_id}' — "
+        f"place_object: stacking on '{canonical_id}' - "
         f"obj_center_y={obj_pos[1]:.4f}, obj_height={obj_height:.4f}, "
         f"placed_obj_height={placed_object_height:.4f} → computed_y={computed_y:.4f}"
     )
@@ -440,7 +440,7 @@ def place_object(
         if effective_y < PLACE_MIN_Y:
             logger.warning(
                 f"place_object: effective_y={effective_y:.4f} below PLACE_MIN_Y={PLACE_MIN_Y} "
-                f"(stereo underestimate) — clamping to {PLACE_MIN_Y}"
+                f"(stereo underestimate) - clamping to {PLACE_MIN_Y}"
             )
             effective_y = PLACE_MIN_Y
             resolution_note += "+y_clamped"
@@ -457,12 +457,12 @@ def place_object(
             place_pos = {"x": x, "y": effective_y + PLACE_TCP_OFFSET, "z": z}
 
             # Top-down orientation: ~179° around ROS X axis (ee_link Z points down).
-            # w=0.0087 (not 0.0) matches grasp planner's base quaternion — keeps MoveIt
+            # w=0.0087 (not 0.0) matches grasp planner's base quaternion - keeps MoveIt
             # IK in the w>0 hemisphere so the solver always picks the same wrist config
             # and avoids the ±360° flip that occurs at the w=0 singularity.
             top_down_orientation = {"x": 0.9999, "y": 0.0, "z": 0.0, "w": 0.0087}
 
-            # Lift before reorienting — clears held object from obstacles, matches TCP path.
+            # Lift before reorienting - clears held object from obstacles, matches TCP path.
             logger.info(f"place_object: lifting to safe height for {robot_id}")
             current_pos = _get_world_state().get_robot_position(robot_id)
             if current_pos is not None:
@@ -481,7 +481,7 @@ def place_object(
                     f"place_object: no current position for {robot_id}, skipping lift"
                 )
 
-            # Orient after lifting — avoids constrained planning failures when starting far from top-down.
+            # Orient after lifting - avoids constrained planning failures when starting far from top-down.
             logger.info(f"place_object: orienting to top-down for {robot_id}")
             orient_result = bridge.plan_orientation_change(
                 {"roll": 180, "pitch": 0, "yaw": 0},
@@ -550,7 +550,7 @@ def place_object(
                     "robot_id": robot_id,
                     "placed_at": {"x": x, "y": effective_y, "z": z},
                     # "ros_executed" tells SequenceExecutor to skip the Unity
-                    # completion-signal wait — the ROS path is fully synchronous
+                    # completion-signal wait - the ROS path is fully synchronous
                     # and Unity never sends a TCP completion message for it.
                     "status": "ros_executed",
                     "resolution": resolution_note,
@@ -616,7 +616,7 @@ PLACE_OBJECT_OPERATION = BasicOperation(
         "Use this for positioned placement; use release_object only for immediate gripper open."
     ),
     usage_examples=[
-        "place_object('Robot1', x=-0.18, y=0.06, z=0.05) — place at field G center",
+        "place_object('Robot1', x=-0.18, y=0.06, z=0.05) - place at field G center",
         "Typical sequence: detect_field → move_to_coordinate (hover) → place_object",
     ],
     parameters=[
@@ -795,8 +795,8 @@ PLACE_BETWEEN_OBJECTS_OPERATION = BasicOperation(
     complexity=OperationComplexity.INTERMEDIATE,
     description="Place a held object at the XZ midpoint between two WorldState objects.",
     usage_examples=[
-        "place_between_objects('Robot1', 'blue_cube', 'red_cube') — place at XZ midpoint, default Y",
-        "place_between_objects('Robot1', 'blue_cube', 'red_cube', on_top_of='blue_cube') — stack height from blue_cube",
+        "place_between_objects('Robot1', 'blue_cube', 'red_cube') - place at XZ midpoint, default Y",
+        "place_between_objects('Robot1', 'blue_cube', 'red_cube', on_top_of='blue_cube') - stack height from blue_cube",
     ],
     parameters=[
         OperationParameter(

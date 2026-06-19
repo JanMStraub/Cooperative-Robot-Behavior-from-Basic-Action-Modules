@@ -227,7 +227,7 @@ namespace PythonCommunication
             byte[] packet = new byte[size];
             int offset = 0;
 
-            // Header: [type:1][request_id:4] — direct byte writes, zero allocation
+            // Header: [type:1][request_id:4] - direct byte writes, zero allocation
             packet[0] = (byte)MessageType.SEQUENCE_QUERY;
             packet[1] = (byte)(requestId);
             packet[2] = (byte)(requestId >> 8);

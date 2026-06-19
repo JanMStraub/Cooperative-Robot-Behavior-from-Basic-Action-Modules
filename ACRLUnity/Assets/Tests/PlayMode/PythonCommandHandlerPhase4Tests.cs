@@ -11,7 +11,7 @@ namespace Tests.PlayMode
     /// <summary>
     /// Tests for PythonCommandHandler geometry-based verification with WorkspaceManager.
     ///
-    /// Note: Allocation/collision-zone logic has been removed — all coordination decisions
+    /// Note: Allocation/collision-zone logic has been removed - all coordination decisions
     /// are made by Python via signal/wait. These tests verify the remaining pure geometry
     /// queries (safe separation) that WorkspaceManager still provides.
     /// </summary>

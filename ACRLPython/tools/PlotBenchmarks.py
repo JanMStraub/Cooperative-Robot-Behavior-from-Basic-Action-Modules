@@ -622,7 +622,7 @@ def plot_ablation(groups: dict[int, list[dict]]) -> None:
     title = "Ablation: Success Rate by Condition"
     if missing_baseline:
         miss = ", ".join(f"B{b}" for b in missing_baseline)
-        title += f"\n(no paired baseline in data for {miss} — re-run paired ablation)"
+        title += f"\n(no paired baseline in data for {miss} - re-run paired ablation)"
     ax.set_title(title, fontsize=13, fontweight="bold")
     ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
     ax.legend(fontsize=9, loc="lower left")

@@ -69,7 +69,7 @@ def test_zero_pose_position_is_near_base():
 def test_zero_pose_height_above_table():
     """At zero angles the end-effector should be at or above table (Y >= 0)."""
     pos, _ = compute_end_effector_pose(ZERO_ANGLES, ROBOT1_BASE)
-    # Some joint configurations may place EE slightly below base — just check Y is reasonable
+    # Some joint configurations may place EE slightly below base - just check Y is reasonable
     assert pos[1] >= -0.5, f"EE Y at zero pose unexpectedly low: {pos[1]:.3f}"
 
 
@@ -111,7 +111,7 @@ def test_robot2_mirrored_x():
 
 
 def test_robot2_z_negated_relative_to_robot1():
-    """A 180° yaw rotation about Y negates the Z offset — Robot2's Z offset from
+    """A 180° yaw rotation about Y negates the Z offset - Robot2's Z offset from
     its base should be the negation of Robot1's Z offset from its base."""
     pos1, _ = compute_end_effector_pose(ZERO_ANGLES, ROBOT1_BASE, base_yaw_rad=0.0)
     pos2, _ = compute_end_effector_pose(ZERO_ANGLES, ROBOT2_BASE, base_yaw_rad=math.pi)

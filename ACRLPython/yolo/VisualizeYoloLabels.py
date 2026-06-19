@@ -94,7 +94,7 @@ def draw_bounding_boxes(image, boxes, class_names=None):
         else:
             label = f"Class {class_id}"
 
-        # Draw label background — clamp to image top to avoid rendering off-screen
+        # Draw label background - clamp to image top to avoid rendering off-screen
         (text_width, text_height), baseline = cv2.getTextSize(
             label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
         )

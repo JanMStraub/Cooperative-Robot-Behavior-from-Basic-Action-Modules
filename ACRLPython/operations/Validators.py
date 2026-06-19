@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parameter validators — return None on success, OperationResult error on failure (walrus-operator friendly)."""
+"""Parameter validators - return None on success, OperationResult error on failure (walrus-operator friendly)."""
 
 import math
 from typing import Optional
@@ -7,7 +7,7 @@ from typing import Optional
 from .Base import OperationResult
 from config.Robot import ROBOT_BASE_POSITIONS
 
-# Workspace bounds — single source of truth
+# Workspace bounds - single source of truth
 
 WORKSPACE_X: tuple = (-0.65, 0.65)
 WORKSPACE_Y: tuple = (0.0, 0.7)
@@ -17,7 +17,7 @@ APPROACH_OFFSET_RANGE: tuple = (0.0, 0.1)
 
 # Minimum allowed distance from any robot base (meters). Targets closer than
 # this are near-singularity and cause violent joint motion when IK tries to
-# solve them — as observed when the LLM sent Robot2 to its own base (0.475,0,0).
+# solve them - as observed when the LLM sent Robot2 to its own base (0.475,0,0).
 BASE_EXCLUSION_RADIUS: float = 0.15
 
 # Validators
@@ -101,7 +101,7 @@ def validate_not_near_base(x: float, y: float, z: float) -> Optional[OperationRe
         if dist < BASE_EXCLUSION_RADIUS:
             return OperationResult.error_result(
                 "TARGET_NEAR_ROBOT_BASE",
-                f"Target ({x:.3f}, {y:.3f}, {z:.3f}) is {dist:.3f}m from {name} base — "
+                f"Target ({x:.3f}, {y:.3f}, {z:.3f}) is {dist:.3f}m from {name} base - "
                 f"near-singularity, minimum distance is {BASE_EXCLUSION_RADIUS}m",
                 [
                     "Use return_to_start_position instead of move_to_coordinate for homing",

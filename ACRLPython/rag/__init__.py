@@ -75,7 +75,7 @@ class RAGSystem:
         # let the caller trigger a rebuild via index_operations().
         if not self.embedding_generator.is_using_lm_studio():
             logger.info(
-                "TF-IDF fallback active — skipping cached index (vocabulary mismatch risk)"
+                "TF-IDF fallback active - skipping cached index (vocabulary mismatch risk)"
             )
             return
 
@@ -88,7 +88,7 @@ class RAGSystem:
                     and store.embedding_dimension != expected_dim
                 ):
                     logger.warning(
-                        f"Cached index dim={store.embedding_dimension} != embedder dim={expected_dim} — discarding stale index"
+                        f"Cached index dim={store.embedding_dimension} != embedder dim={expected_dim} - discarding stale index"
                     )
                     import os as _os
 
@@ -199,7 +199,7 @@ class RAGSystem:
         return self.query_engine is not None and self.vector_store is not None
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get comprehensive statistics about RAG system."""
+        """Get statistics about the RAG system."""
         stats = {
             "config": {
                 "lm_studio_url": self.embedding_generator.base_url,

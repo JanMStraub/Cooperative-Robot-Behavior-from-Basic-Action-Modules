@@ -1,5 +1,5 @@
 """
-BenchmarkFeatureFlags — per-sequence feature flag overrides for ablation benchmarks.
+BenchmarkFeatureFlags - per-sequence feature flag overrides for ablation benchmarks.
 
 Serialised as a compact JSON blob appended to SEQUENCE_QUERY messages.
 None values are omitted (meaning: use server default).

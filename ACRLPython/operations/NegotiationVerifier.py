@@ -112,7 +112,7 @@ class NegotiationVerifier:
             if missing or unresolved:
                 errors.append(
                     f"Command {i} ('{operation}'): missing or unresolved coordinate params "
-                    f"{missing + unresolved} — use numeric values from world state"
+                    f"{missing + unresolved} - use numeric values from world state"
                 )
         return errors
 
@@ -150,7 +150,7 @@ class NegotiationVerifier:
         unused = defined_signals - waited_signals
         for event in unused:
             logger.warning(
-                f"signal('{event}') has no matching wait_for_signal — "
+                f"signal('{event}') has no matching wait_for_signal - "
                 f"potential coordination gap"
             )
 

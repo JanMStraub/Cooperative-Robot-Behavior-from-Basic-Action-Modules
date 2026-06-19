@@ -11,7 +11,7 @@ class VariableResolver:
     """Resolves $var references and manages variable capture from operation results."""
 
     def __init__(self, variables: Dict[str, Any], registry=None):
-        # Shared dict — SequenceExecutor and VariableResolver both see the same object
+        # Shared dict - SequenceExecutor and VariableResolver both see the same object
         self._variables = variables
         self._registry = registry
 
@@ -173,25 +173,25 @@ class VariableResolver:
             ]
             logger.warning(
                 f"Could not resolve expression '{value}' "
-                f"(unresolved vars: {_unresolved or 'unknown'}) — "
+                f"(unresolved vars: {_unresolved or 'unknown'}) - "
                 f"returning raw string, downstream type check will fail"
             )
             return value
 
-        # Handle dotted notation (e.g., "$target.x") — resolves to a scalar directly
+        # Handle dotted notation (e.g., "$target.x") - resolves to a scalar directly
         if "." in value and value.startswith("$"):
             resolved_value = self.resolve_dotted_variable(value)
             if resolved_value is not None:
                 return resolved_value
 
-            # Dotted resolution failed — try known fallback patterns.
+            # Dotted resolution failed - try known fallback patterns.
             parts = value[1:].split(".")  # strip "$", split by dots
             base_var = parts[0]
             base_val = self._variables.get(base_var)
 
             # Pattern: "$field.center.x" where detect_field already stored the center
             # dict directly under the capture variable (i.e. $field == {"x":…,"y":…,"z":…}).
-            # The LLM may still emit ".center." — strip that level and retry.
+            # The LLM may still emit ".center." - strip that level and retry.
             if (
                 len(parts) == 3
                 and parts[1] == "center"
@@ -201,7 +201,7 @@ class VariableResolver:
             ):
                 recovered = base_val[parts[2]]
                 logger.warning(
-                    f"Variable {value} not found — recovered as ${base_var}.{parts[2]}={recovered}"
+                    f"Variable {value} not found - recovered as ${base_var}.{parts[2]}={recovered}"
                 )
                 return recovered
 
@@ -213,7 +213,7 @@ class VariableResolver:
                 and "color" in base_val
             ):
                 logger.warning(
-                    f"Variable {value} not found for object_id — "
+                    f"Variable {value} not found for object_id - "
                     f"falling back to ${base_var}.color='{base_val['color']}'"
                 )
                 return base_val["color"]
@@ -270,7 +270,7 @@ class VariableResolver:
                 for element in value:
                     if isinstance(element, str) and "$" in element:
                         # Use a neutral key so coordinate/object_id special-casing
-                        # doesn't fire — dotted refs like "$p.x" already yield scalars.
+                        # doesn't fire - dotted refs like "$p.x" already yield scalars.
                         resolved_list.append(self.resolve_single_value("", element))
                     else:
                         resolved_list.append(element)

@@ -141,7 +141,7 @@ class GraphQueryEngine:
         seg_len_sq = dx * dx + dy * dy + dz * dz
         blocking_threshold = 0.05  # 5cm path proximity
         ee_exclusion_radius = (
-            0.12  # 12cm — skips objects co-located with EE (held/just released)
+            0.12  # 12cm - skips objects co-located with EE (held/just released)
         )
 
         for obj_id in candidates:

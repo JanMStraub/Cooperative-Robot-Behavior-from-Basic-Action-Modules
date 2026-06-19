@@ -53,7 +53,7 @@ def vector_angle(v1: np.ndarray, v2: np.ndarray) -> float:
     v1_norm = vector_normalize(v1)
     v2_norm = vector_normalize(v2)
 
-    # Early exit for zero-length inputs — angle is undefined, return 0.0
+    # Early exit for zero-length inputs - angle is undefined, return 0.0
     if np.linalg.norm(v1_norm) < 1e-8 or np.linalg.norm(v2_norm) < 1e-8:
         return 0.0
 

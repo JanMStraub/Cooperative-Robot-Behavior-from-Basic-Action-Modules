@@ -84,7 +84,7 @@ class TestTransformWorldToLocal:
         assert result["z"] == pytest.approx(0.089)
 
     def test_robot2_180_flip(self):
-        # Robot2 base at (0.475, 0, 0). Put target at (0.475, 0, -0.3) — directly "in front"
+        # Robot2 base at (0.475, 0, 0). Put target at (0.475, 0, -0.3) - directly "in front"
         result = self.server._transform_world_to_local(
             {"x": 0.475, "y": 0.0, "z": -0.3}, "Robot2"
         )

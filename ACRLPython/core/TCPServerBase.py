@@ -73,7 +73,7 @@ class ServerConfig:
 class TCPServerBase(ABC):
     """Abstract base class for TCP servers. Subclasses implement handle_client_connection()."""
 
-    # Heartbeat interval in seconds — how often the server logs its health status.
+    # Heartbeat interval in seconds - how often the server logs its health status.
     HEARTBEAT_INTERVAL: float = SERVER_HEARTBEAT_INTERVAL
 
     def __init__(self, config: ServerConfig):
@@ -96,7 +96,7 @@ class TCPServerBase(ABC):
         self._total_disconnections: int = 0
         self._start_time: Optional[datetime] = None
 
-        # Last-logged connection snapshot — heartbeat only logs when these change
+        # Last-logged connection snapshot - heartbeat only logs when these change
         self._last_heartbeat_snapshot: Optional[tuple] = None
 
         # Use class name so each server type gets its own logger.
@@ -148,7 +148,7 @@ class TCPServerBase(ABC):
         one message to loop again. Raise any fatal Exception to close the connection;
         the loop calls _is_connection_error_fatal() to decide whether to break.
 
-        Note: servers using _recv_exact() do not need to raise socket.timeout —
+        Note: servers using _recv_exact() do not need to raise socket.timeout -
         _recv_exact() handles timeout-retry internally and only propagates on shutdown.
         Servers using _recv_exactly() (blocking, no timeout) should override
         handle_client_connection() directly rather than implementing this method.
@@ -302,7 +302,7 @@ class TCPServerBase(ABC):
                     return None
                 data += chunk
             except socket.timeout:
-                # Timeout during partial read — check for shutdown, then retry.
+                # Timeout during partial read - check for shutdown, then retry.
                 # Do NOT discard data: partial bytes must be preserved.
                 if not self.is_running():
                     return None
@@ -343,10 +343,10 @@ class TCPServerBase(ABC):
         """Read a sequence of fields after a header and return the assembled bytes.
 
         Each entry in *fields* describes one field to read:
-          - ``"lp_string"`` – a length-prefixed string (4-byte LE length + body).
+          - ``"lp_string"`` - a length-prefixed string (4-byte LE length + body).
             The length prefix is re-emitted verbatim into the output so the
             caller can hand the raw bytes to ``UnityProtocol`` for decoding.
-          - An ``int`` N – exactly N raw bytes (e.g. ``1`` for a boolean flag,
+          - An ``int`` N - exactly N raw bytes (e.g. ``1`` for a boolean flag,
             ``4`` for a uint32).
 
         Returns the assembled ``bytes`` (header + all fields) on success, or

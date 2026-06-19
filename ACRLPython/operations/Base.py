@@ -226,7 +226,7 @@ class BasicOperation:
                 recovery_suggestions=["Contact developer to implement this operation"],
             )
 
-        # Clamp to valid_range (0.1mm tolerance) — prevents spurious errors from stereo depth noise
+        # Clamp to valid_range (0.1mm tolerance) - prevents spurious errors from stereo depth noise
         # e.g. y=-0.0007 when valid range is [0.0, 0.7].
         CLAMP_EPSILON = 1e-4  # 0.1 mm tolerance
         for param in self.parameters:

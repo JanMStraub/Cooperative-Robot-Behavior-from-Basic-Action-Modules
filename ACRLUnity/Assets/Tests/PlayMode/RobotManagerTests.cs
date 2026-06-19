@@ -214,7 +214,7 @@ namespace Tests.PlayMode
             );
             _manager.RegisterRobot("TestRobot", robotObject, null, null);
 
-            // Count should remain 1 — duplicate overwrites, not appends
+            // Count should remain 1 - duplicate overwrites, not appends
             Assert.AreEqual(
                 1,
                 _manager.AllRobotIds.Count,

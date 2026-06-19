@@ -70,7 +70,7 @@ ROBOT_SPATIAL_LAYOUT = {
     },
 }
 
-# 3 attempts matches MAX_NEGOTIATION_ROUNDS — the retry loop injects previous error context
+# 3 attempts matches MAX_NEGOTIATION_ROUNDS - the retry loop injects previous error context
 MAX_JSON_RETRIES = int(os.environ.get("AUTORT_MAX_JSON_RETRIES", "3"))
 
 UNITY_INTEGRATION_ENABLED = (

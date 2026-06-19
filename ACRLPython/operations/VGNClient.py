@@ -127,7 +127,7 @@ class VGNClient:
         try:
             import torch  # noqa: F401
         except ImportError:
-            logger.debug("torch not available — VGN disabled")
+            logger.debug("torch not available - VGN disabled")
             return False
         return True
 
@@ -185,7 +185,7 @@ class VGNClient:
                 in_wf = debug_info.get("_in_world_frame", False)
 
                 if pts is not None:
-                    # pts_full_scene is in camera frame — always take camera->world path
+                    # pts_full_scene is in camera frame - always take camera->world path
                     if debug_info.get("pts_full_scene") is not None:
                         pts_full = pts
                         in_wf = False
@@ -220,7 +220,7 @@ class VGNClient:
                         else:
                             pts_unity = pts_full
 
-                    # workspace bbox filter — wide Z range because camera is behind origin
+                    # workspace bbox filter - wide Z range because camera is behind origin
                     _WS_MIN = np.array([-2.0, -0.2, -5.0])
                     _WS_MAX = np.array([2.0, 2.0, 2.0])
                     ws_mask = np.all(
@@ -252,7 +252,7 @@ class VGNClient:
                             grid.astype(np.float32).tobytes()
                         ).decode("utf-8")
 
-                    # centroid for JS TSDF un-centring — must match frame of grasp positions
+                    # centroid for JS TSDF un-centring - must match frame of grasp positions
                     _internal_wf = debug_info.get("_in_world_frame", False)
                     if _internal_wf and centroid is not None:
                         c_unity = [-centroid[0], centroid[1], centroid[2]]
@@ -306,7 +306,7 @@ class VGNClient:
 
         bx, by, bw, bh = yolo_bbox
 
-        # Step 1 — VLM bbox refinement (opt-in, disabled by default)
+        # Step 1 - VLM bbox refinement (opt-in, disabled by default)
         refined_bbox = yolo_bbox
         try:
             from config.Servers import VGN_USE_VLM_REFINEMENT
@@ -340,11 +340,11 @@ class VGNClient:
         else:
             logger.debug("[VGN] VLM refinement skipped (VGN_USE_VLM_REFINEMENT=false)")
 
-        # Step 2 — Point cloud masking
+        # Step 2 - Point cloud masking
         debug_info["cam_pos"] = cam_pos
         debug_info["cam_rot"] = cam_rot
 
-        # Q-matrix output: (X-right, Y-up, Z-negative) — keep as-is for projection
+        # Q-matrix output: (X-right, Y-up, Z-negative) - keep as-is for projection
         pts_rh = points.copy()
 
         debug_info["pts"] = pts_rh
@@ -403,11 +403,11 @@ class VGNClient:
         masked_points = pts_rh[mask]
         _MIN_POINTS = 15
         if masked_points.shape[0] < _MIN_POINTS and depth_hint is not None:
-            # sparse stereo on small objects — retry with wider margin
+            # sparse stereo on small objects - retry with wider margin
             _retry_margin = _depth_margin * 2
             logger.warning(
                 f"[VGN] Only {masked_points.shape[0]} points after depth-filtered mask "
-                f"(need ≥ {_MIN_POINTS}) — retrying with wider depth margin ({_retry_margin:.2f} m)"
+                f"(need ≥ {_MIN_POINTS}) - retrying with wider depth margin ({_retry_margin:.2f} m)"
             )
             mask = _build_segmentation_mask(
                 pts_rh,
@@ -424,19 +424,19 @@ class VGNClient:
             if object_dimensions is None:
                 logger.warning(
                     f"[VGN] Only {masked_points.shape[0]} points after masking "
-                    f"(need ≥ {_MIN_POINTS}) — aborting (no dims for box synthesis)"
+                    f"(need ≥ {_MIN_POINTS}) - aborting (no dims for box synthesis)"
                 )
                 return None
             logger.warning(
                 f"[VGN] Only {masked_points.shape[0]} real points after masking "
-                f"(need ≥ {_MIN_POINTS}) — proceeding to box synthesis"
+                f"(need ≥ {_MIN_POINTS}) - proceeding to box synthesis"
             )
 
         logger.info(
             f"[VGN] Masked point cloud: {masked_points.shape[0]} / {pts_rh.shape[0]} points"
         )
 
-        # Step 2b — camera frame → world frame so VGN sees axis-aligned table
+        # Step 2b - camera frame → world frame so VGN sees axis-aligned table
         # 1. negate Z → Unity LH cam  2. rotate by cam quat → Unity LH world
         # 3. add cam pos  4. negate X → RH world (scipy/VGN convention)
         _in_world_frame = False
@@ -462,7 +462,7 @@ class VGNClient:
                 f"Z=[{masked_points[:,2].min():.3f},{masked_points[:,2].max():.3f}])"
             )
 
-            # workspace bbox: camera at Z≈-0.75 looks +Z → objects at Z≈0–1.5
+            # workspace bbox: camera at Z≈-0.75 looks +Z → objects at Z≈0-1.5
             _WS_MIN = np.array([-0.8, -0.2, -1.0])
             _WS_MAX = np.array([0.8, 1.2, 2.0])
             ws_mask = np.all(
@@ -481,7 +481,7 @@ class VGNClient:
                     f"skipping filter and using all {n_before} bbox-masked points"
                 )
 
-        # Step 2c — surface completion: depth cam sees only top face → flat TSDF → bad grasps
+        # Step 2c - surface completion: depth cam sees only top face → flat TSDF → bad grasps
         # synthesise all 6 box faces when dims available; jitter fallback otherwise
         _real_centroid = masked_points.mean(axis=0)
         rng = np.random.default_rng(seed=42)
@@ -520,7 +520,7 @@ class VGNClient:
                 f"→ {masked_points.shape[0]} total"
             )
         else:
-            # no dim data — jitter densification
+            # no dim data - jitter densification
             _DENSIFY_TARGET = 800
             _n_copies = max(1, _DENSIFY_TARGET // max(1, _n_orig))
             if _n_copies > 1:
@@ -536,7 +536,7 @@ class VGNClient:
                     f"({_n_copies}x, σ={_sigma} m)"
                 )
 
-        # Step 3 — TSDF
+        # Step 3 - TSDF
         centroid = masked_points.mean(axis=0)
 
         debug_info["centroid"] = centroid
@@ -575,7 +575,7 @@ class VGNClient:
         _vox_size = _TSDF_SIZE / _TSDF_RES
         _half = _TSDF_SIZE / 2.0
 
-        # scale cloud to ~75% grid fill; drive on VGN_Z (height) not max(X,Y,Z) —
+        # scale cloud to ~75% grid fill; drive on VGN_Z (height) not max(X,Y,Z) -
         # max() under-scales height → flat disc → VGN prefers horizontal side grasps
         _TARGET_FILL = 0.75
         _MAX_SCALE = 5.0  # 5cm cube × 5 = 25cm in 12cm grid is intentional overflow
@@ -638,13 +638,13 @@ class VGNClient:
                     logger.info(f"[VGN] TSDF mesh exported to {obj_path}")
                 except ImportError:
                     logger.warning(
-                        "[VGN] skimage not installed — skipping OBJ export (pip install scikit-image)"
+                        "[VGN] skimage not installed - skipping OBJ export (pip install scikit-image)"
                     )
 
-        # Step 4 — inference
+        # Step 4 - inference
         net = self._load_model()
         if net is None:
-            logger.warning("[VGN] Model failed to load — aborting")
+            logger.warning("[VGN] Model failed to load - aborting")
             return None
 
         import torch
@@ -666,7 +666,7 @@ class VGNClient:
                 qual_np, rot_np, width_np = process(grid, qual_np, rot_np, width_np)
                 grasps, scores = select(qual_np, rot_np, width_np)
 
-                # select() returns voxel indices — convert to metres
+                # select() returns voxel indices - convert to metres
                 voxel_size = _TSDF_SIZE / _TSDF_RES
                 from vgn.grasp import from_voxel_coordinates  # type: ignore
 
@@ -684,7 +684,7 @@ class VGNClient:
             logger.info("[VGN] VGN returned no grasps")
             return None
 
-        # Step 5 — convert VGN poses to output format
+        # Step 5 - convert VGN poses to output format
         frame_label = "RH world" if _in_world_frame else "camera"
         logger.info(
             f"[VGN] centroid ({frame_label} frame): {centroid.tolist()} | "
@@ -740,7 +740,7 @@ class VGNClient:
                     logger.debug(
                         f"[VGN] pos_out(UnityLH)={[round(v,4) for v in pos_out]}"
                     )
-                    # R_lh = M @ R_world @ M, M=diag(-1,1,1) — handles all components, not just qx
+                    # R_lh = M @ R_world @ M, M=diag(-1,1,1) - handles all components, not just qx
                     M = np.diag([-1.0, 1.0, 1.0])
                     rot_lh = M @ rot_world @ M
                     quat_lh = _R.from_matrix(rot_lh).as_quat()
@@ -833,7 +833,7 @@ class VGNClient:
 
     @classmethod
     def reset_cache(cls) -> None:
-        """Clear cached model — use in test teardown to force reload on next call."""
+        """Clear cached model - use in test teardown to force reload on next call."""
         cls._net = None
         cls._device = None
         logger.debug("[VGN] Model cache cleared")

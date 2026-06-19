@@ -216,7 +216,7 @@ def get_images_from_server(
             valid_camera_ids.append(cam_id)
             prompts.append(prompt)
         else:
-            logger.info(f"  ✗ {cam_id}: No image available")
+            logger.info(f"  [no image] {cam_id}: No image available")
 
     if not images:
         raise ValueError(f"No images available from cameras: {camera_ids}")

@@ -10,14 +10,14 @@ namespace Robotics
     {
         private readonly float _dampingFactor;
 
-        // Pre-alloc MathNet matrices — Jacobian build + J*J^T
+        // Pre-alloc MathNet matrices - Jacobian build + J*J^T
         private Matrix<double> _jacobianMatrix;
         private Vector<double> _errorVector;
         private Vector<double> _jointDelta;
         private Matrix<double> _jacobianTranspose;
         private Matrix<double> _jacobianJacobianTranspose;
 
-        // Zero-alloc 6x6 LU solve — avoids MathNet LU().Solve() allocation
+        // Zero-alloc 6x6 LU solve - avoids MathNet LU().Solve() allocation
         private readonly double[,] _luA = new double[6, 6];
         private readonly double[] _luB = new double[6];
         private readonly double[] _luY = new double[6];
@@ -104,7 +104,7 @@ namespace Robotics
                 targetState.Rotation
             );
 
-            // Convergence handled by RobotController — adaptive thresholds differ per mode
+            // Convergence handled by RobotController - adaptive thresholds differ per mode
             orientationError *= orientationWeight;
 
             Vector3 combinedError = Kp * posError + Kd * velError;
@@ -121,7 +121,7 @@ namespace Robotics
             CalculateJacobian(currentState, joints);
             ComputePseudoInverse(overrideDamping);
 
-            // Clamp near singularities — ill-conditioned Jacobian → velocity spikes
+            // Clamp near singularities - ill-conditioned Jacobian → velocity spikes
             for (int i = 0; i < _jointDelta.Count; i++)
             {
                 _jointDelta[i] = System.Math.Clamp(
@@ -194,7 +194,7 @@ namespace Robotics
             double damping = overrideDamping ?? _dampingFactor;
             double lambda2 = damping * damping;
 
-            // JJ^T + λ²I into raw array — skip MathNet LU alloc
+            // JJ^T + λ²I into raw array - skip MathNet LU alloc
             for (int r = 0; r < 6; r++)
             {
                 for (int c = 0; c < 6; c++)
@@ -248,7 +248,7 @@ namespace Robotics
                     piv[maxRow] = tmp;
                 }
                 if (a[k, k] == 0.0)
-                    continue; // singular column — skip
+                    continue; // singular column - skip
                 double inv = 1.0 / a[k, k];
                 for (int i = k + 1; i < n; i++)
                 {

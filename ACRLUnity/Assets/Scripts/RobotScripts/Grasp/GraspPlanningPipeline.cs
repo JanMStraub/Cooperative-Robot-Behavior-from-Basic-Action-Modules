@@ -237,7 +237,7 @@ namespace Robotics.Grasp
                 $"{_logPrefix} GraspNet: planning with {externalCandidates.Count} external candidates"
             );
 
-            // IK filter — same code path as the geometric pipeline
+            // IK filter - same code path as the geometric pipeline
             _ikValidCandidates.Clear();
             _ikValidCandidates.AddRange(
                 _ikFilter.FilterCandidates(externalCandidates, gripperPosition)
@@ -249,7 +249,7 @@ namespace Robotics.Grasp
             if (_ikValidCandidates.Count == 0)
             {
                 UnityEngine.Debug.LogWarning(
-                    $"{_logPrefix} GraspNet: no IK-valid candidates — falling back to geometric pipeline"
+                    $"{_logPrefix} GraspNet: no IK-valid candidates - falling back to geometric pipeline"
                 );
                 return FallbackToSimplePlanner(targetObject, gripperPosition, options);
             }
@@ -266,7 +266,7 @@ namespace Robotics.Grasp
             if (_collisionFreeCandidates.Count == 0)
             {
                 UnityEngine.Debug.LogWarning(
-                    $"{_logPrefix} GraspNet: no collision-free candidates — falling back to geometric pipeline"
+                    $"{_logPrefix} GraspNet: no collision-free candidates - falling back to geometric pipeline"
                 );
                 return FallbackToSimplePlanner(targetObject, gripperPosition, options);
             }
