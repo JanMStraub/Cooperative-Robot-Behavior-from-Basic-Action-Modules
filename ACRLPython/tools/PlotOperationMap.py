@@ -5,8 +5,8 @@ Every registered operation occupies one cell of a 2D grid:
   * y-axis -- OperationComplexity (atomic -> complex)
   * x-axis -- OperationCategory   (perception, navigation, ...)
 
-Cell color encodes how many operations fall in that (complexity, category)
-bucket; cell text lists their operation IDs. Saved to Misc/images/.
+Populated cells share a single uniform fill and empty cells render light gray;
+cell text lists their operation IDs. Saved to Misc/images/.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import ListedColormap
 
 from operations.Base import OperationCategory, OperationComplexity
 from operations.Registry import OperationRegistry, get_global_registry
@@ -66,37 +67,29 @@ def plot_operation_map(
     grid = build_operation_grid(registry)
 
     n_rows, n_cols = len(COMPLEXITY_ORDER), len(CATEGORY_ORDER)
-    counts = np.full((n_rows, n_cols), np.nan)
+    filled = np.full((n_rows, n_cols), np.nan)
     for i, complexity in enumerate(COMPLEXITY_ORDER):
         for j, category in enumerate(CATEGORY_ORDER):
             names = grid.get((complexity, category))
             if names:
-                counts[i, j] = len(names)
+                filled[i, j] = 1.0  # populated cell: uniform fill, no count encoding
 
     fig, ax = plt.subplots(figsize=(3.6 * n_cols + 1, 1.4 * n_rows + 1.5))
-    cmap = plt.get_cmap("Blues")
-    cmap.set_bad("0.93")  # empty cells render light gray
-    vmax = int(np.nanmax(counts)) if np.isfinite(counts).any() else 1
-    im = ax.imshow(counts, cmap=cmap, vmin=0, vmax=vmax, aspect="auto")
-    plt.colorbar(
-        im,
-        ax=ax,
-        label="Operations in cell",
-        shrink=0.8,
-        ticks=range(vmax + 1),  # whole-number counts only
-    )
+    cmap = ListedColormap(["#cfe2f3"])  # single uniform shade for populated cells
+    cmap.set_bad("0.96")  # empty cells render light gray (lighter for contrast)
+    ax.imshow(filled, cmap=cmap, aspect="auto")
 
     ax.set_xticks(range(n_cols))
     ax.set_xticklabels(
-        [c.value for c in CATEGORY_ORDER], fontsize=13, rotation=20, ha="right"
+        [c.value for c in CATEGORY_ORDER], fontsize=17, rotation=20, ha="right"
     )
     ax.set_yticks(range(n_rows))
-    ax.set_yticklabels([c.value for c in COMPLEXITY_ORDER], fontsize=13)
-    ax.set_xlabel("Operation category", fontsize=14, fontweight="bold")
-    ax.set_ylabel("Operation complexity", fontsize=14, fontweight="bold")
+    ax.set_yticklabels([c.value for c in COMPLEXITY_ORDER], fontsize=17)
+    ax.set_xlabel("Operation category", fontsize=19, fontweight="bold")
+    ax.set_ylabel("Operation complexity", fontsize=19, fontweight="bold")
     ax.set_xticks(np.arange(-0.5, n_cols, 1), minor=True)
     ax.set_yticks(np.arange(-0.5, n_rows, 1), minor=True)
-    ax.grid(which="minor", color="white", linewidth=1.5)
+    ax.grid(which="minor", color="white", linewidth=3.0)
     ax.tick_params(which="minor", length=0)
     ax.invert_yaxis()  # atomic at the bottom, complexity increasing upward
 
@@ -108,25 +101,25 @@ def plot_operation_map(
                 continue
             total += len(names)
             label = "\n".join(names)
-            dark = counts[i, j] >= 0.6 * vmax
             ax.text(
                 j,
                 i,
                 label,
                 ha="center",
                 va="center",
-                fontsize=9.5,
-                color="white" if dark else "#1a1a1a",
+                fontsize=15,
+                color="black",
+                linespacing=1.6,  # separate stacked operation names
             )
 
     ax.set_title(
         f"Operation Registry Map  ({total} operations)",
-        fontsize=17,
+        fontsize=21,
         fontweight="bold",
     )
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_path, dpi=150)
+    fig.savefig(output_path, dpi=220)
     plt.close(fig)
     return output_path
 
