@@ -18,7 +18,7 @@ Environment variable overrides:
 import logging
 import os
 
-# Master switch: enable/disable knowledge graph (off by default)
+# Master switch: enable/disable knowledge graph
 KNOWLEDGE_GRAPH_ENABLED = os.environ.get("KNOWLEDGE_GRAPH_ENABLED", "true").lower() in (
     "true",
     "1",

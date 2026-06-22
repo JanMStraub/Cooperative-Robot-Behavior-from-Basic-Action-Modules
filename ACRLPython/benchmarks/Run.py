@@ -28,7 +28,8 @@ _PARSE_ONLY_BENCHMARKS = {
     9,
     11,
     14,
-}  # no server required: B9=Impossible, B11=RAG, B14=KG
+    17,
+}  # no server required: B9=Impossible, B11=RAG, B14=KG, B17=AutoRT
 _REQUIRED_PORTS = (5007, 5008)
 
 
@@ -63,17 +64,17 @@ def _parse_benchmark_arg(value: str) -> list[int]:
             lo, hi = int(parts[0]), int(parts[1])
         except ValueError:
             raise argparse.ArgumentTypeError(f"Invalid benchmark range: {value!r}")
-        if lo < 1 or hi > 16 or lo > hi:
+        if lo < 1 or hi > 17 or lo > hi:
             raise argparse.ArgumentTypeError(
-                f"Range must be within 1-16 and lo ≤ hi, got {value!r}"
+                f"Range must be within 1-17 and lo ≤ hi, got {value!r}"
             )
         return list(range(lo, hi + 1))
     try:
         n = int(value)
     except ValueError:
         raise argparse.ArgumentTypeError(f"Invalid benchmark id: {value!r}")
-    if n < 1 or n > 16:
-        raise argparse.ArgumentTypeError(f"Benchmark id must be 1-16, got {n}")
+    if n < 1 or n > 17:
+        raise argparse.ArgumentTypeError(f"Benchmark id must be 1-17, got {n}")
     return [n]
 
 
@@ -164,13 +165,13 @@ def main() -> None:
         "--benchmark",
         type=str,
         metavar="N or N-M",
-        help="Run benchmark(s) 1-16; accepts single id (e.g. 3) or range (e.g. 1-6)",
+        help="Run benchmark(s) 1-17; accepts single id (e.g. 3) or range (e.g. 1-6)",
     )
-    group.add_argument("--all", action="store_true", help="Run all benchmarks (1-16)")
+    group.add_argument("--all", action="store_true", help="Run all benchmarks (1-17)")
     group.add_argument(
         "--ablation",
         action="store_true",
-        help="Run ablation benchmarks only (11-16, no server required for 11 and 14)",
+        help="Run ablation benchmarks only (11-17, no server required for 11, 14 and 17)",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Use mock operations (no hardware)"
@@ -238,9 +239,9 @@ def main() -> None:
 
     runner = BenchmarkRunner()
     if args.all:
-        benchmark_ids = list(range(1, 17))
+        benchmark_ids = list(range(1, 18))
     elif args.ablation:
-        benchmark_ids = list(range(11, 17))
+        benchmark_ids = list(range(11, 18))
     else:
         try:
             benchmark_ids = _parse_benchmark_arg(args.benchmark)

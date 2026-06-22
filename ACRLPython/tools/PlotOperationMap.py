@@ -5,8 +5,8 @@ Every registered operation occupies one cell of a 2D grid:
   * y-axis -- OperationComplexity (atomic -> complex)
   * x-axis -- OperationCategory   (perception, navigation, ...)
 
-Populated cells share a single uniform fill and empty cells render light gray;
-cell text lists their operation IDs. Saved to Misc/images/.
+Populated cells are tinted by complexity tier (empty cells stay gray) and list
+their numbered operation IDs. Saved to Misc/images/.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import ListedColormap
+from matplotlib.colors import to_rgb
 
 from operations.Base import OperationCategory, OperationComplexity
 from operations.Registry import OperationRegistry, get_global_registry
@@ -57,27 +57,48 @@ def build_operation_grid(
     return {key: sorted(names) for key, names in grid.items()}
 
 
+def _wrap_name(name: str, max_chars: int = 22) -> str:
+    """Wrap an over-long operation id onto two lines at an underscore so it
+    stays within its cell instead of spilling into the neighbouring column."""
+    if len(name) <= max_chars:
+        return name
+    parts = name.split("_")
+    first: list[str] = []
+    length = 0
+    for k, part in enumerate(parts):
+        if k > 0 and length + 1 + len(part) > max_chars and first:
+            break
+        first.append(part)
+        length += (1 if k > 0 else 0) + len(part)
+    return "_".join(first) + "_\n" + "_".join(parts[len(first) :])
+
+
 def plot_operation_map(
     registry: OperationRegistry | None = None,
     output_path: Path | None = None,
 ) -> Path:
     """Render the operation registry as a complexity x category heatmap."""
     registry = registry or get_global_registry()
-    output_path = output_path or (IMAGES_DIR / "operation_map.png")
+    output_path = output_path or (IMAGES_DIR / "09_operation_map.png")
     grid = build_operation_grid(registry)
 
     n_rows, n_cols = len(COMPLEXITY_ORDER), len(CATEGORY_ORDER)
-    filled = np.full((n_rows, n_cols), np.nan)
+    # Populated cells are tinted by their complexity tier; empty cells stay gray.
+    row_color = {
+        OperationComplexity.ATOMIC: "#cfe8cf",
+        OperationComplexity.BASIC: "#cfe2f3",
+        OperationComplexity.INTERMEDIATE: "#ffe1b3",
+        OperationComplexity.COMPLEX: "#e3cdec",
+    }
+    empty_rgb = to_rgb("0.96")
+    rgb = np.empty((n_rows, n_cols, 3))
     for i, complexity in enumerate(COMPLEXITY_ORDER):
         for j, category in enumerate(CATEGORY_ORDER):
             names = grid.get((complexity, category))
-            if names:
-                filled[i, j] = 1.0  # populated cell: uniform fill, no count encoding
+            rgb[i, j] = to_rgb(row_color[complexity]) if names else empty_rgb
 
-    fig, ax = plt.subplots(figsize=(3.6 * n_cols + 1, 1.4 * n_rows + 1.5))
-    cmap = ListedColormap(["#cfe2f3"])  # single uniform shade for populated cells
-    cmap.set_bad("0.96")  # empty cells render light gray (lighter for contrast)
-    ax.imshow(filled, cmap=cmap, aspect="auto")
+    fig, ax = plt.subplots(figsize=(3.5 * n_cols + 1, 2.2 * n_rows + 1.5))
+    ax.imshow(rgb, aspect="auto")
 
     ax.set_xticks(range(n_cols))
     ax.set_xticklabels(
@@ -100,16 +121,18 @@ def plot_operation_map(
             if not names:
                 continue
             total += len(names)
-            label = "\n".join(names)
+            label = "\n".join(
+                f"{k}. {_wrap_name(name)}" for k, name in enumerate(names, start=1)
+            )
             ax.text(
                 j,
                 i,
                 label,
                 ha="center",
                 va="center",
-                fontsize=15,
+                fontsize=17,
                 color="black",
-                linespacing=1.6,  # separate stacked operation names
+                linespacing=1.7,
             )
 
     ax.set_title(

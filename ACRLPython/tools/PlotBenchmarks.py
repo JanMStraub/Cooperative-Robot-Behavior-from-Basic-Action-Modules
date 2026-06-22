@@ -21,13 +21,63 @@ import matplotlib.patches as mpatches
 import numpy as np
 
 RESULTS_DIR = Path(__file__).parent.parent / "benchmark_results"
-PLOTS_DIR = RESULTS_DIR / "plots"
+PLOTS_DIR = Path(__file__).parent.parent.parent / "Misc" / "images"
 
 SINGLE_ROBOT_COLOR = "#4C72B0"
 DUAL_ROBOT_COLOR = "#DD8452"
 DUAL_ROBOT_IDS = {6, 7}
 ABLATION_IDS = {12, 13, 14, 15, 16}
 MAIN_MAX_ID = 11  # b1-b11 are the model x task capability benchmarks
+# B11 (RAG ablation) lives in the model x task layout, but its runs carry the
+# same enabled/disabled ablation blocks as B12-B16. Surface it in the ablation
+# figure for a single model so the enabled/disabled pair stays comparable.
+ABLATION_B11_MODEL = "magistral-small-2509"
+
+# --------------------------------------------------------------------------- #
+# Shared house style - every figure uses these so the whole gallery matches.
+# --------------------------------------------------------------------------- #
+FS_TITLE = 16      # axes titles
+FS_SUPTITLE = 18   # figure-level suptitles (multi-panel)
+FS_AXIS = 13       # x / y axis labels and colorbar labels
+FS_TICK = 12       # tick labels
+FS_LEGEND = 11     # legend text
+FS_ANNOT = 12      # bar value labels, deltas
+FS_CELL = 9        # dense heatmap cell text (consistent across heatmaps)
+
+BAR_EDGE = "white"
+BAR_EDGE_W = 0.5
+CAPSIZE = 3
+ERR_KW = {"elinewidth": 1.4, "ecolor": "#333333"}
+REF_LINE = {"color": "gray", "linestyle": "--", "linewidth": 0.8, "alpha": 0.5}
+
+
+def _despine(ax) -> None:
+    """Hide the top and right spines (applied to every axes for a clean look)."""
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+
+def _apply_rc() -> None:
+    """Set matplotlib defaults so any figure inherits the house style."""
+    plt.rcParams.update(
+        {
+            "font.family": "sans-serif",
+            "axes.titlesize": FS_TITLE,
+            "axes.titleweight": "bold",
+            "axes.labelsize": FS_AXIS,
+            "xtick.labelsize": FS_TICK,
+            "ytick.labelsize": FS_TICK,
+            "legend.fontsize": FS_LEGEND,
+            "legend.framealpha": 0.9,
+            "figure.titlesize": FS_SUPTITLE,
+            "figure.titleweight": "bold",
+            "figure.dpi": 100,
+            "savefig.dpi": 150,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+        }
+    )
+
 
 # Stable colors for known models; unknown models cycle through the fallback palette.
 MODEL_COLORS = {
@@ -140,27 +190,35 @@ def plot_success_rate_by_model(groups: dict[int, list[dict]]) -> None:
             np.nan_to_num(np.array(means, dtype=float)),
             width=width,
             yerr=stds,
-            capsize=2,
+            capsize=CAPSIZE,
+            error_kw=ERR_KW,
             color=model_color(model, ordered),
-            edgecolor="white",
-            linewidth=0.5,
+            edgecolor=BAR_EDGE,
+            linewidth=BAR_EDGE_W,
             label=model,
         )
 
     labels = [f"B{bid}\n{groups[bid][0]['benchmark_name']}" for bid in bids]
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=12, rotation=35, ha="right")
-    ax.tick_params(axis="y", labelsize=12)
+    ax.set_xticklabels(labels, fontsize=FS_TICK, rotation=35, ha="right")
+    ax.tick_params(axis="y", labelsize=FS_TICK)
     ax.set_ylim(0, 1.12)
-    ax.set_ylabel("Success Rate", fontsize=15)
-    ax.set_title("Task Success Rate by Model", fontsize=17, fontweight="bold")
-    ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
-    ax.legend(fontsize=11, ncol=min(n, 3), loc="lower left")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    ax.set_ylabel("Success Rate", fontsize=FS_AXIS)
+    ax.set_title("Task Success Rate by Model", fontsize=FS_TITLE, fontweight="bold")
+    ax.axhline(1.0, **REF_LINE)
+    ax.legend(
+        fontsize=FS_LEGEND,
+        ncol=1,
+        loc="center left",
+        bbox_to_anchor=(1.01, 0.5),
+        framealpha=0.9,
+    )
+    _despine(ax)
 
     fig.tight_layout()
-    fig.savefig(PLOTS_DIR / "01_success_rate_by_model.png", dpi=150)
+    fig.savefig(
+        PLOTS_DIR / "01_success_rate_by_model.png", dpi=150, bbox_inches="tight"
+    )
     plt.close(fig)
     print("  [1] success rate by model")
 
@@ -182,17 +240,19 @@ def plot_model_task_heatmap(groups: dict[int, list[dict]]) -> None:
     cmap = plt.get_cmap("RdYlGn")
     cmap.set_bad("0.9")
     im = ax.imshow(matrix, cmap=cmap, vmin=0, vmax=1, aspect="auto")
-    plt.colorbar(im, ax=ax, label="Mean Success Rate", shrink=0.8)
+    cbar = plt.colorbar(im, ax=ax, label="Mean Success Rate", shrink=0.8)
+    cbar.ax.yaxis.label.set_size(FS_AXIS)
+    cbar.ax.tick_params(labelsize=FS_TICK)
 
     ax.set_xticks(range(len(bids)))
     ax.set_xticklabels(
         [f"B{bid}  {groups[bid][0]['benchmark_name']}" for bid in bids],
-        fontsize=8,
+        fontsize=FS_TICK,
         rotation=35,
         ha="right",
     )
     ax.set_yticks(range(len(ordered)))
-    ax.set_yticklabels(ordered, fontsize=10)
+    ax.set_yticklabels(ordered, fontsize=FS_TICK)
 
     for i in range(len(ordered)):
         for j in range(len(bids)):
@@ -204,11 +264,11 @@ def plot_model_task_heatmap(groups: dict[int, list[dict]]) -> None:
                     f"{val:.0%}",
                     ha="center",
                     va="center",
-                    fontsize=8,
+                    fontsize=FS_CELL,
                     color="black" if 0.3 < val < 0.8 else "white",
                 )
 
-    ax.set_title("Model x Task Success Matrix", fontsize=14, fontweight="bold")
+    ax.set_title("Model x Task Success Matrix", fontsize=FS_TITLE, fontweight="bold")
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "02_model_task_heatmap.png", dpi=150)
     plt.close(fig)
@@ -238,17 +298,17 @@ def plot_model_leaderboard(groups: dict[int, list[dict]]) -> None:
         y,
         [v for _, v in ranked],
         color=[model_color(m, ordered) for m, _ in ranked],
-        edgecolor="white",
+        edgecolor=BAR_EDGE,
+        linewidth=BAR_EDGE_W,
     )
     ax.set_yticks(y)
-    ax.set_yticklabels([m for m, _ in ranked], fontsize=10)
+    ax.set_yticklabels([m for m, _ in ranked], fontsize=FS_TICK)
     ax.set_xlim(0, 1.08)
-    ax.set_xlabel("Mean Success Rate (task-averaged, B1-B11)", fontsize=11)
-    ax.set_title("Model Leaderboard", fontsize=14, fontweight="bold")
+    ax.set_xlabel("Mean Success Rate (task-averaged, B1-B11)", fontsize=FS_AXIS)
+    ax.set_title("Model Leaderboard", fontsize=FS_TITLE, fontweight="bold")
     for yi, (_, v) in zip(y, ranked):
-        ax.text(v + 0.01, yi, f"{v:.0%}", va="center", fontsize=10, fontweight="bold")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+        ax.text(v + 0.01, yi, f"{v:.0%}", va="center", fontsize=FS_ANNOT, fontweight="bold")
+    _despine(ax)
 
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "03_model_leaderboard.png", dpi=150)
@@ -277,12 +337,14 @@ def plot_duration_by_model(groups: dict[int, list[dict]]) -> None:
     cmap = plt.get_cmap("YlOrRd")
     cmap.set_bad("0.9")
     im = ax.imshow(matrix, cmap=cmap, aspect="auto")
-    plt.colorbar(im, ax=ax, label="Mean Total Duration (s)", shrink=0.8)
+    cbar = plt.colorbar(im, ax=ax, label="Mean Total Duration (s)", shrink=0.8)
+    cbar.ax.yaxis.label.set_size(FS_AXIS)
+    cbar.ax.tick_params(labelsize=FS_TICK)
 
     ax.set_xticks(range(len(bids)))
-    ax.set_xticklabels([f"B{bid}" for bid in bids], fontsize=9)
+    ax.set_xticklabels([f"B{bid}" for bid in bids], fontsize=FS_TICK)
     ax.set_yticks(range(len(ordered)))
-    ax.set_yticklabels(ordered, fontsize=10)
+    ax.set_yticklabels(ordered, fontsize=FS_TICK)
 
     vmax = np.nanmax(matrix) if not np.all(np.isnan(matrix)) else 1.0
     for i in range(len(ordered)):
@@ -295,11 +357,11 @@ def plot_duration_by_model(groups: dict[int, list[dict]]) -> None:
                     f"{val:.0f}",
                     ha="center",
                     va="center",
-                    fontsize=8,
+                    fontsize=FS_CELL,
                     color="white" if val > 0.55 * vmax else "black",
                 )
 
-    ax.set_title("Model x Task Mean Duration", fontsize=14, fontweight="bold")
+    ax.set_title("Model x Task Mean Duration", fontsize=FS_TITLE, fontweight="bold")
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "04_duration_by_model.png", dpi=150)
     plt.close(fig)
@@ -310,15 +372,24 @@ def plot_duration_by_model(groups: dict[int, list[dict]]) -> None:
 # Operation-level figures (pooled across models)
 # --------------------------------------------------------------------------- #
 def plot_op_latency(groups: dict[int, list[dict]]) -> None:
+    # Track all steps (for op inclusion) and successful-only durations (for the
+    # plotted distribution). A failed move/handoff aborts in ~0ms, which is not a
+    # real latency - pooling failures made move_to_coordinate look sub-second.
     op_bid_durations: dict[str, dict[int, list[float]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    op_bid_ok: dict[str, dict[int, list[float]]] = defaultdict(
         lambda: defaultdict(list)
     )
     for bid, runs in groups.items():
         for run in runs:
             for step in run["steps"]:
-                op_bid_durations[step["operation"]][bid].append(step["duration_ms"])
+                op = step["operation"]
+                op_bid_durations[op][bid].append(step["duration_ms"])
+                if step.get("success"):
+                    op_bid_ok[op][bid].append(step["duration_ms"])
 
-    # Ops appearing in 2+ benchmarks with a meaningful (>100ms) duration.
+    # Ops appearing in 2+ benchmarks with at least one real (>100ms) duration.
     interesting_ops = sorted(
         op
         for op, bid_data in op_bid_durations.items()
@@ -327,43 +398,56 @@ def plot_op_latency(groups: dict[int, list[dict]]) -> None:
     if not interesting_ops:
         return
 
+    # Square-ish grid. Durations shown in seconds so the y-axis reads e.g.
+    # "120" instead of a cramped "120000".
     ncols = math.ceil(math.sqrt(len(interesting_ops)))
     nrows = math.ceil(len(interesting_ops) / ncols)
     fig, axes = plt.subplots(
         nrows,
         ncols,
-        figsize=(3.5 * ncols, 4 * nrows),
+        figsize=(5.0 * ncols, 4.2 * nrows),
         sharey=False,
     )
     axes = axes.flatten() if nrows * ncols > 1 else [axes]
 
     for ax, op in zip(axes, interesting_ops):
-        bid_data = op_bid_durations[op]
-        bids_present = sorted(bid_data)
+        # Plot successful steps only; a bid with no successful step is skipped.
+        bids_present = [bid for bid in sorted(op_bid_ok[op]) if op_bid_ok[op][bid]]
+        if not bids_present:
+            ax.set_visible(False)
+            continue
         bp = ax.boxplot(
-            [bid_data[bid] for bid in bids_present],
+            [[v / 1000.0 for v in op_bid_ok[op][bid]] for bid in bids_present],
             tick_labels=[f"B{bid}" for bid in bids_present],
             patch_artist=True,
+            showfliers=False,  # outliers hidden so boxes fill the panel
             medianprops=dict(color="white", linewidth=2),
         )
         for patch in bp["boxes"]:
             patch.set_facecolor(op_color(op))
-            patch.set_alpha(0.8)
-        ax.set_title(op.replace("_", "\n"), fontsize=8, fontweight="bold")
-        ax.set_ylabel("Duration (ms)")
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        ax.tick_params(axis="x", labelsize=8)
+            patch.set_alpha(0.85)
+        ax.set_title(op.replace("_", " "), fontsize=FS_TITLE - 1, fontweight="bold")
+        ax.set_ylabel("Duration (s)", fontsize=FS_AXIS)
+        # Log scale: durations span ~0.1s to >100s, so a linear axis flattens
+        # every box near zero. Log makes the per-benchmark spread legible.
+        ax.set_yscale("log")
+        ax.grid(axis="y", which="both", linestyle="--", alpha=0.4)
+        ax.set_axisbelow(True)
+        _despine(ax)
+        ax.tick_params(axis="both", labelsize=FS_TICK)
+        if len(bids_present) > 6:  # rotate so dense benchmark ticks don't collide
+            plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
 
     for ax in axes[len(interesting_ops):]:
         ax.set_visible(False)
 
     fig.suptitle(
-        "Per-Operation Step Duration by Benchmark (all models pooled)",
-        fontsize=13,
+        "Per-Operation Step Duration by Benchmark\n"
+        "(all models pooled; successful steps only, log scale, outliers hidden)",
+        fontsize=FS_SUPTITLE,
         fontweight="bold",
     )
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.97), h_pad=2.5, w_pad=2.0)
     fig.savefig(PLOTS_DIR / "05_op_latency.png", dpi=150)
     plt.close(fig)
     print("  [5] op latency")
@@ -394,16 +478,20 @@ def plot_reliability_heatmap(groups: dict[int, list[dict]]) -> None:
     matrix = matrix[sort_idx]
     sorted_ops = [all_ops[i] for i in sort_idx]
 
-    fig, ax = plt.subplots(figsize=(10, max(4, 0.5 * len(sorted_ops) + 2)))
+    fig, ax = plt.subplots(
+        figsize=(max(12, 0.85 * len(bids)), max(4, 0.5 * len(sorted_ops) + 2))
+    )
     cmap = plt.get_cmap("RdYlGn")
     cmap.set_bad("0.9")
     im = ax.imshow(matrix, cmap=cmap, vmin=0, vmax=1, aspect="auto")
-    plt.colorbar(im, ax=ax, label="Success Rate", shrink=0.8)
+    cbar = plt.colorbar(im, ax=ax, label="Success Rate", shrink=0.8)
+    cbar.ax.yaxis.label.set_size(FS_AXIS)
+    cbar.ax.tick_params(labelsize=FS_TICK)
 
     ax.set_xticks(range(len(bids)))
-    ax.set_xticklabels([f"B{bid}" for bid in bids], fontsize=10)
+    ax.set_xticklabels([f"B{bid}" for bid in bids], fontsize=FS_TICK)
     ax.set_yticks(range(len(sorted_ops)))
-    ax.set_yticklabels([op.replace("_", " ") for op in sorted_ops], fontsize=9)
+    ax.set_yticklabels([op.replace("_", " ") for op in sorted_ops], fontsize=FS_TICK)
 
     for i in range(len(sorted_ops)):
         for j in range(len(bids)):
@@ -415,12 +503,12 @@ def plot_reliability_heatmap(groups: dict[int, list[dict]]) -> None:
                     f"{val:.0%}",
                     ha="center",
                     va="center",
-                    fontsize=8,
+                    fontsize=FS_CELL,
                     color="black" if 0.3 < val < 0.8 else "white",
                 )
 
-    ax.set_title("Operation Reliability by Benchmark", fontsize=14, fontweight="bold")
-    ax.set_xlabel("Benchmark", fontsize=11)
+    ax.set_title("Operation Reliability by Benchmark", fontsize=FS_TITLE, fontweight="bold")
+    ax.set_xlabel("Benchmark", fontsize=FS_AXIS)
     fig.tight_layout()
     fig.savefig(PLOTS_DIR / "06_reliability_heatmap.png", dpi=150)
     plt.close(fig)
@@ -438,9 +526,10 @@ def plot_coordination_timeline(groups: dict[int, list[dict]]) -> None:
 
     robot_y = {"Robot1": 1, "Robot2": 0}
     robot_labels = ["Robot2", "Robot1"]
+    legend_handles: dict[str, mpatches.Patch] = {}
 
     for ax, bid in zip(axes, dual_bids):
-        run = groups[bid][0]  # representative first run
+        run = groups[bid][0]
         name = run["benchmark_name"]
 
         seen_groups: set[int] = set()
@@ -449,8 +538,6 @@ def plot_coordination_timeline(groups: dict[int, list[dict]]) -> None:
             group_steps[step["parallel_group_id"]].append(step)
 
         cursor: dict[str, float] = defaultdict(float)
-        patches = []
-        legend_ops: set[str] = set()
 
         for step in run["steps"]:
             robot = step.get("robot_id") or "Robot1"
@@ -476,44 +563,46 @@ def plot_coordination_timeline(groups: dict[int, list[dict]]) -> None:
                 0.7,
                 boxstyle="round,pad=0.02",
                 facecolor=color,
-                edgecolor="white",
-                linewidth=0.5,
-                alpha=0.85 if step["success"] else 0.35,
+                edgecolor=BAR_EDGE,
+                linewidth=BAR_EDGE_W,
+                alpha=0.85,
             )
             ax.add_patch(rect)
-            if dur > 0.5:
-                ax.text(
-                    start + dur / 2,
-                    y,
-                    op.replace("_", "\n"),
-                    ha="center",
-                    va="center",
-                    fontsize=8,
-                    color="black",
-                    fontweight="bold",
-                )
             cursor[robot] += dur
-            if op not in legend_ops:
-                legend_ops.add(op)
-                patches.append(mpatches.Patch(color=color, label=op.replace("_", " ")))
+            if op not in legend_handles:
+                legend_handles[op] = mpatches.Patch(
+                    color=color, label=op.replace("_", " ")
+                )
 
+        # This figure is large (14 wide); scale text up so it stays legible.
         ax.set_xlim(0, max(cursor.values()) * 1.02)
         ax.set_ylim(-0.7, 1.7)
         ax.set_yticks([0, 1])
-        ax.set_yticklabels(robot_labels, fontsize=10)
-        ax.set_xlabel("Time (s)", fontsize=10)
+        ax.set_yticklabels(robot_labels, fontsize=FS_TICK + 4)
+        ax.tick_params(axis="x", labelsize=FS_TICK + 4)
+        ax.set_xlabel("Time (s)", fontsize=FS_AXIS + 4)
         title_suffix = " [FAILED]" if not run["success"] else ""
-        ax.set_title(f"B{bid}: {name}{title_suffix}", fontsize=12, fontweight="bold")
-        ax.legend(
-            handles=patches, loc="upper right", fontsize=7, framealpha=0.9, ncol=2
+        ax.set_title(
+            f"B{bid}: {name}{title_suffix}", fontsize=FS_TITLE + 3, fontweight="bold"
         )
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
+        _despine(ax)
         ax.grid(axis="x", linestyle="--", alpha=0.4)
 
-    fig.suptitle("Dual-Robot Coordination Timeline", fontsize=14, fontweight="bold")
+    fig.legend(
+        handles=list(legend_handles.values()),
+        loc="center left",
+        bbox_to_anchor=(1.0, 0.5),
+        fontsize=FS_LEGEND + 5,
+        framealpha=0.9,
+        ncol=1,
+    )
+    fig.suptitle(
+        "Dual-Robot Coordination Timeline", fontsize=FS_SUPTITLE + 2, fontweight="bold"
+    )
     fig.tight_layout()
-    fig.savefig(PLOTS_DIR / "07_coordination_timeline.png", dpi=150)
+    fig.savefig(
+        PLOTS_DIR / "07_coordination_timeline.png", dpi=150, bbox_inches="tight"
+    )
     plt.close(fig)
     print("  [7] coordination timeline")
 
@@ -529,7 +618,7 @@ def plot_ablation(groups: dict[int, list[dict]]) -> None:
     conditions that exist in the data. When both an enabled/variant and a
     disabled/baseline condition are present, the delta is annotated.
     """
-    abl_bids = [bid for bid in sorted(groups) if bid in ABLATION_IDS]
+    abl_bids = [bid for bid in sorted(groups) if bid in ABLATION_IDS or bid == 11]
     if not abl_bids:
         return
 
@@ -540,6 +629,8 @@ def plot_ablation(groups: dict[int, list[dict]]) -> None:
         cond_sr: dict[str, list[float]] = defaultdict(list)
         has_baseline = False
         for r in groups[bid]:
+            if bid == 11 and r["_model"] != ABLATION_B11_MODEL:
+                continue
             ab = r.get("ablation")
             if ab:
                 cond_sr[ab["condition"]].append(ab.get("success_rate", 0.0))
@@ -587,9 +678,11 @@ def plot_ablation(groups: dict[int, list[dict]]) -> None:
             np.nan_to_num(np.array(means, dtype=float)),
             width=width,
             yerr=stds,
-            capsize=3,
+            capsize=CAPSIZE,
+            error_kw=ERR_KW,
             color=cond_color.get(cond, "#BBBBBB"),
-            edgecolor="white",
+            edgecolor=BAR_EDGE,
+            linewidth=BAR_EDGE_W,
             label=cond,
         )
 
@@ -603,36 +696,116 @@ def plot_ablation(groups: dict[int, list[dict]]) -> None:
         )
         if treat and control and treat != control:
             delta = np.mean(cs[treat]) - np.mean(cs[control])
-            top = float(max(np.mean(cs[treat]), np.mean(cs[control])))
+            # Clear the taller of the two error-bar caps.
+            top = max(
+                np.mean(cs[treat]) + np.std(cs[treat]),
+                np.mean(cs[control]) + np.std(cs[control]),
+            )
             ax.text(
                 j,
-                top + 0.05,
+                min(top + 0.04, 1.18),
                 f"Δ {delta:+.0%}",
                 ha="center",
-                fontsize=9,
+                fontsize=FS_ANNOT,
                 fontweight="bold",
                 color="#333333",
             )
 
     labels = [f"B{bid}\n{groups[bid][0]['benchmark_name']}" for bid in abl_bids]
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=8)
+    ax.set_xticklabels(labels, fontsize=FS_TICK, rotation=35, ha="right")
     ax.set_ylim(0, 1.2)
-    ax.set_ylabel("Success Rate", fontsize=12)
+    ax.set_ylabel("Success Rate", fontsize=FS_AXIS)
     title = "Ablation: Success Rate by Condition"
     if missing_baseline:
         miss = ", ".join(f"B{b}" for b in missing_baseline)
         title += f"\n(no paired baseline in data for {miss} - re-run paired ablation)"
-    ax.set_title(title, fontsize=13, fontweight="bold")
-    ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
-    ax.legend(fontsize=9, loc="lower left")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    ax.set_title(title, fontsize=FS_TITLE, fontweight="bold")
+    ax.axhline(1.0, **REF_LINE)
+    ax.legend(
+        fontsize=FS_LEGEND,
+        loc="center left",
+        bbox_to_anchor=(1.01, 0.5),
+        framealpha=0.9,
+    )
+    _despine(ax)
 
     fig.tight_layout()
-    fig.savefig(PLOTS_DIR / "08_ablation.png", dpi=150)
+    fig.savefig(PLOTS_DIR / "08_ablation.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
     print("  [8] ablation")
+
+
+# --------------------------------------------------------------------------- #
+# AutoRT safety-gate + generation figure (b17)
+# --------------------------------------------------------------------------- #
+AUTORT_ID = 17
+
+
+def plot_autort_safety(groups: dict[int, list[dict]]) -> None:
+    """AutoRT safety-gate error rates and generation quality (mean +/- std).
+
+    Left panel: gate accuracy, false-accept and false-reject rates.
+    Right panel: pre-dedup slot success vs first-attempt validity.
+    b17 is single-model; runs are pooled and shown metric-on-x.
+    """
+    runs = groups.get(AUTORT_ID, [])
+    if not runs:
+        return
+
+    gates = [r.get("per_op_stats", {}).get("safety_gate", {}) for r in runs]
+    gens = [r.get("per_op_stats", {}).get("generation", {}) for r in runs]
+
+    def _ms(dicts: list[dict], key: str) -> tuple[float, float]:
+        vals = [d.get(key, 0.0) for d in dicts]
+        return (float(np.mean(vals)), float(np.std(vals))) if vals else (0.0, 0.0)
+
+    gate_keys = ["accuracy", "false_accept_rate", "false_reject_rate"]
+    gen_keys = ["slot_success_rate", "first_attempt_rate"]
+    # All five metrics live on one axis (like b8) so the bars sit close together
+    # instead of being stranded in two wide panels. A small extra gap separates
+    # the gate group from the generation group.
+    labels = [
+        "accuracy", "false-accept", "false-reject",
+        "slot success\n(pre-dedup)", "first-attempt\nvalid",
+    ]
+    colors = ["#937860", "#C44E52", "#CCB974", "#4C72B0", "#55A868"]
+    means_stds = [_ms(gates, k) for k in gate_keys] + [_ms(gens, k) for k in gen_keys]
+    means = [m for m, _ in means_stds]
+    stds = [s for _, s in means_stds]
+
+    # Unit spacing within each group, +0.6 gap between the two groups.
+    x = np.array([0, 1, 2, 3.6, 4.6])
+    BAR_W = 0.8  # b8-style: bars nearly fill their slot, so they sit close
+
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    ax.bar(
+        x, means, BAR_W, yerr=stds, color=colors,
+        edgecolor=BAR_EDGE, linewidth=BAR_EDGE_W, capsize=CAPSIZE, error_kw=ERR_KW,
+    )
+    for xi, m, s in zip(x, means, stds):
+        ax.text(xi, m + s + 0.03, f"{m:.2f}", ha="center", va="bottom",
+                fontsize=FS_ANNOT, fontweight="bold")
+
+    # Group labels under each cluster.
+    ax.text(1.0, -0.22, "safety gate", ha="center", va="top",
+            fontsize=FS_AXIS, fontweight="bold")
+    ax.text(4.1, -0.22, "generation", ha="center", va="top",
+            fontsize=FS_AXIS, fontweight="bold")
+
+    ax.set_title("AutoRT Safety & Generation (B17)", fontsize=FS_TITLE, fontweight="bold")
+    ax.set_ylabel("Rate", fontsize=FS_AXIS)
+    ax.set_ylim(0, 1.12)
+    ax.set_xlim(-0.6, 5.2)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=FS_TICK)
+    ax.tick_params(axis="y", labelsize=FS_TICK)
+    _despine(ax)
+
+    fig.tight_layout()
+    fig.savefig(PLOTS_DIR / "10_autort_safety.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print("  [10] autort safety")
 
 
 def main() -> None:
@@ -644,14 +817,7 @@ def main() -> None:
     )
     print("Generating plots...")
 
-    plt.rcParams.update(
-        {
-            "font.family": "sans-serif",
-            "axes.labelsize": 11,
-            "axes.titlesize": 13,
-            "figure.dpi": 100,
-        }
-    )
+    _apply_rc()
 
     plot_success_rate_by_model(groups)
     plot_model_task_heatmap(groups)
@@ -661,6 +827,7 @@ def main() -> None:
     plot_reliability_heatmap(groups)
     plot_coordination_timeline(groups)
     plot_ablation(groups)
+    plot_autort_safety(groups)
 
     print(f"Saved plots to {PLOTS_DIR}/")
 
