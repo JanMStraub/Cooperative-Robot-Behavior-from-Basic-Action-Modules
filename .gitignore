@@ -179,6 +179,9 @@ summaries/
 *.png
 *.jpg
 *.txt
+# ...but ROS package build files must be tracked (the *.txt rule above would
+# otherwise drop them, breaking colcon build in fresh clones)
+!**/CMakeLists.txt
 
 # Git worktrees
 .worktrees/

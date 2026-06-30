@@ -75,32 +75,31 @@ Given a single prompt like _"Robot1 and Robot2 perform a handoff of the red cube
    - Open Unity Hub, add project from `ACRLUnity/.`
    - Ensure Unity version **6000.3.11f1** is installed
    - Open the project (dependencies auto-install)
-   - Alternatively, use the standalone build: `ACRLUnity/ACRLUnity_build.app` (macOS)
 
 4. **Install NuGet packages** (if not auto-installed):
    - In Unity: NuGet > Manage NuGet Packages > install `MathNet.Numerics` (required for IK)
 
 ### Running the System
 
-1. **Start the ROS stack** (skip if running `--without-ros`):
+1. **Install and/or load LM Studio model**:
+    - Open LM Studio and download a VLM
+    - Go to the `Developer` tab and load the model
+    - Important: Activate the LM Studio local server in the top left
+    - Copy the model name and and change it here: `ACRLPython/config/Servers.py` in line 93
 
-   ```bash
-   cd ACRLRosUnityIntegration
-   docker compose --profile dual up -d   # dual-robot MoveIt stack (default config)
-   # or: --profile solo                  # single-robot stack
-   ```
+2. **Start Docker**
 
-2. **Start the unified Python backend**:
+3. **Start the unified Python backend**:
 
    ```bash
    cd ACRLPython
-   source acrl/bin/activate
    ./start_servers.sh              # or: --without-ros | --env real | --web 8000
    ```
 
    This starts all servers: ImageServer (5006), CommandServer (5007), SequenceServer (5008), WorldStateServer (5009), AutoRTServer (5010), and optionally WebUIServer (8000).
+   The first time the Docker container is getting build, so it takes a bit longer.
 
-3. **Run the Unity simulation**:
+4. **Run the Unity simulation**:
    - Open `ACRLUnity/Assets/Scenes/1xAR4Scene.unity` and press Play (the standalone build starts automatically)
    - Send natural-language commands via the SequenceClient or the Web UI:
 
