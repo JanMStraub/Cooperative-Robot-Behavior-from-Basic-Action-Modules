@@ -1,5 +1,5 @@
-def test_sequence_executor_result_includes_reflexion_recoveries():
-    """execute_sequence result must contain reflexion_recoveries key."""
+def test_sequence_executor_result_includes_reflection_recoveries():
+    """execute_sequence result must contain reflection_recoveries key."""
     from orchestrators.SequenceExecutor import SequenceExecutor
 
     executor = SequenceExecutor(
@@ -8,8 +8,8 @@ def test_sequence_executor_result_includes_reflexion_recoveries():
         enable_verification=False,
     )
     result = executor.execute_sequence([])
-    assert "reflexion_recoveries" in result
-    assert result["reflexion_recoveries"] == 0
+    assert "reflection_recoveries" in result
+    assert result["reflection_recoveries"] == 0
 
 
 def test_first_fail_nav_mock_fails_then_succeeds():
@@ -37,7 +37,7 @@ def test_ablation_metrics_dataclass_exists():
     m = AblationMetrics(
         condition="enabled",
         hallucinated_ops=2,
-        reflexion_recoveries=1,
+        reflection_recoveries=1,
         negotiation_rounds=0,
         success_rate=0.8,
         ops_executed=5,
@@ -53,7 +53,7 @@ def test_ablation_metrics_has_delta_fields():
     m = AblationMetrics(
         condition="enabled",
         hallucinated_ops=1,
-        reflexion_recoveries=0,
+        reflection_recoveries=0,
         negotiation_rounds=0,
         success_rate=0.9,
         ops_executed=10,
@@ -81,7 +81,7 @@ def test_benchmark_result_has_ablation_fields():
         success_rate=1.0,
         avg_step_duration_ms=33.0,
         hallucinated_ops=0,
-        reflexion_recoveries=0,
+        reflection_recoveries=0,
         negotiation_rounds=0,
     )
     assert r.hallucinated_ops == 0
@@ -90,9 +90,9 @@ def test_benchmark_result_has_ablation_fields():
 def test_benchmark_config_has_ablation_flags():
     from benchmarks.Config import BenchmarkConfig, DualRobotConfig
 
-    cfg = BenchmarkConfig(use_rag=False, reflexion_enabled=False)
+    cfg = BenchmarkConfig(use_rag=False, reflection_enabled=False)
     assert cfg.use_rag is False
-    assert cfg.reflexion_enabled is False
+    assert cfg.reflection_enabled is False
     dual = DualRobotConfig(use_negotiation=False)
     assert dual.use_negotiation is False
 
@@ -116,10 +116,10 @@ def test_b9_get_tasks_returns_list():
 
 
 def test_b10_get_tasks_returns_list():
-    from ACRLPython.benchmarks.cases import B12ReflexionAblation
+    from ACRLPython.benchmarks.cases import B12ReflectionAblation
     from benchmarks.Config import BenchmarkConfig
 
-    tasks = B12ReflexionAblation.get_tasks(BenchmarkConfig())
+    tasks = B12ReflectionAblation.get_tasks(BenchmarkConfig())
     assert isinstance(tasks, list)
     assert len(tasks) >= 3
 
@@ -257,7 +257,7 @@ def test_benchmark_result_has_ablation_baseline_field():
     baseline = AblationMetrics(
         condition="disabled",
         hallucinated_ops=3,
-        reflexion_recoveries=0,
+        reflection_recoveries=0,
         negotiation_rounds=0,
         success_rate=0.7,
         ops_executed=10,
@@ -425,16 +425,16 @@ def test_b11_ground_truth_list_matches_tasks():
     assert all(isinstance(op, str) and op for op in gt)
 
 
-def test_b12_reflexion_offline_produces_single_condition():
-    """B12 offline runs one condition per invocation, driven by reflexion_enabled."""
+def test_b12_reflection_offline_produces_single_condition():
+    """B12 offline runs one condition per invocation, driven by reflection_enabled."""
     from benchmarks.Runner import BenchmarkRunner
     from benchmarks.Config import DualRobotConfig
 
     runner = BenchmarkRunner()
-    cfg = DualRobotConfig(dry_run=True, execution_mode="offline", reflexion_enabled=True)
+    cfg = DualRobotConfig(dry_run=True, execution_mode="offline", reflection_enabled=True)
     result = runner.run(12, cfg)
 
     assert result.ablation is not None
     assert result.ablation_baseline is None
     assert result.ablation.condition == "enabled"
-    assert result.ablation.reflexion_recoveries > 0
+    assert result.ablation.reflection_recoveries > 0

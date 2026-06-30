@@ -390,9 +390,20 @@ async def api_get_benchmarks_aggregate():
                     data = json.load(f)
                 bid = data.get("benchmark_id")
                 if bid is not None:
-                    # Tag each run with its model (JSON field for new runs, else
-                    # recovered from the directory path) for the by_model breakout.
-                    data["_model"] = data.get("model") or _model_from_rel(rel)
+                    # Tag each run with its model for the by_model breakout. The
+                    # directory model wins in the model-subdir layout (b1-b11):
+                    # the JSON `model` field is auto-logged and occasionally
+                    # wrong (the embedding model id leaks into ministral runs).
+                    # Trust the field only for the flat layout (b12+).
+                    path_model = _model_from_rel(rel)
+                    raw_model = (
+                        path_model if path_model != "default"
+                        else (data.get("model") or "default")
+                    )
+                    # Normalise LM Studio "publisher/model" ids to the bare name
+                    # so field-derived ids (google/gemma-4-e2b) match the
+                    # directory-derived ones (gemma-4-e2b) - same model.
+                    data["_model"] = raw_model.split("/")[-1]
                     groups[bid].append(data)
 
         result = {}
@@ -431,8 +442,11 @@ async def api_get_benchmarks_aggregate():
                         "mean_hallucinated_ops": statistics.mean(
                             a.get("hallucinated_ops", 0) for a in abs_list
                         ),
-                        "mean_reflexion_recoveries": statistics.mean(
-                            a.get("reflexion_recoveries", 0) for a in abs_list
+                        "mean_reflection_recoveries": statistics.mean(
+                            # Fallback to legacy "reflexion_recoveries" key for
+                            # benchmark JSONs written before the rename.
+                            a.get("reflection_recoveries", a.get("reflexion_recoveries", 0))
+                            for a in abs_list
                         ),
                         "mean_negotiation_rounds": statistics.mean(
                             a.get("negotiation_rounds", 0) for a in abs_list
@@ -451,16 +465,22 @@ async def api_get_benchmarks_aggregate():
                 for s in r.get("steps", []):
                     op = s.get("operation", "unknown")
                     dur = s.get("duration_ms", 0.0)
-                    op_buckets[op]["durations"].append(dur)  # type: ignore[union-attr]
-                    if not s.get("success"):
+                    # Pool only successful steps into durations (mirrors
+                    # PlotBenchmarks.plot_op_latency); failures (~0 ms) are
+                    # counted separately so they don't drag the means toward 0.
+                    if s.get("success"):
+                        op_buckets[op]["durations"].append(dur)  # type: ignore[union-attr]
+                        robot_id = s.get("robot_id")
+                        if robot_id:
+                            robot_buckets[robot_id]["total_duration_ms"] += dur
+                            robot_buckets[robot_id]["step_count"] += 1
+                    else:
                         op_buckets[op]["fails"] += 1
-                    robot_id = s.get("robot_id")
-                    if robot_id:
-                        robot_buckets[robot_id]["total_duration_ms"] += dur
-                        robot_buckets[robot_id]["step_count"] += 1
             entry["op_stats"] = {
                 op: {
-                    "mean_duration_ms": statistics.mean(v["durations"]),
+                    "mean_duration_ms": (
+                        statistics.mean(v["durations"]) if v["durations"] else 0.0
+                    ),
                     "fail_count": v["fails"],
                     "call_count": len(v["durations"]),
                 }
@@ -478,6 +498,25 @@ async def api_get_benchmarks_aggregate():
             for model, m_runs in sorted(model_buckets.items()):
                 m_sr = [r.get("success_rate", 0.0) for r in m_runs]
                 m_dur = [r.get("total_duration_ms", 0.0) for r in m_runs]
+                # Per-operation success for this model: success_rate =
+                # successful steps / total steps for each op (mirrors the pooled
+                # op_stats above, but scoped to this model's runs).
+                m_op_buckets = defaultdict(lambda: {"ok": 0, "fail": 0})
+                for r in m_runs:
+                    for s in r.get("steps", []):
+                        op = s.get("operation", "unknown")
+                        if s.get("success"):
+                            m_op_buckets[op]["ok"] += 1
+                        else:
+                            m_op_buckets[op]["fail"] += 1
+                m_op_stats = {}
+                for op, v in m_op_buckets.items():
+                    total = v["ok"] + v["fail"]
+                    m_op_stats[op] = {
+                        "success_rate": v["ok"] / total if total else 0.0,
+                        "call_count": total,
+                        "fail_count": v["fail"],
+                    }
                 by_model[model] = {
                     "run_count": len(m_runs),
                     "pass_count": sum(1 for r in m_runs if r.get("success")),
@@ -486,6 +525,7 @@ async def api_get_benchmarks_aggregate():
                         statistics.stdev(m_sr) if len(m_sr) > 1 else 0.0
                     ),
                     "mean_duration_ms": statistics.mean(m_dur),
+                    "op_stats": m_op_stats,
                 }
             entry["by_model"] = by_model
 

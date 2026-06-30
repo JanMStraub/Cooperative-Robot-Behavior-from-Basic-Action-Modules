@@ -179,7 +179,10 @@ STATIC_COLLISION_RADIUS = float(
 )  # meters
 
 # Unity ProximityGuard EE stop threshold mirrored here for Python-side awareness.
-# Must stay in sync with Assets/Scripts/Constants.cs ProximityConstants.EE_STOP_THRESHOLD.
+# NOT enforced in Python: runtime proximity freezing happens entirely Unity-side
+# (ProximityGuard / Constants.cs). This value is informational only and documents
+# the contract; must stay in sync with
+# Assets/Scripts/Constants.cs ProximityConstants.EE_STOP_THRESHOLD.
 PROXIMITY_EE_STOP_THRESHOLD = float(
     os.environ.get("PROXIMITY_EE_STOP_THRESHOLD", "0.25")
 )  # meters

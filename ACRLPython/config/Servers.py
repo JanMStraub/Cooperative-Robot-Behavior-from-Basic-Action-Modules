@@ -54,15 +54,15 @@ MAX_RESULT_QUEUE_SIZE = int(os.environ.get("MAX_RESULT_QUEUE_SIZE", "100"))
 LLM_REQUEST_TIMEOUT = float(os.environ.get("LLM_REQUEST_TIMEOUT", "90.0"))
 WORLDSTATE_CHECK_INTERVAL = float(os.environ.get("WORLDSTATE_CHECK_INTERVAL", "5.0"))
 
-# Reflexion retry: re-parse failed commands with error context injected into the LLM prompt.
-REFLEXION_ENABLED = os.environ.get("REFLEXION_ENABLED", "true").lower() in (
+# Reflection retry: re-parse failed commands with error context injected into the LLM prompt.
+REFLECTION_ENABLED = os.environ.get("REFLECTION_ENABLED", "true").lower() in (
     "true",
     "1",
     "yes",
 )
-REFLEXION_MAX_RETRIES = int(os.environ.get("REFLEXION_MAX_RETRIES", "2"))
-REFLEXION_SELF_REFLECT_ENABLED = REFLEXION_ENABLED and os.environ.get(
-    "REFLEXION_SELF_REFLECT", "true"
+REFLECTION_MAX_RETRIES = int(os.environ.get("REFLECTION_MAX_RETRIES", "2"))
+REFLECTION_SELF_REFLECT_ENABLED = REFLECTION_ENABLED and os.environ.get(
+    "REFLECTION_SELF_REFLECT", "true"
 ).lower() in ("true", "1", "yes")
 
 # Minimum contact force (N) to accept as a confirmed grasp when gripper_has_contact=False.

@@ -1,0 +1,299 @@
+{
+  "benchmark_id": 15,
+  "benchmark_name": "VGN Ablation",
+  "run_id": "20260629T100034_ba4712",
+  "config_snapshot": {
+    "robot_id": "Robot1",
+    "timeout_per_step_s": 90.0,
+    "max_retries": 1,
+    "dry_run": false,
+    "task_count": 5,
+    "reflection": true,
+    "check_completion": true,
+    "use_rag": true,
+    "reflection_enabled": true,
+    "use_knowledge_graph": true,
+    "use_vgn": true,
+    "use_ros_movement": true,
+    "execution_mode": "live"
+  },
+  "success": false,
+  "total_duration_ms": 83099.35927391052,
+  "steps": [
+    {
+      "index": 0,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 764.6000385284424,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 1,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 21277.018785476685,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 2,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 6199.671983718872,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 3,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 812.5660419464111,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 4,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 759.9990367889404,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 5,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 10617.45572090149,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 6,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 5184.823036193848,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 7,
+      "operation": "detect_object_stereo",
+      "success": false,
+      "duration_ms": 770.104169845581,
+      "error_code": null,
+      "error_message": "No magenta objects detected (found: ['field_f', 'field_c', 'field_a', 'field_d', 'field_b', 'field_h', 'field_g', 'field_e', 'red_cube', 'yellow_cube', 'field_i', 'green_cube', 'blue_cube'])",
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 8,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 773.2682228088379,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 9,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 11889.774084091187,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 10,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 3694.636106491089,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 11,
+      "operation": "detect_object_stereo",
+      "success": false,
+      "duration_ms": 713.9420509338379,
+      "error_code": null,
+      "error_message": "No yellow objects detected (found: ['field_f', 'field_b', 'field_a', 'field_d', 'field_c', 'field_i', 'field_e', 'field_h', 'red_cube', 'magenta_cube', 'green_cube', 'blue_cube'])",
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 12,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 759.2978477478027,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 13,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 10151.190996170044,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 14,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 4652.168035507202,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    },
+    {
+      "index": 15,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 708.2560062408447,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": null,
+      "parallel_group_id": null
+    }
+  ],
+  "ops_executed": 16,
+  "ops_succeeded": 14,
+  "success_rate": 0.875,
+  "avg_step_duration_ms": 5193.709954619408,
+  "model": "mistralai/ministral-3-14b-reasoning",
+  "retry_count": 0,
+  "first_failure_step": null,
+  "chain_metrics": null,
+  "hallucinated_ops": 0,
+  "reflection_recoveries": 0,
+  "negotiation_rounds": 0,
+  "ablation": {
+    "condition": "enabled",
+    "hallucinated_ops": 0,
+    "reflection_recoveries": 0,
+    "negotiation_rounds": 0,
+    "success_rate": 0.875,
+    "ops_executed": 16,
+    "ops_succeeded": 14,
+    "condition_delta": 0.0,
+    "hallucination_delta": 0,
+    "grasp_sr": 0.5,
+    "avg_grasp_duration_ms": 13483.859896659851
+  },
+  "ablation_baseline": null,
+  "feature_flags": {
+    "use_rag": true,
+    "use_vgn": true,
+    "use_knowledge_graph": true,
+    "use_ros_movement": true,
+    "reflection_enabled": true,
+    "dry_run": false,
+    "use_negotiation": false
+  },
+  "parsed_plan": [],
+  "per_op_stats": {
+    "detect_object_stereo": {
+      "count": 8,
+      "fail_count": 2,
+      "avg_duration_ms": 757.8
+    },
+    "grasp_object": {
+      "count": 4,
+      "fail_count": 0,
+      "avg_duration_ms": 13483.9
+    },
+    "move_to_coordinate": {
+      "count": 4,
+      "fail_count": 0,
+      "avg_duration_ms": 4932.8
+    }
+  },
+  "execution_mode": "live",
+  "task_breakdown": [
+    {
+      "task": "detect_object_stereo,grasp_object,move_to_coordinate,detect_object_stereo",
+      "ops_executed": 4,
+      "ops_succeeded": 4,
+      "grasp_attempts": 1,
+      "grasp_successes": 1,
+      "grasp_held": true,
+      "grasp_off_table": true,
+      "post_lift_object_y": 0.19802817543364098,
+      "duration_ms": 29911.04507446289
+    },
+    {
+      "task": "detect_object_stereo,grasp_object,move_to_coordinate,detect_object_stereo",
+      "ops_executed": 4,
+      "ops_succeeded": 3,
+      "grasp_attempts": 1,
+      "grasp_successes": 0,
+      "grasp_held": true,
+      "grasp_off_table": null,
+      "post_lift_object_y": null,
+      "duration_ms": 18239.940881729126
+    },
+    {
+      "task": "detect_object_stereo,grasp_object,move_to_coordinate,detect_object_stereo",
+      "ops_executed": 4,
+      "ops_succeeded": 3,
+      "grasp_attempts": 1,
+      "grasp_successes": 0,
+      "grasp_held": true,
+      "grasp_off_table": null,
+      "post_lift_object_y": null,
+      "duration_ms": 17704.34522628784
+    },
+    {
+      "task": "detect_object_stereo,grasp_object,move_to_coordinate,detect_object_stereo",
+      "ops_executed": 4,
+      "ops_succeeded": 4,
+      "grasp_attempts": 1,
+      "grasp_successes": 1,
+      "grasp_held": true,
+      "grasp_off_table": true,
+      "post_lift_object_y": 0.19185579948030995,
+      "duration_ms": 17244.028091430664
+    }
+  ]
+}

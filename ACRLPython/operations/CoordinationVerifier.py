@@ -199,7 +199,7 @@ class CoordinationVerifier:
         if other_robot_state is None:
             return None
 
-        # From config.Robot.STATIC_COLLISION_RADIUS (default 0.03m).
+        # From config.Robot.STATIC_COLLISION_RADIUS (default 0.06m).
         # Only blocks commands that would place EE inside the other robot's physical
         # radius. Unity ProximityGuard handles the broader runtime safety margin.
         if not other_robot_state.is_moving:

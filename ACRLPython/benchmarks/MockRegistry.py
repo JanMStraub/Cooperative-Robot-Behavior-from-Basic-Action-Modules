@@ -25,7 +25,7 @@ class _MockOperation:
     Wraps a real BasicOperation, replacing execute() with a configurable stub.
 
     Copies all attributes from the real operation so that SequenceExecutor's
-    category/name checks (e.g. for Reflexion) still work correctly.
+    category/name checks (e.g. for Reflection) still work correctly.
     """
 
     def __init__(self, real_op, profile: str) -> None:

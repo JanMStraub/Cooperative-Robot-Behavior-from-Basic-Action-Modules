@@ -19,10 +19,9 @@ try:
     from ..operations.CoordinationVerifier import CoordinationVerifier
     from ..core.Imports import get_world_state
     from ..config.Servers import (
-        REFLEXION_ENABLED,
-        REFLEXION_MAX_RETRIES,
-        REFLEXION_SELF_REFLECT_ENABLED,
-        GRASP_VERIFY_MIN_FORCE,
+        REFLECTION_ENABLED,
+        REFLECTION_MAX_RETRIES,
+        REFLECTION_SELF_REFLECT_ENABLED,
     )
 except ImportError:
     from operations.Base import OperationCategory
@@ -30,10 +29,9 @@ except ImportError:
     from operations.CoordinationVerifier import CoordinationVerifier
     from core.Imports import get_world_state
     from config.Servers import (
-        REFLEXION_ENABLED,
-        REFLEXION_MAX_RETRIES,
-        REFLEXION_SELF_REFLECT_ENABLED,
-        GRASP_VERIFY_MIN_FORCE,
+        REFLECTION_ENABLED,
+        REFLECTION_MAX_RETRIES,
+        REFLECTION_SELF_REFLECT_ENABLED,
     )
 
 logger = logging.getLogger(__name__)
@@ -73,7 +71,7 @@ def _extract_waypoint_from_verification(
 
 
 class SequenceExecutor:
-    """Executes command sequences with completion tracking, variable passing, and Reflexion retries."""
+    """Executes command sequences with completion tracking, variable passing, and Reflection retries."""
 
     # Class-level atomic counter for request IDs (shared across all instances)
     _request_id_counter = 0
@@ -159,23 +157,30 @@ class SequenceExecutor:
 
         self.outcome_tracker: Optional[Any] = None
 
-    def _verify_grasp_held(self, robot_id: str) -> bool:
-        """
-        Check WorldState to confirm the robot is actually holding an object
-        after a grasp_object step reported success.
+    def _read_hold_truth(self, robot_id: str) -> dict:
+        try:
+            ws = get_world_state()
+            if ws is None:
+                return {}
+            rs = ws.get_robot_state(robot_id)
+            if rs is None:
+                return {}
+            return {
+                "is_holding_object": rs.is_holding_object,
+                "held_object_id": rs.held_object_id,
+                "gripper_has_contact": rs.gripper_has_contact,
+                "gripper_contact_force": rs.gripper_contact_force,
+            }
+        except Exception as e:
+            logger.debug(f"[grasp truth] read skipped: {e}")
+            return {}
 
-        Returns True if holding is confirmed or WorldState data is stale/unavailable
-        (skip verification rather than false-failing offline/dry-run). Returns False
-        only when WorldState has fresh Unity data and is_holding_object is False.
-        """
+    def _verify_grasp_held(self, robot_id: str) -> bool:
         try:
             ws = get_world_state()
             if ws is None:
                 return True
-            # Poll until gripper_has_contact=True (sensor settled) or deadline.
-            # GripperContactSensor needs ~100ms min contact duration + 5-frame average
-            # at 60Hz (~83ms) before it reports contact, so the first fresh WorldState
-            # update after gripper close often arrives before the sensor has confirmed.
+            # is_holding_object (attachment) settles a few FixedUpdate frames after gripper close.
             verify_start = time.time()
             deadline = verify_start + 1.5
             poll_interval = 0.05
@@ -185,7 +190,7 @@ class SequenceExecutor:
                 if (
                     robot_state is not None
                     and robot_state.timestamp >= verify_start
-                    and robot_state.gripper_has_contact
+                    and robot_state.is_holding_object
                 ):
                     break
                 time.sleep(poll_interval)
@@ -194,24 +199,17 @@ class SequenceExecutor:
                 robot_state = ws.get_robot_state(robot_id)
             if robot_state is None:
                 return True
-            # Only reject when WorldState is fresh (updated within 2s from Unity)
             age = time.time() - robot_state.timestamp
             if age > 2.0:
                 return True
-            force = robot_state.gripper_contact_force
-            contact_confirmed = (
-                robot_state.gripper_has_contact or force >= GRASP_VERIFY_MIN_FORCE
-            )
-            if not contact_confirmed:
+            if not robot_state.is_holding_object:
                 logger.warning(
-                    f"[grasp verify] {robot_id} reported grasp success but "
-                    f"gripper_has_contact=False and force={force:.2f}N < {GRASP_VERIFY_MIN_FORCE}N "
+                    f"[grasp verify] {robot_id}: is_holding_object=False "
                     f"(state age={age:.2f}s)"
                 )
                 return False
             logger.debug(
-                f"[grasp verify] {robot_id} confirmed "
-                f"(gripper_has_contact={robot_state.gripper_has_contact}, force={force:.2f}N)"
+                f"[grasp verify] {robot_id}: held={robot_state.held_object_id}"
             )
             return True
         except Exception as e:
@@ -286,7 +284,7 @@ class SequenceExecutor:
         start_time = time.time()
         results = []
         completed = 0
-        reflexion_recoveries = 0
+        reflection_recoveries = 0
 
         logger.info(f"Starting sequence {_sid} with {len(commands)} commands")
 
@@ -392,18 +390,23 @@ class SequenceExecutor:
                 }
                 results.append(result_entry)
 
-                # After grasp_object reports success, verify the robot is actually
-                # holding the object via WorldState ground truth from Unity.
-                # Skipped in dry-run/offline (WorldState has no fresh Unity data).
                 if cmd_result["success"] and operation == "grasp_object":
                     robot_id_for_check = params.get("robot_id", "")
                     if robot_id_for_check:
-                        if not self._verify_grasp_held(robot_id_for_check):
+                        _truth = self._read_hold_truth(robot_id_for_check)
+                        if _truth:
+                            if not isinstance(result_entry.get("result"), dict):
+                                result_entry["result"] = {}
+                            result_entry["result"].update(_truth)
+                        held_verified = self._verify_grasp_held(robot_id_for_check)
+                        if isinstance(result_entry.get("result"), dict):
+                            result_entry["result"]["is_holding_object"] = held_verified
+                        if not held_verified:
                             cmd_result = {
                                 "success": False,
                                 "error": (
-                                    "Grasp reported success but object not detected "
-                                    "between gripper jaws (WorldState is_holding_object=False)"
+                                    "Grasp reported success but object not held "
+                                    "(WorldState is_holding_object=False)"
                                 ),
                                 "error_code": "GRASP_NOT_CONFIRMED",
                             }
@@ -411,7 +414,7 @@ class SequenceExecutor:
                             result_entry["error"] = cmd_result["error"]
                             result_entry["error_code"] = cmd_result["error_code"]
 
-                            # Open gripper so it's ready for the next attempt.
+                            # Open gripper for the next attempt.
                             logger.info(
                                 "[grasp verify] opening gripper after failed grasp for %s",
                                 robot_id_for_check,
@@ -422,8 +425,7 @@ class SequenceExecutor:
                                 timeout,
                             )
 
-                            # Mark the object stale so the next detect_object_stereo
-                            # does a fresh scan (failed grasp may have displaced it).
+                            # Mark stale so the next detect does a fresh scan.
                             _object_id_failed = params.get("object_id", "")
                             try:
                                 _ws_inv = get_world_state()
@@ -465,13 +467,13 @@ class SequenceExecutor:
                         f"Command {i + 1} failed: {cmd_result.get('error')}",
                     )
 
-                    # Reflexion retry: re-parse the original command with error context.
+                    # Reflection retry: re-parse the original command with error context.
                     # Only applies to NAVIGATION and MANIPULATION ops - re-planning a
                     # status check or sync primitive with the LLM makes no sense and
                     # would block for LLM_REQUEST_TIMEOUT seconds if the LLM is unavailable.
-                    reflexion_succeeded = False
+                    reflection_succeeded = False
                     original_text = cmd.get("_original_text", "")
-                    _reflexion_eligible_categories = {
+                    _reflection_eligible_categories = {
                         OperationCategory.NAVIGATION,
                         OperationCategory.MANIPULATION,
                         OperationCategory.PERCEPTION,
@@ -487,12 +489,12 @@ class SequenceExecutor:
                         else None
                     )
                     _op_category = _op_def.category if _op_def else None
-                    _reflexion_allowed = _op_category in _reflexion_eligible_categories
+                    _reflection_allowed = _op_category in _reflection_eligible_categories
                     if (
                         original_text
-                        and REFLEXION_ENABLED
-                        and REFLEXION_MAX_RETRIES > 0
-                        and _reflexion_allowed
+                        and REFLECTION_ENABLED
+                        and REFLECTION_MAX_RETRIES > 0
+                        and _reflection_allowed
                     ):
                         error_msg = cmd_result.get("error", "Unknown error")
                         recovery = cmd_result.get("recovery_suggestions", [])
@@ -579,19 +581,19 @@ class SequenceExecutor:
                         retry_op = operation
                         retry_params = params
 
-                        for retry_n in range(1, REFLEXION_MAX_RETRIES + 1):
+                        for retry_n in range(1, REFLECTION_MAX_RETRIES + 1):
                             logger.info(
-                                f"Reflexion retry {retry_n}/{REFLEXION_MAX_RETRIES} "
+                                f"Reflection retry {retry_n}/{REFLECTION_MAX_RETRIES} "
                                 f"for command {i + 1}: {operation}"
                             )
 
                             # §19 - LLM self-reflection: ask model what went wrong
                             # before re-parsing, prepend analysis to the procedural hint.
-                            if REFLEXION_SELF_REFLECT_ENABLED:
+                            if REFLECTION_SELF_REFLECT_ENABLED:
                                 _refl_op = retry_op
                                 _refl_params = retry_params
                                 logger.info(
-                                    "Reflexion: generating LLM self-reflection for retry %d",
+                                    "Reflection: generating LLM self-reflection for retry %d",
                                     retry_n,
                                 )
                                 reflection = parser.generate_reflection(
@@ -621,7 +623,7 @@ class SequenceExecutor:
                                 or not retry_parse["commands"]
                             ):
                                 logger.warning(
-                                    f"Reflexion retry {retry_n} parse failed"
+                                    f"Reflection retry {retry_n} parse failed"
                                 )
                                 continue
 
@@ -643,10 +645,7 @@ class SequenceExecutor:
                                 retry_op, retry_params
                             )
 
-                            # Guard: skip retry if any param is still an unresolved $var
-                            # (the Reflexion re-parse may produce commands that reference
-                            # variables not yet captured, e.g. object_id="$target.color"
-                            # when detect_object_stereo hasn't run yet).
+                            # Skip if any param is still an unresolved $var.
                             _retry_unresolved = [
                                 f"{_k}={_v}"
                                 for _k, _v in retry_params.items()
@@ -656,16 +655,15 @@ class SequenceExecutor:
                             ]
                             if _retry_unresolved:
                                 logger.warning(
-                                    "Reflexion retry %d/%d (%s): unresolved variable(s) %s - skipping",
+                                    "Reflection retry %d/%d (%s): unresolved variable(s) %s - skipping",
                                     retry_n,
-                                    REFLEXION_MAX_RETRIES,
+                                    REFLECTION_MAX_RETRIES,
                                     retry_op,
                                     ", ".join(_retry_unresolved),
                                 )
                                 continue
 
-                            # Re-inject camera_id for perception ops - SequenceServer
-                            # normally does this but is bypassed in the Reflexion path.
+                            # Re-inject camera_id bypassed by the Reflection path.
                             _PERCEPTION_OPS = {"detect_object_stereo", "analyze_scene"}
                             if retry_op in _PERCEPTION_OPS:
                                 _original_camera_id = params.get("camera_id")
@@ -682,7 +680,7 @@ class SequenceExecutor:
                                 ) or params.get("robot_id", "")
                                 if _ret_robot_id:
                                     logger.info(
-                                        "Reflexion: returning %s to start before perception retry %d"
+                                        "Reflection: returning %s to start before perception retry %d"
                                         " to clear robot-arm occlusion",
                                         _ret_robot_id,
                                         retry_n,
@@ -701,7 +699,7 @@ class SequenceExecutor:
 
                             if retry_result["success"]:
                                 logger.info(
-                                    f"Reflexion retry {retry_n} succeeded for command {i + 1}"
+                                    f"Reflection retry {retry_n} succeeded for command {i + 1}"
                                 )
                                 # Overwrite the failed result entry with the successful one
                                 results[-1] = {
@@ -726,8 +724,8 @@ class SequenceExecutor:
                                 self._auto_capture_outputs(
                                     retry_op, retry_result.get("result", {})
                                 )
-                                reflexion_succeeded = True
-                                reflexion_recoveries += 1
+                                reflection_succeeded = True
+                                reflection_recoveries += 1
                                 break
                             else:
                                 error_msg = retry_result.get("error", "Unknown error")
@@ -777,10 +775,10 @@ class SequenceExecutor:
                                 except Exception:
                                     pass
                                 logger.warning(
-                                    f"Reflexion retry {retry_n} failed: {error_msg}"
+                                    f"Reflection retry {retry_n} failed: {error_msg}"
                                 )
 
-                    if not reflexion_succeeded:
+                    if not reflection_succeeded:
                         # Stop sequence on exhausted retries
                         break
 
@@ -814,7 +812,7 @@ class SequenceExecutor:
             "results": results,
             "total_duration_ms": total_duration,
             "error": error_message,
-            "reflexion_recoveries": reflexion_recoveries,
+            "reflection_recoveries": reflection_recoveries,
         }
 
         _safe_log(
@@ -1621,7 +1619,7 @@ class SequenceExecutor:
                     # Only block when the list is populated AND robot is not in it.
                     # Empty list = KG not yet populated = don't block.
                     if reachable_robots and robot_id not in reachable_robots:
-                        # Enrich with workspace context so Reflexion hint is actionable
+                        # Enrich with workspace context for the Reflection hint.
                         try:
                             from config.Robot import ROBOT_WORKSPACE_ASSIGNMENTS
                             from operations.SpatialPredicates import is_in_shared_zone

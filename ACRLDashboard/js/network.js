@@ -136,6 +136,9 @@ export class NetworkManager {
             case 'stereo_pointcloud':
                 if (this.renderer) this.renderer.updateStereoPointCloud(msg.data);
                 break;
+            case 'vgn_debug':
+                // Backend-only debug stream; no dashboard visualization yet. Ignore silently.
+                break;
             default:
                 this.ui.logToConsole(`Unknown message type: ${msg.type}`, 'warning');
         }

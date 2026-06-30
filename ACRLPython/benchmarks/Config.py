@@ -15,10 +15,10 @@ class BenchmarkConfig:
     max_retries: int = 1
     dry_run: bool = False
     task_count: int = 1  # B8 sub-task count
-    reflexion: bool = True
+    reflection: bool = True
     check_completion: bool = True
     use_rag: bool = True
-    reflexion_enabled: bool = True
+    reflection_enabled: bool = True
     use_knowledge_graph: bool = True
     use_vgn: bool = True
     use_ros_movement: bool = True

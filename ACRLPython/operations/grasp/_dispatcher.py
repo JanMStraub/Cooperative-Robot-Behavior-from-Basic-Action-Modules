@@ -383,28 +383,41 @@ def grasp_object(
             )
 
         logger.info(f"Sending grasp_object command: {robot_id} -> {object_id}")
-        success = broadcaster.send_command(command, request_id)
+        completion = broadcaster.send_command_and_wait(command, timeout=45.0)
 
-        if success:
-            logger.debug(f"Grasp command sent successfully, request_id={request_id}")
-            return OperationResult.success_result(
-                {
-                    "command_sent": True,
-                    "robot_id": robot_id,
-                    "object_id": object_id,
-                    "request_id": request_id,
-                }
-            )
-        else:
-            logger.error("Failed to send grasp command")
+        if completion is None:
+            logger.error(f"grasp_object timed out or send failed: {robot_id} -> {object_id}")
             return OperationResult.error_result(
-                "COMMUNICATION_ERROR",
-                "Failed to send grasp command to Unity",
+                "TIMEOUT",
+                "grasp_object did not complete within timeout (Unity unreachable or grasp stalled)",
                 [
                     "Check Unity is connected to CommandServer",
-                    "Verify network connectivity",
+                    "Verify the robot is not blocked or frozen by ProximityGuard",
                 ],
             )
+
+        if not completion.get("success", False):
+            logger.warning(f"grasp_object failed (object not held): {robot_id} -> {object_id}")
+            return OperationResult.error_result(
+                "GRASP_FAILED",
+                f"Grasp executed but object '{object_id}' is not held",
+                [
+                    "Verify object position is within robot reach (0.6 m)",
+                    "Run detect_object_stereo before grasp_object to refresh pose",
+                    "Try a different preferred_approach (top/front/side)",
+                ],
+            )
+
+        logger.info(f"grasp_object succeeded: {robot_id} holding {object_id}")
+        return OperationResult.success_result(
+            {
+                "status": "tcp_executed",
+                "robot_id": robot_id,
+                "object_id": object_id,
+                "request_id": request_id,
+                "is_holding_object": True,
+            }
+        )
 
     except Exception as e:
         logger.exception(f"Exception in grasp_object operation: {e}")

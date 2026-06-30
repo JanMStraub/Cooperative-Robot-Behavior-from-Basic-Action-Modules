@@ -17,6 +17,7 @@ ultralytics
 onnx
 onnxruntime
 scikit-image
+networkx
 
 # Web UI server
 fastapi>=0.100.0

@@ -1,0 +1,77 @@
+{
+  "benchmark_id": 7,
+  "benchmark_name": "Dual-Robot Reorient",
+  "run_id": "20260625T052113_a71b19",
+  "config_snapshot": {
+    "robot_id": "Robot1",
+    "timeout_per_step_s": 90.0,
+    "max_retries": 1,
+    "dry_run": false,
+    "task_count": 5,
+    "reflection": true,
+    "check_completion": true,
+    "use_rag": true,
+    "reflection_enabled": true,
+    "use_knowledge_graph": true,
+    "use_vgn": true,
+    "use_ros_movement": true,
+    "execution_mode": "live",
+    "robot_id_a": "Robot1",
+    "robot_id_b": "Robot2",
+    "sync_timeout_ms": 30000,
+    "use_negotiation": true
+  },
+  "success": false,
+  "total_duration_ms": 46246.37985229492,
+  "steps": [
+    {
+      "index": 0,
+      "operation": "grasp_object",
+      "success": false,
+      "duration_ms": 0.19621849060058594,
+      "error_code": null,
+      "error_message": "Spatial feasibility: Robot1 is not in the reachable set for 'red_cube' (reachable: ['Robot2']). Robot1 is assigned to 'left_workspace'; 'red_cube' is in 'shared_zone'. Use Robot2 instead, or plan a handoff.",
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    }
+  ],
+  "ops_executed": 1,
+  "ops_succeeded": 0,
+  "success_rate": 0.0,
+  "avg_step_duration_ms": 46246.37985229492,
+  "model": "google/gemma-4-e2b",
+  "retry_count": 0,
+  "first_failure_step": 0,
+  "chain_metrics": null,
+  "hallucinated_ops": 0,
+  "reflection_recoveries": 0,
+  "negotiation_rounds": 0,
+  "ablation": null,
+  "ablation_baseline": null,
+  "feature_flags": {
+    "use_rag": true,
+    "use_vgn": true,
+    "use_knowledge_graph": true,
+    "use_ros_movement": true,
+    "reflection_enabled": true,
+    "dry_run": false,
+    "use_negotiation": true
+  },
+  "parsed_plan": [
+    "grasp_object",
+    "grasp_object",
+    "move_to_coordinate",
+    "move_to_coordinate"
+  ],
+  "per_op_stats": {
+    "grasp_object": {
+      "count": 1,
+      "fail_count": 1,
+      "avg_duration_ms": 0.2
+    },
+    "_chain_match": false
+  },
+  "execution_mode": "live",
+  "task_breakdown": []
+}

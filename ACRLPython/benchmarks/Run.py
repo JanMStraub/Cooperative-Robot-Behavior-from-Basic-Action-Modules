@@ -8,7 +8,7 @@ Usage:
     python -m benchmarks.run --all
     python -m benchmarks.run --benchmark 8 --task-count 20 --dry-run
     python -m benchmarks.run --all --output-dir ./results/
-    python -m benchmarks.run --benchmark 1 --no-reflexion
+    python -m benchmarks.run --benchmark 1 --no-reflection
 """
 
 from __future__ import annotations
@@ -86,10 +86,10 @@ def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig
     kwargs: dict[str, Any] = dict(
         dry_run=args.dry_run or benchmark_id in _PARSE_ONLY_BENCHMARKS,
         task_count=args.task_count,
-        reflexion=not args.no_reflexion,
+        reflection=not args.no_reflection,
         check_completion=live,
         use_rag=not args.no_rag,
-        reflexion_enabled=not args.no_reflexion,
+        reflection_enabled=not args.no_reflection,
         use_knowledge_graph=not args.no_kg,
         use_vgn=not args.no_vgn,
         use_ros_movement=not args.no_ros,
@@ -98,6 +98,28 @@ def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig
     if benchmark_id in _DUAL_ROBOT_BENCHMARKS:
         return DualRobotConfig(**kwargs, use_negotiation=not args.no_negotiation)
     return BenchmarkConfig(**kwargs)
+
+
+def _is_embedding_model(m: dict) -> bool:
+    """True if an LM Studio /models entry is an embedding model, not a chat LLM.
+
+    When RAG is enabled the embedding model is loaded alongside the chat model
+    and LM Studio lists both; it must be skipped so it isn't recorded as the
+    model under test. Checks the explicit ``type`` field (LM Studio's richer
+    endpoint) and falls back to the id (the configured RAG embedder, or any id
+    containing "embed").
+    """
+    if (m.get("type") or "").lower() in {"embeddings", "embedding"}:
+        return True
+    model_id = (m.get("id") or "").lower()
+    try:
+        from config.Rag import RAG_LM_STUDIO_MODEL
+
+        if model_id == RAG_LM_STUDIO_MODEL.lower():
+            return True
+    except Exception:
+        pass
+    return "embed" in model_id
 
 
 def _detect_model(args: argparse.Namespace) -> str:
@@ -120,8 +142,12 @@ def _detect_model(args: argparse.Namespace) -> str:
         with urllib.request.urlopen(req, timeout=2.0) as resp:
             data = _json.loads(resp.read())
         models = data.get("data") or []
-        if models and models[0].get("id"):
-            return models[0]["id"]
+        # First non-embedding model. /models lists the embedding model too when
+        # RAG is loaded, and it is often first - taking models[0] blindly tagged
+        # every run with the embedder.
+        for m in models:
+            if m.get("id") and not _is_embedding_model(m):
+                return m["id"]
     except Exception:
         pass
     try:
@@ -183,9 +209,9 @@ def main() -> None:
         help="Run B12/B13 ablations against live SequenceServer instead of dry-run mocks",
     )
     parser.add_argument(
-        "--no-reflexion",
+        "--no-reflection",
         action="store_true",
-        help="Disable Reflexion LLM retry on operation failure (B12 ablation: disabled condition)",
+        help="Disable Reflection LLM retry on operation failure (B12 ablation: disabled condition)",
     )
     parser.add_argument(
         "--no-rag",

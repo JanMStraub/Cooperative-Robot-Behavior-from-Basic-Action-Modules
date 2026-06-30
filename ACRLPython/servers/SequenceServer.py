@@ -214,7 +214,7 @@ class SequenceQueryHandler(SingletonBase):
             }
 
         # Tag each command with the original text so SequenceExecutor can
-        # re-parse it with Reflexion context on failure.
+        # re-parse it with Reflection context on failure.
         for cmd in commands:
             cmd["_original_text"] = command_text
 

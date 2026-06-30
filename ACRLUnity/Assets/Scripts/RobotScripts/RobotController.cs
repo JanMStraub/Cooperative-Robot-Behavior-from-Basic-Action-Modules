@@ -927,6 +927,7 @@ namespace Robotics
 
         public bool HasTarget => _targetTransform != null;
         public bool TargetReached => _hasReachedTarget;
+        public bool IsHoldingObject => _gripperController?.IsHoldingObject ?? false;
 
         public GameObject GetTargetObject() => _targetObject;
 

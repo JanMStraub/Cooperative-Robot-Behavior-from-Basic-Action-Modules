@@ -25,7 +25,7 @@ class BenchmarkFeatureFlags:
     use_vgn: Optional[bool] = None
     use_ros: Optional[bool] = None
     use_negotiation: Optional[bool] = None
-    use_reflexion: Optional[bool] = None
+    use_reflection: Optional[bool] = None
 
     def to_json(self) -> str:
         """
@@ -57,7 +57,7 @@ class BenchmarkFeatureFlags:
             "use_rag": "use_rag",
             "use_vgn": "use_vgn",
             "use_ros_movement": "use_ros",
-            "reflexion_enabled": "use_reflexion",
+            "reflection_enabled": "use_reflection",
         }
         kwargs: Dict[str, Any] = {}
         for snap_key, flag_key in mapping.items():

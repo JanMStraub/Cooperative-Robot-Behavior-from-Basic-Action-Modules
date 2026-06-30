@@ -26,7 +26,7 @@ try:
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
         PERCEPTION_ONLY_MODE,
-        REFLEXION_ENABLED,
+        REFLECTION_ENABLED,
     )
     from config.Vision import (
         ENABLE_VISION_STREAMING,
@@ -57,7 +57,7 @@ except ImportError:
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
         PERCEPTION_ONLY_MODE,
-        REFLEXION_ENABLED,
+        REFLECTION_ENABLED,
     )
     from ..config.Vision import (
         ENABLE_VISION_STREAMING,
@@ -529,10 +529,10 @@ class RobotController:
             logger.info(f"  Knowledge Graph:        Enabled")
         else:
             logger.info(f"  Knowledge Graph:        Disabled")
-        if REFLEXION_ENABLED:
-            logger.info(f"  Reflexion:              Enabled")
+        if REFLECTION_ENABLED:
+            logger.info(f"  Reflection:              Enabled")
         else:
-            logger.info(f"  Reflexion:              Disabled")
+            logger.info(f"  Reflection:              Disabled")
         logger.info("=" * 60)
 
     def stop(self):

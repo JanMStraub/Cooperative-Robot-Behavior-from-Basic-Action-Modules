@@ -52,14 +52,14 @@ def test_negotiation_flag_applied_and_restored():
     assert neg_cfg.NEGOTIATION_ENABLED == original
 
 
-def test_reflexion_patches_sequenceexecutor_module():
+def test_reflection_patches_sequenceexecutor_module():
     import orchestrators.SequenceExecutor as seq_mod
 
-    original = seq_mod.REFLEXION_ENABLED
-    flags = BenchmarkFeatureFlags(use_reflexion=not original)
+    original = seq_mod.REFLECTION_ENABLED
+    flags = BenchmarkFeatureFlags(use_reflection=not original)
     with FeatureFlagContext(flags):
-        assert seq_mod.REFLEXION_ENABLED == (not original)
-    assert seq_mod.REFLEXION_ENABLED == original
+        assert seq_mod.REFLECTION_ENABLED == (not original)
+    assert seq_mod.REFLECTION_ENABLED == original
 
 
 def test_restore_on_exception():

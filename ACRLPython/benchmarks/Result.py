@@ -43,7 +43,7 @@ class AblationMetrics:
 
     condition: str  # "enabled" or "disabled"
     hallucinated_ops: int
-    reflexion_recoveries: int
+    reflection_recoveries: int
     negotiation_rounds: int
     success_rate: float
     ops_executed: int
@@ -77,7 +77,7 @@ class BenchmarkResult:
     first_failure_step: Optional[int] = None
     chain_metrics: Optional[ChainMetrics] = None
     hallucinated_ops: int = 0
-    reflexion_recoveries: int = 0
+    reflection_recoveries: int = 0
     negotiation_rounds: int = 0
     ablation: Optional[AblationMetrics] = None
     ablation_baseline: Optional[AblationMetrics] = None  # disabled-condition metrics

@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""Plot the operation registry as a complexity x category map.
-
-Every registered operation occupies one cell of a 2D grid:
-  * y-axis -- OperationComplexity (atomic -> complex)
-  * x-axis -- OperationCategory   (perception, navigation, ...)
-
-Populated cells are tinted by complexity tier (empty cells stay gray) and list
-their numbered operation IDs. Saved to Misc/images/.
-"""
+"""Plot the operation registry as a complexity x category map."""
 
 from __future__ import annotations
 
@@ -22,7 +14,7 @@ from matplotlib.colors import to_rgb
 from operations.Base import OperationCategory, OperationComplexity
 from operations.Registry import OperationRegistry, get_global_registry
 
-IMAGES_DIR = Path(__file__).parent.parent.parent / "Misc" / "images"
+IMAGES_DIR = Path(__file__).parent.parent.parent / "Thesis" / "images"
 
 # Display order along each axis (rows top->bottom, columns left->right).
 COMPLEXITY_ORDER = [

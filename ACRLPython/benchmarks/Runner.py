@@ -2,9 +2,10 @@
 """
 BenchmarkRunner - sends benchmark tasks to the running SequenceServer over TCP.
 
-B1-B5 and B8 send natural language task strings; the LLM parses them into
-operations. B6-B7 use explicit op lists with parallel_group fields that the
-LLM cannot express, sent via the EXEC: prefix.
+B1-B8 send natural language task strings; the LLM parses them into operations.
+B6-B7 are validated against an EXPECTED_OP_CHAIN (chain-match check) rather than
+a single success flag. The EXEC: prefix exists to bypass the LLM with explicit
+op lists, but is used for reset and dry-run paths, not for B6-B7.
 """
 
 from __future__ import annotations
@@ -44,7 +45,7 @@ _BENCHMARK_NAMES: Dict[int, str] = {
     9: "Impossible Task",
     10: "Parallel Independent Tasks",
     11: "RAG Ablation",
-    12: "Reflexion Ablation",
+    12: "Reflection Ablation",
     13: "Negotiation Ablation",
     14: "Knowledge Graph Ablation",
     15: "VGN Ablation",
@@ -64,7 +65,7 @@ _CASE_MODULES: Dict[int, str] = {
     9: "benchmarks.cases.B9Impossible",
     10: "benchmarks.cases.B10ParallelIndependent",
     11: "benchmarks.cases.B11RagAblation",
-    12: "benchmarks.cases.B12ReflexionAblation",
+    12: "benchmarks.cases.B12ReflectionAblation",
     13: "benchmarks.cases.B13NegotiationAblation",
     14: "benchmarks.cases.B14KgAblation",
     15: "benchmarks.cases.B15VGNAblation",
@@ -97,7 +98,7 @@ class BenchmarkRunner:
             if benchmark_id == 11:
                 return self._run_b11_rag(cfg, module)
             if benchmark_id == 12:
-                return self._run_b12_reflexion(cfg, module)
+                return self._run_b12_reflection(cfg, module)
             if benchmark_id == 13:
                 return self._run_b13_negotiation(cfg, module)
             if benchmark_id == 14:
@@ -261,7 +262,7 @@ class BenchmarkRunner:
             "use_vgn": getattr(cfg, "use_vgn", False),
             "use_knowledge_graph": getattr(cfg, "use_knowledge_graph", False),
             "use_ros_movement": getattr(cfg, "use_ros_movement", False),
-            "reflexion_enabled": getattr(cfg, "reflexion_enabled", False),
+            "reflection_enabled": getattr(cfg, "reflection_enabled", False),
             "dry_run": getattr(cfg, "dry_run", False),
             "use_negotiation": getattr(cfg, "use_negotiation", False),
         }
@@ -302,8 +303,8 @@ class BenchmarkRunner:
         import orchestrators.SequenceExecutor as _seq_mod
         from orchestrators.SequenceExecutor import SequenceExecutor
 
-        prev = _seq_mod.REFLEXION_ENABLED
-        _seq_mod.REFLEXION_ENABLED = getattr(cfg, "reflexion_enabled", False)
+        prev = _seq_mod.REFLECTION_ENABLED
+        _seq_mod.REFLECTION_ENABLED = getattr(cfg, "reflection_enabled", False)
         try:
             executor = SequenceExecutor(
                 default_timeout=cfg.timeout_per_step_s,
@@ -312,7 +313,7 @@ class BenchmarkRunner:
             )
             return executor.execute_sequence(ops)
         finally:
-            _seq_mod.REFLEXION_ENABLED = prev
+            _seq_mod.REFLECTION_ENABLED = prev
 
     def _build_result(
         self,
@@ -688,7 +689,7 @@ class BenchmarkRunner:
         ablation = AblationMetrics(
             condition=condition,
             hallucinated_ops=0,
-            reflexion_recoveries=0,
+            reflection_recoveries=0,
             negotiation_rounds=0,
             success_rate=accuracy,
             ops_executed=total,
@@ -949,7 +950,7 @@ class BenchmarkRunner:
         ablation = AblationMetrics(
             condition="enabled",
             hallucinated_ops=fn,  # false-accepts (unsafe approved)
-            reflexion_recoveries=0,
+            reflection_recoveries=0,
             negotiation_rounds=0,
             success_rate=gate_accuracy,
             ops_executed=total_labeled,
@@ -976,9 +977,9 @@ class BenchmarkRunner:
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
-    def _run_b12_reflexion_live(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+    def _run_b12_reflection_live(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Send B11 tasks to live SequenceServer; measure reflexion recoveries from server response.
+        Send B11 tasks to live SequenceServer; measure reflection recoveries from server response.
         """
         from .Result import AblationMetrics
 
@@ -989,7 +990,7 @@ class BenchmarkRunner:
         ops_succeeded = 0
         all_steps: List[StepResult] = []
         total_ms = 0.0
-        _flags = BenchmarkFeatureFlags(use_reflexion=cfg.reflexion_enabled)
+        _flags = BenchmarkFeatureFlags(use_reflection=cfg.reflection_enabled)
 
         fixed_chains = getattr(module, "FIXED_OP_CHAINS", None)
         payloads = fixed_chains if fixed_chains is not None else tasks
@@ -997,7 +998,7 @@ class BenchmarkRunner:
             raw = self._send(payload, cfg.robot_id, cfg, flags=_flags)
             if raw.get("success"):
                 completed += 1
-            total_recoveries += raw.get("reflexion_recoveries", 0)
+            total_recoveries += raw.get("reflection_recoveries", raw.get("reflexion_recoveries", 0))
             task_steps = self._parse_steps(
                 raw.get("results") or [], raw.get("parsed_commands") or []
             )
@@ -1013,9 +1014,9 @@ class BenchmarkRunner:
 
         success_rate = completed / len(tasks) if tasks else 0.0
         ablation = AblationMetrics(
-            condition="enabled" if cfg.reflexion_enabled else "disabled",
+            condition="enabled" if cfg.reflection_enabled else "disabled",
             hallucinated_ops=0,
-            reflexion_recoveries=total_recoveries,
+            reflection_recoveries=total_recoveries,
             negotiation_rounds=0,
             success_rate=success_rate,
             ops_executed=ops_executed,
@@ -1033,43 +1034,43 @@ class BenchmarkRunner:
             ops_succeeded=ops_succeeded,
             success_rate=success_rate,
             avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
-            reflexion_recoveries=total_recoveries,
+            reflection_recoveries=total_recoveries,
             ablation=ablation,
             feature_flags=self._extract_feature_flags(cfg),
             per_op_stats=self._compute_per_op_stats(all_steps),
             execution_mode="live",
         )
 
-    def _run_b12_reflexion(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
+    def _run_b12_reflection(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
-        Run B12 Reflexion ablation.
+        Run B12 Reflection ablation.
 
         In live mode (cfg.execution_mode == "live"), sends NL tasks to SequenceServer and
-        reads reflexion_recoveries from the server response.
+        reads reflection_recoveries from the server response.
 
         In offline mode, uses first_fail_nav mock and dry-run execution. Condition is
-        driven by cfg.reflexion_enabled (--no-reflexion to disable); run once per
+        driven by cfg.reflection_enabled (--no-reflection to disable); run once per
         condition to compare. The first_fail_nav mock deterministically fails the
         first attempt at each op, so the disabled condition is expected to fail every
-        task (no retry available) while the enabled condition recovers via reflexion.
+        task (no retry available) while the enabled condition recovers via reflection.
         """
         if cfg.execution_mode == "live":
-            return self._run_b12_reflexion_live(cfg, module)
+            return self._run_b12_reflection_live(cfg, module)
 
         from orchestrators.CommandParser import CommandParser
         from .Result import AblationMetrics
         import orchestrators.SequenceExecutor as _seq_mod
 
         tasks = module.get_tasks(cfg)
-        reflexion_on = cfg.reflexion_enabled
+        reflection_on = cfg.reflection_enabled
 
         all_steps: List[StepResult] = []
         total_ms = 0.0
         total_recoveries = 0
         completed_tasks = 0
 
-        prev_reflexion = _seq_mod.REFLEXION_ENABLED
-        _seq_mod.REFLEXION_ENABLED = reflexion_on
+        prev_reflection = _seq_mod.REFLECTION_ENABLED
+        _seq_mod.REFLECTION_ENABLED = reflection_on
         mock_original = MockRegistry.install_mock("first_fail_nav")
         try:
             parser = CommandParser(use_rag=cfg.use_rag)
@@ -1087,11 +1088,11 @@ class BenchmarkRunner:
                     for op in ops:
                         op["_original_text"] = payload
                 cfg_local = dataclasses.replace(
-                    cfg, dry_run=True, reflexion_enabled=reflexion_on
+                    cfg, dry_run=True, reflection_enabled=reflection_on
                 )
                 raw = self._run_local(ops, cfg_local)
                 total_ms += float(raw.get("total_duration_ms", 0.0))
-                total_recoveries += raw.get("reflexion_recoveries", 0)
+                total_recoveries += raw.get("reflection_recoveries", raw.get("reflexion_recoveries", 0))
                 task_steps = self._parse_steps(raw.get("results") or [], ops)
                 step_offset = len(all_steps)
                 for s in task_steps:
@@ -1101,26 +1102,23 @@ class BenchmarkRunner:
                     completed_tasks += 1
         finally:
             MockRegistry.restore_mock(mock_original)
-            _seq_mod.REFLEXION_ENABLED = prev_reflexion
+            _seq_mod.REFLECTION_ENABLED = prev_reflection
 
         ops_executed = len(all_steps)
         ops_succeeded = sum(1 for s in all_steps if s.success)
         success_rate = (completed_tasks / len(payloads)) if payloads else 0.0
-        condition = "enabled" if reflexion_on else "disabled"
+        condition = "enabled" if reflection_on else "disabled"
         ablation = AblationMetrics(
             condition=condition,
             hallucinated_ops=0,
-            reflexion_recoveries=total_recoveries,
+            reflection_recoveries=total_recoveries,
             negotiation_rounds=0,
             success_rate=success_rate,
             ops_executed=ops_executed,
             ops_succeeded=ops_succeeded,
         )
 
-        # Success: ops executed, and if reflexion is on, it actually fired recoveries
-        # (the disabled condition is expected to fail every task by mock design - that
-        # is the harness working correctly, not a benchmark failure).
-        success = ops_executed > 0 and (not reflexion_on or total_recoveries > 0)
+        success = ops_executed > 0 and (not reflection_on or total_recoveries > 0)
 
         return BenchmarkResult(
             benchmark_id=12,
@@ -1134,7 +1132,7 @@ class BenchmarkRunner:
             ops_succeeded=ops_succeeded,
             success_rate=success_rate,
             avg_step_duration_ms=0.0,
-            reflexion_recoveries=total_recoveries,
+            reflection_recoveries=total_recoveries,
             ablation=ablation,
             feature_flags=self._extract_feature_flags(cfg),
             per_op_stats=self._compute_per_op_stats(all_steps),
@@ -1187,7 +1185,7 @@ class BenchmarkRunner:
                 "enabled" if getattr(cfg, "use_negotiation", True) else "disabled"
             ),
             hallucinated_ops=0,
-            reflexion_recoveries=0,
+            reflection_recoveries=0,
             negotiation_rounds=total_rounds,
             success_rate=success_rate,
             ops_executed=ops_executed,
@@ -1287,7 +1285,7 @@ class BenchmarkRunner:
         ablation = AblationMetrics(
             condition=condition,
             hallucinated_ops=0,
-            reflexion_recoveries=0,
+            reflection_recoveries=0,
             negotiation_rounds=total_negotiation_rounds,
             success_rate=success_rate,
             ops_executed=ops_executed,
@@ -1323,14 +1321,36 @@ class BenchmarkRunner:
             execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
-    def _run_b15_vgn(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
-        """
-        Run B15 VGN ablation: execute grasp tasks with VGN enabled vs disabled.
+    @staticmethod
+    def _b15_grasp_outcome(results: List[dict], off_table_min_y: float) -> tuple:
+        """Returns (grasp_ok, held, off_table, probe_y) for a B15 probe chain."""
+        grasp = next(
+            (r for r in results if r and r.get("operation") == "grasp_object"), None
+        )
+        detects = [
+            r for r in results if r and r.get("operation") == "detect_object_stereo"
+        ]
+        probe = detects[-1] if detects else None
 
-        Offline mode patches VGN_ENABLED, mocks operations with always_succeed, and
-        verifies the parse+dry-run path works for both conditions.  Live mode sends
-        NL grasp tasks to SequenceServer and measures actual grasp success rate.
-        """
+        held = None
+        if grasp is not None:
+            gres = grasp.get("result") or {}
+            held = gres.get("is_holding_object")
+            if held is None:
+                held = bool(grasp.get("success"))
+
+        probe_y = None
+        off_table = None
+        if probe is not None and probe.get("success"):
+            pres = probe.get("result") or {}
+            probe_y = pres.get("y")
+            if probe_y is not None:
+                off_table = probe_y > off_table_min_y
+
+        grasp_ok = bool(held) and bool(off_table)
+        return grasp_ok, held, off_table, probe_y
+
+    def _run_b15_vgn(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         import config.Servers as _srv_cfg
         from orchestrators.CommandParser import CommandParser
         from .Result import AblationMetrics
@@ -1346,12 +1366,22 @@ class BenchmarkRunner:
             _flags = BenchmarkFeatureFlags(use_vgn=cfg.use_vgn)
             fixed_chains = getattr(module, "FIXED_OP_CHAINS", None)
             payloads = fixed_chains if fixed_chains is not None else tasks
+            off_table_min_y = float(getattr(module, "OFF_TABLE_MIN_Y", 0.1))
+            grasp_attempts = 0
+            grasp_successes = 0
             for payload in payloads:
                 raw = self._send(payload, cfg.robot_id, cfg, flags=_flags)
-                task_steps = self._parse_steps(raw.get("results") or [])
+                raw_results = raw.get("results") or []
+                task_steps = self._parse_steps(raw_results)
                 task_ms = float(raw.get("total_duration_ms", 0.0))
-                # per-task grasp metrics
-                g = [s for s in task_steps if s.operation == "grasp_object"]
+                has_grasp = any(s.operation == "grasp_object" for s in task_steps)
+                grasp_ok, held, off_table, probe_y = self._b15_grasp_outcome(
+                    raw_results, off_table_min_y
+                )
+                if has_grasp:
+                    grasp_attempts += 1
+                    if grasp_ok:
+                        grasp_successes += 1
                 task_label = (
                     payload[:60]
                     if isinstance(payload, str)
@@ -1362,8 +1392,11 @@ class BenchmarkRunner:
                         "task": task_label,
                         "ops_executed": len(task_steps),
                         "ops_succeeded": sum(1 for s in task_steps if s.success),
-                        "grasp_attempts": len(g),
-                        "grasp_successes": sum(1 for s in g if s.success),
+                        "grasp_attempts": 1 if has_grasp else 0,
+                        "grasp_successes": 1 if (has_grasp and grasp_ok) else 0,
+                        "grasp_held": held,
+                        "grasp_off_table": off_table,
+                        "post_lift_object_y": probe_y,
                         "duration_ms": task_ms,
                     }
                 )
@@ -1380,21 +1413,18 @@ class BenchmarkRunner:
 
             success_rate = (ops_succeeded / ops_executed) if ops_executed else 0.0
             grasp_steps = [s for s in all_steps if s.operation == "grasp_object"]
-            grasp_attempts = len(grasp_steps)
             grasp_sr = (
-                (sum(1 for s in grasp_steps if s.success) / grasp_attempts)
-                if grasp_attempts
-                else 0.0
+                (grasp_successes / grasp_attempts) if grasp_attempts else 0.0
             )
             avg_grasp_ms = (
-                (sum(s.duration_ms for s in grasp_steps) / grasp_attempts)
-                if grasp_attempts
+                (sum(s.duration_ms for s in grasp_steps) / len(grasp_steps))
+                if grasp_steps
                 else 0.0
             )
             ablation = AblationMetrics(
                 condition="enabled" if cfg.use_vgn else "disabled",
                 hallucinated_ops=0,
-                reflexion_recoveries=0,
+                reflection_recoveries=0,
                 negotiation_rounds=0,
                 success_rate=success_rate,
                 ops_executed=ops_executed,
@@ -1407,7 +1437,7 @@ class BenchmarkRunner:
                 benchmark_name=_BENCHMARK_NAMES[15],
                 run_id=make_run_id(),
                 config_snapshot=dataclasses.asdict(cfg),
-                success=success_rate > 0.5,
+                success=grasp_sr > 0.5,
                 total_duration_ms=total_ms,
                 steps=all_steps,
                 ops_executed=ops_executed,
@@ -1421,9 +1451,6 @@ class BenchmarkRunner:
                 execution_mode="live",
             )
 
-        # Offline: parse + dry-run path validation only. Condition is driven by
-        # cfg.use_vgn (--no-vgn to disable); run once per condition to compare.
-        # Actual grasp quality difference is only measurable in live mode.
         vgn_on = cfg.use_vgn
         prev_vgn = _srv_cfg.VGN_ENABLED
         _srv_cfg.VGN_ENABLED = vgn_on
@@ -1491,7 +1518,7 @@ class BenchmarkRunner:
         ablation = AblationMetrics(
             condition=condition,
             hallucinated_ops=0,
-            reflexion_recoveries=0,
+            reflection_recoveries=0,
             negotiation_rounds=0,
             success_rate=success_rate,
             ops_executed=ops_executed,
@@ -1585,7 +1612,7 @@ class BenchmarkRunner:
             ablation = AblationMetrics(
                 condition=condition,
                 hallucinated_ops=0,
-                reflexion_recoveries=0,
+                reflection_recoveries=0,
                 negotiation_rounds=0,
                 success_rate=success_rate,
                 ops_executed=ops_executed,
@@ -1649,7 +1676,7 @@ class BenchmarkRunner:
         ablation = AblationMetrics(
             condition=condition,
             hallucinated_ops=0,
-            reflexion_recoveries=0,
+            reflection_recoveries=0,
             negotiation_rounds=0,
             success_rate=success_rate,
             ops_executed=ops_executed,
@@ -1733,7 +1760,7 @@ class BenchmarkRunner:
         ablation = AblationMetrics(
             condition=condition,
             hallucinated_ops=total_bad,
-            reflexion_recoveries=0,
+            reflection_recoveries=0,
             negotiation_rounds=0,
             success_rate=rate,
             ops_executed=total_ops,

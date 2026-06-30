@@ -27,6 +27,59 @@ let stepChartInstance = null;
 let analysisChartInstances = {};
 let compareStepChartInstance = null;
 let aggregateData = null;   // cached from /api/benchmarks/aggregate
+
+// Analysis-tab cleanup rules, mirroring tools/PlotBenchmarks.py so the dashboard
+// agrees with the static thesis figures.
+const ABLATION_BIDS = [11, 12, 13, 14, 15, 16]; // b17 is AutoRT, not a paired ablation
+const OP_MIN_BENCH_PRESENCE = 2;  // op must appear in >=2 benchmarks
+const OP_MIN_DURATION_MS = 100;   // ...and exceed 100ms somewhere
+
+// Models excluded from the Model × Task matrix (mirrors PlotBenchmarks.py
+// EXCLUDE_MODELS). The nomic model is the RAG embedder, not a generation model,
+// but gets tagged on some runs.
+const EXCLUDED_MODELS = new Set([
+    'text-embedding-nomic-embed-text-v1.5',
+]);
+
+// Ops worth charting: present in >= OP_MIN_BENCH_PRESENCE benchmarks AND with a
+// max mean duration over OP_MIN_DURATION_MS (mirrors PlotBenchmarks.plot_op_latency).
+function interestingOps(entries) {
+    const presence = {};   // op -> count of benchmarks it appears in
+    const maxDur = {};     // op -> max mean_duration_ms across benchmarks
+    for (const d of entries) {
+        for (const [op, stat] of Object.entries(d.op_stats || {})) {
+            presence[op] = (presence[op] || 0) + 1;
+            maxDur[op] = Math.max(maxDur[op] || 0, stat.mean_duration_ms ?? 0);
+        }
+    }
+    return new Set(
+        Object.keys(presence).filter(
+            op => presence[op] >= OP_MIN_BENCH_PRESENCE && maxDur[op] > OP_MIN_DURATION_MS
+        )
+    );
+}
+// Some benchmarks record no per-step data (B9 fails before any op; B11/B14/B17
+// are ablation/offline runs that log only aggregate metrics). They can't appear
+// in op- or robot-level charts — flag them explicitly instead of dropping them
+// silently so the gaps are self-explanatory.
+function renderExclusionNote(elId, sortedEntries, shownBids, reason) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const shown = new Set(shownBids);
+    const missing = sortedEntries
+        .map(d => d.benchmark_id)
+        .filter(b => !shown.has(b))
+        .sort((a, b) => a - b);
+    if (missing.length === 0) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        return;
+    }
+    el.style.display = '';
+    el.innerHTML = `<i class="fa-solid fa-circle-info"></i>Not shown — ${reason}: `
+        + missing.map(b => 'B' + b).join(', ');
+}
+
 let thesisMode = false;
 let currentTab = 'details';
 let compareSet = new Set();       // filenames selected for comparison
@@ -205,6 +258,16 @@ function toggleCompareItem(filename, checked) {
     }
     updateCompareTab();
     syncAllCheckboxes();
+    refreshCompareIfActive();
+}
+
+// Re-render the compare view live when it's the active tab and still has enough
+// runs to show. updateCompareTab() already bounces to 'details' when the set
+// drops below 2, so we only refresh while a valid comparison is on screen.
+function refreshCompareIfActive() {
+    if (currentTab === 'compare' && compareSet.size >= 2) {
+        loadCompareView();
+    }
 }
 
 function updateCompareTab() {
@@ -346,6 +409,7 @@ async function fetchBenchmarkList() {
                 });
                 updateCompareTab();
                 syncAllCheckboxes();
+                refreshCompareIfActive();
             });
             left.appendChild(cb);
 
@@ -515,7 +579,7 @@ function renderRunInfo(data) {
         use_vgn: { label: 'VGN', desc: 'Volumetric Grasp Network enabled — replaces heuristic grasp candidates with learned 6-DOF grasp poses. Key ablation for grasp success rate.' },
         use_knowledge_graph: { label: 'KG', desc: 'Knowledge Graph active — spatial reasoning layer provides reachability, proximity, and handoff queries to the LLM. Ablation for planning quality.' },
         use_ros_movement: { label: 'ROS/MoveIt', desc: 'MoveIt trajectory planning active (vs. Unity IK). Tests whether motion planning improves collision avoidance and trajectory quality.' },
-        reflexion_enabled: { label: 'Reflexion', desc: 'Reflexion self-correction loop enabled — LLM retries failed steps with error context. Directly measured via reflexion_recoveries metric.' },
+        reflection_enabled: { label: 'Reflection', desc: 'Reflection self-correction loop enabled — LLM retries failed steps with error context. Directly measured via reflection_recoveries metric.' },
         dry_run: { label: 'Dry Run', desc: 'No real Unity execution — operations are simulated. Used for testing plan generation without robot hardware. Results not comparable to live runs.' },
         use_negotiation: { label: 'Negotiation', desc: 'Multi-robot LLM negotiation active — robots negotiate task allocation before execution. Core ablation for dual-arm coordination benchmarks.' },
     };
@@ -561,18 +625,18 @@ function renderRunInfo(data) {
     const qm = [
         { label: 'Hallucinated Ops',     value: data.hallucinated_ops     ?? 0, warn: v => v > 0,
           tip: 'Operations the LLM generated that do not exist in the operation registry. Always fail. Higher values indicate poor LLM adherence to the available operation set.' },
-        { label: 'Reflexion Recoveries', value: data.reflexion_recoveries  ?? 0, warn: () => false,
-          tip: 'Number of times the Reflexion self-correction loop successfully recovered a failed step by re-prompting with error context. Higher is better when reflexion is enabled.' },
+        { label: 'Reflection Recoveries', value: data.reflection_recoveries ?? data.reflexion_recoveries ?? 0, warn: () => false,
+          tip: 'Number of times the Reflection self-correction loop successfully recovered a failed step by re-prompting with error context. Higher is better when reflection is enabled.' },
         { label: 'Negotiation Rounds',   value: data.negotiation_rounds    ?? 0, warn: () => false,
           tip: 'LLM negotiation rounds completed between robots before execution. Relevant for dual-arm benchmarks with use_negotiation enabled.' },
         { label: 'Total Retries',        value: data.retry_count           ?? 0, warn: v => v > 0,
-          tip: 'Total number of step-level retries across the entire run (includes Reflexion retries and policy retries). Non-zero values indicate at least one step needed recovery.' },
+          tip: 'Total number of step-level retries across the entire run (includes Reflection retries and policy retries). Non-zero values indicate at least one step needed recovery.' },
     ];
     const qmHtml = qm.map(m =>
         `<span class="qm-chip${m.warn(m.value) ? ' qm-chip--warn' : ''}" title="${m.tip}">${m.label}: <strong>${m.value}</strong></span>`
     ).join('');
     html += `<div class="run-info-row run-info-row--qm">
-        <span class="run-info-label">Quality Metrics <i class="fa-solid fa-circle-info kpi-info" title="Run-level quality signals: plan correctness (hallucinations), self-correction effectiveness (reflexion), coordination overhead (negotiation), and overall retry burden."></i></span>
+        <span class="run-info-label">Quality Metrics <i class="fa-solid fa-circle-info kpi-info" title="Run-level quality signals: plan correctness (hallucinations), self-correction effectiveness (reflection), coordination overhead (negotiation), and overall retry burden."></i></span>
         <div class="qm-chips">${qmHtml}</div>
     </div>`;
 
@@ -612,7 +676,7 @@ function renderChainMetrics(data) {
                 <span>${(cm.error_rate * 100).toFixed(1)}%</span>
             </div>
             <div class="run-info-row">
-                <span class="run-info-label">Recoveries <i class="fa-solid fa-circle-info kpi-info" title="Number of sub-task-level recovery attempts (distinct from step-level Reflexion retries). Positive values mean the chain self-healed at least once."></i></span>
+                <span class="run-info-label">Recoveries <i class="fa-solid fa-circle-info kpi-info" title="Number of sub-task-level recovery attempts (distinct from step-level Reflection retries). Positive values mean the chain self-healed at least once."></i></span>
                 <span>${cm.recovery_count}</span>
             </div>
             ${phases.length ? `<div class="run-info-row run-info-row--phases">
@@ -757,9 +821,7 @@ async function loadAnalysis() {
 
 function renderAllAnalysisCharts(data) {
     const sorted = Object.values(data).sort((a, b) => a.benchmark_id - b.benchmark_id);
-    renderMainResultsChart(sorted);
     renderAblationChart(data);
-    renderDurationChart(sorted);
 
     const hasMultiRun = sorted.some(d => d.run_count >= 2);
     const panelD = document.getElementById('chart-d-panel');
@@ -771,22 +833,24 @@ function renderAllAnalysisCharts(data) {
     }
 
     renderModelMatrix(sorted);
+    renderModelOpMatrix(sorted);
     renderLatencyDecomposition(sorted);
     renderOperationHeatmap(sorted);
     renderComplexityScaling(sorted);
     renderRobotBreakdown(sorted);
-    renderCoverageMatrix(sorted);
 }
 
-// Model × Task success matrix — capability benchmarks (B1–B11) broken out by
-// model. b1-b11 are run across several LLMs; the top-level success rate pools
-// them, so this matrix is the trustworthy per-model view.
+// Model × Task success matrix — all benchmarks (B1–B17) broken out by model.
+// b1-b10 are run across several LLMs; the top-level success rate pools them, so
+// this matrix is the trustworthy per-model view. Ablations (B11+) appear too
+// when they carry per-model data; benchmarks with no by_model breakout are
+// dropped by the filter below.
 function renderModelMatrix(sortedEntries) {
     const container = document.getElementById('chartModelMatrix');
     if (!container) return;
 
     const entries = sortedEntries.filter(
-        d => d.benchmark_id <= 11 && d.by_model && Object.keys(d.by_model).length > 0
+        d => d.by_model && Object.keys(d.by_model).length > 0
     );
     if (entries.length === 0) {
         container.innerHTML = '<p style="color:var(--text-dim);padding:1rem">No model data available.</p>';
@@ -794,6 +858,7 @@ function renderModelMatrix(sortedEntries) {
     }
 
     const models = [...new Set(entries.flatMap(d => Object.keys(d.by_model)))]
+        .filter(m => !EXCLUDED_MODELS.has(m))
         .sort((a, b) => a.localeCompare(b));
 
     let html = '<div class="heatmap-scroll"><table class="heatmap-table model-matrix-table"><thead><tr><th>Model</th>';
@@ -822,84 +887,68 @@ function renderModelMatrix(sortedEntries) {
     container.innerHTML = html;
 }
 
-// Chart A — Main Results: success rate for capability tasks B1–B10 (horizontal bar)
-function renderMainResultsChart(sortedEntries) {
-    destroyChart('A');
+// Model × Operation success matrix — per-model success rate for each operation
+// type, pooled across all benchmarks. Surfaces which ops a given model is
+// unreliable at (e.g. grasp_object) independent of which task invoked them.
+function renderModelOpMatrix(sortedEntries) {
+    const container = document.getElementById('chartModelOpMatrix');
+    if (!container) return;
 
-    const coreEntries = sortedEntries.filter(d => d.benchmark_id <= 10);
-    if (coreEntries.length === 0) return;
-
-    const labels = coreEntries.map(d => `B${d.benchmark_id}: ${d.benchmark_name}`);
-    const rates = coreEntries.map(d => +(d.mean_success_rate * 100).toFixed(1));
-    const colors = coreEntries.map(d => successColor(d.mean_success_rate));
-    const runCounts = coreEntries.map(d => d.run_count);
-
-    const ctx = document.getElementById('chartA').getContext('2d');
-    const tt = tooltipDefaults();
-
-    analysisChartInstances['A'] = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                label: 'Success Rate (%)',
-                data: rates,
-                backgroundColor: colors.map(c => c + 'cc'),
-                borderColor: colors,
-                borderWidth: 1.5,
-                borderRadius: 3,
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: { duration: 200 },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    ...tt,
-                    padding: 10,
-                    cornerRadius: 2,
-                    titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
-                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
-                    callbacks: {
-                        label: (ctx) => {
-                            const idx = ctx.dataIndex;
-                            return [
-                                `Success Rate: ${ctx.parsed.x}%`,
-                                `Runs: ${runCounts[idx]}`,
-                            ];
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    min: 0,
-                    max: 100,
-                    grid: { color: chartGridColor() },
-                    border: { color: chartBorderColor() },
-                    ticks: {
-                        color: chartTextColor(),
-                        font: { family: "'IBM Plex Mono', monospace", size: 10 },
-                        callback: v => v + '%',
-                    },
-                    title: {
-                        display: true,
-                        text: 'SUCCESS RATE (%)',
-                        color: chartTextColor(),
-                        font: { family: "'IBM Plex Mono', monospace", size: 10 },
-                    }
-                },
-                y: {
-                    grid: { display: false },
-                    border: { color: chartBorderColor() },
-                    ticks: { color: chartTextColor(), font: { family: "'IBM Plex Mono', monospace", size: 10 } }
-                }
-            }
-        }
+    // Pool op stats per model across every benchmark that carries a by_model
+    // op breakout. ok = call_count - fail_count (call_count is total steps).
+    const perModel = {};   // model -> op -> {ok, total}
+    sortedEntries.forEach(d => {
+        if (!d.by_model) return;
+        Object.entries(d.by_model).forEach(([model, mv]) => {
+            if (EXCLUDED_MODELS.has(model) || !mv.op_stats) return;
+            const bucket = perModel[model] || (perModel[model] = {});
+            Object.entries(mv.op_stats).forEach(([op, os]) => {
+                const total = os.call_count || 0;
+                const fails = os.fail_count || 0;
+                const b = bucket[op] || (bucket[op] = { ok: 0, total: 0 });
+                b.ok += total - fails;
+                b.total += total;
+            });
+        });
     });
+
+    const models = Object.keys(perModel).sort((a, b) => a.localeCompare(b));
+    if (models.length === 0) {
+        container.innerHTML = '<p style="color:var(--text-dim);padding:1rem">No per-model operation data available.</p>';
+        return;
+    }
+
+    // Column order: ops sorted by total call volume (most-exercised first).
+    const opTotals = {};
+    models.forEach(m => Object.entries(perModel[m]).forEach(([op, b]) => {
+        opTotals[op] = (opTotals[op] || 0) + b.total;
+    }));
+    const ops = Object.keys(opTotals).sort((a, b) => opTotals[b] - opTotals[a]);
+
+    let html = '<div class="heatmap-scroll"><table class="heatmap-table model-matrix-table"><thead><tr><th>Model</th>';
+    ops.forEach(op => {
+        html += `<th title="${escHtml(op)}">${escHtml(op)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    models.forEach(model => {
+        const safeModel = escHtml(model);
+        html += `<tr><td class="heatmap-bm-label" title="${safeModel}">${safeModel}</td>`;
+        ops.forEach(op => {
+            const b = perModel[model][op];
+            if (!b || b.total === 0) { html += '<td class="heatmap-cell heatmap-cell--empty">—</td>'; return; }
+            const rate = b.ok / b.total;
+            const bg = successColor(rate);
+            const textColor = (rate > 0.3 && rate < 0.8) ? '#1a1a1a' : '#fff';
+            html += `<td class="heatmap-cell" style="background:${bg};color:${textColor}" `
+                + `title="${safeModel} · ${escHtml(op)}: ${(rate * 100).toFixed(0)}% over ${b.total} calls">`
+                + `${(rate * 100).toFixed(0)}%</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
 }
 
 // Chart B — Ablation: grouped bars enabled vs disabled for B11–B16
@@ -907,7 +956,7 @@ function renderAblationChart(data) {
     destroyChart('B');
 
     const ablationBenchmarks = Object.values(data)
-        .filter(d => d.benchmark_id >= 11 && d.ablation)
+        .filter(d => ABLATION_BIDS.includes(d.benchmark_id) && d.ablation)
         .sort((a, b) => a.benchmark_id - b.benchmark_id);
 
     if (ablationBenchmarks.length === 0) return;
@@ -916,7 +965,7 @@ function renderAblationChart(data) {
     const metricLabels = {
         mean_success_rate: 'Success Rate',
         mean_hallucinated_ops: 'Hallucinated Ops',
-        mean_reflexion_recoveries: 'Reflexion Recoveries',
+        mean_reflection_recoveries: 'Reflection Recoveries',
         mean_negotiation_rounds: 'Negotiation Rounds',
     };
 
@@ -993,86 +1042,6 @@ function renderAblationChart(data) {
                     title: {
                         display: true,
                         text: metricLabels[metric].toUpperCase(),
-                        color: chartTextColor(),
-                        font: { family: "'IBM Plex Mono', monospace", size: 10 },
-                    }
-                },
-                x: {
-                    grid: { display: false },
-                    border: { color: chartBorderColor() },
-                    ticks: { color: chartTextColor(), font: { family: "'IBM Plex Mono', monospace", size: 10 } }
-                }
-            }
-        }
-    });
-}
-
-// Chart C — Duration: avg task duration across all benchmarks
-function renderDurationChart(sortedEntries) {
-    destroyChart('C');
-
-    if (sortedEntries.length === 0) return;
-    const labels = sortedEntries.map(d => `B${d.benchmark_id}`);
-    const values = sortedEntries.map(d => +(d.mean_duration_ms / 1000).toFixed(2));
-    const maxVal = Math.max(...values);
-    const colors = values.map(v => {
-        const t = maxVal > 0 ? v / maxVal : 0;
-        // interpolate teal → orange → vermillion
-        if (t < 0.5) return PALETTE.teal;
-        if (t < 0.8) return PALETTE.orange;
-        return PALETTE.vermillion;
-    });
-
-    const ctx = document.getElementById('chartC').getContext('2d');
-    const tt = tooltipDefaults();
-
-    analysisChartInstances['C'] = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                label: 'Avg Duration (s)',
-                data: values,
-                backgroundColor: colors.map(c => c + 'cc'),
-                borderColor: colors,
-                borderWidth: 1.5,
-                borderRadius: 3,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: { duration: 200 },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    ...tt,
-                    padding: 10,
-                    cornerRadius: 2,
-                    titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
-                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
-                    callbacks: {
-                        label: ctx => `Duration: ${ctx.parsed.y}s`,
-                        afterLabel: (ctx) => {
-                            const entry = sortedEntries[ctx.dataIndex];
-                            return `Runs: ${entry.run_count}`;
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: { color: chartGridColor() },
-                    border: { color: chartBorderColor() },
-                    ticks: {
-                        color: chartTextColor(),
-                        font: { family: "'IBM Plex Mono', monospace", size: 10 },
-                        callback: v => v + 's',
-                    },
-                    title: {
-                        display: true,
-                        text: 'AVG DURATION (s)',
                         color: chartTextColor(),
                         font: { family: "'IBM Plex Mono', monospace", size: 10 },
                     }
@@ -1221,8 +1190,10 @@ function renderLatencyDecomposition(sortedEntries) {
     destroyChart('E');
 
     const entries = sortedEntries.filter(d => d.op_stats && Object.keys(d.op_stats).length > 0);
+    renderExclusionNote('noteE', sortedEntries, entries.map(d => d.benchmark_id), 'no per-step timing data');
     if (entries.length === 0) return;
 
+    const keepOps = interestingOps(entries);
     const labels = entries.map(d => `B${d.benchmark_id}`);
 
     const catTotals = {};
@@ -1230,6 +1201,7 @@ function renderLatencyDecomposition(sortedEntries) {
         catTotals[cat] = entries.map(d => {
             let sum = 0;
             for (const op of meta.ops) {
+                if (!keepOps.has(op)) continue;
                 const stat = d.op_stats[op];
                 if (stat) sum += stat.mean_duration_ms * stat.call_count;
             }
@@ -1286,10 +1258,13 @@ function renderOperationHeatmap(sortedEntries) {
     if (!container) return;
 
     const entries = sortedEntries.filter(d => d.op_stats && Object.keys(d.op_stats).length > 0);
+    renderExclusionNote('noteF', sortedEntries, entries.map(d => d.benchmark_id), 'no per-step timing data');
     if (entries.length === 0) { container.innerHTML = '<p style="color:var(--text-dim);padding:1rem">No step data available.</p>'; return; }
 
-    // Collect all ops across all benchmarks
-    const allOps = [...new Set(entries.flatMap(d => Object.keys(d.op_stats)))].sort();
+    // Show every op that appears in any benchmark — fast atomic ops are still
+    // timed and belong in the timing heatmap (not filtered via interestingOps).
+    const allOps = [...new Set(entries.flatMap(d => Object.keys(d.op_stats)))]
+        .sort();
     // Column max for per-column color scaling
     const colMax = {};
     allOps.forEach(op => {
@@ -1333,6 +1308,46 @@ function renderComplexityScaling(sortedEntries) {
     const points = entries.map(d => ({ x: d.mean_plan_length, y: +(d.mean_duration_ms / 1000).toFixed(2) }));
     const pointLabels = entries.map(d => `B${d.benchmark_id}: ${d.benchmark_name || 'Unknown'}`);
 
+    // Draw the benchmark name beside each point. Labels are placed to the right
+    // (or left, near the right edge) and nudged down when they would overlap a
+    // label already drawn, so dense clusters stay legible.
+    const pointLabelPlugin = {
+        id: 'complexityPointLabels',
+        afterDatasetsDraw(chart) {
+            const { ctx, chartArea } = chart;
+            const meta = chart.getDatasetMeta(0);
+            if (!meta || !meta.data.length) return;
+            ctx.save();
+            ctx.font = "9px 'IBM Plex Mono', monospace";
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = chartTextColor();
+            const lineH = 12;
+            const placed = [];
+            // Place top-to-bottom so the nudge-down stacking is deterministic.
+            const order = meta.data
+                .map((pt, i) => ({ i, px: pt.x, py: pt.y }))
+                .sort((a, b) => a.py - b.py);
+            for (const o of order) {
+                const text = pointLabels[o.i];
+                const w = ctx.measureText(text).width;
+                const toLeft = o.px > chartArea.right - w - 24;
+                const lx = toLeft ? o.px - 9 : o.px + 9;
+                let ly = o.py;
+                const left0 = toLeft ? lx - w : lx;
+                for (const p of placed) {
+                    if (Math.abs(ly - p.y) < lineH && left0 < p.right && left0 + w > p.left) {
+                        ly = p.y + lineH;
+                    }
+                }
+                ctx.textAlign = toLeft ? 'right' : 'left';
+                ctx.fillText(text, lx, ly);
+                const left = toLeft ? lx - w : lx;
+                placed.push({ left, right: left + w, y: ly });
+            }
+            ctx.restore();
+        }
+    };
+
     const ctx = document.getElementById('chartG').getContext('2d');
     const tt = tooltipDefaults();
 
@@ -1345,14 +1360,16 @@ function renderComplexityScaling(sortedEntries) {
                 backgroundColor: PALETTE.blue + 'cc',
                 borderColor: PALETTE.blue,
                 borderWidth: 1.5,
-                pointRadius: 7,
-                pointHoverRadius: 9,
+                pointRadius: 6,
+                pointHoverRadius: 8,
             }]
         },
+        plugins: [pointLabelPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,
             animation: { duration: 200 },
+            layout: { padding: { top: 14, right: 80, left: 10, bottom: 4 } },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -1392,6 +1409,7 @@ function renderRobotBreakdown(sortedEntries) {
     const panelH = document.getElementById('chart-h-panel');
     if (!entries.length) { if (panelH) panelH.style.display = 'none'; return; }
     if (panelH) panelH.style.display = '';
+    renderExclusionNote('noteH', sortedEntries, entries.map(d => d.benchmark_id), 'no per-robot step data');
 
     const labels = entries.map(d => `B${d.benchmark_id}`);
     const robots = [...new Set(entries.flatMap(d => Object.keys(d.per_robot_stats)))].sort();
@@ -1455,37 +1473,6 @@ function renderRobotBreakdown(sortedEntries) {
     });
 }
 
-// Chart I — Coverage Matrix: binary HTML table, op present in benchmark steps
-function renderCoverageMatrix(sortedEntries) {
-    const container = document.getElementById('chartI');
-    if (!container) return;
-
-    const entries = sortedEntries.filter(d => d.op_stats && Object.keys(d.op_stats).length > 0);
-    if (entries.length === 0) { container.innerHTML = '<p style="color:var(--text-dim);padding:1rem">No step data available.</p>'; return; }
-
-    const allOps = [...new Set(entries.flatMap(d => Object.keys(d.op_stats)))].sort();
-
-    let html = '<div class="heatmap-scroll"><table class="heatmap-table coverage-table"><thead><tr><th>Operation</th>';
-    entries.forEach(d => { html += `<th>B${d.benchmark_id}</th>`; });
-    html += '</tr></thead><tbody>';
-
-    allOps.forEach(op => {
-        const cat = opCategory(op);
-        const catColor = OP_CATEGORIES[cat]?.color ?? '#888';
-        html += `<tr><td class="heatmap-bm-label" style="border-left:3px solid ${catColor}">${op}</td>`;
-        entries.forEach(d => {
-            const present = !!d.op_stats[op];
-            html += present
-                ? `<td class="heatmap-cell coverage-cell--present" title="B${d.benchmark_id} uses ${op}">✓</td>`
-                : `<td class="heatmap-cell heatmap-cell--empty">—</td>`;
-        });
-        html += '</tr>';
-    });
-
-    html += '</tbody></table></div>';
-    container.innerHTML = html;
-}
-
 async function loadCompareView() {
     const loading = document.getElementById('compare-loading');
     const content = document.getElementById('compare-content');
@@ -1521,8 +1508,7 @@ async function loadCompareView() {
 
 function renderCompareView(runsData) {
     renderCompareHeader(runsData);
-    renderCompareKPIMatrix(runsData);
-    renderCompareFlagsDiff(runsData);
+    renderCompareKPIMatrix(runsData);  // Configuration rows now live in here
     renderCompareStepChart(runsData);
     renderCompareOpStats(runsData);
 }
@@ -1542,64 +1528,139 @@ function renderCompareHeader(runsData) {
         html += `<span class="compare-header-badge">B${bids[0]}</span>`;
         html += `<span class="compare-header-title">${names[0]}</span>`;
     }
-    html += `<span class="compare-header-count">${runsData.length} runs selected</span>`;
+    const models = [...new Set(runsData.map(compareRunModel))];
+    const modelSuffix = models.length > 1 ? ` · ${models.length} models` : (models[0] ? ` · ${escHtml(models[0])}` : '');
+    html += `<span class="compare-header-count">${runsData.length} runs selected${modelSuffix}</span>`;
     el.innerHTML = html;
 }
 
-function renderCompareKPIMatrix(runsData) {
-    const el = document.getElementById('compare-kpi-matrix');
+// Metrics shown in the compare KPI tables (shared by the per-model blocks and
+// the cross-model summary). `higher` drives best/worst highlighting.
+const COMPARE_METRICS = [
+    { key: 'success_rate',       label: 'Success Rate',        fmt: v => (v * 100).toFixed(1) + '%',  higher: true  },
+    { key: 'total_duration_ms',  label: 'Total Duration',       fmt: v => (v / 1000).toFixed(2) + 's', higher: false },
+    { key: 'ops_ratio',          label: 'Ops (succ/total)',     fmt: (v, r) => `${r.data.ops_succeeded}/${r.data.ops_executed}`, avgFmt: v => (v * 100).toFixed(1) + '%', higher: true, val: r => r.data.ops_succeeded / Math.max(r.data.ops_executed, 1) },
+    { key: 'avg_step_duration_ms', label: 'Avg Step Time',     fmt: v => v.toFixed(0) + 'ms',         higher: false },
+    { key: 'slowest_step', label: 'Slowest Step',
+      val: r => { const s = r.data.steps || []; return s.length ? Math.max(...s.map(x => x.duration_ms)) : null; },
+      fmt: (v, r) => { const step = (r.data.steps || []).find(x => x.duration_ms === v); return step ? `${step.operation} <span class="compare-kpi-sub">${v.toFixed(0)}ms</span>` : '—'; },
+      avgFmt: v => v.toFixed(0) + 'ms avg',
+      higher: false },
+    { key: 'hallucinated_ops',     label: 'Hallucinated Ops',     fmt: v => v, higher: false },
+    { key: 'reflection_recoveries', label: 'Reflection Recoveries', fmt: v => v ?? 0, higher: true,
+      val: r => r.data.reflection_recoveries ?? r.data.reflexion_recoveries ?? null },
+    { key: 'negotiation_rounds',   label: 'Negotiation Rounds',   fmt: v => v ?? 0, higher: false },
+];
 
-    const metrics = [
-        { key: 'success_rate',       label: 'Success Rate',        fmt: v => (v * 100).toFixed(1) + '%',  higher: true  },
-        { key: 'total_duration_ms',  label: 'Total Duration',       fmt: v => (v / 1000).toFixed(2) + 's', higher: false },
-        { key: 'ops_ratio',          label: 'Ops (succ/total)',     fmt: (v, r) => `${r.data.ops_succeeded}/${r.data.ops_executed}`, avgFmt: v => (v * 100).toFixed(1) + '%', higher: true, val: r => r.data.ops_succeeded / Math.max(r.data.ops_executed, 1) },
-        { key: 'avg_step_duration_ms', label: 'Avg Step Time',     fmt: v => v.toFixed(0) + 'ms',         higher: false },
-        { key: 'slowest_step', label: 'Slowest Step',
-          val: r => { const s = r.data.steps || []; return s.length ? Math.max(...s.map(x => x.duration_ms)) : null; },
-          fmt: (v, r) => { const step = (r.data.steps || []).find(x => x.duration_ms === v); return step ? `${step.operation} <span class="compare-kpi-sub">${v.toFixed(0)}ms</span>` : '—'; },
-          avgFmt: v => v.toFixed(0) + 'ms avg',
-          higher: false },
-        { key: 'hallucinated_ops',     label: 'Hallucinated Ops',     fmt: v => v, higher: false },
-        { key: 'reflexion_recoveries', label: 'Reflexion Recoveries', fmt: v => v ?? 0, higher: true  },
-        { key: 'negotiation_rounds',   label: 'Negotiation Rounds',   fmt: v => v ?? 0, higher: false },
-    ];
+// Resolve a run's model: the directory model (bN/<model>/file) wins, else the
+// run's model field; normalise publisher/model -> model so it matches the plots.
+function compareRunModel(run) {
+    const parts = (run.filename || '').split('/');
+    const raw = parts.length >= 3
+        ? parts[parts.length - 2]
+        : ((run.data && run.data.model) || '');
+    return raw ? raw.split('/').pop() : 'unknown';
+}
 
-    // Run column headers: short run_id (last 6 chars) + relative timestamp
-    const colHeaders = runsData.map(r => {
+// One stable color per model in the compare set (runs of a model share it).
+const COMPARE_PALETTE = [
+    PALETTE.blue, PALETTE.orange, PALETTE.teal, PALETTE.vermillion,
+    PALETTE.purple, PALETTE.skyblue, PALETTE.yellow,
+];
+function compareModelColorMap(runsData) {
+    const map = new Map();
+    let i = 0;
+    runsData.forEach(r => {
+        const model = compareRunModel(r);
+        if (!map.has(model)) map.set(model, COMPARE_PALETTE[i++ % COMPARE_PALETTE.length]);
+    });
+    return map;
+}
+
+// Feature flags surfaced in the compare table's Configuration rows.
+const COMPARE_FLAG_META = {
+    use_rag: 'RAG',
+    use_vgn: 'VGN',
+    use_knowledge_graph: 'Knowledge Graph',
+    use_ros_movement: 'ROS/MoveIt',
+    reflection_enabled: 'Reflection',
+    dry_run: 'Dry Run',
+    use_negotiation: 'Negotiation',
+};
+
+// Config entries (flags + execution mode) whose value differs across the runs.
+function compareDiffConfig(runsData) {
+    const rows = [];
+    Object.keys(COMPARE_FLAG_META).forEach(k => {
+        const vals = runsData.map(r => r.data.feature_flags?.[k] ?? null);
+        if ([...new Set(vals.filter(v => v !== null))].length > 1) {
+            rows.push({ key: k, label: COMPARE_FLAG_META[k], isMode: false });
+        }
+    });
+    const modes = runsData.map(r => r.data.execution_mode || null);
+    if ([...new Set(modes.filter(v => v !== null))].length > 1) {
+        rows.push({ key: 'execution_mode', label: 'Execution Mode', isMode: true });
+    }
+    return rows;
+}
+
+function compareConfigCell(run, cfg) {
+    if (cfg.isMode) {
+        const v = run.data.execution_mode || null;
+        return v ? `<span class="run-mode-badge run-mode-badge--${v}">${String(v).toUpperCase()}</span>` : '—';
+    }
+    const v = run.data.feature_flags?.[cfg.key];
+    if (v === undefined || v === null) return '<span class="flag-pill" style="opacity:0.4">—</span>';
+    const on = !!v;
+    return `<span class="flag-pill flag-pill--${on ? 'on' : 'off'}">${on ? 'ON' : 'OFF'}</span>`;
+}
+
+function compareMetricVals(metric, runs) {
+    return runs.map(r => (metric.val ? metric.val(r) : (r.data[metric.key] ?? null)));
+}
+
+function compareMetricAvg(metric, runs) {
+    const nums = compareMetricVals(metric, runs).filter(v => v !== null && !isNaN(v));
+    if (!nums.length) return null;
+    return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+function compareMetricDisplay(metric, avg) {
+    if (avg === null) return '—';
+    const fmtFn = metric.avgFmt ?? (metric.fmt.length > 1 ? null : metric.fmt);
+    return fmtFn ? fmtFn(avg) : avg.toFixed(2);
+}
+
+// One KPI table (metrics × runs, + an Avg column) for a single model's runs.
+// `diffConfig` (config entries that differ across the whole comparison) is
+// appended as Configuration rows so the run config sits beside its metrics.
+function buildKpiTable(runs, diffConfig = []) {
+    const showAvg = runs.length > 1;
+    const colHeaders = runs.map(r => {
         const rid = r.data.run_id || r.filename;
         const short = rid.slice(-6);
-        // run_id format: YYYYMMDDTHHmmss_xxxxxx
         let timeStr = '';
         const m = rid.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
         if (m) timeStr = `${m[4]}:${m[5]}`;
         return { short, timeStr };
     });
 
-    const showAvg = runsData.length > 1;
-
-    let html = `<table class="compare-kpi-table"><thead><tr>
-        <th>Metric</th>`;
+    let html = `<table class="compare-kpi-table"><thead><tr><th>Metric</th>`;
     colHeaders.forEach((h, i) => {
         html += `<th>Run ${i + 1}<span class="compare-run-header">${h.timeStr || h.short}</span></th>`;
     });
     if (showAvg) html += `<th class="compare-kpi-avg-header">Avg</th>`;
     html += `</tr></thead><tbody>`;
 
-    metrics.forEach(metric => {
-        // Extract raw numeric values per run for best/worst detection
-        const vals = runsData.map(r => {
-            if (metric.val) return metric.val(r);
-            return r.data[metric.key] ?? null;
-        });
-
+    COMPARE_METRICS.forEach(metric => {
+        const vals = compareMetricVals(metric, runs);
         const numericVals = vals.filter(v => v !== null && !isNaN(v));
         const allSame = numericVals.length > 1 && numericVals.every(v => v === numericVals[0]);
-        const hasData = numericVals.length > 0;
-        const best = (!hasData || allSame) ? null : (metric.higher ? Math.max(...numericVals) : Math.min(...numericVals));
-        const worst = (!hasData || allSame) ? null : (metric.higher ? Math.min(...numericVals) : Math.max(...numericVals));
+        const best = (!numericVals.length || allSame) ? null : (metric.higher ? Math.max(...numericVals) : Math.min(...numericVals));
+        const worst = (!numericVals.length || allSame) ? null : (metric.higher ? Math.min(...numericVals) : Math.max(...numericVals));
 
         html += `<tr><td class="compare-kpi-label">${metric.label}</td>`;
-        runsData.forEach((r, i) => {
+        runs.forEach((r, i) => {
             const raw = vals[i];
             if (raw === null) { html += `<td>—</td>`; return; }
             const display = typeof metric.fmt === 'function'
@@ -1612,80 +1673,89 @@ function renderCompareKPIMatrix(runsData) {
             }
             html += `<td${cls ? ` class="${cls}"` : ''}>${display}</td>`;
         });
-
         if (showAvg) {
-            if (numericVals.length > 0) {
-                const avg = numericVals.reduce((a, b) => a + b, 0) / numericVals.length;
-                const fmtFn = metric.avgFmt ?? (metric.fmt.length > 1 ? null : metric.fmt);
-                const display = fmtFn ? fmtFn(avg) : avg.toFixed(2);
-                html += `<td class="compare-kpi-avg">${display}</td>`;
-            } else {
-                html += `<td class="compare-kpi-avg">—</td>`;
-            }
+            html += `<td class="compare-kpi-avg">${compareMetricDisplay(metric, compareMetricAvg(metric, runs))}</td>`;
         }
-
         html += `</tr>`;
     });
 
-    html += `</tbody></table>`;
-    el.innerHTML = html;
-}
-
-function renderCompareFlagsDiff(runsData) {
-    const el = document.getElementById('compare-flags-diff');
-
-    const flagMeta = {
-        use_rag: 'RAG',
-        use_vgn: 'VGN',
-        use_knowledge_graph: 'Knowledge Graph',
-        use_ros_movement: 'ROS/MoveIt',
-        reflexion_enabled: 'Reflexion',
-        dry_run: 'Dry Run',
-        use_negotiation: 'Negotiation',
-    };
-
-    // Find flags that differ across runs
-    const diffRows = [];
-    const allFlagKeys = Object.keys(flagMeta);
-    allFlagKeys.forEach(k => {
-        const vals = runsData.map(r => r.data.feature_flags?.[k] ?? null);
-        const uniqueVals = [...new Set(vals.filter(v => v !== null))];
-        if (uniqueVals.length > 1) {
-            diffRows.push({ key: k, label: flagMeta[k], vals });
-        }
-    });
-
-    // execution_mode diff
-    const execModes = runsData.map(r => r.data.execution_mode || null);
-    const uniqueModes = [...new Set(execModes.filter(v => v !== null))];
-    if (uniqueModes.length > 1) {
-        diffRows.push({ key: 'execution_mode', label: 'Execution Mode', vals: execModes, isMode: true });
-    }
-
-    let html = `<div class="compare-flags-header"><i class="fa-solid fa-sliders"></i> Configuration Differences</div>`;
-    html += `<div class="compare-flags-body">`;
-
-    if (diffRows.length === 0) {
-        html += `<span class="compare-no-diff"><i class="fa-solid fa-check" style="color:var(--success);margin-right:0.4rem"></i>All runs share identical configuration</span>`;
-    } else {
-        diffRows.forEach(row => {
-            html += `<div class="compare-flags-row">
-                <span class="compare-flags-label">${row.label}</span>`;
-            row.vals.forEach(v => {
-                if (v === null) {
-                    html += `<span class="flag-pill" style="opacity:0.4">—</span>`;
-                } else if (row.isMode) {
-                    html += `<span class="run-mode-badge run-mode-badge--${v}">${String(v).toUpperCase()}</span>`;
-                } else {
-                    const on = !!v;
-                    html += `<span class="flag-pill flag-pill--${on ? 'on' : 'off'}">${on ? 'ON' : 'OFF'}</span>`;
-                }
-            });
-            html += `</div>`;
+    if (diffConfig.length) {
+        const span = runs.length + 1 + (showAvg ? 1 : 0);
+        html += `<tr class="compare-config-sep"><td colspan="${span}">Configuration</td></tr>`;
+        diffConfig.forEach(cfg => {
+            html += `<tr><td class="compare-kpi-label">${cfg.label}</td>`;
+            runs.forEach(r => { html += `<td>${compareConfigCell(r, cfg)}</td>`; });
+            if (showAvg) html += `<td class="compare-kpi-avg">—</td>`;
+            html += `</tr>`;
         });
     }
 
-    html += `</div>`;
+    html += `</tbody></table>`;
+    return html;
+}
+
+// Cross-model summary: each model's per-metric average, one model per row, with
+// best/worst highlighting across models.
+function buildModelSummary(modelGroups) {
+    const entries = [...modelGroups.entries()].map(([model, runs]) => ({
+        model, runs, avgs: COMPARE_METRICS.map(m => compareMetricAvg(m, runs)),
+    }));
+    const colExtremes = COMPARE_METRICS.map((m, ci) => {
+        const nums = entries.map(e => e.avgs[ci]).filter(v => v !== null && !isNaN(v));
+        if (nums.length < 2 || nums.every(v => v === nums[0])) return { best: null, worst: null };
+        return {
+            best: m.higher ? Math.max(...nums) : Math.min(...nums),
+            worst: m.higher ? Math.min(...nums) : Math.max(...nums),
+        };
+    });
+
+    let html = `<div class="compare-section-title">Model averages</div>`;
+    html += `<table class="compare-kpi-table compare-summary-table"><thead><tr><th>Model</th>`;
+    COMPARE_METRICS.forEach(m => { html += `<th>${m.label}</th>`; });
+    html += `</tr></thead><tbody>`;
+    entries.forEach(({ model, runs, avgs }) => {
+        html += `<tr><td class="compare-kpi-label" title="${escHtml(model)}">${escHtml(model)}`
+            + ` <span class="compare-kpi-sub">${runs.length} run${runs.length > 1 ? 's' : ''}</span></td>`;
+        avgs.forEach((avg, ci) => {
+            const { best, worst } = colExtremes[ci];
+            let cls = '';
+            if (avg !== null && best !== null) {
+                if (avg === best && avg !== worst) cls = 'compare-kpi-best';
+                else if (avg === worst && avg !== best) cls = 'compare-kpi-worst';
+            }
+            html += `<td${cls ? ` class="${cls}"` : ''}>${compareMetricDisplay(COMPARE_METRICS[ci], avg)}</td>`;
+        });
+        html += `</tr>`;
+    });
+    html += `</tbody></table>`;
+    return html;
+}
+
+function renderCompareKPIMatrix(runsData) {
+    const el = document.getElementById('compare-kpi-matrix');
+
+    // Group runs by model, preserving first-seen order.
+    const modelGroups = new Map();
+    runsData.forEach(r => {
+        const model = compareRunModel(r);
+        if (!modelGroups.has(model)) modelGroups.set(model, []);
+        modelGroups.get(model).push(r);
+    });
+
+    // Config entries that differ across the whole comparison, shown as rows in
+    // each model block (replaces the separate Configuration Differences panel).
+    const diffConfig = compareDiffConfig(runsData);
+
+    let html = '';
+    // Cross-model summary only adds value when more than one model is present.
+    if (modelGroups.size > 1) html += buildModelSummary(modelGroups);
+
+    modelGroups.forEach((runs, model) => {
+        html += `<div class="compare-section-title compare-model-title">${escHtml(model)}`
+            + ` <span class="compare-kpi-sub">${runs.length} run${runs.length > 1 ? 's' : ''}</span></div>`;
+        html += buildKpiTable(runs, diffConfig);
+    });
+
     el.innerHTML = html;
 }
 
@@ -1709,23 +1779,38 @@ function renderCompareStepChart(runsData) {
 
     if (opOrder.length === 0) return;
 
-    const runColors = [PALETTE.blue, PALETTE.orange, PALETTE.teal, PALETTE.vermillion, PALETTE.purple];
+    // One color per model so all runs of a model share it (not per-run colors).
+    const modelColors = compareModelColorMap(runsData);
 
-    const datasets = runsData.map((r, i) => {
-        // Sum durations per operation name (a run may have multiple steps of the same op)
-        const opDurations = {};
-        (r.data.steps || []).forEach(s => {
-            opDurations[s.operation] = (opDurations[s.operation] || 0) + s.duration_ms;
+    // Group runs by model so each model is a single dataset (one legend entry).
+    const modelGroups = new Map();
+    runsData.forEach(r => {
+        const model = compareRunModel(r);
+        if (!modelGroups.has(model)) modelGroups.set(model, []);
+        modelGroups.get(model).push(r);
+    });
+
+    const datasets = Array.from(modelGroups.entries()).map(([model, runs]) => {
+        // Mean op duration across the model's runs (each run sums its own repeated ops first).
+        const opTotals = {};
+        const opCounts = {};
+        runs.forEach(r => {
+            const perRun = {};
+            (r.data.steps || []).forEach(s => {
+                perRun[s.operation] = (perRun[s.operation] || 0) + s.duration_ms;
+            });
+            Object.entries(perRun).forEach(([op, ms]) => {
+                opTotals[op] = (opTotals[op] || 0) + ms;
+                opCounts[op] = (opCounts[op] || 0) + 1;
+            });
         });
 
-        const color = runColors[i % runColors.length];
-        const rid = r.data.run_id || r.filename;
-        const m = rid.match(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
-        const label = m ? `Run ${i + 1} (${m[4]}:${m[5]})` : `Run ${i + 1}`;
+        const color = modelColors.get(model);
+        const label = runs.length > 1 ? `${model} (${runs.length} runs, avg)` : model;
 
         return {
             label,
-            data: opOrder.map(op => opDurations[op] ?? null),
+            data: opOrder.map(op => opCounts[op] ? opTotals[op] / opCounts[op] : null),
             backgroundColor: color + 'cc',
             borderColor: color,
             borderWidth: 1.5,
@@ -1783,7 +1868,7 @@ function renderCompareStepChart(runsData) {
                     },
                     title: {
                         display: true,
-                        text: 'DURATION (ms, summed per op)',
+                        text: 'DURATION (ms, summed per op, avg across runs)',
                         color: chartTextColor(),
                         font: { family: "'IBM Plex Mono', monospace", size: 10 },
                     }
@@ -1869,27 +1954,6 @@ function exportHeatmapCsv() {
     triggerDownload(URL.createObjectURL(blob), 'operation-timing.csv');
 }
 
-function exportCoverageMatrixCsv() {
-    if (!aggregateData) { alert('No data loaded.'); return; }
-    const sorted = Object.values(aggregateData).sort((a, b) => a.benchmark_id - b.benchmark_id);
-    const entries = sorted.filter(d => d.op_stats && Object.keys(d.op_stats).length > 0);
-    if (!entries.length) { alert('No coverage data available.'); return; }
-
-    const allOps = [...new Set(entries.flatMap(d => Object.keys(d.op_stats)))].sort();
-
-    const rows = [];
-    rows.push(['Operation', ...entries.map(d => `B${d.benchmark_id}`)]);
-    allOps.forEach(op => {
-        const row = [op, ...entries.map(d => d.op_stats[op] ? '1' : '0')];
-        rows.push(row);
-    });
-
-    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    triggerDownload(URL.createObjectURL(blob), 'operation-coverage.csv');
-}
-
-
 function exportChartPng(chartKey, filename) {
     // Normalise key: strip leading 'chart' prefix so both 'chartA' and 'A' work
     const key = chartKey.replace(/^chart/i, '');
@@ -1924,9 +1988,7 @@ function triggerDownload(href, filename) {
 
 async function exportAllCharts() {
     const pairs = [
-        ['A', 'main-results.png'],
         ['B', 'ablation.png'],
-        ['C', 'duration.png'],
         ['D', 'stability.png'],
         ['E', 'latency-decomposition.png'],
         ['G', 'complexity-scaling.png'],
@@ -1971,4 +2033,3 @@ window.downloadAggregateJson  = downloadAggregateJson;
 window.exportCompareChartPng  = exportCompareChartPng;
 window.downloadCompareJson    = downloadCompareJson;
 window.exportHeatmapCsv       = exportHeatmapCsv;
-window.exportCoverageMatrixCsv = exportCoverageMatrixCsv;

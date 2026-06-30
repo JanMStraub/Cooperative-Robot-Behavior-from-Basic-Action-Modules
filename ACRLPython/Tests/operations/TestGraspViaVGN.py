@@ -411,7 +411,7 @@ class TestGraspObjectVGNRouting:
 
     def test_falls_back_to_tcp_when_vgn_returns_none(self):
         broadcaster = MagicMock()
-        broadcaster.send_command.return_value = True
+        broadcaster.send_command_and_wait.return_value = {"success": True}
         with patch("config.Servers.VGN_ENABLED", True), patch(
             "config.ROS.ROS_ENABLED", False
         ), patch(
@@ -421,10 +421,9 @@ class TestGraspObjectVGNRouting:
             return_value=broadcaster,
         ):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
-        # TCP path sends the command
         assert result.success is True
-        broadcaster.send_command.assert_called_once()
-        cmd = broadcaster.send_command.call_args[0][0]
+        broadcaster.send_command_and_wait.assert_called_once()
+        cmd = broadcaster.send_command_and_wait.call_args[0][0]
         # TCP path does NOT include precomputed_candidates
         assert "precomputed_candidates" not in cmd.get("parameters", {})
 

@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""B12: Reflection Ablation - measure recovery rate with/without reflection."""
+
+from __future__ import annotations
+
+from typing import List
+
+
+def get_tasks(config=None) -> List[str]:
+    """
+    Return failure-prone NL tasks for reflection ablation.
+
+    Tasks are designed to stress IK reachability and precision so that initial
+    attempts are likely to fail, giving reflection retries a chance to recover.
+    Covers NAVIGATION, MANIPULATION, and PERCEPTION eligible categories.
+    """
+    # Boundary coords stress IK reachability; low y risks table collision;
+    # "nearest object" is ambiguous, forcing perception retry on first miss.
+    return [
+        "Robot2: Move to position (0.5, 0.05, 0.4).",
+        "Robot1: Grasp the red cube and lift it to y=0.2.",
+        "Robot2: Grasp the green cube and place it at (0.5, 0.02, -0.4).",
+        "Robot1: Move to position (-0.5, 0.08, 0.4), then move to (-0.1, 0.04, -0.47).",
+        "Robot1: Navigate to the nearest object and return to start.",
+    ]

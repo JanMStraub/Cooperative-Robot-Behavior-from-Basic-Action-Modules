@@ -33,12 +33,12 @@ def _apply(flags: BenchmarkFeatureFlags, restores: Dict[str, Any]) -> None:
         srv.VGN_ENABLED = flags.use_vgn
         logger.debug(f"[FeatureFlagContext] VGN_ENABLED -> {flags.use_vgn}")
 
-    if flags.use_reflexion is not None:
-        restores["srv.REFLEXION_ENABLED"] = srv.REFLEXION_ENABLED
-        restores["seq.REFLEXION_ENABLED"] = seq_mod.REFLEXION_ENABLED
-        srv.REFLEXION_ENABLED = flags.use_reflexion
-        seq_mod.REFLEXION_ENABLED = flags.use_reflexion
-        logger.debug(f"[FeatureFlagContext] REFLEXION_ENABLED -> {flags.use_reflexion}")
+    if flags.use_reflection is not None:
+        restores["srv.REFLECTION_ENABLED"] = srv.REFLECTION_ENABLED
+        restores["seq.REFLECTION_ENABLED"] = seq_mod.REFLECTION_ENABLED
+        srv.REFLECTION_ENABLED = flags.use_reflection
+        seq_mod.REFLECTION_ENABLED = flags.use_reflection
+        logger.debug(f"[FeatureFlagContext] REFLECTION_ENABLED -> {flags.use_reflection}")
 
     if flags.use_ros is not None:
         restores["ros.ROS_ENABLED"] = ros.ROS_ENABLED
@@ -102,10 +102,10 @@ def _restore(restores: Dict[str, Any]) -> None:
 
         if "srv.VGN_ENABLED" in restores:
             srv.VGN_ENABLED = restores["srv.VGN_ENABLED"]
-        if "srv.REFLEXION_ENABLED" in restores:
-            srv.REFLEXION_ENABLED = restores["srv.REFLEXION_ENABLED"]
-        if "seq.REFLEXION_ENABLED" in restores:
-            seq_mod.REFLEXION_ENABLED = restores["seq.REFLEXION_ENABLED"]
+        if "srv.REFLECTION_ENABLED" in restores:
+            srv.REFLECTION_ENABLED = restores["srv.REFLECTION_ENABLED"]
+        if "seq.REFLECTION_ENABLED" in restores:
+            seq_mod.REFLECTION_ENABLED = restores["seq.REFLECTION_ENABLED"]
         if "ros.ROS_ENABLED" in restores:
             ros.ROS_ENABLED = restores["ros.ROS_ENABLED"]
         if "ros.DEFAULT_CONTROL_MODE" in restores:

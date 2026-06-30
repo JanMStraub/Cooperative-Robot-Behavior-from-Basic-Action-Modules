@@ -313,33 +313,27 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator GripSpeed_AffectsInterpolationSpeed()
         {
-            // Reset gripper to known state (fully closed)
+            // Forced-open baseline (ResetGrippers forces joint + drive target) is identical
+            // every run; settling a close left a non-deterministic baseline (anti-tunnel clamp
+            // flips IsMoving false mid-close) that swamped the gripSpeed signal.
             _gripperController.ResetGrippers();
-            _gripperController.SetGripperPosition(0.0f);
-            yield return TestHelpers.WaitUntil(() => !_gripperController.IsMoving, 3.0f); // Ensure fully closed
-
-            // Record baseline (closed) target before fast run
+            yield return new WaitForFixedUpdate();
             float baselineTarget = _leftGripper.xDrive.target;
 
-            // Test 1: Fast grip speed - open from closed
-            _gripperController.gripSpeed = 1.0f; // Very fast
-            _gripperController.SetGripperPosition(1.0f);
-            yield return null; // One render frame = one Update() call with consistent Time.deltaTime
+            _gripperController.gripSpeed = 1.0f;
+            _gripperController.SetGripperPosition(0.0f);
+            yield return null;
 
             float fastDriveTarget = _leftGripper.xDrive.target;
             float fastDisplacement = Mathf.Abs(fastDriveTarget - baselineTarget);
 
-            // Reset gripper to closed again
             _gripperController.ResetGrippers();
-            _gripperController.SetGripperPosition(0.0f);
-            yield return TestHelpers.WaitUntil(() => !_gripperController.IsMoving, 3.0f); // Ensure fully closed
-
+            yield return new WaitForFixedUpdate();
             float baselineTarget2 = _leftGripper.xDrive.target;
 
-            // Test 2: Slow grip speed - open from closed
-            _gripperController.gripSpeed = 0.01f; // Very slow
-            _gripperController.SetGripperPosition(1.0f);
-            yield return null; // Same: one render frame for fair comparison
+            _gripperController.gripSpeed = 0.01f;
+            _gripperController.SetGripperPosition(0.0f);
+            yield return null;
 
             float slowDriveTarget = _leftGripper.xDrive.target;
             float slowDisplacement = Mathf.Abs(slowDriveTarget - baselineTarget2);

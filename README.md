@@ -3,29 +3,29 @@
 LLM-driven collaborative control for two AR4 robotic arms. A locally hosted model translates natural-language instructions into coordinated dual-arm behavior by composing a structured pool of 29 robot operations, no task-specific training, no hard-coded sequencing logic, no cloud dependencies. Developed as a master's thesis at Heidelberg University (project codename **ACRL** Auto-Cooperative Robot Learning).
 
 <p align="center">
-  <img src="Misc/images/14_robot_env.png" width="560" alt="Unity simulation environment with two AR4 arms, manipulation objects, lettered placement fields, and stereo camera rig">
+  <img src="Thesis/images/14_robot_env.png" width="560" alt="Unity simulation environment with two AR4 arms, manipulation objects, lettered placement fields, and stereo camera rig">
 </p>
 
-Given a single prompt like _"Robot1 and Robot2 perform a handoff of the red cube"_, the LLM selects and sequences operations from the pool detection, grasping, signaling, handoff reception with the coordination emerging entirely from its use of `signal`/`wait_for_signal` primitives:
+Given a single prompt like _"Robot1 and Robot2 perform a handoff of the red cube"_, the LLM selects and sequences operations from the pool detection, grasping, signaling, handoff reception, composing the coordination from `signal`/`wait_for_signal` primitives (guided by handoff rules in the prompt):
 
 <p align="center">
-  <img src="Misc/images/17_example_command_flow.png" width="800" alt="Example command flow: LLM-planned handoff sequence across both robots">
+  <img src="Thesis/images/17_example_command_flow.png" width="800" alt="Example command flow: LLM-planned handoff sequence across both robots">
 </p>
 
 ## Highlights
 
 - **100% task success** on all single-robot benchmarks (B1-B5, 25 runs) and the dual-robot handoff (B6) with Magistral Small 2509 (24B, 4-bit) - zero hallucinated operations, zero retries; evaluated across 17 benchmarks, all running on a single Apple MacBook Pro (M5 Pro, 64 GB) hosting the simulation, Python backend, and Dockerized ROS 2/MoveIt stack together
 - **Sustained reliability**: chains of 20 heterogeneous sub-tasks (85 operations per run) complete without failure across all runs (B8)
-- **Emergent parallelism**: the planner identifies task-level independence and emits concurrent dual-robot plans without being told to (B10)
-- **Quantified ablations**: negotiation +25 pp per-task success, reflexion +16 pp; ROS/MoveIt is kept for collision-aware motion planning (a capability point-to-point IK cannot represent) rather than a measured reliability gain - the apparent +24 pp gap is dominated by a shared stereo-detection miss; RAG is model-dependent, and knowledge-graph context injection and VGN are honestly reported as net-neutral or a small cost
-- **Known limitation**: concurrent bimanual manipulation (B7) remains unsolved - the LLM decomposes simultaneous grasps into sequential plans that deadlock or violate separation constraints
+- **Reliable parallelism**: guided by a general parallel rule, the planner spots task-level independence and schedules concurrent dual-robot plans (0.75 parallelism ratio across all runs, B10)
+- **Quantified ablations**: negotiation +25 pp per-task success, reflection +16 pp; VGN neural grasp prediction +33 pp grasp reliability (pooled across six models, scored on whether the object is actually held and lifted off the table) by orienting the gripper to angled objects the top-down baseline closes on but fails to secure; ROS/MoveIt is kept for collision-aware motion planning (a capability point-to-point IK cannot represent) rather than a measured reliability gain - the apparent +24 pp gap is dominated by a shared stereo-detection miss; RAG is model-dependent, and knowledge-graph context injection is honestly reported as a small net cost
+- **Known limitation**: concurrent bimanual manipulation (B7) remains unsolved - the failure is partner-aware target selection, not plan decomposition: each arm resolves its lift target independently, so two individually valid targets collide against the 0.2 m separation check (and a cross-robot `wait_for_signal` can go undispatched outside an explicit parallel group)
 
 **Key Features**:
 
 - Unity 6000.3.11f1 simulation with physics-based ArticulationBody robots and damped least-squares IK (6-DOF)
 - 29-operation registry in four complexity tiers (Atomic / Basic / Intermediate / Complex) with variable passing between operations
 - RAG-augmented command parsing: semantic retrieval narrows the LLM context to relevant operations
-- Reflexion-style failure recovery: structured error feedback drives corrective re-planning
+- Reflection-style failure recovery: structured error feedback drives corrective re-planning
 - Optional multi-agent negotiation protocol for role-ambiguous dual-robot tasks
 - ROS 2 / MoveIt collision-aware motion planning (Docker, planning-only - Unity executes)
 - Stereo vision + YOLO object detection; optional VGN neural grasp-pose prediction (runs on Apple Silicon)
@@ -132,7 +132,7 @@ Given a single prompt like _"Robot1 and Robot2 perform a handoff of the red cube
 ## Architecture
 
 <p align="center">
-  <img src="Misc/images/16_system_flow.png" width="800" alt="Four-layer architecture: command input, RAG+LLM planning, sequence execution and coordination, robot execution via Unity IK or ROS/MoveIt">
+  <img src="Thesis/images/16_system_flow.png" width="800" alt="Four-layer architecture: command input, RAG+LLM planning, sequence execution and coordination, robot execution via Unity IK or ROS/MoveIt">
 </p>
 
 A natural-language prompt flows through four layers: (1) command input, (2) RAG retrieval + LLM plan generation, (3) sequence execution with signal/wait synchronization and parallel-group dispatch, (4) physical execution on the two arms via Unity IK or ROS/MoveIt.
@@ -147,7 +147,7 @@ A natural-language prompt flows through four layers: (1) command input, (2) RAG 
 **Python backend**:
 
 - **Unified entry point**: `RunRobotController` orchestrates all servers (ports 5006-5010, optional 8000)
-- **CommandParser + SequenceExecutor**: LLM/regex hybrid parsing, step-wise dispatch, variable passing (`detect → $target`, then `move to $target`), reflexion retries on eligible failures
+- **CommandParser + SequenceExecutor**: LLM/regex hybrid parsing, step-wise dispatch, variable passing (`detect → $target`, then `move to $target`), reflection retries on eligible failures
 - **RAG system**: LM Studio embeddings + cosine-similarity vector store; indexes 29 operations, 9 workflow patterns, and 4 multi-robot context documents
 - **Operations registry** (29 ops in four tiers):
   - **Atomic** (8): `control_gripper`, `release_object`, `check_robot_status`, `signal`, `wait_for_signal`, `wait`, `reset_simulation`, `yield_workspace`
@@ -164,8 +164,7 @@ A natural-language prompt flows through four layers: (1) command input, (2) RAG 
 Cooperative-Robot-Behavior-from-Basic-Action-Modules/
 ├── ACRLDashboard/                       # Web UI source (served by WebUIServer on port 8000)
 ├── ACRLRosUnityIntegration/             # Docker-based ROS 2 + MoveIt + ros_tcp_endpoint
-├── Misc/benchmark_results/              # Benchmark run JSONs (b1-b17)
-├── Misc/images/                         # Thesis and benchmark figures
+├── Thesis/images/                         # Thesis and benchmark figures
 ├── ACRLUnity/                           # Unity project
 │   └── Assets/
 │       ├── Configuration/               # ScriptableObject .assets (robot, IK, grasp, gripper, …)
@@ -190,6 +189,7 @@ Cooperative-Robot-Behavior-from-Basic-Action-Modules/
     ├── rag/                             # Embeddings, vector store, indexer, query engine
     ├── agents/                          # Per-robot negotiation agents
     ├── autort/                          # Task generation loop, selector, Robot Constitution
+    ├── /benchmark_results/              # Benchmark run JSONs (b1-b17)
     ├── knowledge_graph/                 # Optional NetworkX spatial reasoning
     ├── ros2/                            # ROSMotionClient, ROSBridge
     ├── vision/                          # YOLO detection, stereo depth (SGBM)
@@ -220,18 +220,18 @@ python -m benchmarks.Run --all --dry-run   # no simulation required
 Per-run JSON results are written to `ACRLPython/benchmark_results/bN/<model>/` (B1-B11 organized by model; B12-B17 ablations and AutoRT runs flat under `bN/`). B17 runs fully offline (no Unity or server stack required). Aggregate plots: `python -m tools.PlotBenchmarks`.
 
 <p align="center">
-  <img src="Misc/images/01_success_rate_by_model.png" width="800" alt="Task success rate per benchmark and model">
+  <img src="Thesis/images/01_success_rate_by_model.png" width="800" alt="Task success rate per benchmark and model">
 </p>
 
 <p align="center">
-  <img src="Misc/images/08_ablation.png" width="800" alt="Ablation results: negotiation +25pp, ROS/MoveIt +24pp (stereo-detection-dominated), reflexion +16pp; RAG, KG, VGN near-neutral">
+  <img src="Thesis/images/08_ablation.png" width="800" alt="Ablation results: negotiation +25pp, ROS/MoveIt +24pp (stereo-detection-dominated), reflection +16pp; VGN +33pp grasp reliability; RAG model-dependent, KG small cost">
 </p>
 
 <p align="center">
-  <img src="Misc/images/10_autort_safety.png" width="800" alt="B17 AutoRT safety gate: Robot Constitution confusion matrix and per-layer attribution of correctly rejected unsafe tasks">
+  <img src="Thesis/images/10_autort_safety.png" width="800" alt="B17 AutoRT safety gate: Robot Constitution confusion matrix and per-layer attribution of correctly rejected unsafe tasks">
 </p>
 
-**System benchmarks** (5 runs each, three LLM backends):
+**System benchmarks** (5 runs each, six LLM backends):
 
 - **B1**: Navigate to object (detect + move, no grasp)
 - **B2**: Sequential multi-target navigation
@@ -246,7 +246,7 @@ Per-run JSON results are written to `ACRLPython/benchmark_results/bN/<model>/` (
 
 **Ablations** (single feature flag toggled, all else constant):
 
-- **B11**: RAG (model-dependent: helps Gemma 4, neutral for Magistral, harms Qwen3) · **B12**: Reflexion (+16 pp task SR) · **B13**: Negotiation (+25 pp task SR) · **B14**: Knowledge Graph (parse-only; small consistent cost) · **B15**: VGN (net-neutral on tested tasks) · **B16**: ROS/MoveIt vs. Unity IK (near-parity reliability; ROS kept for collision-aware planning)
+- **B11**: RAG (model-dependent: helps Gemma 4, neutral for Magistral, harms Qwen3) · **B12**: Reflection (+16 pp task SR) · **B13**: Negotiation (+25 pp task SR) · **B14**: Knowledge Graph (parse-only; small consistent cost) · **B15**: VGN (+33 pp grasp reliability pooled, held-and-lifted scoring) · **B16**: ROS/MoveIt vs. Unity IK (near-parity reliability; ROS kept for collision-aware planning)
 
 **Autonomous task generation** (offline, drives AutoRT directly, not the command parser):
 

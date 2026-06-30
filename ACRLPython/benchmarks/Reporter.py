@@ -38,7 +38,7 @@ def write_csv(result: BenchmarkResult, output_dir: str = ".") -> str:
         "use_vgn",
         "use_knowledge_graph",
         "use_ros_movement",
-        "reflexion_enabled",
+        "reflection_enabled",
         "dry_run",
         "use_negotiation",
     ]
@@ -143,7 +143,7 @@ def print_summary(result: BenchmarkResult) -> None:
         print("  ABLATION METRICS")
         print(f"  Condition:             {ab.condition}")
         print(f"  Hallucinated ops:      {ab.hallucinated_ops}")
-        print(f"  Reflexion recoveries:  {ab.reflexion_recoveries}")
+        print(f"  Reflection recoveries:  {ab.reflection_recoveries}")
         print(f"  Negotiation rounds:    {ab.negotiation_rounds}")
         print(f"  Ablation success rate: {ab.success_rate:.1%}")
 

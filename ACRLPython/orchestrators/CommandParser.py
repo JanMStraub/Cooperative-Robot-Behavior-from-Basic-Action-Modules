@@ -146,7 +146,7 @@ class CommandParser:
         hint: str = "",
         use_motion_layer: Optional[bool] = None,
     ) -> Dict[str, Any]:
-        """Re-parse with a Reflexion error hint so the LLM can fix its parameter choices."""
+        """Re-parse with a Reflection error hint so the LLM can fix its parameter choices."""
         motion_layer = (
             USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
         )
@@ -173,7 +173,7 @@ class CommandParser:
                     f"Motion plan (use as chain-of-thought guidance):\n{motion_context}"
                 )
                 logger.info(
-                    f"Reflexion retry: motion layer Stage 1 produced {len(motions)} steps"
+                    f"Reflection retry: motion layer Stage 1 produced {len(motions)} steps"
                 )
 
         kg_section = self._get_spatial_context(robot_id, command_text=command_text)
@@ -198,14 +198,14 @@ class CommandParser:
                 return {
                     "success": False,
                     "commands": [],
-                    "error": "Reflexion retry produced no valid commands",
+                    "error": "Reflection retry produced no valid commands",
                 }
             return {"success": True, "commands": validated, "error": None}
         except Exception as e:
             return {
                 "success": False,
                 "commands": [],
-                "error": f"Reflexion LLM error: {e}",
+                "error": f"Reflection LLM error: {e}",
             }
 
     def generate_reflection(

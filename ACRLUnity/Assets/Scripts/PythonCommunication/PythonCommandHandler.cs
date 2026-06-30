@@ -783,7 +783,7 @@ namespace PythonCommunication
                             SendCommandCompletion(
                                 command.robot_id,
                                 "grasp_object",
-                                true,
+                                controller.IsHoldingObject,
                                 command.request_id
                             );
                         }

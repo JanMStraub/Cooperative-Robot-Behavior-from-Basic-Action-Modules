@@ -460,6 +460,28 @@
     overflow: auto;
 }
 
+/* Operation Timing heatmap: drop the 420px cap so all op rows render and the
+   page scrolls downward instead of trapping a tall table in an inner scrollbar
+   (which gets clipped/unreadable when the op set is large). */
+.analysis-chart-body--grow {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+}
+
+.analysis-chart-note {
+    margin-top: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+}
+
+.analysis-chart-note i {
+    margin-right: 0.35rem;
+    opacity: 0.7;
+}
+
 .metric-select {
     background: var(--bg-input);
     border: 1px solid var(--glass-border-hi);
@@ -930,10 +952,13 @@ body.thesis-mode .export-row-label {
     opacity: 0.4;
 }
 
-/* Model x Task matrix: stretch the (few) columns evenly across the panel. */
+/* Model x Task / Model x Operation matrix: stretch to the full panel width so
+   the cells distribute across the available space (falls back to scrolling via
+   .heatmap-scroll only when there are too many columns to fit). */
 .model-matrix-table {
     width: 100%;
-    table-layout: fixed;
+    min-width: max-content;
+    table-layout: auto;
 }
 
 .model-matrix-table th,
@@ -941,9 +966,10 @@ body.thesis-mode .export-row-label {
     max-width: none;
 }
 
-.model-matrix-table th:first-child,
-.model-matrix-table .heatmap-bm-label {
-    width: 12rem;
+/* The matrix has only a handful of rows; let its panel shrink to the table
+   rather than reserving the shared min-height meant for the tall op tables. */
+.analysis-chart-body--table:has(#chartModelMatrix) {
+    min-height: 0;
 }
 
 .coverage-cell--present {
@@ -1044,6 +1070,11 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
     gap: 0.35rem;
 }
 
+/* Breathing room inside the compare table panel (glass-box has no padding). */
+#compare-kpi-matrix {
+    padding: 1rem 1.25rem;
+}
+
 /* KPI matrix table */
 .compare-kpi-table {
     width: 100%;
@@ -1105,6 +1136,39 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
 }
 .compare-kpi-best .compare-kpi-sub,
 .compare-kpi-worst .compare-kpi-sub { color: inherit; opacity: 0.75; }
+
+/* Per-model section titles + cross-model summary table */
+.compare-section-title {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text-main);
+    margin: 1.1rem 0 0.4rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--glass-border);
+}
+.compare-section-title:first-child { margin-top: 0; }
+.compare-model-title {
+    color: var(--accent, var(--text-main));
+}
+.compare-summary-table {
+    margin-bottom: 0.5rem;
+}
+.compare-config-sep td {
+    padding: 0.4rem 0.75rem 0.2rem;
+    color: var(--text-dim);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--glass-border);
+    text-align: left;
+}
+.compare-summary-table th:not(:first-child),
+.compare-summary-table td:not(:first-child) {
+    text-align: center;
+}
 
 .compare-run-header {
     font-family: 'IBM Plex Mono', monospace;

@@ -11,9 +11,6 @@ from benchmarks.cases.B3NavigateAndLift import get_task as _b3
 from benchmarks.cases.B4PickAndPlace import get_task as _b4
 from benchmarks.cases.B5PoseAwareGrasp import get_task as _b5
 
-# Fixed operation chains for live-mode execution - bypasses LLM so both ROS and
-# Unity conditions execute identical sequences, isolating routing overhead only.
-# Derived from B1-B5 EXPECTED_OP_CHAIN values with explicit params.
 FIXED_OP_CHAINS: list[list[dict]] = [
     # B1: detect blue cube → move above it (approach_offset lifts target 10 cm above cube;
     # avoids near-table IK struggles when cubes sit at y≈0.01-0.02 m)

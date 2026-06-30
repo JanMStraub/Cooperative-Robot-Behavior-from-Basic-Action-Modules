@@ -5,10 +5,12 @@ from __future__ import annotations
 
 EXPECTED_OP_CHAIN: list[str] = [
     "detect_object_stereo",
-    "move_to_coordinate",
     "grasp_object",
-    "move_to_coordinate",
+    "signal",
+    "wait_for_signal",
     "grasp_object",
+    "signal",
+    "wait_for_signal",
     "move_to_coordinate",
     "move_to_coordinate",
 ]

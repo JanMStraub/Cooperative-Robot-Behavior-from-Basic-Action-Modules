@@ -19,7 +19,7 @@ class TestGraspObjectOperation:
 
     def test_grasp_object_success(self, mock_broadcaster):
         # Setup mock response - operation sends command without waiting
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(
             robot_id="Robot1",
@@ -29,16 +29,15 @@ class TestGraspObjectOperation:
             request_id=42,
         )
 
-        # Verify result - async mode returns command_sent confirmation
         assert result["success"] is True
-        assert result["result"]["command_sent"] is True
+
         assert result["result"]["robot_id"] == "Robot1"
         assert result["result"]["object_id"] == "Cube_01"
         assert result["result"]["request_id"] == 42
 
         # Verify command was sent correctly
-        mock_broadcaster.send_command.assert_called_once()
-        call_args = mock_broadcaster.send_command.call_args[0][0]
+        mock_broadcaster.send_command_and_wait.assert_called_once()
+        call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
         assert call_args["command_type"] == "grasp_object"
         assert call_args["robot_id"] == "Robot1"
         assert call_args["parameters"]["object_id"] == "Cube_01"
@@ -47,7 +46,7 @@ class TestGraspObjectOperation:
         assert call_args["request_id"] == 42
 
     def test_grasp_object_with_custom_approach_vector(self, mock_broadcaster):
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(
             robot_id="Robot1",
@@ -56,26 +55,26 @@ class TestGraspObjectOperation:
         )
 
         assert result["success"] is True
-        call_args = mock_broadcaster.send_command.call_args[0][0]
+        call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
         assert "custom_approach_vector" in call_args["parameters"]
         assert call_args["parameters"]["custom_approach_vector"]["x"] == 0.0
         assert call_args["parameters"]["custom_approach_vector"]["y"] == 1.0
         assert call_args["parameters"]["custom_approach_vector"]["z"] == 0.5
 
     def test_grasp_object_with_retreat_disabled(self, mock_broadcaster):
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(
             robot_id="Robot1", object_id="Cube_01", enable_retreat=False
         )
 
         assert result["success"] is True
-        call_args = mock_broadcaster.send_command.call_args[0][0]
+        call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
         assert call_args["parameters"]["enable_retreat"] is False
 
     def test_grasp_object_with_custom_distances(self, mock_broadcaster):
         """Test grasp with custom pre-grasp and retreat distances."""
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(
             robot_id="Robot1",
@@ -85,7 +84,7 @@ class TestGraspObjectOperation:
         )
 
         assert result["success"] is True
-        call_args = mock_broadcaster.send_command.call_args[0][0]
+        call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
         assert call_args["parameters"]["pre_grasp_distance"] == 0.12
         assert call_args["parameters"]["retreat_distance"] == 0.15
 
@@ -95,7 +94,7 @@ class TestGraspObjectOperation:
         assert result["success"] is False
         assert result["error"]["code"] == "INVALID_ROBOT_ID"
         assert "non-empty string" in result["error"]["message"]
-        mock_broadcaster.send_command.assert_not_called()
+        mock_broadcaster.send_command_and_wait.assert_not_called()
 
     def test_grasp_object_invalid_object_id(self, mock_broadcaster):
         result = grasp_object(robot_id="Robot1", object_id="")
@@ -103,7 +102,7 @@ class TestGraspObjectOperation:
         assert result["success"] is False
         assert result["error"]["code"] == "INVALID_OBJECT_ID"
         assert "non-empty string" in result["error"]["message"]
-        mock_broadcaster.send_command.assert_not_called()
+        mock_broadcaster.send_command_and_wait.assert_not_called()
 
     def test_grasp_object_invalid_approach(self, mock_broadcaster):
         result = grasp_object(
@@ -116,7 +115,7 @@ class TestGraspObjectOperation:
         assert result["error"]["code"] == "INVALID_APPROACH"
         assert "auto" in result["error"]["message"]
         assert "top" in result["error"]["message"]
-        mock_broadcaster.send_command.assert_not_called()
+        mock_broadcaster.send_command_and_wait.assert_not_called()
 
     def test_grasp_object_invalid_approach_vector(self, mock_broadcaster):
         # Test with wrong length
@@ -139,7 +138,7 @@ class TestGraspObjectOperation:
 
         assert result["success"] is False
         assert result["error"]["code"] == "INVALID_APPROACH_VECTOR"
-        mock_broadcaster.send_command.assert_not_called()
+        mock_broadcaster.send_command_and_wait.assert_not_called()
 
     def test_grasp_object_broadcaster_not_available(self, mock_broadcaster):
         mock_broadcaster.return_value = None
@@ -154,13 +153,12 @@ class TestGraspObjectOperation:
         assert "CommandBroadcaster not available" in result["error"]["message"]
 
     def test_grasp_object_execution_failed(self, mock_broadcaster):
-        mock_broadcaster.send_command.return_value = False
+        mock_broadcaster.send_command_and_wait.return_value = None
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is False
-        assert result["error"]["code"] == "COMMUNICATION_ERROR"
-        assert "Failed to send grasp command" in result["error"]["message"]
+        assert result["error"]["code"] == "TIMEOUT"
 
     def test_grasp_object_no_response(self, mock_broadcaster):
         with patch(
@@ -173,7 +171,7 @@ class TestGraspObjectOperation:
         assert "CommandBroadcaster not available" in result["error"]["message"]
 
     def test_grasp_object_exception_handling(self, mock_broadcaster):
-        mock_broadcaster.send_command.side_effect = Exception("Network error")
+        mock_broadcaster.send_command_and_wait.side_effect = Exception("Network error")
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
@@ -182,7 +180,7 @@ class TestGraspObjectOperation:
         assert "Network error" in result["error"]["message"]
 
     def test_grasp_object_all_approaches(self, mock_broadcaster):
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         valid_approaches = ["auto", "top", "front", "side"]
         for approach in valid_approaches:
@@ -192,7 +190,7 @@ class TestGraspObjectOperation:
             assert result["success"] is True
 
     def test_grasp_object_timeout_parameter(self, mock_broadcaster):
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01", request_id=123)
 
@@ -318,7 +316,7 @@ class TestGraspObjectIntegration:
             patch("config.ROS.ROS_ENABLED", False),
         ):
             broadcaster = MagicMock()
-            broadcaster.send_command.return_value = True
+            broadcaster.send_command_and_wait.return_value = {"success": True}
             mock_bc.return_value = broadcaster
 
             result = grasp_object(
@@ -334,12 +332,12 @@ class TestGraspObjectIntegration:
             )
 
             assert result["success"] is True
-            assert result["result"]["command_sent"] is True
+    
             assert result["result"]["robot_id"] == "Robot1"
             assert result["result"]["object_id"] == "Cube_01"
 
             # Verify all parameters in command
-            call_args = broadcaster.send_command.call_args[0][0]
+            call_args = broadcaster.send_command_and_wait.call_args[0][0]
             assert call_args["robot_id"] == "Robot1"
             assert call_args["parameters"]["object_id"] == "Cube_01"
             assert call_args["parameters"]["use_advanced_planning"] is True
@@ -366,24 +364,24 @@ class TestGraspTrajectoryValidation:
 
     def test_three_waypoint_grasp_trajectory(self, mock_broadcaster):
         # Async mode - command is sent without waiting
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(
             robot_id="Robot1", object_id="Cube_01", preferred_approach="top"
         )
 
         assert result["success"] is True
-        assert result["result"]["command_sent"] is True
+
 
         # Verify command parameters
-        call_args = mock_broadcaster.send_command.call_args[0][0]
+        call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
         assert call_args["parameters"]["preferred_approach"] == "top"
         # Note: Actual trajectory execution and waypoint data comes from Unity response
         # which is handled by SequenceExecutor, not the operation itself
 
     def test_approach_direction_accuracy(self, mock_broadcaster):
         test_cases = ["top", "front", "side"]
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         for approach_type in test_cases:
             result = grasp_object(
@@ -391,51 +389,51 @@ class TestGraspTrajectoryValidation:
             )
 
             assert result["success"] is True
-            call_args = mock_broadcaster.send_command.call_args[0][0]
+            call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
             assert call_args["parameters"]["preferred_approach"] == approach_type
             # Note: Unity determines actual approach direction during grasp planning
 
     def test_pre_grasp_offset_calculation(self, mock_broadcaster):
         """Test pre-grasp distance parameter is sent correctly."""
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(
             robot_id="Robot1", object_id="Cube_01", pre_grasp_distance=0.1
         )
 
         assert result["success"] is True
-        call_args = mock_broadcaster.send_command.call_args[0][0]
+        call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
         assert call_args["parameters"]["pre_grasp_distance"] == 0.1
         # Note: Actual grasp and pre-grasp positions calculated by Unity's GraspPlanningPipeline
 
     def test_trajectory_collision_avoidance_check(self, mock_broadcaster):
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
-        assert result["result"]["command_sent"] is True
+
         # Note: Collision checking performed by Unity's GraspCollisionFilter during planning
 
 
 class TestGraspForceEstimation:
 
     def test_grasp_force_estimation(self, mock_broadcaster):
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
-        assert result["result"]["command_sent"] is True
+
         # Note: Force estimation performed by Unity's GripperContactSensor during execution
 
     def test_grasp_force_threshold_check(self, mock_broadcaster):
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
-        assert result["result"]["command_sent"] is True
+
         # Note: Force threshold checking performed by Unity's VerifyGraspSuccess() method
 
     @pytest.fixture
@@ -450,21 +448,21 @@ class TestGraspForceEstimation:
             yield broadcaster
 
     def test_contact_sensor_detection(self, mock_broadcaster):
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
-        assert result["result"]["command_sent"] is True
+
         # Note: Contact sensor detection performed by Unity's GripperContactSensor
 
     def test_early_contact_during_approach(self, mock_broadcaster):
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
-        assert result["result"]["command_sent"] is True
+
         # Note: Early contact detection handled by Unity's ExecuteThreeWaypointGrasp()
 
 
@@ -484,12 +482,12 @@ class TestGraspFailureRecovery:
 
     def test_grasp_success_verification_multi_criteria(self, mock_broadcaster):
         """Test grasp command sent (multi-criteria verification done by Unity)."""
-        mock_broadcaster.send_command.return_value = True
+        mock_broadcaster.send_command_and_wait.return_value = {"success": True}
 
         result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
-        assert result["result"]["command_sent"] is True
+
         # Note: Multi-criteria verification (contact + force + closure) performed by
         # Unity's VerifyGraspSuccess() method as documented in RobotControlRedesign.md
 
