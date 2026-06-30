@@ -198,8 +198,6 @@ ACRLUnity/TestResults-*.xml
 ACRLUnity/unity-*-test.log
 ACRLPython/acrl/
 ACRLPython/kg_snapshots
-# README figures — keep tracked despite images/ and *.png rules above
-Thesis/
 
 # LaTeX
 *.pdf
