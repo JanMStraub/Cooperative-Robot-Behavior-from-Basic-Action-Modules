@@ -100,56 +100,16 @@ def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig
     return BenchmarkConfig(**kwargs)
 
 
-def _is_embedding_model(m: dict) -> bool:
-    """True if an LM Studio /models entry is an embedding model, not a chat LLM.
-
-    When RAG is enabled the embedding model is loaded alongside the chat model
-    and LM Studio lists both; it must be skipped so it isn't recorded as the
-    model under test. Checks the explicit ``type`` field (LM Studio's richer
-    endpoint) and falls back to the id (the configured RAG embedder, or any id
-    containing "embed").
-    """
-    if (m.get("type") or "").lower() in {"embeddings", "embedding"}:
-        return True
-    model_id = (m.get("id") or "").lower()
-    try:
-        from config.Rag import RAG_LM_STUDIO_MODEL
-
-        if model_id == RAG_LM_STUDIO_MODEL.lower():
-            return True
-    except Exception:
-        pass
-    return "embed" in model_id
-
-
 def _detect_model(args: argparse.Namespace) -> str:
     """
     Resolve the LLM model under test for result tagging.
 
-    Priority: explicit --model flag > live LM Studio /models > configured default.
+    Priority: explicit --model flag > configured default (config/Servers.DEFAULT_LMSTUDIO_MODEL).
     Recorded in each result so analysis can break results out by model instead of
     relying on the output directory layout.
     """
     if getattr(args, "model", None):
         return args.model
-    try:
-        from config.Servers import LMSTUDIO_BASE_URL
-        import json as _json
-        import urllib.request
-
-        url = LMSTUDIO_BASE_URL.rstrip("/")
-        req = urllib.request.Request(f"{url}/models", method="GET")
-        with urllib.request.urlopen(req, timeout=2.0) as resp:
-            data = _json.loads(resp.read())
-        models = data.get("data") or []
-        # First non-embedding model. /models lists the embedding model too when
-        # RAG is loaded, and it is often first - taking models[0] blindly tagged
-        # every run with the embedder.
-        for m in models:
-            if m.get("id") and not _is_embedding_model(m):
-                return m["id"]
-    except Exception:
-        pass
     try:
         from config.Servers import DEFAULT_LMSTUDIO_MODEL
 

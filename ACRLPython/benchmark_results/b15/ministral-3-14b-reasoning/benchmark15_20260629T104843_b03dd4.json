@@ -157,7 +157,7 @@
   "ops_succeeded": 10,
   "success_rate": 0.8333333333333334,
   "avg_step_duration_ms": 5493.235170841217,
-  "model": "qwen/qwen3-vl-8b",
+  "model": "mistralai/ministral-3-14b-reasoning",
   "retry_count": 0,
   "first_failure_step": null,
   "chain_metrics": null,

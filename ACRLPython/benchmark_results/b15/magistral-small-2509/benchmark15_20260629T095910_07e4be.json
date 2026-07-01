@@ -201,7 +201,7 @@
   "ops_succeeded": 16,
   "success_rate": 1.0,
   "avg_step_duration_ms": 5481.739178299904,
-  "model": "mistralai/ministral-3-14b-reasoning",
+  "model": "mistralai/magistral-small-2509",
   "retry_count": 0,
   "first_failure_step": null,
   "chain_metrics": null,

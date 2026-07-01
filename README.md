@@ -101,11 +101,7 @@ Given a single prompt like _"Robot1 and Robot2 perform a handoff of the red cube
 
 4. **Run the Unity simulation**:
    - Open `ACRLUnity/Assets/Scenes/1xAR4Scene.unity` and press Play (the standalone build starts automatically)
-   - Send natural-language commands via the SequenceClient or the Web UI:
-
-     ```csharp
-     SequenceClient.Instance.SendCommand("Detect the blue cube, move to it, close the gripper");
-     ```
+   - Send natural-language commands via the Web UI:
 
 ### Autonomous Task Generation (AutoRT)
 

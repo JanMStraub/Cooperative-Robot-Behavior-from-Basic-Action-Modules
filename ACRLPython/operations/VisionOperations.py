@@ -529,6 +529,7 @@ def detect_object_stereo(
             result = {
                 "detections": [
                     {
+                        "object_id": d.color if d.color else "unknown_object",
                         "x": d.world_position[0] if d.world_position else None,
                         "y": d.world_position[1] if d.world_position else None,
                         "z": d.world_position[2] if d.world_position else None,

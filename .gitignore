@@ -176,7 +176,6 @@ summaries/
 *.log
 
 # Miscellaneous
-*.png
 *.jpg
 *.txt
 # ...but ROS package build files must be tracked (the *.txt rule above would
