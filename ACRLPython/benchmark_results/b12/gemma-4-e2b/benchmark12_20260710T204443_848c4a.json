@@ -1,0 +1,220 @@
+{
+  "benchmark_id": 12,
+  "benchmark_name": "Reflection Ablation",
+  "run_id": "20260710T204443_848c4a",
+  "config_snapshot": {
+    "robot_id": "Robot1",
+    "timeout_per_step_s": 90.0,
+    "max_retries": 1,
+    "dry_run": false,
+    "task_count": 5,
+    "reflection": true,
+    "check_completion": true,
+    "use_rag": true,
+    "reflection_enabled": true,
+    "use_knowledge_graph": true,
+    "use_vgn": true,
+    "use_ros_movement": true,
+    "execution_mode": "live"
+  },
+  "success": true,
+  "total_duration_ms": 130353.60598564148,
+  "steps": [
+    {
+      "index": 0,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 5451.41077041626,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": null
+    },
+    {
+      "index": 1,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 857.6879501342773,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 2,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 12560.391902923584,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 3,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 4388.721942901611,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 4,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 753.7069320678711,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": null
+    },
+    {
+      "index": 5,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 32823.22001457214,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": null
+    },
+    {
+      "index": 6,
+      "operation": "place_object",
+      "success": true,
+      "duration_ms": 34468.89925003052,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": null
+    },
+    {
+      "index": 7,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 4583.026885986328,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 8,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 17238.433122634888,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 9,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 853.6860942840576,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 10,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 4189.288854598999,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 11,
+      "operation": "return_to_start_position",
+      "success": true,
+      "duration_ms": 11167.15121269226,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    }
+  ],
+  "ops_executed": 12,
+  "ops_succeeded": 12,
+  "success_rate": 1.0,
+  "avg_step_duration_ms": 10862.800498803457,
+  "model": "google/gemma-4-e2b",
+  "retry_count": 0,
+  "first_failure_step": null,
+  "chain_metrics": null,
+  "hallucinated_ops": 0,
+  "reflection_recoveries": 0,
+  "negotiation_rounds": 0,
+  "ablation": {
+    "condition": "enabled",
+    "hallucinated_ops": 0,
+    "reflection_recoveries": 0,
+    "negotiation_rounds": 0,
+    "success_rate": 1.0,
+    "ops_executed": 12,
+    "ops_succeeded": 12,
+    "condition_delta": 0.0,
+    "hallucination_delta": 0,
+    "grasp_sr": 0.0,
+    "avg_grasp_duration_ms": 0.0
+  },
+  "ablation_baseline": null,
+  "feature_flags": {
+    "use_rag": true,
+    "use_vgn": true,
+    "use_knowledge_graph": true,
+    "use_ros_movement": true,
+    "reflection_enabled": true,
+    "dry_run": false,
+    "use_negotiation": false
+  },
+  "parsed_plan": [],
+  "per_op_stats": {
+    "move_to_coordinate": {
+      "count": 5,
+      "fail_count": 0,
+      "avg_duration_ms": 7170.2
+    },
+    "detect_object_stereo": {
+      "count": 3,
+      "fail_count": 0,
+      "avg_duration_ms": 821.7
+    },
+    "grasp_object": {
+      "count": 2,
+      "fail_count": 0,
+      "avg_duration_ms": 22691.8
+    },
+    "place_object": {
+      "count": 1,
+      "fail_count": 0,
+      "avg_duration_ms": 34468.9
+    },
+    "return_to_start_position": {
+      "count": 1,
+      "fail_count": 0,
+      "avg_duration_ms": 11167.2
+    }
+  },
+  "execution_mode": "live",
+  "task_breakdown": []
+}

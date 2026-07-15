@@ -24,7 +24,12 @@ from config.Negotiation import (
     MAX_PLAN_LENGTH,
 )
 from agents.RobotLLMAgent import RobotLLMAgent, TaskAnalysis, PlanProposal
-from servers.NegotiationHub import NegotiationHub, NegotiationSession, NegotiationState
+from servers.NegotiationHub import (
+    NegotiationHub,
+    NegotiationSession,
+    NegotiationState,
+    NegotiationResult,
+)
 from operations.NegotiationVerifier import NegotiationVerifier
 from orchestrators.SequenceExecutor import SequenceExecutor
 from core.Imports import get_negotiation_hub
@@ -50,7 +55,7 @@ class TestNegotiationConfig:
         assert "both" in COLLABORATION_KEYWORDS
         assert "together" in COLLABORATION_KEYWORDS
         assert VERIFY_NEGOTIATED_PLANS is True
-        assert MAX_PLAN_LENGTH == 50
+        assert MAX_PLAN_LENGTH == 500
 
     def test_collaboration_keywords_coverage(self):
         expected_keywords = [
@@ -58,7 +63,7 @@ class TestNegotiationConfig:
             "together",
             "cooperate",
             "collaborate",
-            "coordinate",
+            "coordinate with",
             "handoff",
         ]
         for kw in expected_keywords:
@@ -206,6 +211,84 @@ class TestRobotLLMAgent:
             "detect" in proposal.reasoning.lower()
             or "robot" in proposal.reasoning.lower()
         )
+
+    @patch("agents.RobotLLMAgent.requests.post")
+    def test_propose_plan_injects_prior_feedback(self, mock_post):
+        mock_post.return_value = _mock_llm_response(
+            json.dumps(
+                {
+                    "reasoning": "revised",
+                    "commands": [
+                        {
+                            "parallel_group": 1,
+                            "operation": "move_to_coordinate",
+                            "params": {
+                                "robot_id": "Robot1",
+                                "x": 0.1,
+                                "y": 0.3,
+                                "z": 0.0,
+                            },
+                        }
+                    ],
+                    "estimated_duration_s": 5.0,
+                }
+            )
+        )
+
+        agent = RobotLLMAgent("Robot1")
+        other_analysis = TaskAnalysis(
+            robot_id="Robot2", can_contribute=True, suggested_role="support"
+        )
+
+        agent.propose_plan(
+            "Both robots approach the red cube",
+            [other_analysis],
+            {"robots": {}, "objects": {}},
+            round_number=2,
+            prior_feedback=["Robot2: move target x=0.9 exceeds my reach"],
+        )
+
+        sent_prompt = mock_post.call_args.kwargs["json"]["messages"][1]["content"]
+        assert "REJECTED" in sent_prompt
+        assert "x=0.9 exceeds my reach" in sent_prompt
+
+    @patch("agents.RobotLLMAgent.requests.post")
+    def test_propose_plan_no_feedback_omits_section(self, mock_post):
+        mock_post.return_value = _mock_llm_response(
+            json.dumps(
+                {
+                    "reasoning": "initial",
+                    "commands": [
+                        {
+                            "parallel_group": 1,
+                            "operation": "move_to_coordinate",
+                            "params": {
+                                "robot_id": "Robot1",
+                                "x": 0.1,
+                                "y": 0.3,
+                                "z": 0.0,
+                            },
+                        }
+                    ],
+                    "estimated_duration_s": 5.0,
+                }
+            )
+        )
+
+        agent = RobotLLMAgent("Robot1")
+        other_analysis = TaskAnalysis(
+            robot_id="Robot2", can_contribute=True, suggested_role="support"
+        )
+
+        agent.propose_plan(
+            "Both robots approach the red cube",
+            [other_analysis],
+            {"robots": {}, "objects": {}},
+            round_number=1,
+        )
+
+        sent_prompt = mock_post.call_args.kwargs["json"]["messages"][1]["content"]
+        assert "was REJECTED for these reasons" not in sent_prompt
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_accept(self, mock_post):
@@ -855,6 +938,30 @@ class TestSequenceExecutorNegotiation:
         with patch("core.Imports.get_negotiation_hub", side_effect=ImportError("test")):
             result = executor.negotiate_if_needed("Both robots cooperate", "Robot1")
             assert result is None
+
+    def test_negotiate_if_needed_records_rounds_on_failed_consensus(self):
+        # Falling back to None must not lose the round count already spent.
+        executor = SequenceExecutor(check_completion=False, enable_verification=False)
+
+        failed_result = NegotiationResult(
+            success=False,
+            commands=[],
+            reasoning="No consensus reached after max rounds",
+            rounds_taken=MAX_NEGOTIATION_ROUNDS,
+            duration_s=1.0,
+            state=NegotiationState.FAILED,
+        )
+        mock_hub = MagicMock()
+        mock_hub.needs_negotiation.return_value = True
+        mock_hub.negotiate.return_value = failed_result
+
+        with patch("core.Imports.get_negotiation_hub", return_value=mock_hub):
+            result = executor.negotiate_if_needed(
+                "Both robots lift the cube together", "Robot1"
+            )
+
+        assert result is None
+        assert executor.last_negotiation_rounds == MAX_NEGOTIATION_ROUNDS
 
 
 class TestCoreImportsNegotiation:

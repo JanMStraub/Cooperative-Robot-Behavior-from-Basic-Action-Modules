@@ -455,3 +455,124 @@ class TestVariableAccessors:
     def test_get_missing_returns_none(self):
         executor, _ = _make_executor()
         assert executor.get_variable("missing") is None
+
+
+class TestParallelGroupAllowParallelRosInjection:
+    def _setup(self):
+        return _make_executor()
+
+    def test_injects_allow_parallel_ros_when_two_robots_in_group(self):
+        executor, registry = self._setup()
+        op_def = _make_op_def("move_to_coordinate")
+        registry.get_operation_by_name.return_value = op_def
+        registry.execute_operation_by_name.return_value = _make_op_result(True)
+
+        cmds = [
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot1"},
+                "parallel_group": 0,
+            },
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot2"},
+                "parallel_group": 0,
+            },
+        ]
+        result = executor.execute_sequence(cmds)
+
+        assert result["success"] is True
+        calls = registry.execute_operation_by_name.call_args_list
+        assert len(calls) == 2
+        for _, kwargs in calls:
+            assert kwargs.get("allow_parallel_ros") is True
+
+    @pytest.mark.parametrize(
+        "operation", ["grasp_object", "place_object", "return_to_start_position"]
+    )
+    def test_injects_allow_parallel_ros_for_grasp_and_place_and_return(self, operation):
+        executor, registry = self._setup()
+        op_def = _make_op_def(operation)
+        registry.get_operation_by_name.return_value = op_def
+        registry.execute_operation_by_name.return_value = _make_op_result(True)
+
+        cmds = [
+            {
+                "operation": operation,
+                "params": {"robot_id": "Robot1"},
+                "parallel_group": 0,
+            },
+            {
+                "operation": operation,
+                "params": {"robot_id": "Robot2"},
+                "parallel_group": 0,
+            },
+        ]
+        result = executor.execute_sequence(cmds)
+
+        assert result["success"] is True
+        calls = registry.execute_operation_by_name.call_args_list
+        assert len(calls) == 2
+        for _, kwargs in calls:
+            assert kwargs.get("allow_parallel_ros") is True
+
+    def test_does_not_inject_when_group_has_single_robot(self):
+        executor, registry = self._setup()
+        op_def = _make_op_def("move_to_coordinate")
+        registry.get_operation_by_name.return_value = op_def
+        registry.execute_operation_by_name.return_value = _make_op_result(True)
+
+        cmds = [
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot1"},
+                "parallel_group": 0,
+            },
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot1"},
+                "parallel_group": 0,
+            },
+        ]
+        executor.execute_sequence(cmds)
+
+        for _, kwargs in registry.execute_operation_by_name.call_args_list:
+            assert "allow_parallel_ros" not in kwargs
+
+    def test_does_not_inject_for_ineligible_operation(self):
+        executor, registry = self._setup()
+        op_def = _make_op_def("detect_field")
+        registry.get_operation_by_name.return_value = op_def
+        registry.execute_operation_by_name.return_value = _make_op_result(True)
+
+        cmds = [
+            {
+                "operation": "detect_field",
+                "params": {"robot_id": "Robot1"},
+                "parallel_group": 0,
+            },
+            {
+                "operation": "detect_field",
+                "params": {"robot_id": "Robot2"},
+                "parallel_group": 0,
+            },
+        ]
+        executor.execute_sequence(cmds)
+
+        for _, kwargs in registry.execute_operation_by_name.call_args_list:
+            assert "allow_parallel_ros" not in kwargs
+
+    def test_does_not_inject_for_sequential_commands(self):
+        executor, registry = self._setup()
+        op_def = _make_op_def("move_to_coordinate")
+        registry.get_operation_by_name.return_value = op_def
+        registry.execute_operation_by_name.return_value = _make_op_result(True)
+
+        cmds = [
+            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1"}},
+            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot2"}},
+        ]
+        executor.execute_sequence(cmds)
+
+        for _, kwargs in registry.execute_operation_by_name.call_args_list:
+            assert "allow_parallel_ros" not in kwargs

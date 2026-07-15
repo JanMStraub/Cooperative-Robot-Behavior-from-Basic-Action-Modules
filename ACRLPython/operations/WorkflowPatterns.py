@@ -541,97 +541,6 @@ WORKSPACE_YIELD_PATTERN = WorkflowPattern(
     ],
 )
 
-SYNCHRONIZED_GRASP_PATTERN = WorkflowPattern(
-    pattern_id="workflow_synchronized_grasp_001",
-    name="synchronized_grasp",
-    category=WorkflowCategory.MULTI_ROBOT,
-    description="Both robots simultaneously approach and grasp a large object from opposite sides (bimanual grasping)",
-    steps=[
-        WorkflowStep(
-            operation_id="check_partner_status",
-            parameter_bindings={
-                "robot_id": "robot1_id",
-                "partner_robot_id": "robot2_id",
-            },
-            description="Verify partner robot is idle and ready before starting bimanual task",
-        ),
-        WorkflowStep(
-            operation_id="synchronized_grasp",
-            parameter_bindings={
-                "robot_id": "robot1_id",
-                "partner_robot_id": "robot2_id",
-                "object_id": "object_id",
-                "approach_axis": "x",
-            },
-            description="Both robots approach from opposite sides and close grippers simultaneously",
-        ),
-    ],
-    variable_bindings={
-        "partner_status": "coordination_check_partner_001.result",
-    },
-    success_criteria=[
-        "Partner robot confirmed idle before grasp",
-        "Both robots reached approach positions",
-        "Both grippers confirmed closed on object",
-    ],
-    failure_recovery="If one robot fails to reach position, use single-robot grasp_object instead",
-    usage_examples=[
-        "synchronized_grasp('Robot1', partner_robot_id='Robot2', object_id='LargeBox', approach_axis='x')",
-        "Bimanual grasping of objects too large for single-arm grasp",
-    ],
-)
-
-JOINT_TRANSPORT_PATTERN = WorkflowPattern(
-    pattern_id="workflow_joint_transport_001",
-    name="joint_transport",
-    category=WorkflowCategory.MULTI_ROBOT,
-    description="Both robots cooperatively transport a jointly-grasped object to a target position, then release it",
-    steps=[
-        WorkflowStep(
-            operation_id="synchronized_grasp",
-            parameter_bindings={
-                "robot_id": "robot1_id",
-                "partner_robot_id": "robot2_id",
-                "object_id": "object_id",
-            },
-            description="Both robots grasp the object simultaneously (precondition for joint transport)",
-        ),
-        WorkflowStep(
-            operation_id="joint_transport",
-            parameter_bindings={
-                "robot_id": "robot1_id",
-                "partner_robot_id": "robot2_id",
-                "target_x": "dest_x",
-                "target_y": "dest_y",
-                "target_z": "dest_z",
-                "lift_height": "0.05",
-            },
-            description="Both robots transport the object together maintaining relative positions",
-        ),
-        WorkflowStep(
-            operation_id="release_object",
-            parameter_bindings={"robot_id": "robot1_id"},
-            description="Robot1 releases object at destination",
-        ),
-        WorkflowStep(
-            operation_id="release_object",
-            parameter_bindings={"robot_id": "robot2_id"},
-            description="Robot2 releases object at destination",
-        ),
-    ],
-    variable_bindings={},
-    success_criteria=[
-        "Both robots grasped object successfully",
-        "Object transported to target position without dropping",
-        "Both robots released at destination",
-    ],
-    failure_recovery="If transport fails mid-way, both robots should return to start positions and retry",
-    usage_examples=[
-        "joint_transport('Robot1', partner_robot_id='Robot2', target_x=0.3, target_y=0.1, target_z=0.0)",
-        "Cooperative bimanual transport of large/heavy objects",
-    ],
-)
-
 
 class WorkflowPatternRegistry:
     def __init__(self):
@@ -647,8 +556,6 @@ class WorkflowPatternRegistry:
             HANDOFF_PATTERN,
             LLM_DRIVEN_COORDINATION_PATTERN,
             WORKSPACE_YIELD_PATTERN,
-            SYNCHRONIZED_GRASP_PATTERN,
-            JOINT_TRANSPORT_PATTERN,
         ]
 
         for pattern in patterns:
@@ -772,79 +679,5 @@ detect_object_stereo("Robot2", color="red")
 receive_handoff("Robot2", object_id="RedBar", source_robot_id="Robot1")
 release_object("Robot1")
 return_to_start_position("Robot1", speed=0.5)
-```
-"""
-
-STABILIZE_MANIPULATE_TEXT_PATTERN = """
-REMOVED OPERATION: stabilize_and_manipulate_collaboratively
-=============================================================
-
-This operation was REMOVED because it is NON-ATOMIC (combines grasp + hold + manipulate).
-
-To perform collaborative manipulation, the LLM should chain these ATOMIC operations:
-
-**Step-by-Step Atomic Operation Sequence:**
-
-**Robot1 (Stabilizer):**
-1. Move to object
-   → move_to_coordinate(robot1, object_position)
-
-2. Grasp object
-   → grasp_object(robot1, object_coords)
-
-3. Hold stable with force control
-   → stabilize_object(robot1, object_id, duration_ms=10000)
-
-4. Signal stabilization active
-   → signal(robot1, "stabilization_active")
-
-5. Wait for manipulation complete
-   → wait_for_signal(robot1, "manipulation_complete")
-
-6. Release object
-   → control_gripper(robot1, open=True)
-
-**Robot2 (Manipulator) - runs in parallel:**
-1. Wait for stabilization active
-   → wait_for_signal(robot2, "stabilization_active")
-
-2. Move to manipulation position
-   → move_to_coordinate(robot2, manipulation_position)
-
-3. Perform manipulation operation
-   → [insert/assemble/etc operation]
-
-4. Signal completion
-   → signal(robot2, "manipulation_complete")
-
-**Why Removed:**
-The original operation combined multiple robot behaviors into one.
-By exposing atomic operations, the LLM can:
-- Coordinate parallel robot behaviors explicitly
-- Choose different manipulation strategies
-- Handle edge cases and failures at each step
-- See the full coordination protocol
-
-**Example LLM Usage:**
-"Robot1, hold the board stable while Robot2 inserts a peg"
-
-LLM generates for Robot1:
-```
-move_to_coordinate("Robot1", x=0.2, y=0.0, z=0.05)
-grasp_object("Robot1", object_coords={"x": 0.2, "y": 0.0, "z": 0.05})
-stabilize_object("Robot1", object_id="PegBoard", duration_ms=10000)
-signal("Robot1", "stabilization_active")
-wait_for_signal("Robot1", "manipulation_complete")
-control_gripper("Robot1", open_gripper=True)
-```
-
-LLM generates for Robot2 (parallel):
-```
-wait_for_signal("Robot2", "stabilization_active")
-grasp_object("Robot2", object_coords={"x": 0.1, "y": 0.1, "z": 0.05})
-move_to_coordinate("Robot2", x=0.2, y=0.0, z=0.08)
-move_to_coordinate("Robot2", x=0.2, y=0.0, z=0.05)  # Insert
-control_gripper("Robot2", open_gripper=True)
-signal("Robot2", "manipulation_complete")
 ```
 """

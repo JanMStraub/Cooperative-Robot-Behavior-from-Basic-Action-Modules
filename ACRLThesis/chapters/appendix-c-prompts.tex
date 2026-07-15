@@ -1,0 +1,424 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%  LLM PROMPT ENGINEERING
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Large Language Model Prompt Engineering}\label{appendix:prompts}
+This appendix documents the prompts behind the system's various \gls{vlm} calls. Because none of the models are fine-tuned, prompting is the main mechanism for shaping model behavior, encoding domain knowledge, enforcing output structure, and restricting the model to physically valid plans. We arrived at these prompts through an iterative process, and what follows reflects the final state after extensive testing.
+
+% ------------------------------------------------------------------------------
+\section{Shared Large Language Model System Prompt}
+Every call in the system shares one system message that establishes robot identity, workspace bounds, and a strict JSON-only output constraint. Centralizing this preamble matters because every call needs the same grounding, as without it, individual calls risk hallucinating coordinates outside the workspace or wrapping responses in markdown that breaks the command parser. Role-specific prompts for the command parser, negotiation agents, and task generator then extend this shared base with their own instructions.
+
+\begin{lstlisting}[caption={System prompt establishing robot identity, workspace bounds, and the JSON-only output constraint}, extendedchars=true]
+You are an AI robot controller for a dual-arm AR4 robotic system running inside a Unity simulation. The workspace is a tabletop environment with two 6-DOF robot arms: Robot1 (left side, base at x = -0.475) and Robot2 (right side, base at x = +0.475). Workspace bounds: x between -0.6 and 0.6, y between 0.0 and 0.6, z between -0.5 and 0.5. Operations are executed sequentially or in named parallel_groups. Robots communicate via signal/wait_for_signal events. You must ONLY use operations, object IDs, and coordinate values explicitly provided in the user message and never invent names, IDs, or positions. Output only valid JSON. Never include markdown fences, reasoning text, or [THINK] tags.
+\end{lstlisting}
+
+% ------------------------------------------------------------------------------
+\section{Command Parser Prompt}
+The command parser prompt is the most complex in the system and the one that took the most iterations to get right. Its job is to convert a natural-language instruction into a valid, sequenced operation plan. To do that dependably across a wide range of tasks, it has to encode substantial domain knowledge that the model cannot infer on its own.
+
+The prompt opens with the available robots and the \gls{rag}-retrieved operations for the current request, giving the model the concrete vocabulary it is allowed to use. The bulk of the prompt is then a set of rules accumulated through testing, each targeting a failure mode that appeared in earlier iterations. A navigation rule prevents the model from adding gripper commands when the task only requires movement. A grasp rule enforces the use of \texttt{grasp\_object} over manually chaining \texttt{move\_to\_coordinate} and \texttt{control\_gripper}, which produces physically unreliable behavior. A place rule distinguishes placement from release. A handoff rule prescribes the operation ordering for robot-to-robot object transfer, including fixed handoff coordinates in \texttt{config/Robot.py} and a mandatory wrist orientation step that prevents joint variance across runs. The variable-passing block explains the \texttt{capture\_var} / \texttt{\$var.field} syntax and enforces that variables must be defined before they are used.
+
+Without this prompt, the model reliably hallucinates operation names, skips synchronization steps, or produces plans that are syntactically valid but physically impossible. Each rule in the prompt corresponds to a failure mode we observed and debugged during development. The prompt is, in effect, a machine-readable record of what the system learned through testing.
+
+The prompt is not a fixed monolith, however. It is dynamically assembled by \texttt{PromptBuilder}, which first classifies the incoming command using a set of compiled regular expressions and then includes only the relevant rule sections. Two sections are always present, the workspace boundary block and the robot assignment rule. Beyond those, each section is injected only when its trigger is detected.
+
+\begin{itemize}
+	\item \textbf{Available operations.} The \gls{rag} system queries the vector store with the raw command text and returns the top 10 matches, of which up to 5 operations and up to 3 matching workflow patterns are kept. The operations are also formatted with their parameter schemas and relevance scores, and prepended as the first section. If \gls{rag} is unavailable, all 20 registered operations are listed as a fallback.
+	\item \textbf{Multi-robot coordination.} Injected when both \texttt{Robot1} and \texttt{Robot2} are named in the command. Explains the \texttt{parallel\_group} field and the variable dependency law.
+	\item \textbf{Handoff rule.} Injected on keywords hand, pass, give, transfer, or handoff. Encodes the full handoff ordering constraints, including the hardcoded handoff coordinate from \texttt{config/Robot.py}, the mandatory wrist orientation step, and the constraint that the receiving robot must use \texttt{receive\_handoff} and never \texttt{grasp\_object}.
+	\item \textbf{Grasp, place, between, cooperative, and dual-grasp rules.} Each is injected only when its corresponding keyword pattern fires. A command that only moves does not receive the grasp rule; a task without the cooperative/dual-grasp trigger phrases does not receive those sections. This holds the prompt length proportional to task complexity and avoids confusing the model with rules that do not apply.
+	\item \textbf{Reflection suffix.} When the reflection retry mechanism re-submits a failed command, the error message is appended as an \texttt{=== REFLECTION ===} section, and the output instruction is tightened to \textit{Output exactly one valid JSON command object}.
+\end{itemize}
+
+The result is that a simple single-robot move command generates a prompt of roughly 600 tokens, while a full dual-robot handoff with stacking generates one of around 2000 tokens. The classification step is pure regex and adds no measurable latency.
+
+\begin{lstlisting}[caption={The few-shot and rule-based system prompt for the command parser.}, extendedchars=true]
+Available Operations: {available_ops}
+
+Command to parse: "{command_text}"
+Default robot_id: "{robot_id}"
+
+=== ROBOT WORKSPACE BOUNDARIES ===
+
+Robot1 (left, x=-0.475): reachable x < 0.165. Robot2 (right, x=+0.475): reachable x > -0.165.
+x > 0 -> Robot2's side. x < 0 -> Robot1's side. x = 0 -> shared.
+Wrong-side task -> use HANDOFF sequence.
+SINGULARITY RULE: Never command a robot to a position directly above its own base.
+Robot1 base column: x=-0.475, z=0 -> keep targets at x > -0.36 or x < -0.59 to avoid.
+Robot2 base column: x=+0.475, z=0 -> keep targets at x < +0.36 or x > +0.59 to avoid.
+
+=== ROBOT ASSIGNMENT RULE ===
+Assign robot_id based ONLY on which robot can physically reach the object.
+"The other robot", "second robot", or "Robot2" are NOT valid reasons by themselves.
+Cross-check every grasp/pick against the 'Object reachability by robot' section below.
+If an object appears only under Robot1, always use robot_id='Robot1', regardless of task wording.
+
+=== MULTI-ROBOT COORDINATION ===
+
+Multi-robot tasks use "plan" format (with "reasoning" + per-op "parallel_group"). Single-robot -> "commands" format.
+Same parallel_group = concurrent. Later group waits for all prior groups.
+VARIABLE DEPENDENCY LAW: if B reads $var captured by A, B must have strictly higher parallel_group than A. Never same group.
+
+=== HANDOFF RULE ===
+
+Handoff = Robot1 picks an object and transfers it to Robot2 at the handoff position ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}).
+
+Ordering constraints (derive parallel_group numbers yourself):
+- Detect must complete before grasp (needs object location).
+- return_to_start must follow grasp before moving to handoff position (clear workspace path).
+- move_to_coordinate to handoff position must complete before adjust_end_effector_orientation starts (arm must be stationary; IK conflicts with active trajectory -> timeout).
+- adjust_end_effector_orientation(pitch=0, yaw=0, roll=90) must complete before signal (Robot2 must not approach until the object is in the correct orientation).
+- Robot1 signals when in position AND orientation is done; Robot2 must wait_for_signal before detecting: signal and wait_for_signal are concurrent (same parallel_group).
+- Robot2 detects the object at Robot1's hand (same color as originally detected, capture_var="handoff_target"), then calls receive_handoff(robot_id="Robot2", object_id="$handoff_target.color", source_robot_id="Robot1").
+- Robot1 releases only after receive_handoff completes.
+- Robot1 returns to start after releasing.
+
+Hard constraints:
+- Receiving robot always uses receive_handoff - never grasp_object.
+- Handoff coordinate is exactly ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}); no approach_offset on that move.
+- Robot2's detect color must match Robot1's detect color (never null).
+- signal + wait_for_signal must share the same parallel_group.
+
+=== SYNCHRONIZATION PRIMITIVES ===
+
+signal(event_name): emit event. wait_for_signal(event_name, timeout_ms=30000): wait for event. wait(duration_ms): time pause.
+
+=== NAVIGATION RULE ===
+
+Move/navigate/approach WITHOUT pick/grab/grasp language -> move_to_coordinate only (no gripper ops).
+Always set approach_offset=0.10 when moving to a detected object (lifts gripper above table; range 0.0-0.10).
+receive_handoff is not navigation: never replace with move_to_coordinate.
+"return to start" / "go home" / "home position" -> return_to_start_position, NEVER move_to_coordinate with hardcoded coordinates.
+
+"find the yellow cube and approach it":
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot1", "color": "yellow"}, "capture_var": "target"}
+{"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": "$target.x", "y": "$target.y", "z": "$target.z", "approach_offset": 0.10}}
+
+"pick up the red cube and place it on field a, then return to start":
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot1", "color": "red"}, "capture_var": "target"}
+{"operation": "grasp_object", "params": {"robot_id": "Robot1", "object_id": "$target.color"}}
+{"operation": "detect_field", "params": {"robot_id": "Robot1", "field_label": "a"}, "capture_var": "field"}
+{"operation": "place_object", "params": {"robot_id": "Robot1", "x": "$field.x", "y": "$field.y", "z": "$field.z"}}
+{"operation": "return_to_start_position", "params": {"robot_id": "Robot1"}}
+
+=== GRASP RULE ===
+
+Pick/grab/grasp -> grasp_object (handles approach+descent+grip; no separate move_to_coordinate before it).
+object_id always uses ".color" from detection ($target.color: never .id or .name).
+Never use grasp_object with a $field var (detect_field has no .color). Never on place/deposit tasks. Never for receiving robot in handoff (use receive_handoff).
+If the command explicitly requests a move AFTER grasping (e.g. "lift to y=0.2", "raise to height H"), add move_to_coordinate AFTER grasp_object using $target.x/$target.z for the horizontal position.
+
+"pick up the green cube and raise it to y=0.15":
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot1", "color": "green"}, "capture_var": "target"}
+{"operation": "grasp_object", "params": {"robot_id": "Robot1", "object_id": "$target.color"}}
+{"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": "$target.x", "y": 0.15, "z": "$target.z"}}
+
+=== PLACE RULE ===
+
+Place/drop/deposit -> place_object(x, y, z): hover, descend, open, ascend. Not release_object, not control_gripper.
+release_object: only for immediate drop at current position (emergency/handoff transfer).
+Typical sequence: detect_field -> place_object($field.x, $field.y, $field.z).
+on_top_of: OPTIONAL string object ID (e.g. "blue_cube"), this auto-computes Y so object stacks on top. NEVER pass true/false; omit entirely when placing in a field.
+
+=== STACKING RULE ===
+
+When the task says "on top of [object]", "stack on [object]", or "place on [object]":
+- Use on_top_of="<object_id>" (e.g. "red_cube"), as this computes the correct Y automatically.
+- x and z MUST come from that same object (its WorldState position or a prior detect_object_stereo), NOT from detect_field.
+- placed_object_height: height of the held object in metres (e.g. 0.02 for a small cube). Omit or set 0.0 if unknown.
+
+Example: "pick up the cyan cube and stack it on top of the orange cube":
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot1", "color": "cyan"}, "capture_var": "cyan_obj"}
+{"operation": "grasp_object", "params": {"robot_id": "Robot1", "object_id": "$cyan_obj.color"}}
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot1", "color": "orange"}, "capture_var": "orange_obj"}
+{"operation": "place_object", "params": {"robot_id": "Robot1", "x": "$orange_obj.x", "y": "$orange_obj.y", "z": "$orange_obj.z", "on_top_of": "orange_cube", "placed_object_height": 0.02}}
+
+If the target object is already in WorldState (no detect needed), skip the detect step and use on_top_of directly.
+
+=== BETWEEN PLACEMENT ===
+
+When the task says "place between X and Y", "put it midway between", or "place in the middle of X and Y":
+PREFER place_between_objects: it resolves both objects from WorldState and computes the midpoint internally.
+
+Example: "place the held object between the cyan and orange cube":
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot1", "color": "cyan"}, "parallel_group": 1}
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot1", "color": "orange"}, "parallel_group": 1}
+{"operation": "place_between_objects", "params": {"robot_id": "Robot1", "object_id_1": "cyan", "object_id_2": "orange"}, "parallel_group": 2}
+
+The two detect calls are independent, so assign them the same parallel_group so they run concurrently.
+place_between_objects depends on both detects, so it must have a strictly higher parallel_group than both.
+
+Fallback: if objects are already in WorldState (no detection needed):
+{"operation": "place_between_objects", "params": {"robot_id": "Robot1", "object_id_1": "cyan_cube", "object_id_2": "orange_cube"}}
+
+Multi-variable arithmetic in params is also supported when you need a custom midpoint:
+{"operation": "place_object", "params": {"robot_id": "Robot1", "x": "($blue_obj.x + $red_obj.x) / 2", "y": "($blue_obj.y + $red_obj.y) / 2", "z": "($blue_obj.z + $red_obj.z) / 2"}}
+
+=== INDEPENDENT PARALLEL RULE ===
+
+When two robots have fully independent tasks (no shared objects, no handoff, no sync point), assign MATCHING parallel_group numbers so both chains execute simultaneously.
+Step N for Robot1 and step N for Robot2 belong in the same group, do NOT assign monotonically increasing groups across both robots.
+Use distinct capture_var names per robot (e.g. "r1_target" / "r2_target") to avoid collisions.
+
+Example: "Robot1 picks the red cube and places it in field C; Robot2 picks the yellow cube and places it in field D":
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot1", "color": "red"}, "capture_var": "r1_target", "parallel_group": 1}
+{"operation": "detect_object_stereo", "params": {"robot_id": "Robot2", "color": "yellow"}, "capture_var": "r2_target", "parallel_group": 1}
+{"operation": "grasp_object", "params": {"robot_id": "Robot1", "object_id": "$r1_target.color"}, "parallel_group": 2}
+{"operation": "grasp_object", "params": {"robot_id": "Robot2", "object_id": "$r2_target.color"}, "parallel_group": 2}
+{"operation": "detect_field", "params": {"robot_id": "Robot1", "field_label": "c"}, "capture_var": "r1_field", "parallel_group": 3}
+{"operation": "detect_field", "params": {"robot_id": "Robot2", "field_label": "d"}, "capture_var": "r2_field", "parallel_group": 3}
+{"operation": "place_object", "params": {"robot_id": "Robot1", "x": "$r1_field.x", "y": "$r1_field.y", "z": "$r1_field.z"}, "parallel_group": 4}
+{"operation": "place_object", "params": {"robot_id": "Robot2", "x": "$r2_field.x", "y": "$r2_field.y", "z": "$r2_field.z"}, "parallel_group": 4}
+
+grasp is group 2 (not 1) because it reads $r1_target/$r2_target captured in group 1. Variable dependency forces a new group, but both robots' grasps still share group 2. Same logic for place after detect_field.
+
+=== COOPERATIVE POSITIONING RULE ===
+
+When both robots work on one shared object but only ONE grips and the other braces/supports/steadies (NOT a handoff):
+- Gripping robot: grasp_object with preferred_approach="left_side" or "right_side".
+- Support/brace robot: move_to_coordinate to opposite side (x offset +-0.08m, y=0.08 above table and NOT $target.y) -> NEVER grasp_object.
+- Grasp and brace can happen concurrently (both depend only on the prior detect, not on each other).
+- Lift: both robots move to target height concurrently (neither depends on the other's lift).
+
+Ordering rule: detect -> [grasp, brace] -> [lift, lift]. Derive parallel_group numbers from these dependencies.
+
+Trigger phrases: "brace", "support", "steadies", "one grasps ... other supports".
+
+=== DUAL GRASP RULE ===
+
+When BOTH robots physically grip the same object from opposite sides (both "grasp", "grip", or "pick"):
+- Exactly ONE detect_object_stereo call for the whole sequence. Both grasp_object calls reference that same captured variable (e.g. $target.color) - do NOT add a second detect for the second robot. Once the first robot grasps, its arm/gripper partially occludes the object from the camera, so a second detection reads a biased position/size, not a more accurate one.
+- Both robots use grasp_object with complementary preferred_approach ("left_side" / "right_side").
+- Grasps must be sequential, not concurrent, so the stabilising robot grasps first to prevent object drift, then the second robot grasps. Each grasp waits for the previous to complete.
+- Lift: both robots move_to_coordinate to target height concurrently (neither lift depends on the other).
+
+Ordering rule: detect -> grasp_A -> grasp_B -> [lift_A, lift_B]. Derive parallel_group numbers from these dependencies.
+
+Trigger phrases: "both grasp", "both grip", "both pick", "Robot1 grasps ... Robot2 grasps", "cooperatively grasp", "cooperatively handle" (when both sides explicitly grip).
+
+=== SINGLE-ROBOT RULES ===
+
+Each action = separate op. Include robot_id in every op. Preserve order.
+"close gripper/grip" (not a pick) -> control_gripper(open_gripper=false). "open gripper/release" -> open_gripper=true.
+Never add return_to_start, signal, or adjust_end_effector_orientation after a grasp unless explicitly requested.
+
+"grip the purple cube": detect_object_stereo(color="purple", capture_var="target") -> grasp_object(object_id="$target.color")
+
+=== VARIABLE PASSING ===
+
+capture_var defines a variable; $var references it in later ops (never before capture).
+detect_object_stereo fields: x, y, z, color, confidence. For grasp: $target.color (never .id/.name).
+detect_field fields: x, y, z directly (use $field.x not $field.center.x).
+
+Pick-and-place: detect_object_stereo(color="purple", capture_var="target") -> grasp_object($target.color) -> detect_field(field_label="C", capture_var="field") -> place_object($field.x, $field.y, $field.z)
+
+=== DETECT_FIELD RULE (CRITICAL) ===
+detect_field ALWAYS requires field_label (a single letter A-I). NEVER omit it.
+WRONG: {"operation": "detect_field", "params": {"robot_id": "Robot1"}}
+RIGHT: {"operation": "detect_field", "params": {"robot_id": "Robot1", "field_label": "A"}}
+If the task does not specify a field letter, infer it from context or ask: do NOT emit detect_field without field_label.
+
+{spatial_block}{anti_pattern_block}{reflection_block} Output only valid JSON, no explanation, no comments.
+\end{lstlisting}
+
+Before the command parser selects operations, a preparatory call asks the model to decompose the natural language instruction into an ordered list of short physical motion descriptions. These motion strings are not executed directly; instead, they serve as chain-of-thought anchors passed to the subsequent operation selection stage to constrain model output. We based this approach on the two-stage parsing design of RT-H~\cite{belkhale2024rthactionhierarchiesusing}, discussed in Section~\ref{sec:refinement_and_safety}.
+
+Two rules govern the decomposition, namely include gripper steps only when the instruction contains explicit grasp language, and represent grasping as a single atomic step, regardless of phrasing. Without these constraints, the model tends to over-specify motion sequences, inserting unnecessary gripper operations or splitting grasp actions into sub-steps that do not map cleanly onto the operation registry.
+
+\begin{lstlisting}[caption={Motion decomposition prompt (inspired by RT-H)}, extendedchars=true]
+High-level command: "{command_text}"
+
+Default robot: {robot_id}
+
+Decompose this command into an ordered list of short, concrete physical motion descriptions. Each entry should describe one distinct robot motion (e.g. 'move end-effector to target position', 'lower arm to 0.3m height').
+
+RULES:
+1. Navigation only (no grasp/pick/grab/grip in command): detect position, then move. Do NOT add any gripper or grasp step.
+   Example: 'detect the orange cube and approach it': ["detect orange cube position", "move end-effector to detected position"]
+
+2. Grasp command (grasp/pick/pick up/grab/grip appears in command): detect position, then grasp as a SINGLE step. Never write 'move end-effector' for a grasp, always write 'grasp <object> (full approach and grip)'.
+   Example: 'grasp the purple cube': ["detect purple cube position", "grasp purple cube (full approach and grip)"]
+   Example: 'Robot1: grasp the yellow cube, and lift it to y=0.15': ["detect yellow cube position", "grasp yellow cube (full approach and grip)", "lift end-effector to y=0.15"]
+
+3. Place command (place/deposit/put down in command): always a SINGLE step written as 'place object at <target>'. Never write 'move end-effector to position' for a place step. Place always follows a grasp; do NOT merge them.
+   Example: 'grasp the cyan cube and place it in field C': ["detect cyan cube position", "grasp cyan cube (full approach and grip)", "place cyan cube at field C"]
+
+4. Multi-robot tasks: include motions for ALL robots in sequence order.
+   Example: 'Robot1 grasps the green cube and hands it to Robot2': ["Robot1: detect green cube", "Robot1: grasp green cube (full approach and grip)", "Robot1: move to handoff position", "Robot1: orient end-effector", "Robot1: signal ready + Robot2: wait for signal", "Robot2: detect green cube at Robot1's hand", "Robot2: receive handoff from Robot1", "Robot1: release object"]
+
+5. ROBOT ASSIGNMENT RULE for multi-robot tasks:
+   Assign robots based on object workspace, NOT linguistic cues like "the other robot" or "Robot2":
+   - Objects at x < 0 (left side) -> Robot1 only.
+   - Objects at x > 0 (right side) -> Robot2 only.
+   - Objects at x = 0 (shared zone, |x| < 0.1) -> either robot.
+   If the task says "the other robot picks up the blue cube" and blue_cube is on the left (x < 0), assign Robot1 and NOT Robot2.
+   When object positions are unknown, use color/name context: blue/yellow cubes are typically on the left (Robot1), green/magenta/red cubes may vary.
+
+Output a JSON array of strings only. No markdown.
+\end{lstlisting}
+
+% ------------------------------------------------------------------------------
+\section{Negotiation Agent Prompts}
+Each negotiation agent receives a system prompt that extends \texttt{SYSTEM\_PROMPT\_BASE} with its robot identity and spatial role, followed by a role-specific user prompt containing the current world state, available operations, and task description.
+
+\begin{lstlisting}[caption={World state and spatial limits template injected into the negotiation prompt.}, extendedchars=true]
+Robot: {self.robot_id} | Base: {self.base_position} | Reach: {self.max_reach}m
+Workspace: {self.workspace} x=[{wb.get('x_min')},{wb.get('x_max')}] z=[{wb.get('z_min')},{wb.get('z_max')}]
+Shared zone (both robots): x=[{sz.get('x_min')},{sz.get('x_max')}] -> objects here are reachable by either robot
+\end{lstlisting}
+
+\subsection{Task Analysis}
+The first phase of the negotiation protocol asks each robot agent to independently examine the task from its own spatial perspective. The prompt instructs the agent to assess whether it can contribute at all, what capabilities and constraints apply given its current position, what role it would naturally take, such as grasper, receiver, or stabilizer, and whether the task needs collaboration. The output is a structured JSON object capturing these assessments alongside a confidence score.
+
+The motivation for keeping this analysis independent per agent is that centralized planning has no reliable way to account for spatial reality. A robot can only honestly assess its own workspace proximity and joint state. Asking a single model to reason about both robots simultaneously often results in role allocations that ignore which robot is actually positioned to perform each action.
+
+\begin{lstlisting}[caption={Task analysis prompt for independent agent-side capability and role assessment.}, extendedchars=true]
+You are {self.robot_id}, the {workspace_side} robot arm. Analyze tasks from your own spatial perspective and only claim capabilities within your workspace bounds.
+
+{context}
+
+Operations: {ops_str}
+
+Task: "{task}"
+
+Set can_contribute=true if you can play ANY part (even as one half of a pair). Only false if completely irrelevant.
+
+JSON: {{"can_contribute":bool,"capabilities":[],"constraints":[],"suggested_role":"","requires_collaboration":bool,"confidence":0.0}}
+\end{lstlisting}
+
+\subsection{Plan Proposal}
+The proposal prompt is issued to the one agent selected for that round and asks it to generate a complete operation sequence covering every participating robot, given the task description, the current world state, and the analyses produced in the previous phase. The output is a structured JSON object containing a reasoning trace, a commands array with parallel group assignments, and an estimated duration. Two constraints are enforced in the prompt: every \texttt{signal} must have a matching \texttt{wait\_for\_signal} with the same event name, and every participating robot must appear in at least one command.
+
+The round-robin structure rotates the authorship of the full team plan, so that different spatial perspectives get to draft it, and any plan that ignores a robot's actual reach can be rejected by that robot in the evaluation phase. Each round's proposal is evaluated against a refreshed world state until one draft is unanimously accepted as physically feasible, or the round limit is reached.
+
+\begin{lstlisting}[caption={Plan proposal prompt for synthesizing multi-robot operation sequences with strict inclusion and synchronization constraints.}, extendedchars=true]
+You are {self.robot_id}, the {workspace_side} robot arm, proposing a COMPLETE multi-robot coordination plan for {robots_str}. Assign operations to robots based on workspace proximity. Every signal must have a matching wait_for_signal.
+
+Round {round_number}: propose a coordinated plan.
+
+{context}
+{ops_section}
+Other robots:{analyses_summary}
+
+Task: "{task}"
+
+CRITICAL RULES:
+- You MUST include at least one command for EVERY robot: {", ".join(all_robot_ids)}.
+- A plan that only covers {self.robot_id} will be REJECTED.
+- Each command needs operation+params(robot_id), optional parallel_group/capture_var.
+- Every signal MUST have a matching wait_for_signal and MUST include "event_name".
+- CROSS-ROBOT SIGNALS: if you plan wait_for_signal('X') for one robot, you MUST also plan signal('X') for the other robot in the SAME proposal. Both sides of every signal pair must appear.
+- COORDINATE RULES:
+  * grasp_object and receive_handoff compute positions internally and do NOT include x/y/z.
+  * move_to_coordinate requires x, y, z, use numeric values, never omit them.
+  * place_object requires x, y, z - NEVER leave these blank. If the target is a
+    named object (e.g. "stack on top of X"), first detect_object_stereo it with a
+    capture_var, then reference $var.x/$var.y/$var.z in place_object - add a
+    numeric offset to y for stacking height (e.g. "$var.y + 0.03").
+- SIGNAL RULES: signal and wait_for_signal MUST include "event_name" (a unique string).
+
+OPERATION EXAMPLES:
+grasp: {{"parallel_group":1,"operation":"grasp_object","params":{{"robot_id":"{self.robot_id}","object_id":"RedCube"}}}}
+place on top of a detected object: {{"parallel_group":1,"operation":"detect_object_stereo","params":{{"robot_id":"{self.robot_id}","color":"red"}},"capture_var":"base_obj"}} + {{"parallel_group":2,"operation":"place_object","params":{{"robot_id":"{self.robot_id}","x":"$base_obj.x","y":"$base_obj.y + 0.03","z":"$base_obj.z"}}}}
+signal pair: {{"parallel_group":2,"operation":"signal","params":{{"event_name":"r1_done"}}}} + {{"parallel_group":2,"operation":"wait_for_signal","params":{{"robot_id":"{other_robot_ids[0] if other_robot_ids else 'Robot2'}","event_name":"r1_done"}}}}
+
+JSON (show commands for ALL robots): {_example_json}
+\end{lstlisting}
+
+\subsection{Proposal Evaluation}
+The evaluation prompt asks each agent to assess the current proposal from its own perspective. The agent checks whether planned positions fall within its reachable workspace, whether the proposed sequence poses any collision threat, whether all signal-and-wait primitives are correctly paired, and whether the overall plan is efficient. One deliberate exception is noted in the prompt. Agents are instructed not to flag missing coordinates for \texttt{receive\_handoff} or \texttt{grasp\_object}, since those operations compute their own target positions internally and do not need explicit coordinates in the plan.
+
+The output is a binary accept/reject decision, accompanied by a concerns field and suggested changes; only the accept/reject decision drives control flow. A rejection advances the protocol to the next round, and the concerns and suggested-changes fields are fed back to the next proposing agent, which must address each one in its revision. The value of distributing this evaluation among agents is that each robot can verify the feasibility of actions only within its own workspace, whereas a centralized verifier would need to replicate that spatial reasoning for every robot. Peer review makes each agent responsible for what it knows best.
+
+\begin{lstlisting}[caption={Proposal evaluation prompt for decentralized plan validation, workspace constraint verification, and safety checking.}, extendedchars=true]
+You are {self.robot_id}, the {workspace_side} robot arm, evaluating a plan proposed by {proposal.proposer_id}. Be conservative: flag any operation that exceeds your workspace bounds or creates collision risk.
+
+{context}
+
+Note: grasp_object and receive_handoff compute positions internally -> do NOT flag missing coords for these.
+
+Task: "{task}"
+Proposed by {proposal.proposer_id}: {proposal.reasoning}
+
+Plan: {commands_json}
+
+Check: (1) your actions within reach? (2) signal/wait pairs match? (3) collision risks? (4) efficient?
+
+EXAMPLES:
+  no issues: {{"accept":true,"concerns":[],"suggested_changes":[],"confidence":0.9}}
+  with issues: {{"accept":false,"concerns":["move_to_coordinate target x=0.9 exceeds my reach","missing wait_for_signal for r1_done"],"suggested_changes":["clamp x to workspace bound","add wait_for_signal('r1_done') for {self.robot_id}"],"confidence":0.6}}
+
+JSON: {{"accept":bool,"concerns":[...],"suggested_changes":[...],"confidence":0.0}}
+\end{lstlisting}
+
+% ------------------------------------------------------------------------------
+\section{AutoRT Task Generation Prompt}
+The task generation prompt receives a structured scene description that combines the \gls{vlm} scene summary with a list of detected objects, their 3D positions, and per-object reachability hints indicating which robots can physically reach each object, and asks the model to generate a set of diverse, executable task candidates. The operation registry with parameter schemas is injected into the prompt, along with the robot spatial layout and, when multi-robot mode is enabled, a set of collaborative task patterns covering handoff, parallel, and sequential coordination.
+
+Strict parameter rules are enforced inline. The prompt specifies the accepted selection modes and the exact camera identifier for \texttt{detect\_object\_stereo} and limits color to a named color or null, preventing the model from hallucinating values that would fail validation. For JSON parsing or validation errors, the previous error message is appended to the next generation attempt, letting the model self-correct without external intervention.
+
+The motivation for this level of specificity is that AutoRT~\cite{ahn2024autortembodiedfoundationmodels} requires tasks that can execute immediately against the live system. A prompt that describes operations loosely produces syntactically plausible but physically invalid plans, objects that do not exist in the scene, colors that do not match the detector's vocabulary, or parameter sets that the operation registry rejects. Encoding the exact schemas at generation time, backed by the error-feedback loop above, keeps the invalid-proposal rate low.
+
+\begin{lstlisting}[caption={AutoRT task generation prompt integrating VLM scene analysis, operational schemas, and multi-robot collaborative patterns.}, extendedchars=true]
+MULTI-ROBOT COORDINATION: You have {len(robot_ids)} robots: {robot_ids}
+{robot_layout}
+
+Collaborative patterns:
+1. Handoff: Robot1 picks object, moves to handoff zone, Robot2 receives
+2. Parallel: Both robots pick different objects simultaneously
+3. Sequential: Robot1 places object, Robot2 stacks on top
+
+Use 'signal' and 'wait_for_signal' for coordination between robots.
+
+SCENE ANALYSIS:
+{summary}
+
+DETECTED OBJECTS:
+{objects_str if objects_str else "No objects detected."}
+
+AVAILABLE ROBOTS:
+{robot_ids}{spatial_hints}
+
+AVAILABLE OPERATIONS:
+{operations_str}
+
+{collaborative_hint}
+
+{previous_task_section}
+TASK: Generate {num_tasks} diverse robotic tasks as a JSON array. Each task:
+{{
+  "task_id": "task_001",
+  "description": "one sentence",
+  "operations": [{{"type": "op_name", "robot_id": "RobotN", "parameters": {{}}}}],
+  "required_robots": ["RobotN"],
+  "estimated_complexity": 1-10,
+  "reasoning": "one sentence"
+}}
+
+Rules:
+Only use objects from DETECTED OBJECTS and operations from AVAILABLE OPERATIONS
+Every operation needs robot_id and parameters ({{}} if none)
+detect_object_stereo: color must be a named color or null; selection must be "left"/"right"/"closest"/"first"/"all"; camera_id="{DEFAULT_CAMERA_ID}"
+Assign objects to nearest robot (X<-0.1: Robot1, X>0.1: Robot2, center: either)
+Every robot_id in operations must appear in required_robots
+GRASP RULE: Always use grasp_object when grasping a detected object: grasp_object uses the object's name/ID and handles detection internally
+HANDOFF RULE: For transferring an object between robots use handoff (sender) + receive_handoff (receiver): never implement handoffs with raw move/signal/release sequences. Handoffs are ONLY allowed with the red object: never generate a handoff for any other color.
+PLACE RULE: For placing a held object use place_object (at a position) or place_between_objects (between two reference objects): never use release_object or move_to_coordinate to place
+FIELD RULE: Fields (field_a through field_i) are NOT in WorldState by default. Before using a field as a placement target (on_top_of param) you MUST call detect_field earlier in the same task's operations. Never reference a field ID unless detect_field for that field precedes it in the sequence.
+Output compact JSON array only, no markdown
+\end{lstlisting}
+
+\subsection{Semantic Safety Prompt}
+The safety prompt presents the model with the proposed task description, the ordered sequence of its operation types, and a list of natural-language safety rules, and asks whether the task violates any of them. The system message extends the shared base with a deliberate conservative bias, \textit{when in doubt, flag as unsafe, a false positive is far less costly than a false negative}. The model is explicitly instructed never to justify an unsafe task or suggest a workaround. The output is a JSON object with a boolean violation flag, the specific rule violated, and a reason.
+
+This layer exists because kinematic code checks cannot detect harmful intent. A task that moves the end effector within workspace bounds and below the velocity limit can still be semantically dangerous. Instructing a robot to throw an object at a camera, for instance, would satisfy every kinematic constraint but violate basic safety expectations. The semantic layer catches these cases before any motion executes. The system is configured to fail-safe. If the model call returns an error or produces malformed output, the task is rejected by default.
+
+\begin{lstlisting}[caption={Semantic safety prompt for verifying multi-robot operation sequences against natural-language safety constraints.}, extendedchars=true]
+Task: "{task.description}"
+Operations: {ops_summary}
+
+Safety rules: {rules_str}
+
+Does this task violate any rule? JSON: {{"violates":bool,"rule_violated":null,"reason":""}}
+\end{lstlisting}
+

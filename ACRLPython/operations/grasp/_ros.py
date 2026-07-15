@@ -53,6 +53,7 @@ def _grasp_via_ros_planned(
     world_state,
     grasp_yaw_override: "Optional[float]" = None,
     pre_grasp_distance: float = 0.0,
+    allow_parallel: bool = False,
 ):
     """Full GraspPlanner pipeline (ROS path). Returns (result, should_fallback)."""
     import numpy as np
@@ -190,6 +191,7 @@ def _grasp_via_ros_planned(
             robot_id=robot_id,
             max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
             max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+            allow_parallel=allow_parallel,
         )
         if not clearance_result or not clearance_result.get("success"):
             cl_err = (
@@ -213,6 +215,7 @@ def _grasp_via_ros_planned(
         max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
         max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
         constrain_joint4=True,
+        allow_parallel=allow_parallel,
     )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -229,6 +232,7 @@ def _grasp_via_ros_planned(
         robot_id=robot_id,
         max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
         max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
+        allow_parallel=allow_parallel,
     )
 
     if not result or not result.get("success"):
@@ -250,6 +254,7 @@ def _grasp_via_ros_planned(
         orientation=grasp_orientation,
         tcp_y_offset=GRASP_TCP_OFFSET,
         world_state=world_state,
+        allow_parallel=allow_parallel,
     )
     if not grasp_ok:
         return (
@@ -290,6 +295,7 @@ def _grasp_via_ros_position_only(
     request_id: int,
     world_state,
     grasp_yaw_override: "Optional[float]" = None,
+    allow_parallel: bool = False,
 ):
     """Position-only ROS grasp fallback when GraspPlanner unavailable. Returns (result, should_fallback)."""
     if grasp_yaw_override is not None:
@@ -328,6 +334,15 @@ def _grasp_via_ros_position_only(
     pre_grasp_position = _vec_to_pos(object_position, PRE_GRASP_HOVER_OFFSET)
     grasp_position = _vec_to_pos(object_position, GRASP_TCP_OFFSET)
 
+    try:
+        from operations.SpatialPredicates import warn_if_target_outside_workspace
+
+        warn_if_target_outside_workspace(
+            robot_id, grasp_position["x"], grasp_position["y"], grasp_position["z"]
+        )
+    except Exception:
+        pass
+
     logger.info(
         f"[GRASP_DEBUG] {robot_id} object_position={object_position}, "
         f"pre_grasp_y={pre_grasp_position['y']:.3f}, grasp_y={grasp_position['y']:.3f}"
@@ -351,6 +366,7 @@ def _grasp_via_ros_position_only(
             robot_id=robot_id,
             max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
             max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+            allow_parallel=allow_parallel,
         )
         if not clearance_result or not clearance_result.get("success"):
             cl_err = (
@@ -381,6 +397,7 @@ def _grasp_via_ros_position_only(
         max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
         max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
         constrain_joint4=True,
+        allow_parallel=allow_parallel,
     )
     if not pre_result or not pre_result.get("success"):
         error_msg = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -406,6 +423,7 @@ def _grasp_via_ros_position_only(
         robot_id=robot_id,
         max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
         max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
+        allow_parallel=allow_parallel,
     )
 
     if not result or not result.get("success"):
@@ -427,6 +445,7 @@ def _grasp_via_ros_position_only(
         orientation=top_down_orientation,
         tcp_y_offset=GRASP_TCP_OFFSET,
         world_state=world_state,
+        allow_parallel=allow_parallel,
     )
     if not grasp_ok:
         return (

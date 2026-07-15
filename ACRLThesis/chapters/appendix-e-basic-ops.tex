@@ -1,0 +1,164 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%  BASIC OPERATIONS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Basic Operations}\label{appendix:basic_ops}
+This appendix is a reference for the basic operations that make up the command vocabulary. Section~\ref{appendix:operation_example} walks through a complete three-part implementation example of a navigation primitive, namely the Python dispatch function, its registry entry, and its parameter-flow metadata. The remaining sections list the operations actually in use, grouped by complexity tier from single-step Atomic commands to multi-agent Complex routines.
+
+% ------------------------------------------------------------------------------
+\section{Operation Example}\label{appendix:operation_example}
+This is a simplified example of the \texttt{move\_to\_coordinate} operation, showing its implementation in three parts. The first function defines the parameter schema, the validation pattern, and the \gls{ros}-TCP dispatch logic.
+
+\begin{lstlisting}[caption={Python implementation function for coordinate navigation with ROS fallback and validation guards.}, extendedchars=true]
+def move_to_coordinate(
+    robot_id: str,
+    x: float, y: float, z: float,
+    speed: float = 1.0,
+    approach_offset: float = 0.0,
+    use_ros: Optional[bool] = None,
+) -> OperationResult:
+    """
+    Move the robot end effector to a specified 3D coordinate.
+
+    Args:
+        robot_id: ID of the robot to move (e.g., "Robot1", "Robot2")
+        x, y, z: Target position in meters in the Unity world frame (Y-up)
+        speed: Speed multiplier, range [0.1, 2.0]
+        approach_offset: Lift above target in meters along the vertical axis
+        use_ros: Override control mode; None uses the system default
+
+    Returns:
+        OperationResult with target position and status on success,
+        or structured error information with recovery suggestions on failure.
+    """
+    if err := validate_robot_id(robot_id):
+        return err
+    if err := validate_xyz(x, y, z):
+        return err
+
+    # Apply vertical approach offset before dispatch
+    target = {"x": x, "y": y + approach_offset, "z": z}
+
+    # Route through ROS/MoveIt or direct TCP depending on control mode
+    return execute_with_ros_fallback(
+        ros_path=lambda: _plan_via_moveit(robot_id, target),
+        tcp_path=lambda: _send_via_tcp(robot_id, target, speed),
+        use_ros=use_ros,
+    )
+\end{lstlisting}
+
+The second snippet defines the parameter schema with type and range information, the preconditions that specify how operations are safety-checked before execution, and the relationship metadata that drives the \gls{rag} pairing logic.
+
+\begin{lstlisting}[caption={Metadata registry definition detailing type schemas, preconditions, and operational relationships for RAG lookup.}, extendedchars=true]
+def create_move_to_coordinate_operation() -> BasicOperation:
+    return BasicOperation(
+        operation_id="motion_move_to_coord_001",
+        name="move_to_coordinate",
+        category=OperationCategory.NAVIGATION,
+        complexity=OperationComplexity.BASIC,
+        description="Move the robot end effector to a specific 3D coordinate",
+        parameters=[
+            OperationParameter(
+                name="robot_id", type="str", required=True),
+            OperationParameter(
+                name="x", type="float", required=True,
+                valid_range=(-0.65, 0.65)),
+            OperationParameter(
+                name="y", type="float", required=True,
+                valid_range=(0.0, 0.7)),
+            OperationParameter(
+                name="z", type="float", required=True,
+                valid_range=(-0.5, 0.5)),
+            OperationParameter(
+                name="speed", type="float", required=False,
+                default=1.0, valid_range=(0.1, 2.0)),
+            OperationParameter(
+                name="approach_offset", type="float", required=False,
+                default=0.0, valid_range=(0.0, 0.1)),
+        ],
+        preconditions=[
+            "robot_is_initialized(robot_id)",
+            "target_within_reach(robot_id, x, y, z)",
+        ],
+        average_duration_ms=1200.0,
+        success_rate=0.96,
+        relationships=OperationRelationship(
+            commonly_paired_with=[
+                "perception_stereo_detect_001",
+                "manipulation_control_gripper_001",
+                "motion_pick_at_coord_004",
+            ],
+        ),
+        implementation=move_to_coordinate,
+    )
+\end{lstlisting}
+
+The final part is the implementation for Unity. Here, the code defines the \gls{ros} mode guard that routes movement to MoveIt, the callback pattern that signals completion back to Python, and the \texttt{SetTarget} call that hands off to the Unity \gls{ik} pipeline.
+
+\begin{lstlisting}[caption={Unity C\# implementation processing the command block, asynchronous callback hooks, and IK targeting.}, extendedchars=true]
+private void ExecuteMoveToCoordinate(RobotCommand command)
+{
+    if (!ValidateAndGetRobot(command.robot_id, "move_to_coordinate",
+            out RobotInstance robotInstance, out RobotController controller))
+        return;
+
+    // Skip Unity IK in ROS mode: movement handled by MoveIt via
+    // ROSTrajectorySubscriber
+    if (ShouldSkipForROSMode(controller, command.robot_id,
+            "move_to_coordinate", command.request_id))
+        return;
+
+    Vector3 target = TargetPositionToVector3(command.parameters.target_position);
+
+    // Register completion callback: fires when controller reaches target
+    Action onComplete = null;
+    onComplete = () =>
+    {
+        controller.OnTargetReached -= onComplete;
+        SendCommandCompletion(command.robot_id, "move_to_coordinate",
+            true, command.request_id);
+    };
+
+    controller.OnTargetReached += onComplete;
+    controller.SetTarget(target);
+}
+\end{lstlisting}
+
+% ------------------------------------------------------------------------------
+\section{Operations}
+This is a list of the system's operation primitives, grouped by complexity level in increasing order.
+
+\subsection{Atomic}
+\begin{enumerate}
+	\item Open/close gripper: Controls the gripper to open or close in preparation for grasping or releasing an object.
+	\item Release object: Opens the gripper and releases a held object at the current end-effector position.
+	\item Check robot status: Queries the simulation for the robot's current position, joint angles, and operational state.
+	\item Signal: Emits a named event that partner robots can listen to, used for synchronization.
+	\item Wait for signal: Blocks execution until a specified named event is received.
+	\item Wait: Pauses execution for a fixed duration given in milliseconds.
+	\item Reset simulation: Resets the simulation environment, used in benchmarks and automated tests.
+	\item Yield workspace: Releases a claimed workspace region so the partner robot can safely access it.
+\end{enumerate}
+
+\subsection{Basic}
+\begin{enumerate}
+	\item Move to coordinates: Moves the end-effector to a specified $(x, y, z)$ position in the world frame.
+	\item Adjust end-effector orientation: Rotates the gripper to a target roll, pitch, and yaw to match the required approach pose.
+	\item Return to start: Moves the robot back to its predefined home position.
+	\item Generate point cloud: Reconstructs a dense 3D point cloud from the stereo camera pair in the Unity world frame.
+	\item Detect field: Detects a single labeled field via \gls{yolo} and returns its 3D coordinates in the world frame.
+	\item Detect all fields: Detects all visible labeled fields in a single pass and returns their positions.
+\end{enumerate}
+
+\subsection{Intermediate}
+\begin{enumerate}
+	\item Place object: Places a held object at a target position, optionally stacking it on top of another object.
+	\item Place between objects: Calculates the midpoint between two reference objects and places a held object at that position.
+	\item Detect object: Detects a target object using stereo vision and returns its 3D world position.
+	\item Analyze scene: Sends a camera image to a \gls{vlm} and returns a natural-language scene description.
+\end{enumerate}
+
+\subsection{Complex}
+\begin{enumerate}
+	\item Grasp object: Performs a full grasp on a detected object, including approach planning, orientation alignment, and contact verification.
+	\item Receive handoff: Positions the gripper to receive an object being released by the partner robot, coordinating timing with the transfer.
+\end{enumerate}

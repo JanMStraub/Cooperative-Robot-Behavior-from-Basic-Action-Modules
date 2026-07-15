@@ -1,5 +1,5 @@
 import time
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock, patch
 
 from operations.DefaultPositionOperation import (
     return_to_start_position,
@@ -116,6 +116,54 @@ class TestReturnToStartPosition:
         assert result.success is False
         assert result.error is not None
         assert result.error["code"] == "UNEXPECTED_ERROR"
+
+
+class TestReturnAllowParallelRos:
+    def test_uses_parallel_instance_and_flag_when_allow_parallel_ros_true(self):
+        mock_default_bridge = MagicMock()
+        mock_default_bridge.is_connected = True
+        mock_parallel_bridge = MagicMock()
+        mock_parallel_bridge.plan_return_to_start.return_value = {
+            "success": True,
+            "planning_time": 1.0,
+        }
+
+        with patch(
+            "ros2.ROSBridge.ROSBridge.get_instance", return_value=mock_default_bridge
+        ), patch(
+            "ros2.ROSBridge.ROSBridge.get_parallel_instance",
+            return_value=mock_parallel_bridge,
+        ) as mock_get_parallel:
+            result = return_to_start_position(
+                "Robot1", use_ros=True, allow_parallel_ros=True
+            )
+
+        assert result.success is True
+        mock_get_parallel.assert_called_once_with("Robot1")
+        assert (
+            mock_parallel_bridge.plan_return_to_start.call_args[1]["allow_parallel"]
+            is True
+        )
+
+    def test_uses_default_instance_when_allow_parallel_ros_false(self):
+        mock_default_bridge = MagicMock()
+        mock_default_bridge.is_connected = True
+        mock_default_bridge.plan_return_to_start.return_value = {
+            "success": True,
+            "planning_time": 1.0,
+        }
+
+        with patch(
+            "ros2.ROSBridge.ROSBridge.get_instance", return_value=mock_default_bridge
+        ), patch("ros2.ROSBridge.ROSBridge.get_parallel_instance") as mock_get_parallel:
+            result = return_to_start_position("Robot1", use_ros=True)
+
+        assert result.success is True
+        mock_get_parallel.assert_not_called()
+        assert (
+            mock_default_bridge.plan_return_to_start.call_args[1]["allow_parallel"]
+            is False
+        )
 
 
 class TestReturnSpeedValidation:

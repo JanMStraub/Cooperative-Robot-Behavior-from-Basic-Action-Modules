@@ -1,0 +1,456 @@
+{
+  "benchmark_id": 13,
+  "benchmark_name": "Negotiation Ablation",
+  "run_id": "20260711T051259_15b01b",
+  "config_snapshot": {
+    "robot_id": "Robot1",
+    "timeout_per_step_s": 90.0,
+    "max_retries": 1,
+    "dry_run": false,
+    "task_count": 5,
+    "reflection": true,
+    "check_completion": true,
+    "use_rag": true,
+    "reflection_enabled": true,
+    "use_knowledge_graph": true,
+    "use_vgn": true,
+    "use_ros_movement": true,
+    "execution_mode": "live",
+    "robot_id_a": "Robot1",
+    "robot_id_b": "Robot2",
+    "sync_timeout_ms": 30000,
+    "use_negotiation": true
+  },
+  "success": false,
+  "total_duration_ms": 239653.63907814026,
+  "steps": [
+    {
+      "index": 0,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 23910.7882976532,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 1
+    },
+    {
+      "index": 1,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 18506.43301010132,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": 1
+    },
+    {
+      "index": 2,
+      "operation": "signal",
+      "success": true,
+      "duration_ms": 0.18405914306640625,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 2
+    },
+    {
+      "index": 3,
+      "operation": "wait_for_signal",
+      "success": true,
+      "duration_ms": 0.125885009765625,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": 2
+    },
+    {
+      "index": 4,
+      "operation": "signal",
+      "success": true,
+      "duration_ms": 0.07319450378417969,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 2
+    },
+    {
+      "index": 5,
+      "operation": "wait_for_signal",
+      "success": true,
+      "duration_ms": 0.08606910705566406,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 2
+    },
+    {
+      "index": 6,
+      "operation": "place_object",
+      "success": false,
+      "duration_ms": 5.132198333740234,
+      "error_code": null,
+      "error_message": "'<' not supported between instances of 'str' and 'float'",
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 3
+    },
+    {
+      "index": 7,
+      "operation": "place_object",
+      "success": false,
+      "duration_ms": 5.043983459472656,
+      "error_code": null,
+      "error_message": "'<' not supported between instances of 'str' and 'float'",
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": 3
+    },
+    {
+      "index": 8,
+      "operation": "signal",
+      "success": false,
+      "duration_ms": 0.0,
+      "error_code": null,
+      "error_message": "Command not executed",
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 4
+    },
+    {
+      "index": 9,
+      "operation": "wait_for_signal",
+      "success": false,
+      "duration_ms": 0.0,
+      "error_code": null,
+      "error_message": "Command not executed",
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": 4
+    },
+    {
+      "index": 10,
+      "operation": "signal",
+      "success": false,
+      "duration_ms": 0.0,
+      "error_code": null,
+      "error_message": "Command not executed",
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 4
+    },
+    {
+      "index": 11,
+      "operation": "wait_for_signal",
+      "success": false,
+      "duration_ms": 0.0,
+      "error_code": null,
+      "error_message": "Command not executed",
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 4
+    },
+    {
+      "index": 12,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 1365.8790588378906,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 13,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 16006.705045700073,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 1
+    },
+    {
+      "index": 14,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 1367.9289817810059,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": null
+    },
+    {
+      "index": 15,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 44811.184883117676,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": 1
+    },
+    {
+      "index": 16,
+      "operation": "move_to_coordinate",
+      "success": false,
+      "duration_ms": 0.2460479736328125,
+      "error_code": null,
+      "error_message": "Multi-robot coordination issue: collision: Target position too close to Robot2 (distance: 0.023m)",
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 2
+    },
+    {
+      "index": 17,
+      "operation": "signal",
+      "success": true,
+      "duration_ms": 0.125885009765625,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": 2
+    },
+    {
+      "index": 18,
+      "operation": "wait_for_signal",
+      "success": true,
+      "duration_ms": 0.07700920104980469,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 2
+    },
+    {
+      "index": 19,
+      "operation": "place_object",
+      "success": false,
+      "duration_ms": 0.0,
+      "error_code": null,
+      "error_message": "Command not executed",
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": 3
+    },
+    {
+      "index": 20,
+      "operation": "move_to_coordinate",
+      "success": false,
+      "duration_ms": 0.0,
+      "error_code": null,
+      "error_message": "Command not executed",
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 4
+    },
+    {
+      "index": 21,
+      "operation": "place_object",
+      "success": false,
+      "duration_ms": 0.0,
+      "error_code": null,
+      "error_message": "Command not executed",
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": 5
+    },
+    {
+      "index": 22,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 899.7230529785156,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 23,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 12828.377962112427,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 24,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 717.0429229736328,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": null
+    },
+    {
+      "index": 25,
+      "operation": "receive_handoff",
+      "success": true,
+      "duration_ms": 39850.23307800293,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot2",
+      "parallel_group_id": null
+    },
+    {
+      "index": 26,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 819.7822570800781,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 27,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 10907.816886901855,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 28,
+      "operation": "place_object",
+      "success": true,
+      "duration_ms": 41848.713397979736,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 29,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 796.9427108764648,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 30,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 15567.12293624878,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    },
+    {
+      "index": 31,
+      "operation": "place_object",
+      "success": true,
+      "duration_ms": 43499.10497665405,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0,
+      "robot_id": "Robot1",
+      "parallel_group_id": null
+    }
+  ],
+  "ops_executed": 32,
+  "ops_succeeded": 22,
+  "success_rate": 0.5,
+  "avg_step_duration_ms": 7489.176221191883,
+  "model": "mistralai/magistral-small-2509",
+  "retry_count": 0,
+  "first_failure_step": null,
+  "chain_metrics": null,
+  "hallucinated_ops": 0,
+  "reflection_recoveries": 0,
+  "negotiation_rounds": 4,
+  "ablation": {
+    "condition": "enabled",
+    "hallucinated_ops": 0,
+    "reflection_recoveries": 0,
+    "negotiation_rounds": 4,
+    "success_rate": 0.5,
+    "ops_executed": 32,
+    "ops_succeeded": 22,
+    "condition_delta": 0.0,
+    "hallucination_delta": 0,
+    "grasp_sr": 0.0,
+    "avg_grasp_duration_ms": 0.0
+  },
+  "ablation_baseline": null,
+  "feature_flags": {
+    "use_rag": true,
+    "use_vgn": true,
+    "use_knowledge_graph": true,
+    "use_ros_movement": true,
+    "reflection_enabled": true,
+    "dry_run": false,
+    "use_negotiation": true
+  },
+  "parsed_plan": [],
+  "per_op_stats": {
+    "grasp_object": {
+      "count": 7,
+      "fail_count": 0,
+      "avg_duration_ms": 20362.6
+    },
+    "signal": {
+      "count": 5,
+      "fail_count": 2,
+      "avg_duration_ms": 0.1
+    },
+    "wait_for_signal": {
+      "count": 5,
+      "fail_count": 2,
+      "avg_duration_ms": 0.1
+    },
+    "place_object": {
+      "count": 6,
+      "fail_count": 4,
+      "avg_duration_ms": 14226.3
+    },
+    "detect_object_stereo": {
+      "count": 6,
+      "fail_count": 0,
+      "avg_duration_ms": 994.5
+    },
+    "move_to_coordinate": {
+      "count": 2,
+      "fail_count": 2,
+      "avg_duration_ms": 0.1
+    },
+    "receive_handoff": {
+      "count": 1,
+      "fail_count": 0,
+      "avg_duration_ms": 39850.2
+    },
+    "_parallelism_ratio": 0.5938,
+    "_ops_in_parallel": 19
+  },
+  "execution_mode": "live",
+  "task_breakdown": []
+}

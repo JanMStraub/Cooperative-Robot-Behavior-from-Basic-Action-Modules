@@ -21,7 +21,15 @@ def test_b16_task_contains_independence_signal():
     from ACRLPython.benchmarks.cases.B10ParallelIndependent import get_task
 
     task = get_task().lower()
-    assert any(word in task for word in ["independently", "simultaneously", "parallel"])
+    assert any(
+        word in task
+        for word in [
+            "independently",
+            "simultaneously",
+            "parallel",
+            "at the same time",
+        ]
+    )
 
 
 def test_b16_task_uses_disjoint_objects():

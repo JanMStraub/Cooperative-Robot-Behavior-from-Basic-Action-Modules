@@ -20,6 +20,15 @@ NEGOTIATION_ENABLED = os.environ.get("NEGOTIATION_ENABLED", "false").lower() in 
 MAX_NEGOTIATION_ROUNDS = int(os.environ.get("MAX_NEGOTIATION_ROUNDS", "3"))
 NEGOTIATION_TIMEOUT = float(os.environ.get("NEGOTIATION_TIMEOUT", "300.0"))  # seconds
 
+# Feed a rejected proposal's critiques into the next round's proposal prompt.
+NEGOTIATION_FEEDBACK_ENABLED = os.environ.get(
+    "NEGOTIATION_FEEDBACK_ENABLED", "true"
+).lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
 AGENT_LLM_TIMEOUT = float(
     os.environ.get("AGENT_LLM_TIMEOUT", "90.0")
 )  # seconds per LLM call (proposal phase is the heaviest; 90s for slow local models)
@@ -40,7 +49,7 @@ COLLABORATION_KEYWORDS = [
     "together",
     "cooperate",
     "collaborate",
-    "coordinate",
+    "coordinate with",
     "handoff",
     "hand off",
     "pass to",
@@ -69,4 +78,4 @@ VERIFY_NEGOTIATED_PLANS = os.environ.get("VERIFY_NEGOTIATED_PLANS", "true").lowe
     "1",
     "yes",
 )
-MAX_PLAN_LENGTH = int(os.environ.get("MAX_PLAN_LENGTH", "50"))
+MAX_PLAN_LENGTH = int(os.environ.get("MAX_PLAN_LENGTH", "500"))

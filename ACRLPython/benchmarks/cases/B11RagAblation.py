@@ -18,28 +18,28 @@ TASKS: List[Tuple[str, str]] = [
         "yield_workspace",
     ),
     (
-        "you are currently holding the box - keep it stable while Robot2 manipulates it",
-        "stabilize_object",
+        "the red cube is sitting on the table pick it up",
+        "grasp_object",
     ),
     (
-        "you are currently holding the cube - deposit it at the shared handoff zone for Robot2 to pick up",
-        "place_for_partner",
+        "put the block down exactly halfway between the blue block and the green block",
+        "place_between_objects",
     ),
     (
         "take the object that Robot1 is offering",
         "receive_handoff",
     ),
     (
-        "check whether your partner robot is ready before starting the joint task",
-        "check_partner_status",
+        "before grasping, first check that you yourself aren't already holding something",
+        "check_robot_status",
     ),
     (
-        "perform a bimanual grasp of the beam with Robot2 from opposite sides",
-        "synchronized_grasp",
+        "map out every zone on the table before deciding where to place the object",
+        "detect_all_fields",
     ),
     (
-        "cooperatively carry the already grasped object with Robot2 to the drop zone",
-        "joint_transport",
+        "without moving from your current position, angle your gripper straight down over the object",
+        "adjust_end_effector_orientation",
     ),
     (
         "do not move until you receive the go signal from Robot1",

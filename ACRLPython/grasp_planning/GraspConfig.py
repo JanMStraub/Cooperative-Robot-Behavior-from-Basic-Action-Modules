@@ -5,7 +5,10 @@ Grasp planning configuration.
 This module defines configuration settings for the grasp planning pipeline,
 including candidate generation, scoring weights, and validation parameters.
 
-Matches Unity's GraspConfig.cs for compatibility.
+Mirrors the field layout of Unity's GraspConfig.cs, but the values deliberately
+diverge and must not be aligned. This pipeline validates candidates against
+MoveIt IK; Unity's validates against its damped-least-squares solver, whose
+convergence range is what motivates Unity's tighter reach and looser threshold.
 """
 
 from dataclasses import dataclass, field

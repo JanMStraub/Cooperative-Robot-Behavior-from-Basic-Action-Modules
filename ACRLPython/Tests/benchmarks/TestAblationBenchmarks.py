@@ -431,7 +431,9 @@ def test_b12_reflection_offline_produces_single_condition():
     from benchmarks.Config import DualRobotConfig
 
     runner = BenchmarkRunner()
-    cfg = DualRobotConfig(dry_run=True, execution_mode="offline", reflection_enabled=True)
+    cfg = DualRobotConfig(
+        dry_run=True, execution_mode="offline", reflection_enabled=True
+    )
     result = runner.run(12, cfg)
 
     assert result.ablation is not None

@@ -10,7 +10,6 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Any, List, Optional, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from core.SingletonBase import SingletonBase
 
@@ -19,6 +18,7 @@ from config.Negotiation import (
     NEGOTIATION_TIMEOUT,
     VERIFY_NEGOTIATED_PLANS,
     MAX_PLAN_LENGTH,
+    NEGOTIATION_FEEDBACK_ENABLED,
 )
 from config.Robot import ROBOT_BASE_POSITIONS
 from agents.RobotLLMAgent import RobotLLMAgent, TaskAnalysis, PlanProposal
@@ -48,6 +48,7 @@ class NegotiationSession:
     proposals: List[PlanProposal] = field(default_factory=list)
     current_round: int = 0
     start_time: float = field(default_factory=time.time)
+    last_feedback: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -250,29 +251,24 @@ class NegotiationHub(SingletonBase):
             available_ops = []
             logger.warning("Cannot get operation names for analysis")
 
-        with ThreadPoolExecutor(max_workers=len(session.robot_ids)) as executor:
-            futures = {}
-            for robot_id in session.robot_ids:
-                agent = self._get_or_create_agent(robot_id)
-                future = executor.submit(
-                    agent.analyze_task, session.task, world_state, available_ops
+        # Sequential, not parallel: concurrent completions against a single
+        # local LLM instance (e.g. LM Studio's MLX backend) don't queue -
+        # the second concurrent request gets rejected with a 500 instead of
+        # waiting its turn.
+        for robot_id in session.robot_ids:
+            agent = self._get_or_create_agent(robot_id)
+            try:
+                analysis = agent.analyze_task(session.task, world_state, available_ops)
+                session.analyses[robot_id] = analysis
+                logger.info(
+                    f"[{robot_id}] Analysis: can_contribute={analysis.can_contribute}, "
+                    f"role='{analysis.suggested_role}'"
                 )
-                futures[future] = robot_id
-
-            for future in as_completed(futures):
-                robot_id = futures[future]
-                try:
-                    analysis = future.result()
-                    session.analyses[robot_id] = analysis
-                    logger.info(
-                        f"[{robot_id}] Analysis: can_contribute={analysis.can_contribute}, "
-                        f"role='{analysis.suggested_role}'"
-                    )
-                except Exception as e:
-                    logger.error(f"[{robot_id}] Analysis failed: {e}")
-                    session.analyses[robot_id] = TaskAnalysis(
-                        robot_id=robot_id, can_contribute=False
-                    )
+            except Exception as e:
+                logger.error(f"[{robot_id}] Analysis failed: {e}")
+                session.analyses[robot_id] = TaskAnalysis(
+                    robot_id=robot_id, can_contribute=False
+                )
 
         # Check if any robot can contribute.
         # If all robots returned can_contribute=False, promote them all: for
@@ -323,12 +319,14 @@ class NegotiationHub(SingletonBase):
             logger.warning("Cannot get operation names for proposal phase")
 
         agent = self._get_or_create_agent(proposer_id)
+        prior_feedback = session.last_feedback if NEGOTIATION_FEEDBACK_ENABLED else None
         proposal = agent.propose_plan(
             session.task,
             other_analyses,
             world_state,
             session.current_round,
             available_operations=available_ops,
+            prior_feedback=prior_feedback,
         )
 
         logger.info(
@@ -370,29 +368,32 @@ class NegotiationHub(SingletonBase):
         if not evaluator_ids:
             return True  # Only one robot, auto-accept
 
+        # Sequential, not parallel - see comment in _run_analysis_phase.
         all_accept = True
-        with ThreadPoolExecutor(max_workers=len(evaluator_ids)) as executor:
-            futures = {}
-            for robot_id in evaluator_ids:
-                agent = self._get_or_create_agent(robot_id)
-                future = executor.submit(
-                    agent.evaluate_proposal, proposal, session.task, world_state
+        critiques: List[str] = []
+        for robot_id in evaluator_ids:
+            agent = self._get_or_create_agent(robot_id)
+            try:
+                evaluation = agent.evaluate_proposal(
+                    proposal, session.task, world_state
                 )
-                futures[future] = robot_id
-
-            for future in as_completed(futures):
-                robot_id = futures[future]
-                try:
-                    evaluation = future.result()
-                    logger.info(
-                        f"[{robot_id}] Evaluation: accept={evaluation.accept}, "
-                        f"concerns={evaluation.concerns}"
-                    )
-                    if not evaluation.accept:
-                        all_accept = False
-                except Exception as e:
-                    logger.error(f"[{robot_id}] Evaluation failed: {e}")
+                logger.info(
+                    f"[{robot_id}] Evaluation: accept={evaluation.accept}, "
+                    f"concerns={evaluation.concerns}"
+                )
+                if not evaluation.accept:
                     all_accept = False
+                    for item in list(evaluation.concerns) + list(
+                        evaluation.suggested_changes
+                    ):
+                        if item:
+                            critiques.append(f"{robot_id}: {item}")
+            except Exception as e:
+                logger.error(f"[{robot_id}] Evaluation failed: {e}")
+                all_accept = False
+
+        if NEGOTIATION_FEEDBACK_ENABLED:
+            session.last_feedback = [] if all_accept else critiques
 
         return all_accept
 

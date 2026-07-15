@@ -12,7 +12,7 @@ namespace Tests.PlayMode
     /// Validates integration with 17 registered Python operations:
     /// - Detection: detect_object, detect_objects
     /// - Vision: analyze_scene
-    /// - Movement: move_to_coordinate, move_relative_to_object
+    /// - Movement: move_to_coordinate
     /// - Manipulation: control_gripper
     /// - Sync: signal, wait_for_signal, wait
     /// - Variable passing: $target syntax
@@ -288,19 +288,6 @@ namespace Tests.PlayMode
 
             Assert.IsNotNull(command, "Analyze command should be valid");
             Assert.IsTrue(command.Contains("analyze"), "Command should contain analyze keyword");
-        }
-
-        [Test]
-        public void Command_MoveRelativeToObject_ParsesCorrectly()
-        {
-            // Expected operation: move_relative_to_object
-            var command = "move 0.1m above the red cube";
-
-            Assert.IsNotNull(command, "Relative move command should be valid");
-            Assert.IsTrue(
-                command.Contains("above") || command.Contains("relative"),
-                "Command should indicate relative positioning"
-            );
         }
 
         [Test]

@@ -20,5 +20,5 @@ def get_tasks(config=None) -> List[str]:
         "Both robots need to retrieve their respective objects from the table.",
         "Stack the blue cube on top of the red cube using both robots.",
         "One of the robots should pick up the red cube and pass it to the other robot.",
-        "One robot picks up the red cube and places it on the desk. Then the other robot picks up the blue cube and stacks it on top of the red cube.",
+        "One robot picks up the red cube and places it on the desk. Then a robot picks up the blue cube and stacks it on top of the red cube.",
     ]

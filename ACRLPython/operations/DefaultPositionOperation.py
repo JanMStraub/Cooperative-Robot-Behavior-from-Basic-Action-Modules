@@ -29,6 +29,7 @@ def return_to_start_position(
     speed: float = 1.0,
     request_id: int = 0,
     use_ros: Optional[bool] = None,
+    allow_parallel_ros: bool = False,
 ) -> OperationResult:
     """Return robot to saved start joint configuration (exact joint restore, not IK).
 
@@ -58,7 +59,11 @@ def return_to_start_position(
         def _ros_path():
             from ros2.ROSBridge import ROSBridge
 
-            bridge = ROSBridge.get_instance()
+            bridge = (
+                ROSBridge.get_parallel_instance(robot_id)
+                if allow_parallel_ros
+                else ROSBridge.get_instance()
+            )
             start_joint_angles = None
             try:
                 from core.Imports import get_world_state
@@ -73,6 +78,7 @@ def return_to_start_position(
                 robot_id=robot_id,
                 target_joint_angles=start_joint_angles,
                 speed=speed,
+                allow_parallel=allow_parallel_ros,
             )
             if result and result.get("success"):
                 logger.info(f"ROS return to start completed for {robot_id}")

@@ -137,11 +137,12 @@ SYSTEM_PROMPT_BASE = "You are an AI robot controller for a dual-arm AR4 robotic 
 
 # Popular vision models (for reference)
 VISION_MODELS = [
-    "gemma-3-12b",
-    "llama-3.2-vision",
-    "qwen/qwen3-vl-4b",
-    "mistralai/ministral-3-14b-reasoning",
+    "google/gemma-4-e2b",
+    "google/gemma-4-e4b",
     "mistralai/magistral-small-2509",
+    "mistralai/ministral-3-14b-reasoning",
+    "qwen/qwen3-vl-8b",
+    "qwen/qwen3-vl-30b",
 ]
 
 # ============================================================================

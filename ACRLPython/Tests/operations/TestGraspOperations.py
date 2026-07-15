@@ -4,6 +4,82 @@ from operations.GraspOperations import grasp_object, GRASP_OBJECT_OPERATION
 from operations.Base import OperationCategory, OperationComplexity
 
 
+class TestGraspObjectAllowParallelRos:
+    """grasp_object routes to _grasp_via_ros_position_only when VGN is disabled and
+    object dimensions are unknown - the simplest of the three ROS sub-paths, used
+    here to verify allow_parallel_ros threading without exercising GraspPlanner/VGN."""
+
+    def _mock_world_state(self):
+        ws = MagicMock()
+        ws.get_object_position.return_value = (0.3, 0.05, 0.1)
+        ws.get_object_dimensions.return_value = None
+        ws.get_robot_state.return_value = None
+        return ws
+
+    def test_uses_parallel_instance_and_flag_when_true(self):
+        mock_default_bridge = MagicMock()
+        mock_default_bridge.is_connected = True
+        mock_parallel_bridge = MagicMock()
+
+        with (
+            patch("config.Servers.VGN_ENABLED", False),
+            patch(
+                "core.Imports.get_world_state", return_value=self._mock_world_state()
+            ),
+            patch(
+                "ros2.ROSBridge.ROSBridge.get_instance",
+                return_value=mock_default_bridge,
+            ),
+            patch(
+                "ros2.ROSBridge.ROSBridge.get_parallel_instance",
+                return_value=mock_parallel_bridge,
+            ) as mock_get_parallel,
+            patch(
+                "operations.grasp._dispatcher._grasp_via_ros_position_only",
+                return_value=(MagicMock(success=True), False),
+            ) as mock_position_only,
+        ):
+            result = grasp_object(
+                "Robot1",
+                "blue_cube",
+                use_ros=True,
+                allow_parallel_ros=True,
+            )
+
+        assert result.success is True
+        mock_get_parallel.assert_called_once_with("Robot1")
+        assert mock_position_only.call_args[1]["bridge"] is mock_parallel_bridge
+        assert mock_position_only.call_args[1]["allow_parallel"] is True
+
+    def test_uses_default_instance_when_false(self):
+        mock_default_bridge = MagicMock()
+        mock_default_bridge.is_connected = True
+
+        with (
+            patch("config.Servers.VGN_ENABLED", False),
+            patch(
+                "core.Imports.get_world_state", return_value=self._mock_world_state()
+            ),
+            patch(
+                "ros2.ROSBridge.ROSBridge.get_instance",
+                return_value=mock_default_bridge,
+            ),
+            patch(
+                "ros2.ROSBridge.ROSBridge.get_parallel_instance"
+            ) as mock_get_parallel,
+            patch(
+                "operations.grasp._dispatcher._grasp_via_ros_position_only",
+                return_value=(MagicMock(success=True), False),
+            ) as mock_position_only,
+        ):
+            result = grasp_object("Robot1", "blue_cube", use_ros=True)
+
+        assert result.success is True
+        mock_get_parallel.assert_not_called()
+        assert mock_position_only.call_args[1]["bridge"] is mock_default_bridge
+        assert mock_position_only.call_args[1]["allow_parallel"] is False
+
+
 class TestGraspObjectOperation:
 
     @pytest.fixture
@@ -332,7 +408,7 @@ class TestGraspObjectIntegration:
             )
 
             assert result["success"] is True
-    
+
             assert result["result"]["robot_id"] == "Robot1"
             assert result["result"]["object_id"] == "Cube_01"
 
@@ -371,7 +447,6 @@ class TestGraspTrajectoryValidation:
         )
 
         assert result["success"] is True
-
 
         # Verify command parameters
         call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]

@@ -92,7 +92,7 @@ class NegotiationVerifier:
     def _verify_coordinate_params(self, commands: List[Dict[str, Any]]) -> List[str]:
         """Reject coordinate-requiring operations that have None or missing x/y/z."""
         errors = []
-        COORD_OPS = {"pick_object_at_coordinate", "move_to_coordinate", "place_object"}
+        COORD_OPS = {"move_to_coordinate", "place_object"}
         for i, cmd in enumerate(commands):
             operation = cmd.get("operation", "")
             if operation not in COORD_OPS:

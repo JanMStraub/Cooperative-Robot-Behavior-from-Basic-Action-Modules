@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 from .MoveOperations import (
     MOVE_TO_COORDINATE_OPERATION,
     ADJUST_END_EFFECTOR_ORIENTATION_OPERATION,
-    PICK_OBJECT_AT_COORDINATE_OPERATION,
 )
 from .StatusOperations import CHECK_ROBOT_STATUS_OPERATION
 from .GripperOperations import (
@@ -29,17 +28,9 @@ from .GraspOperations import (
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
 from .VisionOperations import ANALYZE_SCENE_OPERATION, DETECT_OBJECT_STEREO_OPERATION
 from .PointCloudOperations import GENERATE_POINT_CLOUD_OPERATION
-from .SpatialOperations import (
-    MOVE_RELATIVE_TO_OBJECT_OPERATION,
-)
 from .FieldOperations import (
     DETECT_FIELD_OPERATION,
     DETECT_ALL_FIELDS_OPERATION,
-)
-from .CoordinationOperations import (
-    DETECT_OTHER_ROBOT_OPERATION,
-    MIRROR_MOVEMENT_OPERATION,
-    CHECK_PARTNER_STATUS_OPERATION,
 )
 from .SyncOperations import (
     SIGNAL_OPERATION,
@@ -47,14 +38,6 @@ from .SyncOperations import (
     WAIT_OPERATION,
     RESET_SIMULATION_OPERATION,
     YIELD_WORKSPACE_OPERATION,
-)
-from .CollaborativeOperations import (
-    STABILIZE_OBJECT_OPERATION,
-    PLACE_FOR_PARTNER_OPERATION,
-)
-from .BimanualOperations import (
-    SYNCHRONIZED_GRASP_OPERATION,
-    JOINT_TRANSPORT_OPERATION,
 )
 
 
@@ -70,7 +53,6 @@ class OperationRegistry:
             MOVE_TO_COORDINATE_OPERATION,
             ADJUST_END_EFFECTOR_ORIENTATION_OPERATION,
             RETURN_TO_START_POSITION_OPERATION,
-            PICK_OBJECT_AT_COORDINATE_OPERATION,
             CONTROL_GRIPPER_OPERATION,
             RELEASE_OBJECT_OPERATION,
             PLACE_OBJECT_OPERATION,
@@ -86,16 +68,8 @@ class OperationRegistry:
             WAIT_OPERATION,
             RESET_SIMULATION_OPERATION,
             GRASP_OBJECT_OPERATION,
-            MOVE_RELATIVE_TO_OBJECT_OPERATION,
-            DETECT_OTHER_ROBOT_OPERATION,
-            MIRROR_MOVEMENT_OPERATION,
             RECEIVE_HANDOFF_OPERATION,
-            STABILIZE_OBJECT_OPERATION,
-            CHECK_PARTNER_STATUS_OPERATION,
             YIELD_WORKSPACE_OPERATION,
-            PLACE_FOR_PARTNER_OPERATION,
-            SYNCHRONIZED_GRASP_OPERATION,
-            JOINT_TRANSPORT_OPERATION,
         ]
 
         for op in operations:

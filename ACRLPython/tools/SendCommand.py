@@ -51,7 +51,7 @@ def build_sequence_message(
     """
     Encode a SEQUENCE_QUERY message in Protocol V2 wire format.
 
-    Format: [type:1][request_id:4LE][cmd_len:4LE][cmd:N][robot_id_len:4LE][robot_id:N][cam_len:4LE][cam:N][auto_execute:1]
+    Format: [type:1][request_id:4LE][cmd_len:4LE][cmd:N][robot_id_len:4LE][robot_id:N][cam_len:4LE][cam:N][auto_execute:1][flags_len:4LE][flags:N]
     """
     cmd_b = command_text.encode("utf-8")
     rob_b = robot_id.encode("utf-8")
@@ -62,6 +62,7 @@ def build_sequence_message(
     msg += struct.pack("<I", len(rob_b)) + rob_b
     msg += struct.pack("<I", len(cam_b)) + cam_b
     msg += struct.pack("<B", 1 if auto_execute else 0)
+    msg += struct.pack("<I", 0)  # flags_len=0 - SequenceServer always reads this field
     return msg
 
 

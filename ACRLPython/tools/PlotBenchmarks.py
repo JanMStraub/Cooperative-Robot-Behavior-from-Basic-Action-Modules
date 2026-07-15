@@ -18,7 +18,7 @@ import matplotlib.patches as mpatches
 import numpy as np
 
 RESULTS_DIR = Path(__file__).parent.parent / "benchmark_results"
-PLOTS_DIR = Path(__file__).parent.parent.parent / "Thesis" / "images"
+PLOTS_DIR = Path(__file__).parent.parent.parent / "ACRLThesis" / "images"
 
 SINGLE_ROBOT_COLOR = "#4C72B0"
 DUAL_ROBOT_COLOR = "#DD8452"
@@ -90,14 +90,11 @@ OP_COLORS = {
     "generate_point_cloud": "#3A7CA5",
     "analyze_scene": "#2E5E8A",
     "move_to_coordinate": "#55A868",
-    "move_relative_to_object": "#6FBF73",
-    "pick_object_at_coordinate": "#3E7D4E",
     "return_to_start_position": "#C44E52",
     "adjust_end_effector_orientation": "#937860",
     "grasp_object": "#DD8452",
     "place_object": "#E8A87C",
     "receive_handoff": "#8172B2",
-    "stabilize_object": "#A088C9",
     "signal": "#DA8BC3",
     "wait_for_signal": "#8C8C8C",
     "control_gripper": "#CCB974",

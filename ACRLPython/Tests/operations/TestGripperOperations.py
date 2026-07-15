@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock, patch
 
 from operations.GripperOperations import (
     control_gripper,
@@ -188,6 +188,60 @@ def _make_ws_two_objects():
     ws.get_object_position = Mock(side_effect=_get_pos)
     ws.get_object_dimensions = Mock(return_value=None)
     return ws
+
+
+class TestPlaceObjectAllowParallelRos:
+    def _patch_no_lift(self):
+        ws = MagicMock()
+        ws.get_robot_position.return_value = None
+        return patch("operations.GripperOperations._get_world_state", return_value=ws)
+
+    def test_uses_parallel_instance_and_flag_when_allow_parallel_ros_true(self):
+        mock_default_bridge = MagicMock()
+        mock_default_bridge.is_connected = True
+        mock_parallel_bridge = MagicMock()
+        mock_parallel_bridge.plan_and_execute.return_value = {"success": True}
+        mock_parallel_bridge.plan_orientation_change.return_value = {"success": True}
+
+        with self._patch_no_lift(), patch(
+            "ros2.ROSBridge.ROSBridge.get_instance", return_value=mock_default_bridge
+        ), patch(
+            "ros2.ROSBridge.ROSBridge.get_parallel_instance",
+            return_value=mock_parallel_bridge,
+        ) as mock_get_parallel:
+            result = place_object(
+                "Robot1",
+                x=0.3,
+                y=0.1,
+                z=0.1,
+                use_ros=True,
+                allow_parallel_ros=True,
+            )
+
+        assert result.success is True
+        mock_get_parallel.assert_called_once_with("Robot1")
+        for _, kwargs in mock_parallel_bridge.plan_and_execute.call_args_list:
+            assert kwargs["allow_parallel"] is True
+        for _, kwargs in mock_parallel_bridge.plan_orientation_change.call_args_list:
+            assert kwargs["allow_parallel"] is True
+
+    def test_uses_default_instance_when_allow_parallel_ros_false(self):
+        mock_default_bridge = MagicMock()
+        mock_default_bridge.is_connected = True
+        mock_default_bridge.plan_and_execute.return_value = {"success": True}
+        mock_default_bridge.plan_orientation_change.return_value = {"success": True}
+
+        with self._patch_no_lift(), patch(
+            "ros2.ROSBridge.ROSBridge.get_instance", return_value=mock_default_bridge
+        ), patch("ros2.ROSBridge.ROSBridge.get_parallel_instance") as mock_get_parallel:
+            result = place_object("Robot1", x=0.3, y=0.1, z=0.1, use_ros=True)
+
+        assert result.success is True
+        mock_get_parallel.assert_not_called()
+        for _, kwargs in mock_default_bridge.plan_and_execute.call_args_list:
+            assert kwargs["allow_parallel"] is False
+        for _, kwargs in mock_default_bridge.plan_orientation_change.call_args_list:
+            assert kwargs["allow_parallel"] is False
 
 
 class TestPlaceBetweenObjects:

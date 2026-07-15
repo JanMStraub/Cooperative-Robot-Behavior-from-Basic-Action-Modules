@@ -1,0 +1,277 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%  SYSTEM CONFIGURATION REFERENCE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{System Configuration Reference}\label{appendix:config}
+The Python backend loads all its configuration at startup from \texttt{ACRLPython/config/}. Every parameter accepts an environment-variable override of the same name; the defaults listed here apply when no override is set. Parameters that are code-level constants rather than environment-controlled are marked accordingly. The system starts with \texttt{./start\_servers.sh} and the optional flags in Section~\ref{sec:startup_flags}.
+
+% ------------------------------------------------------------------------------
+\section{Network and Server Ports}\label{appendix:config:network}
+Table~\ref{tab:config_ports} lists the TCP ports used by the system. All servers bind to the address specified by \texttt{ACRL\_HOST} (default \texttt{127.0.0.1}). Port assignments can be overridden individually via the corresponding environment variable.
+
+\begin{table}[t]
+	\centering
+	\begin{tabular}{llp{6cm}}
+		\toprule
+		\textbf{Variable}                & \textbf{Default} & \textbf{Purpose}                                                  \\
+		\midrule
+		\texttt{STEREO\_DETECTION\_PORT} & 5006             & Stereo image receiver                                             \\
+		\texttt{COMMAND\_SERVER\_PORT}   & 5007             & Bidirectional command bus                                         \\
+		\texttt{SEQUENCE\_SERVER\_PORT}  & 5008             & Multi-step sequence server                                        \\
+		\texttt{WORLD\_STATE\_PORT}      & 5009             & Unity world-state stream                                          \\
+		\texttt{AUTORT\_SERVER\_PORT}    & 5010             & AutoRT task server                                                \\
+		\texttt{ROS\_BRIDGE\_PORT}       & 5020             & \gls{ros} bridge (Docker; code constant)                          \\
+		\texttt{WEB\_PORT}               & 8000             & Mission Control webUI (on by default; \texttt{--no-web} disables) \\
+		\texttt{FOXGLOVE\_PORT}          & 8765             & Foxglove Bridge visualization (Docker; code constant)             \\
+		\texttt{ROS\_TCP\_PORT}          & 10000            & Unity$\leftrightarrow$\gls{ros} topic endpoint (Docker)           \\
+		\bottomrule
+	\end{tabular}
+	\caption{Server port assignments. The core TCP servers bind to
+		\texttt{ACRL\_HOST} (default \texttt{127.0.0.1}); the \gls{ros}-side
+		endpoints (5020, 8765, 10000) run inside Docker and bind \texttt{0.0.0.0}.}
+	\label{tab:config_ports}
+\end{table}
+
+When the \texttt{PERCEPTION\_ONLY\_MODE} is enabled, the WorldStateServer on port~5009 never starts. Robot and object positions come entirely from forward kinematics computed from joint angles and from stereo perception, bypassing Unity's ground-truth broadcast. This is useful for testing real-robot code paths in simulation without relying on Unity's world-state stream.
+
+% ------------------------------------------------------------------------------
+\section{Large Language Model Configuration}\label{appendix:config:llm}
+Table~\ref{tab:config_llm} lists the model parameters. \texttt{LLM\_THINKING\_BUDGET} sets the token budget passed to reasoning models through LM Studio's \texttt{thinking.budget\_tokens} field and has no effect on non-reasoning models or models with internal reasoning. \texttt{LLM\_MAX\_TOKENS} must exceed \texttt{LLM\_THINKING\_BUDGET} plus the expected JSON response length; the default 16384 fits an 8192-token thinking block plus a multi-step plan.
+
+\texttt{REFLECTION\_ENABLED} controls whether, when an eligible operation fails during execution, the system re-submits the original command to the model with the failure context appended. \texttt{REFLECTION\_MAX\_RETRIES} (default:~2) caps the number of retry attempts.
+
+\texttt{PARSER\_USE\_MOTION\_LAYER} enables the \texttt{CommandParser} to perform a two-stage parse. Stage~1 breaks down the natural-language command into intermediate motion strings; Stage~2 maps those strings to concrete operations. We based this design on the hierarchical language-motion representation of RT-H~\cite{belkhale2024rthactionhierarchiesusing}.
+
+\begin{table}[t]
+	\centering
+	\resizebox{\textwidth}{!}{
+		\begin{tabular}{lll}
+			\toprule
+			\textbf{Variable}                   & \textbf{Default}                        & \textbf{Purpose}                               \\
+			\midrule
+			\texttt{LMSTUDIO\_BASE\_URL}        & \texttt{http://127.0.0.1:1234/v1}       & LM Studio API endpoint                         \\
+			\texttt{DEFAULT\_LMSTUDIO\_MODEL}   & \texttt{mistralai/magistral-small-2509} & Planning model                                 \\
+			\texttt{DEFAULT\_TEMPERATURE}       & 0.3                                     & Sampling temperature                           \\
+			\texttt{LLM\_THINKING\_ENABLED}     & \texttt{true}                           & Enable reasoning budget                        \\
+			\texttt{LLM\_THINKING\_BUDGET}      & 8192                                    & Maximum thinking tokens                        \\
+			\texttt{LLM\_MAX\_TOKENS}           & 16384                                   & Maximum response tokens                        \\
+			\texttt{LLM\_REQUEST\_TIMEOUT}      & 90~s                                    & Per-request HTTP timeout                       \\
+			\texttt{REFLECTION\_ENABLED}        & \texttt{true}                           & Retry eligible failed operations via the model \\
+			\texttt{REFLECTION\_MAX\_RETRIES}   & 2                                       & Max reflection retry attempts                  \\
+			\texttt{PARSER\_USE\_MOTION\_LAYER} & \texttt{true}                           & Two-stage RT-H-style parse                     \\
+			\bottomrule
+		\end{tabular}
+	}
+	\caption{LLM configuration parameters.}
+	\label{tab:config_llm}
+\end{table}
+
+% ------------------------------------------------------------------------------
+\section{Robot Operating System 2 and MoveIt Integration}\label{appendix:config:ros}
+Table~\ref{tab:config_ros} lists the motion-planning parameters. Unlike the rest of this appendix, all parameters listed here are code-level constants in \texttt{config/ROS.py} and do not accept environment-variable overrides. \texttt{DEFAULT\_CONTROL\_MODE} selects the motion backend at runtime. The \texttt{hybrid} mode attempts MoveIt first and falls back to Unity \gls{ik} on failure; \texttt{ros} routes all motion through MoveIt; \texttt{unity} bypasses MoveIt entirely. \texttt{ROS\_ALLOW\_TCP\_FALLBACK\_ON\_99999} is disabled by default, so singularity-related planning failures throw a clear error instead of a silent Unity-\gls{ik} fallback, which helps debugging. \texttt{SHARED\_PLANNING\_SCENE} requires the \texttt{moveit\_dual} Docker Compose profile.
+
+\begin{table}[t]
+	\centering
+	\resizebox{\textwidth}{!}{
+		\begin{tabular}{lll}
+			\toprule
+			\textbf{Variable}                             & \textbf{Default} & \textbf{Purpose}                                \\
+			\midrule
+			\texttt{ROS\_ENABLED}                         & \texttt{true}    & Master \gls{ros} toggle                         \\
+			\texttt{DEFAULT\_CONTROL\_MODE}               & \texttt{hybrid}  & \texttt{unity} / \texttt{ros} / \texttt{hybrid} \\
+			\texttt{AUTO\_CONNECT\_ROS}                   & \texttt{true}    & Connect on startup                              \\
+			\texttt{MOVEIT\_PLANNING\_TIME}               & 2.0~s            & Maximum \gls{ompl} planning time                \\
+			\texttt{MOVEIT\_PLANNING\_ATTEMPTS}           & 3                & Planning retries                                \\
+			\texttt{MOVEIT\_GOAL\_TOLERANCE}              & 0.01~m           & Position goal tolerance                         \\
+			\texttt{ROS\_EXECUTION\_TIMEOUT}              & 60~s             & Trajectory execution timeout                    \\
+			\texttt{ROS\_ALLOW\_TCP\_FALLBACK\_ON\_99999} & \texttt{false}   & Fall back to Unity \gls{ik} on \gls{ompl} error \\
+			\texttt{INTER\_ROBOT\_COLLISION\_ENABLED}     & \texttt{true}    & Publish partner arm as collision object         \\
+			\texttt{SHARED\_PLANNING\_SCENE}              & \texttt{true}    & Use single dual-robot \texttt{move\_group}      \\
+			\bottomrule
+		\end{tabular}
+	}
+	\caption{\gls{ros}~2 and MoveIt configuration parameters.}
+	\label{tab:config_ros}
+\end{table}
+
+% ------------------------------------------------------------------------------
+\section{Grasp and Motion Parameters}\label{appendix:config:grasp}
+Table~\ref{tab:config_grasp} lists the grasp and placement geometry parameters. After a pre-grasp move, if the target object has drifted, for example, pushed by the partner arm, the system can re-plan to the new position before closing the gripper. \texttt{FOLLOW\_TARGET\_ENABLED} turns this on. \texttt{FOLLOW\_TARGET\_DRIFT\_THRESHOLD} (default: 0.025~m) is the minimum drift that triggers a corrective re-plan, and \texttt{FOLLOW\_TARGET\_MAX\_CORRECTIONS} caps the correction attempts.
+
+\texttt{STATIC\_COLLISION\_RADIUS} is a Python-side pre-check that blocks any move whose target falls within 6~cm of the partner end-effector. The wider Unity \texttt{ProximityGuard} enforces a 0.25~m runtime stop threshold (\texttt{PROXIMITY\_EE\_STOP\_THRESHOLD}), which has to stay in sync with the C\# constant \texttt{EE\_STOP\_THRESHOLD} in \texttt{Constants.cs}.
+
+\texttt{GRASP\_VERIFY\_MIN\_FORCE} sits at 0.0~N because grasp-force verification happens Unity-side, in the \texttt{GripperContactSensor}, which needs an estimated contact force above 5~N (and a 50~ms contact duration) before confirming a grasp. The Python-side gate is therefore disabled by default to avoid double-gating the same check.
+
+\begin{table}[t]
+	\centering
+	\resizebox{\textwidth}{!}{
+		\begin{tabular}{lll}
+			\toprule
+			\textbf{Variable}                              & \textbf{Default} & \textbf{Purpose}                                                   \\
+			\midrule
+			\texttt{GRASP\_TCP\_OFFSET}                    & 0.05~m           & End-effector to fingertip distance                                 \\
+			\texttt{PRE\_GRASP\_HOVER\_OFFSET}             & 0.15~m           & Height above object for approach waypoint                          \\
+			\texttt{PRE\_GRASP\_CLEARANCE\_Y}              & 0.35~m           & Intermediate safe height before descent                            \\
+			\texttt{GRASP\_DESCENT\_VELOCITY\_SCALING}     & 0.9              & Cartesian descent speed fraction                                   \\
+			\texttt{GRASP\_DESCENT\_ACCELERATION\_SCALING} & 0.7              & Cartesian descent acceleration fraction                            \\
+			\texttt{PLACE\_HOVER\_OFFSET}                  & 0.15~m           & Height above target before descent                                 \\
+			\texttt{PLACE\_TCP\_OFFSET}                    & 0.055~m          & Height above surface for gripper open                              \\
+			\texttt{PLACE\_MIN\_Y}                         & 0.06~m           & Minimum placement height (table floor)                             \\
+			\texttt{HANDOFF\_PRESENTATION\_X/Y/Z}          & 0, 0.35, 0~m     & World position for object handoff                                  \\
+			\texttt{GRASP\_VERIFY\_MIN\_FORCE}             & 0.0~N            & Python-side force gate (disabled; see note)                        \\
+			\texttt{FOLLOW\_TARGET\_ENABLED}               & \texttt{true}    & Re-plan to a drifted object before closing                         \\
+			\texttt{FOLLOW\_TARGET\_DRIFT\_THRESHOLD}      & 0.025~m          & Min drift triggering a corrective re-plan                          \\
+			\texttt{FOLLOW\_TARGET\_MAX\_CORRECTIONS}      & 1                & Max corrective moves before grasping                               \\
+			\texttt{STATIC\_COLLISION\_RADIUS}             & 0.06~m           & Python pre-check block radius vs partner EE                        \\
+			\texttt{PROXIMITY\_EE\_STOP\_THRESHOLD}        & 0.25~m           & Unity runtime EE stop (informational; syncs \texttt{Constants.cs}) \\
+			\bottomrule
+		\end{tabular}
+	}
+	\caption{Grasp and placement geometry parameters.}
+	\label{tab:config_grasp}
+\end{table}
+
+% ------------------------------------------------------------------------------
+\section{Vision and Perception}\label{appendix:config:vision}
+Table~\ref{tab:config_vision} lists the perception parameters. \texttt{VGN\_USE\_VLM\_REFINEMENT} adds a per-grasp \gls{vlm} vision call that re-crops the \gls{yolo} bounding box to the best grasp region. It is disabled by default because that extra call adds \gls{vlm} latency to every grasp for a marginal gain on the well-separated benchmark objects, whose raw \gls{yolo} box is already accurate; when disabled, that box is passed directly to \gls{vgn}. \texttt{SCENE\_DIFF\_THRESHOLD} drives the scene-change detector. Frames whose downsampled thumbnail differs from the previous one by less than this mean absolute difference are skipped, avoiding redundant \gls{yolo} and \gls{sgbm} passes on a static scene. The measured noise floor on synthetic Unity images at JPEG quality~75 is approximately~0.6, so the default of~8.0 has a 13$\times$ safety margin.
+
+\begin{table}[t]
+	\centering
+	\resizebox{\textwidth}{!}{
+		\begin{tabular}{lll}
+			\toprule
+			\textbf{Variable}                      & \textbf{Default} & \textbf{Purpose}                                                                           \\
+			\midrule
+			\texttt{USE\_YOLO}                     & \texttt{true}    & \gls{yolo} vs.\ HSV color detection                                                        \\
+			\texttt{YOLO\_CONFIDENCE\_THRESHOLD}   & 0.7              & Minimum detection confidence                                                               \\
+			\texttt{YOLO\_IOU\_THRESHOLD}          & 0.45             & NMS IoU threshold                                                                          \\
+			\texttt{VGN\_ENABLED}                  & \texttt{true}    & Enable \gls{vgn} grasp-pose network                                                        \\
+			\texttt{VGN\_TOP\_K}                   & 20               & Candidate grasps retained from \gls{vgn}                                                   \\
+			\texttt{VGN\_USE\_VLM\_REFINEMENT}     & \texttt{false}   & \gls{vlm} bounding-box refinement for \gls{vgn}                                            \\
+			\texttt{VGN\_MIN\_Y\_APPROACH}         & 0.15             & Candidate pre-filter on the vertical approach component                                    \\
+			\texttt{USE\_UNITY\_OBJECT\_POSITIONS} & \texttt{true}    & Trust Unity positions over stereo                                                          \\
+			\texttt{SGBM\_PRESET}                  & \texttt{medium}  & Stereo \gls{sgbm} preset (\texttt{close} / \texttt{medium} / \texttt{far} / \texttt{auto}) \\
+			\texttt{SCENE\_DIFF\_THRESHOLD}        & 8.0              & Frame-skip MAD threshold                                                                   \\
+			\bottomrule
+		\end{tabular}
+	}
+	\caption{Vision and perception configuration parameters.}
+	\label{tab:config_vision}
+\end{table}
+
+% ------------------------------------------------------------------------------
+\section{Retrieval-Augmented Generation}\label{appendix:config:rag}
+Table~\ref{tab:config_rag} lists the retrieval parameters.
+
+\begin{table}[t]
+	\centering
+	\resizebox{\textwidth}{!}{
+		\begin{tabular}{lll}
+			\toprule
+			\textbf{Variable}                    & \textbf{Default}                              & \textbf{Purpose}                                  \\
+			\midrule
+			\texttt{RAG\_LM\_STUDIO\_MODEL}      & \texttt{text-embedding-nomic-embed-text-v1.5} & Embedding model                                   \\
+			\texttt{RAG\_EMBEDDING\_DIMENSION}   & 768                                           & Expected embedding dimension                      \\
+			\texttt{RAG\_DEFAULT\_TOP\_K}        & 5                                             & Operations retrieved per query                    \\
+			\texttt{RAG\_MIN\_SIMILARITY\_SCORE} & 0.5                                           & Minimum cosine score to include                   \\
+			\texttt{RAG\_USE\_TFIDF\_FALLBACK}   & \texttt{true}                                 & Fall back to \gls{tfidf} if LM Studio unavailable \\
+			\bottomrule
+		\end{tabular}%
+	}
+	\caption{\gls{rag} system configuration parameters.}
+	\label{tab:config_rag}
+\end{table}
+
+% ------------------------------------------------------------------------------
+\section{AutoRT}\label{appendix:config:autort}
+Table~\ref{tab:config_autort} lists the AutoRT parameters. Safety validation runs at temperature = 0.0 for near-deterministic verdicts. Additional semantic rules can be appended at runtime via \texttt{AUTORT\_EXTRA\_SAFETY\_RULES} without modifying the source code, for example \texttt{Do not stack objects; Do not approach the table edge}.
+
+\begin{table}[t]
+	\centering
+	\resizebox{\textwidth}{!}{
+		\begin{tabular}{lll}
+			\toprule
+			\textbf{Variable}                                & \textbf{Default} & \textbf{Purpose}                              \\
+			\midrule
+			\texttt{AUTORT\_HUMAN\_IN\_LOOP}                 & \texttt{true}    & Require human approval per task               \\
+			\texttt{AUTORT\_MAX\_TASKS}                      & 2                & Candidates generated per loop iteration       \\
+			\texttt{AUTORT\_LOOP\_DELAY}                     & 5.0~s            & Pause between loop iterations                 \\
+			\texttt{AUTORT\_TASK\_GENERATION\_TEMPERATURE}   & 0.7              & Temperature for task generation               \\
+			\texttt{AUTORT\_SAFETY\_VALIDATION\_TEMPERATURE} & 0.0              & Temperature for safety checks (deterministic) \\
+			\texttt{AUTORT\_ENABLE\_SAFETY}                  & \texttt{true}    & Enable two-layer safety filter                \\
+			\texttt{AUTORT\_EXTRA\_SAFETY\_RULES}            & (empty)          & Semicolon-delimited extra semantic rules      \\
+			\texttt{AUTORT\_TASK\_EXPIRATION}                & 300~s            & Task cache TTL                                \\
+			\bottomrule
+		\end{tabular}
+	}
+	\caption{AutoRT configuration parameters.}
+	\label{tab:config_autort}
+\end{table}
+
+% ------------------------------------------------------------------------------
+\section{Multi-Robot Negotiation}\label{appendix:config:negotiation}
+Table~\ref{tab:config_negotiation} lists the negotiation parameters. Negotiation is disabled by default to avoid overhead on single-robot commands. It activates automatically when collaboration keywords are detected in the task text (e.g.\ together, handoff, coordinate) unless independence keywords are also present (e.g.\ independently, separate tasks). \texttt{USE\_STRUCTURED\_OUTPUT} should only be enabled for models that support the OpenAI \texttt{response\_format} API.
+
+\begin{table}[t]
+	\centering
+	\begin{tabular}{lll}
+		\toprule
+		\textbf{Variable}                  & \textbf{Default} & \textbf{Purpose}                                \\
+		\midrule
+		\texttt{NEGOTIATION\_ENABLED}      & \texttt{false}   & Master toggle (off by default)                  \\
+		\texttt{MAX\_NEGOTIATION\_ROUNDS}  & 3                & Maximum proposal-evaluation rounds              \\
+		\texttt{NEGOTIATION\_TIMEOUT}      & 300~s            & Total negotiation budget                        \\
+		\texttt{AGENT\_LLM\_TIMEOUT}       & 90~s             & Per-agent \gls{llm} call timeout                \\
+		\texttt{NEGOTIATION\_TEMPERATURE}  & 0.3              & Agent sampling temperature                      \\
+		\texttt{VERIFY\_NEGOTIATED\_PLANS} & \texttt{true}    & Run coordination verifier on agreed plan        \\
+		\texttt{USE\_STRUCTURED\_OUTPUT}   & \texttt{false}   & Force JSON output via \texttt{response\_format} \\
+		\bottomrule
+	\end{tabular}
+	\caption{Multi-robot negotiation configuration parameters.}
+	\label{tab:config_negotiation}
+\end{table}
+
+% ------------------------------------------------------------------------------
+\section{Knowledge Graph}\label{appendix:config:kg}
+Table~\ref{tab:config_kg} lists the \gls{kg} parameters. The \gls{kg} requires the \texttt{networkx} package~\cite{hagberg2008networkx}. \texttt{KG\_VIZ\_AUTO\_SAVE} helps during development, to inspect the graph across task executions, but it adds I/O overhead and should be disabled in production.
+
+\begin{table}[t]
+	\centering
+	\begin{tabular}{lll}
+		\toprule
+		\textbf{Variable}                  & \textbf{Default}         & \textbf{Purpose}                           \\
+		\midrule
+		\texttt{KNOWLEDGE\_GRAPH\_ENABLED} & \texttt{true}            & Master toggle                              \\
+		\texttt{KG\_NEAR\_THRESHOLD}       & 0.35~m                   & Distance threshold for \textsc{Near} edges \\
+		\texttt{KG\_VIZ\_AUTO\_SAVE}       & \texttt{false}           & Auto-save PNG after each update            \\
+		\texttt{KG\_VIZ\_OUTPUT\_DIR}      & \texttt{./kg\_snapshots} & PNG output directory                       \\
+		\bottomrule
+	\end{tabular}
+	\caption{\gls{kg} configuration parameters.}
+	\label{tab:config_kg}
+\end{table}
+
+% ------------------------------------------------------------------------------
+\section{Start-up Flags}\label{sec:startup_flags}
+\texttt{start\_servers.sh} accepts the command-line flags listed in Table~\ref{tab:config_startup}.
+
+\begin{table}[t]
+	\centering
+	\begin{tabular}{ll}
+		\toprule
+		\textbf{Flag}             & \textbf{Effect}                                                     \\
+		\midrule
+		(none)                    & Simulation mode, \gls{ros} enabled, web UI on port 8000             \\
+		\texttt{--without-ros}    & Disable \gls{ros} bridge; use Unity \gls{ik} exclusively            \\
+		\texttt{--env sim|real}   & Select hardware adapters (\texttt{sim} default, \texttt{real})      \\
+		\texttt{--web PORT}       & Serve Mission Control web UI on \texttt{PORT} (on by default; 8000) \\
+		\texttt{--no-web}         & Suppress web UI even if previously configured                       \\
+		\texttt{--dual}           & Use the dual-robot MoveIt Docker Compose profile                    \\
+		\texttt{--no-stop-docker} & Leave \gls{ros} Docker containers running on exit                   \\
+		\texttt{--no-unity}       & Do not auto-launch the Unity editor/build                           \\
+		\texttt{--unity PATH}     & Launch a specific Unity build instead of the default                \\
+		\bottomrule
+	\end{tabular}
+	\caption{Start-up script flags.}
+	\label{tab:config_startup}
+\end{table}
+

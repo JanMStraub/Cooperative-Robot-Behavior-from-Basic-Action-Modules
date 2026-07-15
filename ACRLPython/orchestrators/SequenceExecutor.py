@@ -70,6 +70,16 @@ def _extract_waypoint_from_verification(
     return None
 
 
+# Only these operations' signatures accept allow_parallel_ros.
+_PARALLEL_ROS_ELIGIBLE_OPERATIONS = {
+    "move_to_coordinate",
+    "adjust_end_effector_orientation",
+    "grasp_object",
+    "place_object",
+    "return_to_start_position",
+}
+
+
 class SequenceExecutor:
     """Executes command sequences with completion tracking, variable passing, and Reflection retries."""
 
@@ -156,6 +166,7 @@ class SequenceExecutor:
             self.world_state = None
 
         self.outcome_tracker: Optional[Any] = None
+        self.last_negotiation_rounds: int = 0
 
     def _read_hold_truth(self, robot_id: str) -> dict:
         try:
@@ -419,11 +430,17 @@ class SequenceExecutor:
                                 "[grasp verify] opening gripper after failed grasp for %s",
                                 robot_id_for_check,
                             )
-                            self._execute_single_command(
+                            _reopen_result = self._execute_single_command(
                                 "control_gripper",
-                                {"robot_id": robot_id_for_check, "action": "open"},
+                                {"robot_id": robot_id_for_check, "open_gripper": True},
                                 timeout,
                             )
+                            if not _reopen_result.get("success"):
+                                logger.warning(
+                                    "[grasp verify] failed to reopen gripper for %s: %s",
+                                    robot_id_for_check,
+                                    _reopen_result.get("error"),
+                                )
 
                             # Mark stale so the next detect does a fresh scan.
                             _object_id_failed = params.get("object_id", "")
@@ -489,7 +506,9 @@ class SequenceExecutor:
                         else None
                     )
                     _op_category = _op_def.category if _op_def else None
-                    _reflection_allowed = _op_category in _reflection_eligible_categories
+                    _reflection_allowed = (
+                        _op_category in _reflection_eligible_categories
+                    )
                     if (
                         original_text
                         and REFLECTION_ENABLED
@@ -927,6 +946,16 @@ class SequenceExecutor:
             logger.info(
                 f"Executing parallel group {group_num} with {len(group_commands)} commands"
             )
+
+            # 2+ robots in a group -> bypass ROSMotionClient's inter-robot lock.
+            robot_ids_in_group = {
+                cmd.get("params", {}).get("robot_id") for _, cmd in group_commands
+            }
+            robot_ids_in_group.discard(None)
+            if len(robot_ids_in_group) >= 2:
+                for _, cmd in group_commands:
+                    if cmd.get("operation") in _PARALLEL_ROS_ELIGIBLE_OPERATIONS:
+                        cmd.setdefault("params", {})["allow_parallel_ros"] = True
 
             # Execute all commands in this group concurrently
             thread_results = {}
@@ -1582,7 +1611,6 @@ class SequenceExecutor:
             MOVE_OPS = {
                 "move_to_coordinate",
                 "move_from_a_to_b",
-                "move_relative_to_object",
                 "move_between_objects",
             }
             if op_name in MOVE_OPS:
@@ -1611,7 +1639,7 @@ class SequenceExecutor:
                     }
 
             # --- Grasp/stabilize operations: reachability check ---
-            GRASP_OPS = {"grasp_object", "grip_object", "stabilize_object"}
+            GRASP_OPS = {"grasp_object", "grip_object"}
             if op_name in GRASP_OPS:
                 object_id = params.get("object_id")
                 if object_id:
@@ -1701,6 +1729,7 @@ class SequenceExecutor:
         robot_id: str = "Robot1",
     ) -> Optional[List[Dict[str, Any]]]:
         """Run NegotiationHub if the command needs multi-robot planning; returns None to fall back."""
+        self.last_negotiation_rounds = 0
         try:
             from core.Imports import get_negotiation_hub
 
@@ -1714,6 +1743,7 @@ class SequenceExecutor:
             logger.info(f"Negotiation triggered for: {command_text[:80]}")
             handoff_ctx = self._get_handoff_context(command_text, robot_id)
             result = hub.negotiate(command_text, spatial_context=handoff_ctx)
+            self.last_negotiation_rounds = result.rounds_taken
 
             if result.success and result.commands:
                 logger.info(

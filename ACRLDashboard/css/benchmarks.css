@@ -1031,6 +1031,20 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
     border-left: 2px solid #56B4E9 !important;
 }
 
+/* Compare tab cards are flex items of #compare-content (flex-direction:
+   column). #compare-kpi-matrix / #compare-op-stats set overflow-x:auto,
+   which zeroes their flexbox auto min-height and lets the flex-shrink
+   algorithm crush them toward 0 height once total content exceeds the
+   viewport-bounded .tab-pane, instead of letting the tab scroll. */
+#compare-header,
+#compare-kpi-matrix,
+#compare-step-chart,
+#compare-op-stats,
+.analysis-export-row {
+    flex-shrink: 0;
+    min-width: 0;
+}
+
 /* Compare header */
 .compare-header {
     display: flex;
@@ -1073,6 +1087,72 @@ body.thesis-mode .coverage-cell--present { background: rgba(0,130,90,0.2); color
 /* Breathing room inside the compare table panel (glass-box has no padding). */
 #compare-kpi-matrix {
     padding: 1rem 1.25rem;
+}
+
+/* The KPI-matrix panel itself must NOT be a horizontal scroller: it stacks a
+   summary table + per-model tables of differing widths, so scrolling it would
+   let you scroll past the narrower ones. Each table gets its own tight scroll
+   wrapper (.compare-table-scroll) instead; the panel just clips. */
+#compare-kpi-matrix {
+    overflow-x: hidden;
+}
+
+/* Persistent, always-visible horizontal scrollbar on each wide compare table.
+   .compare-table-scroll wraps each KPI/summary table; .table-wrapper wraps the
+   op-stats table. The table is allowed to exceed 100% (min-width:100%,
+   width:auto) so it genuinely overflows and the bar has a thumb. */
+.compare-table-scroll,
+#compare-op-stats .table-wrapper {
+    overflow-x: scroll;
+    overflow-y: hidden;
+    max-width: 100%;
+}
+.compare-table-scroll .compare-kpi-table,
+#compare-op-stats .table-wrapper .compare-op-stats-table {
+    width: auto;
+    min-width: 100%;
+}
+/* Firefox only: in Blink, setting scrollbar-color switches to the STANDARD
+   scrollbar, which on macOS obeys the "show when scrolling" OS setting and
+   fades. Gate it behind lack of ::-webkit-scrollbar support so WebKit/Blink
+   keep the always-on custom bar below (styling ::-webkit-scrollbar with an
+   explicit size + -webkit-appearance:none forces a non-overlay bar). */
+@supports not selector(::-webkit-scrollbar) {
+    .compare-table-scroll,
+    #compare-op-stats .table-wrapper {
+        scrollbar-width: thin;
+        scrollbar-color: var(--primary-border) rgba(255, 255, 255, 0.08);
+    }
+}
+.compare-table-scroll::-webkit-scrollbar,
+#compare-op-stats .table-wrapper::-webkit-scrollbar {
+    height: 10px;
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.06);
+}
+.compare-table-scroll::-webkit-scrollbar-track,
+#compare-op-stats .table-wrapper::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 5px;
+}
+.compare-table-scroll::-webkit-scrollbar-thumb,
+#compare-op-stats .table-wrapper::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    min-width: 32px;
+}
+.compare-table-scroll::-webkit-scrollbar-thumb:hover,
+#compare-op-stats .table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-hover);
+    background-clip: padding-box;
+}
+body.light-theme .compare-table-scroll::-webkit-scrollbar,
+body.light-theme .compare-table-scroll::-webkit-scrollbar-track,
+body.light-theme #compare-op-stats .table-wrapper::-webkit-scrollbar,
+body.light-theme #compare-op-stats .table-wrapper::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.06);
 }
 
 /* KPI matrix table */

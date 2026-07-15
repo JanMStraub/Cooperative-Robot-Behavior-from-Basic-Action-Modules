@@ -339,29 +339,6 @@ class TestFieldOps:
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
-class TestSpatialOps:
-
-    @pytest.fixture(autouse=True)
-    def reset_before_each(self):
-        """Reset simulation before every spatial operation test."""
-        reset_simulation()
-
-    def test_move_relative_to_object(self):
-        """move_relative_to_object moves Robot1 relative to a named object."""
-        result = _cmd(
-            "move Robot1 relative to redCube offset 0.0 0.1 0.0",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=700,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "move_relative_to_object returned an unexpected response"
-
-
-@pytest.mark.integration
-@pytest.mark.requires_unity
-@pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
 class TestGraspOps:
     """Tests for grasp_object and align_object (Level 3).
 
@@ -431,7 +408,7 @@ class TestGraspOps:
 @pytest.mark.multi_robot
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
 class TestMultiRobotOps:
-    """Tests for detect_other_robot, mirror_movement, grasp_object (Level 4).
+    """Tests for yield_workspace, grasp_object handoff (Level 4).
 
     These tests use 120 s timeouts because the LLM-based negotiation protocol
     (NegotiationHub → RobotLLMAgent) may run up to 3 rounds of Analysis →
@@ -446,42 +423,6 @@ class TestMultiRobotOps:
     def reset_before_each(self):
         """Reset simulation before every multi-robot test."""
         reset_simulation()
-
-    def test_detect_other_robot(self):
-        """detect_other_robot reports Robot2's position relative to Robot1."""
-        result = _cmd(
-            "detect other robot from Robot1 perspective",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=900,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "detect_other_robot returned an unexpected response"
-
-    def test_mirror_movement(self):
-        """mirror_movement makes Robot2 mirror Robot1's motion symmetrically."""
-        result = _cmd(
-            "mirror movement of Robot1 with Robot2",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=901,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "mirror_movement returned an unexpected response"
-
-    def test_check_partner_status(self):
-        """check_partner_status returns Robot2's full state from Robot1's perspective."""
-        result = _cmd(
-            "check partner status of Robot2 from Robot1",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=903,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "check_partner_status returned an unexpected response"
 
     def test_yield_workspace(self):
         """yield_workspace signals intent to enter shared zone and waits for clearance."""
@@ -510,72 +451,6 @@ class TestMultiRobotOps:
         assert (
             result.get("success") is True or result.get("error") is not None
         ), "grasp_object returned an unexpected response"
-
-
-@pytest.mark.integration
-@pytest.mark.requires_unity
-@pytest.mark.multi_robot
-@pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
-class TestCollaborativeOps:
-    """Tests for stabilize_object (Level 5).
-
-    stabilize_object requires two robots to simultaneously apply forces to
-    keep a shared object stable.  The negotiation protocol resolves the
-    assignment of robots to roles.
-    """
-
-    @pytest.fixture(autouse=True)
-    def reset_before_each(self):
-        """Reset simulation before the collaborative test."""
-        reset_simulation()
-
-    def test_stabilize_object(self):
-        """stabilize_object coordinates both arms to stabilise a shared object."""
-        result = _cmd(
-            "stabilize redCube using Robot1 and Robot2",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=1000,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "stabilize_object returned an unexpected response"
-
-    def test_place_for_partner(self):
-        """place_for_partner places a held object at the shared zone for Robot2."""
-        result = _cmd(
-            "Robot1 place object for partner at shared zone",
-            robot_id="Robot1",
-            timeout=120.0,
-            request_id=1001,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "place_for_partner returned an unexpected response"
-
-    def test_synchronized_grasp(self):
-        """synchronized_grasp has both robots approach LargeBox from opposite sides."""
-        result = _cmd(
-            "Robot1 and Robot2 synchronized grasp LargeBox together",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=1002,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "synchronized_grasp returned an unexpected response"
-
-    def test_joint_transport(self):
-        """joint_transport moves a jointly-grasped object to target position."""
-        result = _cmd(
-            "Robot1 and Robot2 jointly transport object to position 0 0 0.3",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=1003,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "joint_transport returned an unexpected response"
 
 
 @pytest.mark.integration

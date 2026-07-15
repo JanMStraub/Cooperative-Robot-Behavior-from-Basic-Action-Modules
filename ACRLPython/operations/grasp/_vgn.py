@@ -11,6 +11,7 @@ from core.LoggingSetup import setup_logging
 from ..Base import OperationResult
 from ._helpers import (
     _execute_grasp_with_follow_target,
+    _side_offset_world_xz,
     _yaw_from_world_state_or_robot,
 )
 
@@ -296,6 +297,7 @@ def _grasp_via_vgn_with_ros(
     world_state,
     custom_approach_vector: "Optional[List[float]]" = None,
     grasp_yaw_override: "Optional[float]" = None,
+    allow_parallel: bool = False,
 ) -> "Optional[OperationResult]":
     """VGN 6-DOF poses + MoveIt (highest-priority path). None if unavailable; error result if arm descended but gripper failed."""
     import numpy as np
@@ -515,47 +517,30 @@ def _grasp_via_vgn_with_ros(
                 f"using most-horizontal candidate (X_approach={top['approach_direction'][0]:.2f})"
             )
     elif _approach_lower in ("left_side", "right_side"):
-        # Top-down approach offset along the object's longest horizontal axis (left or right end).
-        # Select the best-scoring candidate for orientation; position is set geometrically below.
         top = max(world_grasps, key=lambda g: g.get("score", 0.0))
         logger.info(
             f"[VGN+ROS] Selected {_approach_lower} grasp (best score) from {len(world_grasps)} candidates"
         )
-        # Offset along the longest WORLD-space axis so the gripper lands at the
-        # left/right end of the object.  The local dims must be projected through
-        # the object's yaw rotation to find which world axis (X or Z) is longer.
         if _detected_world_pos and _object_dimensions:
             _lx, _, _lz = _object_dimensions
-            # Get object yaw (rotation[1] = Unity Y-axis degrees) to project to world.
-            _obj_yaw_rad = 0.0
+            _obj_yaw_deg = 0.0
             try:
                 if world_state is not None:
                     _rot = world_state.get_object_rotation(object_id)
                     if _rot is not None:
-                        _obj_yaw_rad = math.radians(_rot[1])
+                        _obj_yaw_deg = _rot[1]
             except Exception:
                 pass
-            _cy, _sy = abs(math.cos(_obj_yaw_rad)), abs(math.sin(_obj_yaw_rad))
-            _world_half_x = _cy * (_lx / 2.0) + _sy * (_lz / 2.0)
-            _world_half_z = _sy * (_lx / 2.0) + _cy * (_lz / 2.0)
-            _side_sign = -1.0 if _approach_lower == "left_side" else 1.0
+            _side_sign = 1.0 if _approach_lower == "left_side" else -1.0
+            _dx, _dz = _side_offset_world_xz(_lx, _lz, _obj_yaw_deg, _side_sign)
             _detected_world_pos = list(_detected_world_pos)
-            if _world_half_x >= _world_half_z:
-                _offset = _side_sign * 0.75 * _world_half_x
-                _detected_world_pos[0] += _offset
-                logger.info(
-                    f"[VGN+ROS] {_approach_lower}: X offset {_offset:+.3f}m "
-                    f"(world half_x={_world_half_x:.3f}m > half_z={_world_half_z:.3f}m) "
-                    f"→ target_x={_detected_world_pos[0]:.3f}"
-                )
-            else:
-                _offset = _side_sign * 0.75 * _world_half_z
-                _detected_world_pos[2] += _offset
-                logger.info(
-                    f"[VGN+ROS] {_approach_lower}: Z offset {_offset:+.3f}m "
-                    f"(world half_z={_world_half_z:.3f}m > half_x={_world_half_x:.3f}m) "
-                    f"→ target_z={_detected_world_pos[2]:.3f}"
-                )
+            _detected_world_pos[0] += _dx
+            _detected_world_pos[2] += _dz
+            logger.info(
+                f"[VGN+ROS] {_approach_lower}: offset ({_dx:+.3f}, {_dz:+.3f})m "
+                f"(obj_yaw={_obj_yaw_deg:.1f}°) → target=({_detected_world_pos[0]:.3f}, "
+                f"{_detected_world_pos[2]:.3f})"
+            )
     elif _approach_lower == "front":
         _MIN_Z_APPROACH = 0.3
         front_candidates = [
@@ -618,8 +603,12 @@ def _grasp_via_vgn_with_ros(
 
     # Fail fast before MoveIt if grasp position outside robot reach.
     try:
-        from operations.SpatialPredicates import target_within_reach as _twr
+        from operations.SpatialPredicates import (
+            target_within_reach as _twr,
+            warn_if_target_outside_workspace as _warn_ws,
+        )
 
+        _warn_ws(robot_id, pos[0], pos[1], pos[2])
         _reachable, _reach_reason = _twr(robot_id, pos[0], pos[1], pos[2])
         if not _reachable:
             logger.warning(
@@ -745,6 +734,7 @@ def _grasp_via_vgn_with_ros(
             max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
             max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
             constrain_joint4=True,
+            allow_parallel=allow_parallel,
         )
         if not clearance_result or not clearance_result.get("success"):
             cl_err = (
@@ -770,6 +760,7 @@ def _grasp_via_vgn_with_ros(
         max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
         max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
         constrain_joint4=True,
+        allow_parallel=allow_parallel,
     )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -787,6 +778,7 @@ def _grasp_via_vgn_with_ros(
             max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
             constrain_joint6=True,
             constrain_joint4=True,
+            allow_parallel=allow_parallel,
         )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -808,6 +800,7 @@ def _grasp_via_vgn_with_ros(
         robot_id=robot_id,
         max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
         max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
+        allow_parallel=allow_parallel,
     )
     if not descent_result or not descent_result.get("success"):
         descent_err = (
@@ -839,6 +832,7 @@ def _grasp_via_vgn_with_ros(
         tcp_y_offset=GRASP_TCP_OFFSET,
         world_state=world_state,
         approach_offset_xz=_approach_offset_xz,
+        allow_parallel=allow_parallel,
     )
     if not grasp_ok:
         return OperationResult.error_result(

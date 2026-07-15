@@ -397,7 +397,8 @@ async def api_get_benchmarks_aggregate():
                     # Trust the field only for the flat layout (b12+).
                     path_model = _model_from_rel(rel)
                     raw_model = (
-                        path_model if path_model != "default"
+                        path_model
+                        if path_model != "default"
                         else (data.get("model") or "default")
                     )
                     # Normalise LM Studio "publisher/model" ids to the bare name
@@ -445,7 +446,10 @@ async def api_get_benchmarks_aggregate():
                         "mean_reflection_recoveries": statistics.mean(
                             # Fallback to legacy "reflexion_recoveries" key for
                             # benchmark JSONs written before the rename.
-                            a.get("reflection_recoveries", a.get("reflexion_recoveries", 0))
+                            a.get(
+                                "reflection_recoveries",
+                                a.get("reflexion_recoveries", 0),
+                            )
                             for a in abs_list
                         ),
                         "mean_negotiation_rounds": statistics.mean(

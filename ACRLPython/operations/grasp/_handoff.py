@@ -198,8 +198,8 @@ def receive_handoff(
 
         from ..MoveOperations import move_to_coordinate
 
-        # Two-step approach: pre-waypoint (free-space, no orientation) → Cartesian move (locked).
-        # Free-space first so OMPL finds correct joint config; Cartesian prevents joint_6 spin.
+        # Two-step approach: pre-waypoint (free-space, orientation + joint_6 pinned) → Cartesian move (locked).
+        # Free-space first so OMPL finds a joint config near the current one; Cartesian slides in without joint_6 spin.
         _use_ros_approach = use_ros
         if _use_ros_approach is None:
             try:
@@ -237,12 +237,19 @@ def receive_handoff(
             logger.info(
                 f"receive_handoff: pre-waypoint=({pre_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
             )
+            # Pin joint_6 near its current value so RRTConnect cannot satisfy the
+            # roll=90° orientation goal by jumping to a far IK branch - that branch
+            # flip is what makes the arm swing all the way around on approach even
+            # though the target is right in front. ±90° window keeps the wrist close
+            # while still giving OMPL room to reach the locked orientation.
             pre_result = bridge.plan_and_execute(
                 position={"x": pre_x, "y": ap_y, "z": ap_z},
                 orientation=handoff_orientation,
                 robot_id=robot_id,
                 max_velocity_scaling=0.5,
                 max_acceleration_scaling=0.4,
+                constrain_joint6=True,
+                joint6_window_rad=_math.radians(90.0),
             )
             if not pre_result or not pre_result.get("success"):
                 logger.warning(

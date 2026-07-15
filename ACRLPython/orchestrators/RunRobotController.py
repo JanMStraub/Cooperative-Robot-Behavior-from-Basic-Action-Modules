@@ -138,6 +138,7 @@ class RobotController:
         self._graph_builder = None
         self._web_server_thread = None
         self._perception_refresh = None
+        self._camera_capture_bridge = None
         self._running = False
         self._stop_event = threading.Event()
 
@@ -405,6 +406,16 @@ class RobotController:
         logger.info(f"HardwareInterface: {type(hw).__name__}")
         logger.info(f"CameraProvider:    {type(cam).__name__}")
 
+        if self._env == "real":
+            from camera.CaptureBridge import CameraCaptureBridge
+
+            try:
+                self._camera_capture_bridge = CameraCaptureBridge(cam)
+                self._camera_capture_bridge.start()
+                logger.info("CameraCaptureBridge started (real env)")
+            except Exception as exc:
+                logger.warning(f"Failed to start CameraCaptureBridge: {exc}")
+
         # Auto-connect to ROS bridge if enabled
         self._auto_connect_ros()
 
@@ -590,6 +601,12 @@ class RobotController:
                 self._perception_refresh.stop()
         except Exception as e:
             logger.error(f"Error stopping PerceptionRefreshLoop: {e}")
+
+        try:
+            if self._camera_capture_bridge:
+                self._camera_capture_bridge.stop()
+        except Exception as e:
+            logger.error(f"Error stopping CameraCaptureBridge: {e}")
 
         logger.info("RobotController stopped")
 

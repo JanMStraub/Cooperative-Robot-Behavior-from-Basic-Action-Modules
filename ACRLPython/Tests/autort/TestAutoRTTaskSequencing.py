@@ -165,7 +165,7 @@ class TestBuildPreviousTaskSectionSuccess:
         assert "gripper is open" in section
 
     def test_unknown_op_generic(self):
-        ctx = make_context(["stabilize_object"], success=True)
+        ctx = make_context(["check_robot_status"], success=True)
         section = self.gen._build_previous_task_section(ctx)
         assert "PREVIOUS TASK CONTEXT" in section
         assert "detect_object_stereo" in section  # generic follow-ups
@@ -257,6 +257,25 @@ class TestBuildTaskPromptIntegration:
         scene = make_scene()
         prompt = self.gen._build_task_prompt(scene, ["Robot1"], 1, False)
         assert "TASK:" in prompt
+
+    def test_prompt_does_not_reference_removed_operations(self):
+        # The prompt must not advertise operations that no longer exist in the
+        # registry; a stale reference tempts the model to emit invalid calls.
+        removed_ops = [
+            "pick_object_at_coordinate",
+            "move_relative_to_object",
+            "detect_other_robot",
+            "check_partner_status",
+            "place_for_partner",
+            "mirror_movement_of_other_robot",
+            "stabilize_object",
+            "synchronized_grasp",
+            "joint_transport",
+        ]
+        scene = make_scene()
+        prompt = self.gen._build_task_prompt(scene, ["Robot1"], 1, False)
+        for op in removed_ops:
+            assert op not in prompt, f"prompt references removed operation '{op}'"
 
 
 class TestAutoRTOrchestratorState:

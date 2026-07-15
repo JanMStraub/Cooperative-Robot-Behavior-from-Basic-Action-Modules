@@ -1,0 +1,60 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%  ROBOT CONFIGURATION
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\chapter{Robot Configuration}\label{appendix:robot_values}
+This appendix documents the two \texttt{ArticulationBody} joint configurations used in the system, a simulation profile, which drives the AR4 arms during all Unity-based experiments, and a real-robot (\gls{urdf}) profile, which models the mechanical compliance of the physical hardware for the hardware-in-the-loop path (\texttt{--env real}). The two profiles differ in stiffness and damping (Tables~\ref{tab:used_joint_config} and \ref{tab:real_joint_config} provide exact values), and the reasons for these differences are specific to Unity's physics engine.
+
+% ------------------------------------------------------------------------------
+\section{Simulation Profile}
+Unity's PhysX engine advances the world in discrete fixed timesteps, 50~Hz by default. An \texttt{ArticulationBody} joint drive is a \gls{pd} spring--damper whose equation of motion is
+
+\begin{equation}
+	\tau = k_s \, (\theta_{\text{target}} - \theta) - k_d \, \dot{\theta},
+\end{equation}
+
+where $\tau$ is the drive torque, $\theta$ the current joint angle, $\theta_{\text{target}}$ the commanded angle, $\dot{\theta}$ the joint angular velocity, $k_s$ the stiffness, and $k_d$ the damping. In continuous time, critical damping is $k_d = 2\sqrt{k_s \cdot I}$, with $I$ as the effective link inertia. At the discrete 50~Hz physics rate, that formula underestimates the required damping. The integrator adds a one-frame lag that the continuous model does not account for, and at low damping that lag feeds back as overshoot on the next frame, producing a diverging oscillation.
+
+We traced this to the wrist oscillation problem encountered during development. The first configuration used \texttt{stiffness = 5000} and \texttt{damping = 500} on every joint, which is underdamped at 50~Hz under closed-loop \gls{ik}. We increased damping (see Table~\ref{tab:used_joint_config}) and added velocity feedback to the \gls{ik} solver, which reduced oscillations. The simulation profile is therefore deliberately overdamped relative to what a real motor controller would require, because the physics integrator needs the extra margin.
+
+\begin{table}[t]
+	\centering
+	\begin{tabular}{lccccc}
+		\hline
+		\textbf{Joint}       & \textbf{Stiffness}   & \textbf{Damping}        &
+		\textbf{Force Limit} & \textbf{Lower Limit} & \textbf{Upper Limit}                                            \\
+		                     & (N$\cdot$m/rad)      & (N$\cdot$m$\cdot$s/rad) & (N$\cdot$m) & ($^\circ$) & ($^\circ$) \\
+		\hline
+		Base                 & 5000                 & 1500                    & 2000        & $-170$     & $170$      \\
+		Shoulder             & 4000                 & 1200                    & 2000        & $-42$      & $90$       \\
+		Elbow                & 5000                 & 1000                    & 2000        & $-89$      & $52$       \\
+		Wrist 1              & 2500                 & 900                     & 2000        & $-180$     & $180$      \\
+		Wrist 2              & 2500                 & 600                     & 1500        & $-105$     & $105$      \\
+		Wrist 3              & 3500                 & 700                     & 1500        & $-180$     & $180$      \\
+		\hline
+	\end{tabular}
+	\caption{Simulation \texttt{ArticulationBody} joint configuration for the AR4 robotic arm. Stiffness and damping values are set to be overdamped relative to the physical hardware to compensate for the one-frame integration lag at Unity's 50~Hz physics rate.}
+	\label{tab:used_joint_config}
+\end{table}
+
+The elbow upper limit is 52$^\circ$ in the simulation profile but 125$^\circ$ on the real robot (see Table~\ref{tab:real_joint_config}). The tighter simulation limit prevents the elbow from swinging into configurations where the forearm would intersect the table plane, which Unity's \texttt{ArticulationBody} can briefly reach during end-of-trajectory overshoot. On the physical AR4, firmware enforces a hard end-stop at 125$^\circ$, so no software pre-clamp is needed. The wrist~1 limit is expanded to $\pm$180$^\circ$ in simulation (from the real robot's $\pm$105$^\circ$) to give \gls{ompl}'s RRTConnect planner more configuration space for collision-free paths; wrist~3 is $\pm$180$^\circ$ in both profiles, and wrist~2 differs only marginally ($\pm$105$^\circ$ simulated versus $\pm$100$^\circ$ real).
+
+\begin{table}[t]
+	\centering
+	\begin{tabular}{lccccc}
+		\hline
+		\textbf{Joint}       & \textbf{Stiffness}   & \textbf{Damping}        &
+		\textbf{Force Limit} & \textbf{Lower Limit} & \textbf{Upper Limit}                                            \\
+		                     & (N$\cdot$m/rad)      & (N$\cdot$m$\cdot$s/rad) & (N$\cdot$m) & ($^\circ$) & ($^\circ$) \\
+		\hline
+		Base                 & 800                  & 60                      & 1000        & $-170$     & $170$      \\
+		Shoulder             & 800                  & 45                      & 1000        & $-42.5$    & $90$       \\
+		Elbow                & 400                  & 20                      & 500         & $-90$      & $125$      \\
+		Wrist 1              & 300                  & 10                      & 200         & $-105$     & $105$      \\
+		Wrist 2              & 200                  & 5                       & 100         & $-100$     & $100$      \\
+		Wrist 3              & 100                  & 2                       & 50          & $-180$     & $180$      \\
+		\hline
+	\end{tabular}
+	\caption{Real-robot \texttt{ArticulationBody} joint configuration for the AR4 robotic arm, modeling the passive mechanical compliance of the physical structure. We derived these values from the AR4 \gls{urdf} file.}
+	\label{tab:real_joint_config}
+\end{table}
+

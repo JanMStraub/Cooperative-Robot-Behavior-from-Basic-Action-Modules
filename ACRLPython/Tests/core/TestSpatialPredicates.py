@@ -4,6 +4,7 @@ from unittest.mock import Mock
 from operations.WorldState import WorldState
 from operations.SpatialPredicates import (
     target_within_reach,
+    warn_if_target_outside_workspace,
     is_in_robot_workspace,
     is_in_shared_zone,
     robot_is_initialized,
@@ -52,6 +53,30 @@ class TestTargetWithinReach:
         assert is_valid is False
         assert "Unknown robot" in reason
         assert "UnknownRobot" in reason
+
+
+class TestWarnIfTargetOutsideWorkspace:
+
+    def test_warns_when_target_outside_assigned_region(self):
+        # Robot2 owns right_workspace (x >= 0.1); this target sits at x=-0.048
+        # in the shared_zone (the real failing grasp from server_logs_20260705).
+        msg = warn_if_target_outside_workspace("Robot2", -0.048, 0.027, -0.094)
+
+        assert msg is not None
+        assert "right_workspace" in msg  # assigned region named
+        assert "shared_zone" in msg  # actual region named
+        assert "Robot2" in msg
+
+    def test_silent_when_target_in_assigned_region(self):
+        # Target well inside Robot2's right_workspace.
+        msg = warn_if_target_outside_workspace("Robot2", 0.3, 0.1, 0.0)
+
+        assert msg is None
+
+    def test_silent_for_robot_without_assignment(self):
+        msg = warn_if_target_outside_workspace("UnknownRobot", 0.0, 0.0, 0.0)
+
+        assert msg is None
 
 
 class TestWorkspacePredicates:

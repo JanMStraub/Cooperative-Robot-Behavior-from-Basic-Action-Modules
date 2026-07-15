@@ -32,6 +32,10 @@ class ROSBridge:
     _instance = None
     _lock = threading.Lock()
 
+    # Separate from the singleton so allow_parallel_ros callers don't share its socket/_io_lock.
+    _parallel_instances = {}
+    _parallel_lock = threading.Lock()
+
     @classmethod
     def get_instance(cls):
         """Get or create singleton instance."""
@@ -40,6 +44,17 @@ class ROSBridge:
                 if cls._instance is None:
                     cls._instance = cls()
         return cls._instance
+
+    @classmethod
+    def get_parallel_instance(cls, robot_id):
+        """Get or create a dedicated connection for robot_id."""
+        if robot_id not in cls._parallel_instances:
+            with cls._parallel_lock:
+                if robot_id not in cls._parallel_instances:
+                    inst = cls()
+                    inst.connect()
+                    cls._parallel_instances[robot_id] = inst
+        return cls._parallel_instances[robot_id]
 
     def __init__(self, host=None, port=None):
         """
@@ -177,6 +192,7 @@ class ROSBridge:
         constrain_joint4=False,
         joint6_window_rad=0.5236,
         joint4_window_rad=1.5708,
+        allow_parallel=False,
     ):
         """
         Plan and execute a motion to target pose for a specific robot.
@@ -202,6 +218,8 @@ class ROSBridge:
         if constrain_joint4:
             cmd["constrain_joint4"] = True
             cmd["joint4_window_rad"] = joint4_window_rad
+        if allow_parallel:
+            cmd["allow_parallel"] = True
 
         return self._send_command(cmd, timeout=self._execution_timeout)
 
@@ -213,6 +231,7 @@ class ROSBridge:
         max_velocity_scaling=0.3,
         max_acceleration_scaling=0.3,
         lock_orientation=True,
+        allow_parallel=False,
     ):
         """
         Plan and execute a straight-line Cartesian descent to a target position.
@@ -236,6 +255,8 @@ class ROSBridge:
         }
         if orientation is not None:
             cmd["orientation"] = orientation
+        if allow_parallel:
+            cmd["allow_parallel"] = True
 
         return self._send_command(cmd, timeout=self._execution_timeout)
 
@@ -325,7 +346,7 @@ class ROSBridge:
         return self._send_command(cmd, timeout=planning_time * len(waypoints) + 10)
 
     def plan_orientation_change(
-        self, orientation, robot_id="Robot1", planning_time=5.0
+        self, orientation, robot_id="Robot1", planning_time=5.0, allow_parallel=False
     ):
         """Plan and execute an orientation change while maintaining position."""
         cmd = {
@@ -334,6 +355,8 @@ class ROSBridge:
             "orientation": orientation,
             "planning_time": planning_time,
         }
+        if allow_parallel:
+            cmd["allow_parallel"] = True
         return self._send_command(cmd, timeout=self._execution_timeout)
 
     def plan_grasp(
@@ -350,7 +373,12 @@ class ROSBridge:
         return self._send_command(cmd, timeout=planning_time + 10)
 
     def plan_return_to_start(
-        self, robot_id="Robot1", planning_time=5.0, target_joint_angles=None, speed=1.0
+        self,
+        robot_id="Robot1",
+        planning_time=5.0,
+        target_joint_angles=None,
+        speed=1.0,
+        allow_parallel=False,
     ):
         """Plan and execute a return to the robot's home configuration."""
         cmd = {
@@ -361,6 +389,8 @@ class ROSBridge:
         }
         if target_joint_angles is not None:
             cmd["target_joint_angles"] = target_joint_angles
+        if allow_parallel:
+            cmd["allow_parallel"] = True
         return self._send_command(cmd, timeout=self._execution_timeout)
 
     def ping(self):

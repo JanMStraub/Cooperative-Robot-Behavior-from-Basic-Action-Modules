@@ -185,15 +185,9 @@ class SequenceQueryHandler(SingletonBase):
                 exec_result["negotiated"] = True
                 exec_result["original_command"] = command_text
                 exec_result["parsed_commands"] = negotiated
-                try:
-                    from core.Imports import get_negotiation_hub
-
-                    _hub = get_negotiation_hub()
-                    exec_result["negotiation_rounds"] = (
-                        _hub.get_last_round_count() if _hub else 0
-                    )
-                except Exception:
-                    exec_result["negotiation_rounds"] = 0
+                exec_result["negotiation_rounds"] = (
+                    self._executor.last_negotiation_rounds
+                )
                 return exec_result
 
         parse_result = self._parser.parse(command_text, robot_id)
@@ -250,6 +244,7 @@ class SequenceQueryHandler(SingletonBase):
         exec_result["parsed_commands"] = commands
         exec_result["original_command"] = command_text
         exec_result["camera_id"] = camera_id
+        exec_result["negotiation_rounds"] = self._executor.last_negotiation_rounds
 
         return exec_result
 

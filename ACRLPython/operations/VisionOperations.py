@@ -25,6 +25,23 @@ from ._imports import (
 
 logger = logging.getLogger(__name__)
 
+HELD_OBJECT_Y_MOVE_THRESHOLD = 0.05
+
+
+def resolve_held_object_xz(
+    fresh_x: float,
+    fresh_y: float,
+    fresh_z: float,
+    robot_id: Optional[str],
+    existing: Optional[dict],
+) -> tuple:
+    held_by = existing.get("grasped_by") if existing else None
+    cached_pos = existing.get("position") if existing else None
+    if held_by and held_by != robot_id and cached_pos:
+        if abs(fresh_y - cached_pos["y"]) < HELD_OBJECT_Y_MOVE_THRESHOLD:
+            return cached_pos["x"], cached_pos["z"]
+    return fresh_x, fresh_z
+
 
 def color_matches(detection_color: Optional[str], query_color: Optional[str]) -> bool:
     if detection_color is None or query_color is None:
@@ -580,16 +597,24 @@ def detect_object_stereo(
             existing = (
                 world_state.get_object_state(ws_object_id) if not is_field else None
             )
+
+            resolved_x, resolved_z = resolve_held_object_xz(
+                result["x"], result["y"], result["z"], robot_id, existing
+            )
+            if (resolved_x, resolved_z) != (result["x"], result["z"]):
+                logger.info(
+                    f"{ws_object_id} held by another robot, height unchanged - "
+                    f"using cached x/z ({resolved_x:.3f}, {resolved_z:.3f}) "
+                    f"instead of fresh ({result['x']:.3f}, {result['z']:.3f})"
+                )
+            result["x"], result["z"] = resolved_x, resolved_z
+
             if not is_field and not (
                 existing and existing.get("object_type") == "field"
             ):
                 world_state.update_object_position(
                     object_id=ws_object_id,
-                    position=(
-                        best.world_position[0],
-                        best.world_position[1],
-                        best.world_position[2],
-                    ),
+                    position=(result["x"], result["y"], result["z"]),
                     color=best.color,
                     object_type="cube",
                     confidence=best.confidence,
@@ -602,7 +627,7 @@ def detect_object_stereo(
                 )
                 logger.info(
                     f"WorldState updated: key='{ws_object_id}' at "
-                    f"({best.world_position[0]:.3f}, {best.world_position[1]:.3f}, {best.world_position[2]:.3f}){dim_str}"
+                    f"({result['x']:.3f}, {result['y']:.3f}, {result['z']:.3f}){dim_str}"
                 )
         except Exception as e:
             # ERROR not WARNING - WorldState write failure breaks next grasp_object call

@@ -470,6 +470,7 @@ class _VGNROSPatch:
         self._patches = []
         self.mock_client: MagicMock = MagicMock()
         self.mock_bridge: MagicMock = MagicMock()
+        self.mock_follow_target: MagicMock = MagicMock()
 
     def __enter__(self) -> "_VGNROSPatch":
         # VGNClient mock
@@ -529,7 +530,8 @@ class _VGNROSPatch:
             "operations.grasp._vgn._execute_grasp_with_follow_target",
             return_value=_follow_rv,
         )
-        self._patches.append(follow_patch.start())
+        self.mock_follow_target = follow_patch.start()
+        self._patches.append(self.mock_follow_target)
 
         return self
 
@@ -683,6 +685,53 @@ class TestGraspViaVGNWithROSHappyPath:
                     world_state=None,
                 )
             mock_follow.assert_called_once()
+
+
+class TestGraspViaVGNWithROSAllowParallel:
+    def test_allow_parallel_true_reaches_plan_calls_and_follow_target(self):
+        with _VGNROSPatch() as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+
+            result = _grasp_via_vgn_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=1,
+                world_state=None,
+                allow_parallel=True,
+            )
+
+        assert result is not None
+        assert result.success is True
+        for _, kwargs in ctx.mock_bridge.plan_and_execute.call_args_list:
+            assert kwargs["allow_parallel"] is True
+        for _, kwargs in ctx.mock_bridge.plan_cartesian_descent.call_args_list:
+            assert kwargs["allow_parallel"] is True
+        assert ctx.mock_follow_target.call_args[1]["allow_parallel"] is True
+
+    def test_allow_parallel_false_by_default(self):
+        with _VGNROSPatch() as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+
+            result = _grasp_via_vgn_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=2,
+                world_state=None,
+            )
+
+        assert result is not None
+        assert result.success is True
+        for _, kwargs in ctx.mock_bridge.plan_and_execute.call_args_list:
+            assert kwargs["allow_parallel"] is False
+        for _, kwargs in ctx.mock_bridge.plan_cartesian_descent.call_args_list:
+            assert kwargs["allow_parallel"] is False
+        assert ctx.mock_follow_target.call_args[1]["allow_parallel"] is False
 
 
 class TestGraspViaVGNWithROSFallback:

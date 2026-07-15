@@ -25,11 +25,8 @@ KG_AWARE_OPS: frozenset = frozenset(
     {
         "grasp_object",
         "detect_object_stereo",
-        "pick_object_at_coordinate",
-        "move_relative_to_object",
         "receive_handoff",
         "place_object",
-        "place_for_partner",
         "place_between_objects",
     }
 )

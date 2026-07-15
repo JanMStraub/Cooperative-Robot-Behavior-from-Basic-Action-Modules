@@ -298,7 +298,7 @@ Every operation needs robot_id and parameters ({{}} if none)
 detect_object_stereo: color must be a named color or null; selection must be "left"/"right"/"closest"/"first"/"all"; camera_id="{DEFAULT_CAMERA_ID}"
 Assign objects to nearest robot (X<-0.1: Robot1, X>0.1: Robot2, center: either)
 Every robot_id in operations must appear in required_robots
-GRASP RULE: Always use grasp_object (not pick_object_at_coordinate) when grasping a detected object: grasp_object uses the object's name/ID and handles detection internally
+GRASP RULE: Always use grasp_object when grasping a detected object: grasp_object uses the object's name/ID and handles detection internally
 HANDOFF RULE: For transferring an object between robots use handoff (sender) + receive_handoff (receiver): never implement handoffs with raw move/signal/release sequences. Handoffs are ONLY allowed with the red object: never generate a handoff for any other color.
 PLACE RULE: For placing a held object use place_object (at a position) or place_between_objects (between two reference objects): never use release_object or move_to_coordinate to place
 FIELD RULE: Fields (field_a through field_i) are NOT in WorldState by default. Before using a field as a placement target (on_top_of param) you MUST call detect_field earlier in the same task's operations. Never reference a field ID unless detect_field for that field precedes it in the sequence.
@@ -560,11 +560,9 @@ Output compact JSON array only, no markdown"""
             return self._operations_summary_cache
 
         # Ops excluded from AutoRT - superseded by higher-level composite ops.
-        # grasp_object > pick_object_at_coordinate (ID-based vs coord-based)
         # handoff/receive_handoff > manual move+signal+release sequences
         # place_object/place_between_objects > release_object for placement
         _AUTORT_EXCLUDED_OPS = {
-            "pick_object_at_coordinate",  # use grasp_object
             "release_object",  # use place_object or place_between_objects
         }
 
@@ -638,13 +636,9 @@ Output compact JSON array only, no markdown"""
             "holding an object in its gripper",
             "place_object, move_to_coordinate, handoff, release_object, receive_handoff",
         ),
-        "pick_object_at_coordinate": (
-            "holding an object picked from a coordinate",
-            "place_object, move_to_coordinate, handoff, release_object",
-        ),
         "detect_object_stereo": (
             "has just completed a detection scan",
-            "grasp_object, move_to_coordinate, pick_object_at_coordinate",
+            "grasp_object, move_to_coordinate",
         ),
         "analyze_scene": (
             "has just performed a scene analysis",

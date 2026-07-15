@@ -38,7 +38,9 @@ def _apply(flags: BenchmarkFeatureFlags, restores: Dict[str, Any]) -> None:
         restores["seq.REFLECTION_ENABLED"] = seq_mod.REFLECTION_ENABLED
         srv.REFLECTION_ENABLED = flags.use_reflection
         seq_mod.REFLECTION_ENABLED = flags.use_reflection
-        logger.debug(f"[FeatureFlagContext] REFLECTION_ENABLED -> {flags.use_reflection}")
+        logger.debug(
+            f"[FeatureFlagContext] REFLECTION_ENABLED -> {flags.use_reflection}"
+        )
 
     if flags.use_ros is not None:
         restores["ros.ROS_ENABLED"] = ros.ROS_ENABLED

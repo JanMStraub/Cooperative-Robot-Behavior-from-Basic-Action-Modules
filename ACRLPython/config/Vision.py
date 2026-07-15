@@ -161,6 +161,9 @@ DEFAULT_CAMERA_ID = os.environ.get(
     "DEFAULT_CAMERA_ID", "TableStereoCamera"
 )  # Must match the StereoCameraController GameObject name in Unity
 
+# Poll rate for CameraCaptureBridge (--env real)
+LOCAL_CAPTURE_FPS = float(os.environ.get("LOCAL_CAPTURE_FPS", "10.0"))
+
 # Maximum long-edge resolution fed to YOLO. Images larger than this are
 # downscaled before inference (YOLO letterboxes to 640×640 internally anyway,
 # so sending e.g. a 1280×960 image just wastes preprocessing time).

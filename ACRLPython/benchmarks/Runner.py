@@ -660,10 +660,13 @@ class BenchmarkRunner:
         """
         Run B11 RAG ablation: measure operation selection accuracy vs. ground truth.
 
-        Each task has a ground-truth primary operation. The metric is strict exact
-        match on the first parsed operation name. Run with RAG enabled (default)
-        and again with --no-rag to compare accuracy across conditions.
-        No Unity connection required - parse-only.
+        Each task has a ground-truth operation. The metric is whether that operation
+        appears anywhere in the parsed plan, not just as commands[0] - tasks that
+        reference an object by name/color legitimately decompose into a
+        detect-then-act plan (e.g. detect_object_stereo -> grasp_object), and
+        checking only the first command would wrongly penalize that correct
+        decomposition. Run with RAG enabled (default) and again with --no-rag to
+        compare accuracy across conditions. No Unity connection required - parse-only.
         """
         from orchestrators.CommandParser import CommandParser
         from .Result import AblationMetrics
@@ -680,8 +683,8 @@ class BenchmarkRunner:
                 task, robot_id=cfg.robot_id, use_motion_layer=False
             )
             commands = parse_result.get("commands", [])
-            primary_op = commands[0].get("operation", "") if commands else ""
-            if primary_op == expected_op:
+            parsed_ops = {cmd.get("operation", "") for cmd in commands}
+            if expected_op in parsed_ops:
                 correct += 1
 
         accuracy = correct / total if total else 0.0
@@ -830,7 +833,11 @@ class BenchmarkRunner:
                 return "handoff_rule"
             if "detect_field" in r or "on_top_of" in r:
                 return "field_rule"
-            if "outside valid range" in r or "valid values" in r or "missing required" in r:
+            if (
+                "outside valid range" in r
+                or "valid values" in r
+                or "missing required" in r
+            ):
                 return "bad_params"
             if "truncated" in r or "incomplete" in r or "not closed" in r:
                 return "truncated"
@@ -856,7 +863,9 @@ class BenchmarkRunner:
                 except Exception as exc:
                     last_error = f"parse/schema error: {exc}"
                     yield_reason = _categorize(last_error)
-                    rej_per_attempt[yield_reason] = rej_per_attempt.get(yield_reason, 0) + 1
+                    rej_per_attempt[yield_reason] = (
+                        rej_per_attempt.get(yield_reason, 0) + 1
+                    )
                     continue
                 if not candidates:
                     last_error = "No tasks generated"
@@ -998,7 +1007,9 @@ class BenchmarkRunner:
             raw = self._send(payload, cfg.robot_id, cfg, flags=_flags)
             if raw.get("success"):
                 completed += 1
-            total_recoveries += raw.get("reflection_recoveries", raw.get("reflexion_recoveries", 0))
+            total_recoveries += raw.get(
+                "reflection_recoveries", raw.get("reflexion_recoveries", 0)
+            )
             task_steps = self._parse_steps(
                 raw.get("results") or [], raw.get("parsed_commands") or []
             )
@@ -1092,7 +1103,9 @@ class BenchmarkRunner:
                 )
                 raw = self._run_local(ops, cfg_local)
                 total_ms += float(raw.get("total_duration_ms", 0.0))
-                total_recoveries += raw.get("reflection_recoveries", raw.get("reflexion_recoveries", 0))
+                total_recoveries += raw.get(
+                    "reflection_recoveries", raw.get("reflexion_recoveries", 0)
+                )
                 task_steps = self._parse_steps(raw.get("results") or [], ops)
                 step_offset = len(all_steps)
                 for s in task_steps:
@@ -1294,7 +1307,9 @@ class BenchmarkRunner:
 
         # Success: ops parsed, and if negotiation is on, it actually ran.
         # (always_succeed mock makes success_rate comparison uninformative.)
-        success = ops_executed > 0 and (not negotiation_on or total_negotiation_rounds > 0)
+        success = ops_executed > 0 and (
+            not negotiation_on or total_negotiation_rounds > 0
+        )
 
         parallelism_ratio, ops_in_parallel = self._compute_parallelism_ratio(all_steps)
 
@@ -1413,9 +1428,7 @@ class BenchmarkRunner:
 
             success_rate = (ops_succeeded / ops_executed) if ops_executed else 0.0
             grasp_steps = [s for s in all_steps if s.operation == "grasp_object"]
-            grasp_sr = (
-                (grasp_successes / grasp_attempts) if grasp_attempts else 0.0
-            )
+            grasp_sr = (grasp_successes / grasp_attempts) if grasp_attempts else 0.0
             avg_grasp_ms = (
                 (sum(s.duration_ms for s in grasp_steps) / len(grasp_steps))
                 if grasp_steps

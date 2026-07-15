@@ -533,3 +533,28 @@ class TestCacheManagement:
         )
         assert len(world_state._pending_commands) == 0
         assert len(world_state._robot_cache) == 0
+
+
+class TestSupplementObjectFromUnity:
+
+    def test_rotation_is_refreshed_on_every_call(self, cleanup_world_state):
+        world_state = get_world_state()
+
+        world_state.supplement_object_from_unity(
+            "red_cube", (0.0, 0.0, 0.0), rotation=(0.0, 70.0, 0.0)
+        )
+        world_state.supplement_object_from_unity(
+            "red_cube", (0.0, 0.0, 0.0), rotation=(0.0, 45.0, 0.0)
+        )
+
+        assert world_state._objects["red_cube"].rotation == (0.0, 45.0, 0.0)
+
+    def test_position_is_never_overwritten(self, cleanup_world_state):
+        world_state = get_world_state()
+
+        world_state.update_object_position("red_cube", (0.1, 0.2, 0.3), "red")
+        world_state.supplement_object_from_unity(
+            "red_cube", (9.0, 9.0, 9.0), rotation=(0.0, 45.0, 0.0)
+        )
+
+        assert world_state._objects["red_cube"].position == (0.1, 0.2, 0.3)

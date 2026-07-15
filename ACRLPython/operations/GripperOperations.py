@@ -413,6 +413,7 @@ def place_object(
     placed_object_height: float = 0.0,
     use_ros: Optional[bool] = None,
     request_id: int = 0,
+    allow_parallel_ros: bool = False,
 ) -> OperationResult:
     """
     Place held object at target: hover → descend → release → ascend.
@@ -450,7 +451,11 @@ def place_object(
         def _ros_path():
             from ros2.ROSBridge import ROSBridge
 
-            bridge = ROSBridge.get_instance()
+            bridge = (
+                ROSBridge.get_parallel_instance(robot_id)
+                if allow_parallel_ros
+                else ROSBridge.get_instance()
+            )
 
             hover_y = effective_y + PLACE_HOVER_OFFSET
             hover_pos = {"x": x, "y": hover_y, "z": z}
@@ -470,6 +475,7 @@ def place_object(
                 lift_result = bridge.plan_and_execute(
                     position={"x": cx, "y": hover_y, "z": cz},
                     robot_id=robot_id,
+                    allow_parallel=allow_parallel_ros,
                 )
                 if not lift_result or not lift_result.get("success"):
                     logger.warning(
@@ -486,6 +492,7 @@ def place_object(
             orient_result = bridge.plan_orientation_change(
                 {"roll": 180, "pitch": 0, "yaw": 0},
                 robot_id=robot_id,
+                allow_parallel=allow_parallel_ros,
             )
             if not orient_result or not orient_result.get("success"):
                 logger.warning(
@@ -500,6 +507,7 @@ def place_object(
                 orientation=top_down_orientation,
                 robot_id=robot_id,
                 constrain_joint4=True,
+                allow_parallel=allow_parallel_ros,
             )
             if not hover_result or not hover_result.get("success"):
                 err = (
@@ -523,6 +531,7 @@ def place_object(
                 orientation=top_down_orientation,
                 robot_id=robot_id,
                 constrain_joint4=True,
+                allow_parallel=allow_parallel_ros,
             )
             if not descent_result or not descent_result.get("success"):
                 err = (
@@ -543,6 +552,7 @@ def place_object(
             bridge.plan_and_execute(
                 position=hover_pos,
                 robot_id=robot_id,
+                allow_parallel=allow_parallel_ros,
             )
 
             return OperationResult.success_result(

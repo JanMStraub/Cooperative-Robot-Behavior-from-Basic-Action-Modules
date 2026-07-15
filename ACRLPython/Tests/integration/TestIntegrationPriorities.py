@@ -74,7 +74,9 @@ class TestPriority1_RAGWorkflowIntegration:
 
         if using_tfidf and len(all_results) == 0:
             # TF-IDF may not work well without LM Studio - skip test
-            print("WARNING: TF-IDF fallback did not return results (vocabulary mismatch)")
+            print(
+                "WARNING: TF-IDF fallback did not return results (vocabulary mismatch)"
+            )
             print(
                 "WARNING: Skipping test - workflows are indexed but TF-IDF cannot search them"
             )
@@ -117,7 +119,9 @@ class TestPriority1_RAGWorkflowIntegration:
             assert metadata["step_count"] > 0, "Workflow has invalid step count"
             print(f"Workflow metadata includes step_count: {metadata['step_count']}")
         else:
-            print("WARNING: No workflows in top 3 results (may be normal depending on query)")
+            print(
+                "WARNING: No workflows in top 3 results (may be normal depending on query)"
+            )
 
 
 class TestPriority2_AutomatedParameterFlow:

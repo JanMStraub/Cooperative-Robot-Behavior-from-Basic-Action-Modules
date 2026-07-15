@@ -202,9 +202,8 @@ ACRLPython/acrl/
 ACRLPython/kg_snapshots
 
 # LaTeX
-*.pdf
 *.aux
-*.bak0
+*.bak[0-9]*
 *.nav
 *.out
 *.snm
@@ -213,3 +212,6 @@ ACRLPython/kg_snapshots
 *.blg
 *.lof
 *.lot
+*.fls
+*.fdb_latexmk
+indent.log

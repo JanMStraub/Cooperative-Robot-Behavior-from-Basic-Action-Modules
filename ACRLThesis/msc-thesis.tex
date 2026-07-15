@@ -1,0 +1,302 @@
+% This template was initially provided by Dulip Withanage.
+% Modifications were made by Conny Junghans, Jannik Strötgen, and Sascha Hunold
+
+\documentclass[
+     12pt,
+     a4paper,
+     BCOR=10mm,
+     DIV=14,
+     listof=totoc,
+     bibliography=totoc,
+     parskip,
+     twoside,
+     headsepline
+     ]{scrreprt}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% PACKAGES:
+
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+
+\makeatletter
+
+\newcommand*\lmtt@fillM[1]{%
+  \DeclareFontShape{T1}{lmtt}{#1}{n}{<->ssub*lmtt/m/n}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{it}{<->ssub*lmtt/m/it}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{sl}{<->ssub*lmtt/m/sl}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{sc}{<->ssub*lmtt/m/sc}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{scsl}{<->ssub*lmtt/m/sl}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{scit}{<->ssub*lmtt/m/it}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{ui}{<->ssub*lmtt/m/n}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{In}{<->ssub*lmtt/m/it}{}}
+
+\newcommand*\lmtt@fillBold[2]{%
+  \DeclareFontShape{T1}{lmtt}{#1}{n}{<->ssub*lmtt/#2/n}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{it}{<->ssub*lmtt/#2/sl}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{sl}{<->ssub*lmtt/#2/sl}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{sc}{<->ssub*lmtt/#2/n}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{scsl}{<->ssub*lmtt/#2/sl}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{scit}{<->ssub*lmtt/#2/sl}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{ui}{<->ssub*lmtt/#2/n}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{In}{<->ssub*lmtt/#2/sl}{}}
+
+\newcommand*\lmtt@fillVariants[1]{%
+  \DeclareFontShape{T1}{lmtt}{#1}{it}{<->ssub*lmtt/#1/sl}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{sc}{<->ssub*lmtt/#1/n}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{scsl}{<->ssub*lmtt/#1/sl}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{scit}{<->ssub*lmtt/#1/sl}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{ui}{<->ssub*lmtt/#1/n}{}%
+  \DeclareFontShape{T1}{lmtt}{#1}{In}{<->ssub*lmtt/#1/sl}{}}
+
+\begingroup\usefont{T1}{lmtt}{m}{n}\endgroup
+\lmtt@fillVariants{b}
+\lmtt@fillVariants{bx}
+\DeclareFontShape{T1}{lmtt}{m}{ui}{<->ssub*lmtt/m/n}{}
+\DeclareFontShape{T1}{lmtt}{m}{In}{<->ssub*lmtt/m/it}{}
+\lmtt@fillM{c}
+\lmtt@fillM{lc}
+\lmtt@fillBold{sbx}{bx}
+\lmtt@fillBold{sbc}{bx}
+\lmtt@fillBold{bc}{b}
+\makeatother
+% Include Graphic-files:
+\usepackage{graphicx}
+% For math stuff
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{makecell}
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{ltablex}
+\keepXColumns % tables opt in to page-breaking with \convertXColumns
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\makeatletter
+\let\hyphenat@svwarn\PackageWarning
+\let\hyphenat@svwarnnl\PackageWarningNoLine
+\renewcommand\PackageWarning[2]{}
+\renewcommand\PackageWarningNoLine[2]{}
+\usepackage[htt]{hyphenat}
+\let\PackageWarning\hyphenat@svwarn
+\let\PackageWarningNoLine\hyphenat@svwarnnl
+\makeatother
+
+\lstset{
+    basicstyle=\footnotesize\ttfamily,
+    lineskip=-1pt,                 % tighter line spacing
+    breaklines=true,               % Wraps long lines
+    frame=single,                  % Adds a box around the prompt
+    columns=flexible,              % better space usage
+    backgroundcolor=\color{gray!5},% Slight gray background
+    captionpos=b                   % Puts caption at the bottom
+}
+
+% Make glossary
+\usepackage[acronym, nonumberlist, toc]{glossaries}
+
+\makenoidxglossaries
+\newacronym{eai}{EAI}{Embodied Artificial Intelligence}
+\newacronym{llm}{LLM}{Large Language Model}
+\newacronym{ros}{ROS}{Robot Operating System 2 Humble}
+\newacronym{fm}{FM}{Foundation Model}
+\newacronym{yolo}{YOLO}{You Only Look Once}
+\newacronym{vlm}{VLM}{Vision-Language Model}
+\newacronym{rag}{RAG}{Retrieval-Augmented Generation}
+\newacronym{kg}{KG}{Knowledge Graph}
+\newacronym{s2r}{Sim2Real}{Simulation-to-Real}
+\newacronym{vgn}{VGN}{Volumetric Grasping Network}
+\newacronym{hrc}{HRC}{Human-Robot Collaboration}
+\newacronym{rl}{RL}{Reinforcement Learning}
+\newacronym{vla}{VLA}{Vision-Language-Action}
+\newacronym{tsdf}{TSDF}{Truncated Signed Distance Function}
+\newacronym{ik}{IK}{Inverse Kinematics}
+\newacronym{magi}{Magistral 24B}{Magistral Small 2509 24B 4-bit Quant}
+\newacronym{mini}{Ministral 14B}{Ministral 3 14B Reasoning 4-bit Quant}
+\newacronym{gema44}{Gemma 4B}{Gemma 4 E4B 4-bit Quant}
+\newacronym{gema42}{Gemma 2B}{Gemma 4 E2B 4-bit Quant}
+\newacronym{qwen330}{Qwen 30B}{Qwen 3 VL 30B 4-bit Quant}
+\newacronym{qwen38}{Qwen 8B}{Qwen 3 VL 8B 4-bit Quant}
+\newacronym{cap}{CaP}{Code as Policies}
+\newacronym{sgbm}{SGBM}{Semi-Global Block Matching}
+\newacronym{pd}{PD}{Proportional-Derivative}
+\newacronym{ompl}{OMPL}{Open Motion Planning Library}
+\newacronym{urdf}{URDF}{Unified Robot Description Format}
+\newacronym{cv}{CV}{Coefficient of Variation}
+\newacronym{sd}{SD}{Sample Standard Deviation}
+\newacronym{tfidf}{TF-IDF}{Term Frequency-Inverse Document Frequency}
+
+\usepackage{setspace}
+
+% hyperrefs in the documents
+\usepackage[bookmarks=true,colorlinks,pdfpagelabels,pdfstartview = FitH,bookmarksopen = true,bookmarksnumbered = true,linkcolor = black,plainpages = false,hypertexnames = false,citecolor = black,urlcolor=black]{hyperref}
+\usepackage{bookmark}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% OTHER SETTINGS:
+
+% --- Layout Fixes ---
+\raggedbottom
+\setlength{\emergencystretch}{3em}
+
+\DeclareTOCStyleEntry[numwidth=2.8em]{tocline}{section}
+\DeclareTOCStyleEntry[numwidth=2.8em]{tocline}{table}
+\DeclareTOCStyleEntry[numwidth=2.8em]{tocline}{figure}
+
+% Pagestyle:
+\pagestyle{headings}
+
+% Choose language
+\newcommand{\setlang}[1]{\selectlanguage{#1}\nonfrenchspacing}
+
+\begin{document}
+
+% TITLE:
+\pagenumbering{roman}
+\begin{titlepage}
+
+	\vspace*{1cm}
+	\begin{center}
+		\vspace*{1cm}
+		\textbf{
+			\Large Ruprecht Karls University of Heidelberg\\
+			\smallskip
+			\Large Institute for Computer Science\\
+			\smallskip
+			\Large Artificial Intelligence for Programming\\
+			\smallskip
+		}
+
+		\vspace{3cm}
+
+		\textbf{\large Master's Thesis}
+
+		\vspace{2\baselineskip}
+		{\huge
+			Building Cooperative Robot Behavior from Basic Action Modules
+		}
+	\end{center}
+
+	\vfill
+
+	{\large
+		\begin{tabular}[l]{ll}
+			Name:                 & Jan Michael Straub        \\
+			Matriculation Number: & 34 05 670                 \\
+			Supervisor:           & Prof. Dr. Artur Andrzejak \\
+			Date of Submission:   & 15.07.2026
+		\end{tabular}
+	}
+
+\end{titlepage}
+
+\onehalfspacing
+
+\thispagestyle{empty}
+
+\vspace*{30pt}
+
+\section*{Declaration of Authorship and AI Usage}
+
+I hereby declare that I have written this Master's thesis independently and have used no other sources or aids than those specified. Furthermore, regarding the use of Artificial Intelligence (AI) tools in this work, I declare that:
+
+\begin{itemize}
+	\item I assume full responsibility for the scholarly quality and content of the submitted work, the chosen methodology, the production process, and the cited literature.
+	\item I confirm that the work was prepared in compliance with the principles of good academic practice (see guidelines on good academic practice).
+	\item I confirm that the use of AI tools was agreed in advance with the instructor or examiner and that the agreed rules were followed.
+\end{itemize}
+
+\vspace{1.5em}
+
+\begin{flushright}
+	\begin{minipage}{20em}
+		\rule{\textwidth}{0.5pt}\\
+		Jan M. Straub \\
+		Heidelberg, \today
+	\end{minipage}
+\end{flushright}
+
+\clearpage
+
+\vspace*{30pt}
+
+\subsection*{Overview of AI Tools Used}
+
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X}
+	\toprule
+	\textbf{AI Tool}          & \textbf{Purpose of Use}                                  & \textbf{Comments}                                                    \\
+	\midrule
+	Claude                    & Drafting, language editing and proofreading              & Everything was reviewed by me                                        \\
+	Claude Code               & Implementation, error/bug fixing, and prompt engineering & Used as an assistant, and all code was reviewed, tested, and revised \\
+	Ministral-3 14B Reasoning & Planning model                                           & Used for tests and benchmarks                                        \\
+	Magistral Small 2509      & Planning model                                           & Default model used for tests, benchmarks, and system operation       \\
+	Qwen3-VL 8B / 30B         & Planning model                                           & Used for tests and benchmarks                                        \\
+	Gemma-4 E2B / E4B         & Planning model                                           & Used for tests and benchmarks                                        \\
+	\bottomrule
+\end{tabularx}
+
+\cleardoublepage
+
+\section*{Abstract}
+Current robotic systems excel at precision in rigid sequences, yet frequently fail in unknown situations. Large Language Models (LLMs) promise to close this gap through their reasoning capabilities, even though they currently cannot turn that reasoning into physical action on their own. In this work, we present an LLM-driven control framework for two AR4 robotic arms that enables precisely this transition. To achieve this, we equip a locally hosted Vision-Language Model (VLM) with a pool of 20 operations, which the model assembles into executable chains. A Retrieval-Augmented Generation (RAG)-assisted pipeline processes natural-language instructions, a reflection mechanism retries faulty sequences, and an optional multi-agent negotiation protocol coordinates multiple robots. We implement the system in Unity using Robot Operating System (ROS) 2 and MoveIt as the collision-aware planning backend, and evaluate it across 17 benchmarks. With Magistral Small 2509 24B 4-bit Quant as the default backend model, it achieves a success rate of 1.000 across all five single-robot benchmarks and object handovers between the two arms. Additionally, ablation studies demonstrate that, with the default model, enabling the Volumetric Grasping Network (VGN) grasp path improves grasp reliability by 35 percentage points, negotiation improves task success by 10 percentage points, and the reflection mechanism improves task success by 14 percentage points. However, simultaneous manipulation of a single object remains unsolved.
+
+\clearpage
+
+\section*{Zusammenfassung}
+Heutige Robotersysteme glänzen durch Präzision in starren Abläufen, scheitern jedoch oft noch an unvorhergesehenen Situationen. Große Sprachmodelle (LLMs) versprechen, diese Lücke durch ihre Schlussfolgerungsfähigkeit zu schließen, auch wenn ihnen bislang die Fähigkeit fehlt, abstraktes Schlussfolgern in physisches Handeln umzusetzen. In dieser Arbeit stellen wir ein LLM-gesteuertes Kontrollframework für zwei AR4-Roboterarme vor, das genau diesen Übergang ermöglicht. Wir statten dafür ein lokal betriebenes Vision-Language-Modell (VLM) mit einem Pool aus 20 Operationen aus und lassen es aus sprachlichen Anweisungen selbstständig ausführbare Operationsketten zusammensetzen. Eine Retrieval-Augmented-Generation (RAG)-gestützte Pipeline begrenzt die Anzahl möglicher Operationen. Ein Reflexionsmechanismus korrigiert fehlerhafte Schritte, und ein optionales Multi-Agenten-Verhandlungsprotokoll koordiniert mehrere Roboter. Wir implementieren das System in einer Unity-Simulation mit Robot Operating System (ROS) 2 und MoveIt als kollisionsbewusstem Planungs-Backend und evaluieren es anhand von 17 Benchmarks. Mit dem Magistral Small 2509 24B 4-bit Quant als Standard-Backend-Modell erreicht es einen 100\%igen Erfolg bei allen fünf Einzelrobotertests sowie bei der Objektübergabe zwischen beiden Robotern. Ablationsstudien zeigen zudem, dass die Aktivierung des Volumetric-Grasping-Network-(VGN)-Greifpfads die Greifzuverlässigkeit um 35 Prozentpunkte, das Verhandlungsprotokoll den Aufgabenerfolg um 10 Prozentpunkte und die Reflexion um 14 Prozentpunkte erhöht. Die gleichzeitige Manipulation eines Objekts bleibt jedoch ungelöst.
+
+\cleardoublepage
+
+\tableofcontents
+\clearpage
+
+\printnoidxglossary[
+	type=\acronymtype,
+	title=List of Abbreviations,
+	nonumberlist,
+	style=listdotted,
+	nogroupskip,
+]
+
+\cleardoublepage
+
+\pagenumbering{arabic}
+
+\cleardoublepage
+
+\glsresetall
+
+\input{chapters/01-introduction}
+\input{chapters/02-background}
+\input{chapters/03-methodology}
+\input{chapters/04-implementation}
+\input{chapters/05-evaluation}
+\input{chapters/06-discussion}
+\input{chapters/07-conclusion}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\newpage
+\clearpage
+\appendix
+
+\input{chapters/appendix-a-config}
+\input{chapters/appendix-b-robot-values}
+\input{chapters/appendix-c-prompts}
+\input{chapters/appendix-d-benchmarks}
+\input{chapters/appendix-e-basic-ops}
+
+\end{document}

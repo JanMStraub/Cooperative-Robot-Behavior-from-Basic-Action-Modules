@@ -69,8 +69,7 @@ Hard constraints:
 _SECTION_SYNC = """\
 === SYNCHRONIZATION PRIMITIVES ===
 
-signal(event_name): emit event. wait_for_signal(event_name, timeout_ms=30000): wait for event. wait(duration_ms): time pause.
-mirror_movement_of_other_robot(duration_ms): duration_ms in [1000, 60000]."""
+signal(event_name): emit event. wait_for_signal(event_name, timeout_ms=30000): wait for event. wait(duration_ms): time pause."""
 
 _SECTION_NAVIGATION = """\
 === NAVIGATION RULE ===
@@ -183,6 +182,7 @@ _SECTION_DUAL_GRASP = """\
 === DUAL GRASP RULE ===
 
 When BOTH robots physically grip the same object from opposite sides (both "grasp", "grip", or "pick"):
+- Exactly ONE detect_object_stereo call for the whole sequence. Both grasp_object calls reference that same captured variable (e.g. $target.color) - do NOT add a second detect for the second robot. Once the first robot grasps, its arm/gripper partially occludes the object from the camera, so a second detection reads a biased position/size, not a more accurate one.
 - Both robots use grasp_object with complementary preferred_approach ("left_side" / "right_side").
 - Grasps must be sequential, not concurrent, so the stabilising robot grasps first to prevent object drift, then the second robot grasps. Each grasp waits for the previous to complete.
 - Lift: both robots move_to_coordinate to target height concurrently (neither lift depends on the other).

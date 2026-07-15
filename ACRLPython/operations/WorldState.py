@@ -505,10 +505,10 @@ class WorldState(SingletonBase):
         Update object state from Unity, but only as a supplement to vision.
 
         Creates the object if not yet in WorldState (source="unity").
-        If already present (populated by vision), only fills in missing
-        dimensions/rotation/color/type - never overwrites position.
-        Does not fire object observers since no position change occurs for
-        already-tracked objects.
+        If already present (populated by vision), fills in missing
+        dimensions/color/type, always refreshes rotation, but never
+        overwrites position. Does not fire object observers since no
+        position change occurs for already-tracked objects.
         """
         with self._lock:
             if object_id not in self._objects:
@@ -528,10 +528,10 @@ class WorldState(SingletonBase):
                 )
             else:
                 obj = self._objects[object_id]
-                # Fill missing metadata only - never overwrite position set by vision
+                # Fill missing metadata only - never overwrite position set by vision.
                 if dimensions is not None and obj.dimensions is None:
                     obj.dimensions = dimensions
-                if rotation is not None and obj.rotation is None:
+                if rotation is not None:
                     obj.rotation = rotation
                 if obj.color == "unknown" and color != "unknown":
                     obj.color = color

@@ -86,8 +86,6 @@ def load(root, bench, model):
 
 
 def run_sr(r):
-    # success_rate is task-level for the multi-task ablation runs (B12/B13/B16)
-    # and operation-level for the single-task benchmarks; reported as-is.
     return r.get("success_rate", 0.0) or 0.0
 
 
@@ -101,7 +99,7 @@ def fmt_dur(ms):
 
 
 def fmt_pct(x):
-    return "100\\%" if abs(x - 1.0) < 1e-9 else f"{x * 100:.1f}\\%"
+    return f"{x:.3f}"
 
 
 def min_idx(values):
@@ -255,16 +253,16 @@ def ablation_table(root):
 
 def b17_combined_table(root):
     header = [
-        "\t\\textbf{Model} & \\textbf{Run} & \\textbf{Gate acc.} & \\textbf{False acc.} & \\textbf{False rej.} & \\textbf{Slot succ.} & \\textbf{First-attempt} \\\\",
+        "\t\\textbf{Model} & \\textbf{Gate acc.} & \\textbf{False acc.} & \\textbf{False rej.} & \\textbf{Slot succ.} & \\textbf{First-attempt} \\\\",
     ]
     body = []
     for model in MODELS:
         cells = []
-        for i, r in enumerate(load(root, "b17", model), 1):
+        for r in load(root, "b17", model):
             sg = r["per_op_stats"]["safety_gate"]
             gn = r["per_op_stats"]["generation"]
             cells.append(
-                f"{i} & {sg['accuracy']:.3f} & {sg['false_accept_rate']:.2f} & {sg['false_reject_rate']:.2f} & {gn['slot_success_rate']:.3f} & {gn['first_attempt_rate']:.3f}"
+                f"{sg['accuracy']:.3f} & {sg['false_accept_rate']:.3f} & {sg['false_reject_rate']:.3f} & {gn['slot_success_rate']:.3f} & {gn['first_attempt_rate']:.3f}"
             )
         body += block_rows(GLS[model], cells)
         body.append("\t\\midrule")
@@ -279,9 +277,9 @@ def b17_combined_table(root):
         "\\gls{qwen330}; 11/4/4/0 for the two Gemma~4 models); slot success and "
         "first-attempt validity vary with sampling."
     )
-    colspec = "@{}l*{6}{>{\\centering\\arraybackslash}X}@{}"
+    colspec = "@{}l*{5}{>{\\centering\\arraybackslash}X}@{}"
     return longtabx(
-        colspec, header, "\n".join(body), caption, "tab:b17_benchmark_runs", 7
+        colspec, header, "\n".join(body), caption, "tab:b17_benchmark_runs", 6
     )
 
 

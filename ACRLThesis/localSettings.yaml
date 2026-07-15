@@ -1,0 +1,6 @@
+# latexindent settings for this thesis. Auto-loaded from cwd, so `make format`
+# and any `latexindent` invocation run from ACRLThesis/ picks this up without
+# needing -l on the command line.
+onlyOneBackUp: 1
+indentation:
+  string: "\t"

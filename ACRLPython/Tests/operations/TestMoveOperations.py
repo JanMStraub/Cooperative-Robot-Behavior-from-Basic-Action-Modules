@@ -1,7 +1,11 @@
 import pytest
-from unittest.mock import Mock
+from unittest.mock import Mock, MagicMock, patch
 
-from operations.MoveOperations import move_to_coordinate, MOVE_TO_COORDINATE_OPERATION
+from operations.MoveOperations import (
+    move_to_coordinate,
+    adjust_end_effector_orientation,
+    MOVE_TO_COORDINATE_OPERATION,
+)
 
 # Test Class: Basic Movement Operations
 
@@ -192,6 +196,112 @@ class TestMoveErrors:
         assert result.success is False
         assert result.error is not None
         assert result.error["code"] == "UNEXPECTED_ERROR"
+
+
+# Test Class: allow_parallel_ros routing to per-robot ROS connection
+
+
+class TestMoveToCoordinateAllowParallelRos:
+    def test_uses_parallel_instance_and_flag_when_allow_parallel_ros_true(self):
+        mock_default_bridge = MagicMock()
+        mock_default_bridge.is_connected = True
+        mock_parallel_bridge = MagicMock()
+        mock_parallel_bridge.plan_and_execute.return_value = {
+            "success": True,
+            "planning_time": 1.0,
+        }
+
+        with patch(
+            "ros2.ROSBridge.ROSBridge.get_instance", return_value=mock_default_bridge
+        ), patch(
+            "ros2.ROSBridge.ROSBridge.get_parallel_instance",
+            return_value=mock_parallel_bridge,
+        ) as mock_get_parallel:
+            result = move_to_coordinate(
+                "Robot1",
+                x=0.3,
+                y=0.2,
+                z=0.1,
+                use_ros=True,
+                allow_parallel_ros=True,
+            )
+
+        assert result.success is True
+        mock_get_parallel.assert_called_once_with("Robot1")
+        mock_parallel_bridge.plan_and_execute.assert_called_once()
+        assert (
+            mock_parallel_bridge.plan_and_execute.call_args[1]["allow_parallel"] is True
+        )
+
+    def test_uses_default_instance_when_allow_parallel_ros_false(self):
+        mock_default_bridge = MagicMock()
+        mock_default_bridge.is_connected = True
+        mock_default_bridge.plan_and_execute.return_value = {
+            "success": True,
+            "planning_time": 1.0,
+        }
+
+        with patch(
+            "ros2.ROSBridge.ROSBridge.get_instance", return_value=mock_default_bridge
+        ), patch("ros2.ROSBridge.ROSBridge.get_parallel_instance") as mock_get_parallel:
+            result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=0.1, use_ros=True)
+
+        assert result.success is True
+        mock_get_parallel.assert_not_called()
+        assert (
+            mock_default_bridge.plan_and_execute.call_args[1]["allow_parallel"] is False
+        )
+
+
+class TestAdjustOrientationAllowParallelRos:
+    def test_uses_parallel_instance_and_flag_when_allow_parallel_ros_true(self):
+        mock_default_bridge = MagicMock()
+        mock_default_bridge.is_connected = True
+        mock_parallel_bridge = MagicMock()
+        mock_parallel_bridge.plan_orientation_change.return_value = {
+            "success": True,
+            "planning_time": 1.0,
+        }
+
+        with patch(
+            "ros2.ROSBridge.ROSBridge.get_instance", return_value=mock_default_bridge
+        ), patch(
+            "ros2.ROSBridge.ROSBridge.get_parallel_instance",
+            return_value=mock_parallel_bridge,
+        ) as mock_get_parallel:
+            result = adjust_end_effector_orientation(
+                "Robot2",
+                roll=90.0,
+                use_ros=True,
+                allow_parallel_ros=True,
+            )
+
+        assert result.success is True
+        mock_get_parallel.assert_called_once_with("Robot2")
+        assert (
+            mock_parallel_bridge.plan_orientation_change.call_args[1]["allow_parallel"]
+            is True
+        )
+
+    def test_uses_default_instance_when_allow_parallel_ros_false(self):
+        mock_default_bridge = MagicMock()
+        mock_default_bridge.is_connected = True
+        mock_default_bridge.plan_orientation_change.return_value = {
+            "success": True,
+            "planning_time": 1.0,
+        }
+
+        with patch(
+            "ros2.ROSBridge.ROSBridge.get_instance", return_value=mock_default_bridge
+        ), patch("ros2.ROSBridge.ROSBridge.get_parallel_instance") as mock_get_parallel:
+            result = adjust_end_effector_orientation("Robot2", roll=90.0, use_ros=True)
+
+        assert result.success is True
+        mock_get_parallel.assert_not_called()
+        assert (
+            mock_default_bridge.plan_orientation_change.call_args[1]["allow_parallel"]
+            is False
+        )
 
 
 # Test Class: Operation Definition

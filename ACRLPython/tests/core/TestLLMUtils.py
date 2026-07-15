@@ -74,14 +74,14 @@ class TestExtractJsonBareJsonl:
         """Stage 3b: bare comma-separated JSON objects are wrapped into {commands: [...]}"""
         bare = (
             '{"operation": "move_to_coordinate", "params": {"x": 0.1}},\n'
-            '{"operation": "detect_other_robot", "params": {}}'
+            '{"operation": "grasp_object", "params": {}}'
         )
         result = extract_json(bare)
         assert result is not None
         assert "commands" in result
         assert len(result["commands"]) == 2
         assert result["commands"][0]["operation"] == "move_to_coordinate"
-        assert result["commands"][1]["operation"] == "detect_other_robot"
+        assert result["commands"][1]["operation"] == "grasp_object"
 
     def test_single_object_not_wrapped(self):
         """Single-object response must NOT be wrapped in commands list."""
@@ -95,7 +95,7 @@ class TestExtractJsonBareJsonl:
         """Stage 3b handles 3 objects, not just 2."""
         bare = (
             '{"operation": "move_to_coordinate", "params": {"x": 0.1}},\n'
-            '{"operation": "detect_other_robot", "params": {}},\n'
+            '{"operation": "grasp_object", "params": {}},\n'
             '{"operation": "wait", "params": {"duration": 1}}'
         )
         result = extract_json(bare)
@@ -107,7 +107,7 @@ class TestExtractJsonBareJsonl:
         """Stage 3b strips trailing commas from all objects including the last."""
         bare = (
             '{"operation": "move_to_coordinate", "params": {"x": 0.1}},\n'
-            '{"operation": "detect_other_robot", "params": {}},\n'
+            '{"operation": "grasp_object", "params": {}},\n'
         )
         result = extract_json(bare)
         assert result is not None

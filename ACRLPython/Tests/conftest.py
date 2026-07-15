@@ -276,7 +276,7 @@ def patch_world_state():
     # WorldState is imported inside functions, so we patch at the module level.
     # Usage:
     #   with patch_world_state(mock_world_state_instance):
-    #       result = detect_other_robot("Robot1", "Robot2")
+    #       result = check_robot_status("Robot1")
     from unittest.mock import patch
 
     def _create_patch(mock_world_state_instance):

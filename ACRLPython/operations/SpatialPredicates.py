@@ -417,6 +417,34 @@ def _get_workspace_containing_point(x: float, y: float, z: float) -> Optional[st
     return None
 
 
+def warn_if_target_outside_workspace(
+    robot_id: str, x: float, y: float, z: float
+) -> Optional[str]:
+    """Warn when a target within reach falls outside the robot's assigned
+    region - a cross-body reach near the workspace edge where a clean top-down
+    grasp is hard to achieve. Diagnostic only. Returns the message or None."""
+    from config.Robot import ROBOT_WORKSPACE_ASSIGNMENTS
+
+    assigned = ROBOT_WORKSPACE_ASSIGNMENTS.get(robot_id)
+    if assigned is None:
+        return None
+
+    region = _get_workspace_containing_point(x, y, z)
+    if region == assigned:
+        return None
+
+    base = ROBOT_BASE_POSITIONS.get(robot_id, (0.0, 0.0, 0.0))
+    dist = math.sqrt((x - base[0]) ** 2 + (y - base[1]) ** 2 + (z - base[2]) ** 2)
+    msg = (
+        f"Grasp target ({x:.3f}, {y:.3f}, {z:.3f}) for {robot_id} is in region "
+        f"'{region or 'none'}', outside its assigned '{assigned}' "
+        f"({dist:.3f}m from base) - cross-body reach near workspace edge, "
+        f"grasp may be shallow or poorly oriented"
+    )
+    logger.warning(msg)
+    return msg
+
+
 @register_predicate("object_not_stale")
 def object_not_stale(object_id: str, world_state=None) -> Tuple[bool, str]:
     if world_state is None:

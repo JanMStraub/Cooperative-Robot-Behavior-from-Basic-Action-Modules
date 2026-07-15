@@ -24,8 +24,4 @@ def get_task() -> str:
     LLM response assigns Robot1 ops and Robot2 ops to the same parallel_group
     so both chains execute concurrently.
     """
-    return (
-        "Robot1 and Robot2 work independently. "
-        "Robot1: detect the blue cube, grasp it, and place it in field A. "
-        "Robot2: detect the green cube, grasp it, and place it in field B."
-    )
+    return "Robot1: detect the blue cube, grasp it, and place it in field A and at the same time Robot2: detect the green cube, grasp it, and place it in field B."

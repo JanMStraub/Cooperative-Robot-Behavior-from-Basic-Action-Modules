@@ -33,9 +33,6 @@ logger = get_logger(__name__)
 _HANDOFF_EXEMPT_OPERATIONS = frozenset(
     {
         "receive_handoff",
-        "place_for_partner",
-        "synchronized_grasp",
-        "joint_transport",
     }
 )
 

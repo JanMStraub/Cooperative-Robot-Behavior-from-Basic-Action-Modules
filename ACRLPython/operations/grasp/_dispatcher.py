@@ -45,6 +45,7 @@ def grasp_object(
     grasp_yaw_override: Optional[float] = None,  # radians; bypasses WorldState/VGN yaw
     request_id: int = 0,
     use_ros: Optional[bool] = None,
+    allow_parallel_ros: bool = False,
 ) -> OperationResult:
     """Plan and execute grasp via VGN+ROS → geometric ROS → TCP fallback chain."""
     try:
@@ -152,7 +153,11 @@ def grasp_object(
             try:
                 from ros2.ROSBridge import ROSBridge
 
-                bridge = ROSBridge.get_instance()
+                bridge = (
+                    ROSBridge.get_parallel_instance(robot_id)
+                    if allow_parallel_ros
+                    else ROSBridge.get_instance()
+                )
                 if not bridge.is_connected and not bridge.connect():
                     should_fallback, err = _handle_ros_failure(
                         "Failed to connect to ROS bridge (port 5020)", "grasp_object"
@@ -254,6 +259,7 @@ def grasp_object(
                             world_state=world_state,
                             custom_approach_vector=custom_approach_vector,
                             grasp_yaw_override=grasp_yaw_override,
+                            allow_parallel=allow_parallel_ros,
                         )
                         if result is not None:
                             return result
@@ -278,6 +284,7 @@ def grasp_object(
                             world_state=world_state,
                             grasp_yaw_override=grasp_yaw_override,
                             pre_grasp_distance=pre_grasp_distance,
+                            allow_parallel=allow_parallel_ros,
                         )
                         if not fallback:
                             assert ros_result is not None
@@ -295,6 +302,7 @@ def grasp_object(
                         request_id=request_id,
                         world_state=world_state,
                         grasp_yaw_override=grasp_yaw_override,
+                        allow_parallel=allow_parallel_ros,
                     )
                     if not fallback:
                         assert ros_result is not None
@@ -386,7 +394,9 @@ def grasp_object(
         completion = broadcaster.send_command_and_wait(command, timeout=45.0)
 
         if completion is None:
-            logger.error(f"grasp_object timed out or send failed: {robot_id} -> {object_id}")
+            logger.error(
+                f"grasp_object timed out or send failed: {robot_id} -> {object_id}"
+            )
             return OperationResult.error_result(
                 "TIMEOUT",
                 "grasp_object did not complete within timeout (Unity unreachable or grasp stalled)",
@@ -397,7 +407,9 @@ def grasp_object(
             )
 
         if not completion.get("success", False):
-            logger.warning(f"grasp_object failed (object not held): {robot_id} -> {object_id}")
+            logger.warning(
+                f"grasp_object failed (object not held): {robot_id} -> {object_id}"
+            )
             return OperationResult.error_result(
                 "GRASP_FAILED",
                 f"Grasp executed but object '{object_id}' is not held",

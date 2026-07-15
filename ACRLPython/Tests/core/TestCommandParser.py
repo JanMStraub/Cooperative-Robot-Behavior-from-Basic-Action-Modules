@@ -620,8 +620,7 @@ class TestVariableSubstitution:
         registry = Mock()
         registry.get_operation_by_name.side_effect = lambda name: (
             Mock(name=name, operation_id=f"op_{name}", parameters=[])
-            if name
-            in ["detect_object_stereo", "move_to_coordinate", "move_relative_to_object"]
+            if name in ["detect_object_stereo", "move_to_coordinate"]
             else None
         )
         return registry

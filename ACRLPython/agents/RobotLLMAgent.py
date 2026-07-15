@@ -117,7 +117,7 @@ JSON: {{"can_contribute":bool,"capabilities":[],"constraints":[],"suggested_role
             logger.warning(f"[{self.robot_id}] LLM analysis failed, returning default")
             return TaskAnalysis(robot_id=self.robot_id)
 
-        logger.info(f"[{self.robot_id}] Raw analysis response: {response[:300]}")
+        logger.info(f"[{self.robot_id}] Raw analysis response: {response}")
 
         try:
             data = self._extract_json(response)
@@ -144,8 +144,17 @@ JSON: {{"can_contribute":bool,"capabilities":[],"constraints":[],"suggested_role
         world_state: Dict[str, Any],
         round_number: int = 1,
         available_operations: Optional[List[str]] = None,
+        prior_feedback: Optional[List[str]] = None,
     ) -> PlanProposal:
         context = self._build_agent_context(world_state)
+
+        feedback_section = ""
+        if prior_feedback:
+            feedback_lines = "\n".join(f"  - {c}" for c in prior_feedback)
+            feedback_section = (
+                "\nThe previous proposal was REJECTED for these reasons; "
+                f"address each one in this revision:\n{feedback_lines}\n"
+            )
 
         analyses_summary = ""
         for analysis in other_analyses:
@@ -175,7 +184,12 @@ JSON: {{"can_contribute":bool,"capabilities":[],"constraints":[],"suggested_role
             f'{{"parallel_group":1,"operation":"","params":{{"robot_id":"{rid}"}}}}'
             for rid in all_robot_ids
         ]
-        _example_json = f'{{"reasoning":"","commands":[{",".join(_example_cmds)}],"estimated_duration_s":0.0}}'
+        _example_reasoning = (
+            f"{self.robot_id} is closer to the target object and handles the "
+            f"pick; {other_robot_ids[0] if other_robot_ids else 'the other robot'} "
+            "receives the handoff and places it"
+        )
+        _example_json = f'{{"reasoning":"{_example_reasoning}","commands":[{",".join(_example_cmds)}],"estimated_duration_s":0.0}}'
         user_prompt = f"""Round {round_number}: propose a coordinated plan.
 
 {context}
@@ -183,7 +197,7 @@ JSON: {{"can_contribute":bool,"capabilities":[],"constraints":[],"suggested_role
 Other robots:{analyses_summary}
 
 Task: "{task}"
-
+{feedback_section}
 CRITICAL RULES:
 - You MUST include at least one command for EVERY robot: {", ".join(all_robot_ids)}.
 - A plan that only covers {self.robot_id} will be REJECTED.
@@ -191,14 +205,17 @@ CRITICAL RULES:
 - Every signal MUST have a matching wait_for_signal and MUST include "event_name".
 - CROSS-ROBOT SIGNALS: if you plan wait_for_signal('X') for one robot, you MUST also plan signal('X') for the other robot in the SAME proposal. Both sides of every signal pair must appear.
 - COORDINATE RULES:
-  * pick_object_at_coordinate requires x, y, z, use the exact coordinates from "Objects in scene" above.
   * grasp_object and receive_handoff compute positions internally and do NOT include x/y/z.
   * move_to_coordinate requires x, y, z, use numeric values, never omit them.
-  * place_object requires x, y, z.
+  * place_object requires x, y, z - NEVER leave these blank. If the target is a
+    named object (e.g. "stack on top of X"), first detect_object_stereo it with a
+    capture_var, then reference $var.x/$var.y/$var.z in place_object - add a
+    numeric offset to y for stacking height (e.g. "$var.y + 0.03").
 - SIGNAL RULES: signal and wait_for_signal MUST include "event_name" (a unique string).
 
 OPERATION EXAMPLES:
-  pick: {{"parallel_group":1,"operation":"pick_object_at_coordinate","params":{{"robot_id":"{self.robot_id}","x":0.0,"y":0.012,"z":0.0}}}}
+  grasp: {{"parallel_group":1,"operation":"grasp_object","params":{{"robot_id":"{self.robot_id}","object_id":"RedCube"}}}}
+  place on top of a detected object: {{"parallel_group":1,"operation":"detect_object_stereo","params":{{"robot_id":"{self.robot_id}","color":"red"}},"capture_var":"base_obj"}} + {{"parallel_group":2,"operation":"place_object","params":{{"robot_id":"{self.robot_id}","x":"$base_obj.x","y":"$base_obj.y + 0.03","z":"$base_obj.z"}}}}
   signal pair: {{"parallel_group":2,"operation":"signal","params":{{"event_name":"r1_done"}}}} + {{"parallel_group":2,"operation":"wait_for_signal","params":{{"robot_id":"{other_robot_ids[0] if other_robot_ids else 'Robot2'}","event_name":"r1_done"}}}}
 
 JSON (show commands for ALL robots): {_example_json}"""
@@ -255,7 +272,11 @@ Plan: {commands_json}
 
 Check: (1) your actions within reach? (2) signal/wait pairs match? (3) collision risks? (4) efficient?
 
-JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
+EXAMPLES:
+  no issues: {{"accept":true,"concerns":[],"suggested_changes":[],"confidence":0.9}}
+  with issues: {{"accept":false,"concerns":["move_to_coordinate target x=0.9 exceeds my reach","missing wait_for_signal for r1_done"],"suggested_changes":["clamp x to workspace bound","add wait_for_signal('r1_done') for {self.robot_id}"],"confidence":0.6}}
+
+JSON: {{"accept":bool,"concerns":[...],"suggested_changes":[...],"confidence":0.0}}"""
 
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:

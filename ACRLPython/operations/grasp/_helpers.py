@@ -47,6 +47,7 @@ def _execute_grasp_with_follow_target(
     tcp_y_offset: float = 0.0,
     world_state=None,
     approach_offset_xz: tuple = (0.0, 0.0),
+    allow_parallel: bool = False,
 ) -> "tuple[bool, str]":
     """Move to planned position, optionally correct for object drift, then close gripper.
 
@@ -83,9 +84,8 @@ def _execute_grasp_with_follow_target(
                 )
                 break
 
-            # Compute drift distance in XZ plane (Y is vertical, cube stays on table)
-            dx = live_pos[0] - (current_position["x"])
-            dz = live_pos[2] - (current_position["z"])
+            dx = live_pos[0] - (current_position["x"] - approach_offset_xz[0])
+            dz = live_pos[2] - (current_position["z"] - approach_offset_xz[1])
             drift = math.sqrt(dx * dx + dz * dz)
 
             if drift <= FOLLOW_TARGET_DRIFT_THRESHOLD:
@@ -113,6 +113,7 @@ def _execute_grasp_with_follow_target(
                 robot_id=robot_id,
                 max_velocity_scaling=0.8,
                 max_acceleration_scaling=0.7,
+                allow_parallel=allow_parallel,
             )
             if not retract_result or not retract_result.get("success"):
                 logger.warning(
@@ -149,6 +150,7 @@ def _execute_grasp_with_follow_target(
                 robot_id=robot_id,
                 max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
                 max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+                allow_parallel=allow_parallel,
             )
             if not hover_result or not hover_result.get("success"):
                 hover_err = hover_result.get("error") if hover_result else "no response"
@@ -177,6 +179,7 @@ def _execute_grasp_with_follow_target(
                 robot_id=robot_id,
                 max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
                 max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
+                allow_parallel=allow_parallel,
             )
             if not correction_result or not correction_result.get("success"):
                 corr_err = (
@@ -195,6 +198,7 @@ def _execute_grasp_with_follow_target(
                     robot_id=robot_id,
                     max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
                     max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
+                    allow_parallel=allow_parallel,
                 )
             if not correction_result or not correction_result.get("success"):
                 corr_err = (
@@ -272,6 +276,23 @@ def _handle_ros_failure(error_msg: str, context: str):
         error_msg,
         ["Check MoveIt logs", "Verify object is reachable"],
     )
+
+
+def _side_offset_world_xz(
+    lx: float, lz: float, yaw_deg: float, side_sign: float, fraction: float = 0.6
+) -> tuple:
+    yaw_rad = math.radians(yaw_deg)
+    cos_t, sin_t = math.cos(yaw_rad), math.sin(yaw_rad)
+    if lx >= lz:
+        local_x, local_z = 1.0, 0.0
+        half_len = lx / 2.0
+    else:
+        local_x, local_z = 0.0, 1.0
+        half_len = lz / 2.0
+    dir_x = cos_t * local_x + sin_t * local_z
+    dir_z = -sin_t * local_x + cos_t * local_z
+    magnitude = side_sign * fraction * half_len
+    return magnitude * dir_x, magnitude * dir_z
 
 
 def _yaw_from_world_state_or_robot(

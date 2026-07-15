@@ -1172,9 +1172,9 @@ function renderStabilityChart(sortedEntries) {
 
 const OP_CATEGORIES = {
     perception: { ops: ['detect_object_stereo', 'detect_field', 'analyze_scene', 'generate_point_cloud', 'detect_all_fields'], color: PALETTE.blue },
-    motion: { ops: ['move_to_coordinate', 'adjust_end_effector_orientation', 'return_to_start_position', 'pick_object_at_coordinate', 'move_relative_to_object'], color: PALETTE.teal },
+    motion: { ops: ['move_to_coordinate', 'adjust_end_effector_orientation', 'return_to_start_position'], color: PALETTE.teal },
     grasp: { ops: ['grasp_object', 'place_object', 'receive_handoff'], color: PALETTE.orange },
-    coordination: { ops: ['signal', 'wait_for_signal', 'wait', 'detect_other_robot', 'mirror_movement', 'stabilize_object'], color: PALETTE.purple },
+    coordination: { ops: ['signal', 'wait_for_signal', 'wait'], color: PALETTE.purple },
     gripper: { ops: ['control_gripper', 'release_object'], color: PALETTE.skyblue },
 };
 
@@ -1645,7 +1645,7 @@ function buildKpiTable(runs, diffConfig = []) {
         return { short, timeStr };
     });
 
-    let html = `<table class="compare-kpi-table"><thead><tr><th>Metric</th>`;
+    let html = `<div class="compare-table-scroll"><table class="compare-kpi-table"><thead><tr><th>Metric</th>`;
     colHeaders.forEach((h, i) => {
         html += `<th>Run ${i + 1}<span class="compare-run-header">${h.timeStr || h.short}</span></th>`;
     });
@@ -1690,7 +1690,7 @@ function buildKpiTable(runs, diffConfig = []) {
         });
     }
 
-    html += `</tbody></table>`;
+    html += `</tbody></table></div>`;
     return html;
 }
 
@@ -1710,7 +1710,7 @@ function buildModelSummary(modelGroups) {
     });
 
     let html = `<div class="compare-section-title">Model averages</div>`;
-    html += `<table class="compare-kpi-table compare-summary-table"><thead><tr><th>Model</th>`;
+    html += `<div class="compare-table-scroll"><table class="compare-kpi-table compare-summary-table"><thead><tr><th>Model</th>`;
     COMPARE_METRICS.forEach(m => { html += `<th>${m.label}</th>`; });
     html += `</tr></thead><tbody>`;
     entries.forEach(({ model, runs, avgs }) => {
@@ -1727,7 +1727,7 @@ function buildModelSummary(modelGroups) {
         });
         html += `</tr>`;
     });
-    html += `</tbody></table>`;
+    html += `</tbody></table></div>`;
     return html;
 }
 
