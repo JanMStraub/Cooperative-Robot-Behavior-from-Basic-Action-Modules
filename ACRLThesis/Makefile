@@ -12,10 +12,6 @@ pdf:
 presentation:
 	latexmk -pdf -interaction=nonstopmode $(PRES).tex
 
-# Presenter build: speaker notes on the right half of a dual-screen PDF.
-presentation-notes:
-	latexmk -pdf -interaction=nonstopmode $(PRES)-notes.tex
-
 # Recompile on save.
 watch:
 	latexmk -pvc -pdf -interaction=nonstopmode $(MAIN).tex

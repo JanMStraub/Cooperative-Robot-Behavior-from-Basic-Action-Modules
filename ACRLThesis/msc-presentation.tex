@@ -14,6 +14,7 @@
 \usepackage{amsmath}
 \usepackage{xcolor}
 \usepackage{tikz}
+\usepackage{multicol}
 
 \graphicspath{{images/}}
 
@@ -22,9 +23,21 @@
 \setbeamercolor{title separator}{fg=hdred}
 \setbeamercolor{alerted text}{fg=hdred}
 
-%\ifdefined\shownotes % set by msc-presentation-notes.tex: dual-screen presenter build
-%	\setbeameroption{show notes on second screen=right}
-%\fi
+\setbeamertemplate{bibliography item}[text]
+\newcommand{\bibtinyfont}{\fontsize{5}{5.8}\selectfont}
+\setbeamerfont{bibliography item}{size=\bibtinyfont}
+\setbeamerfont{bibliography entry author}{size=\bibtinyfont}
+\setbeamerfont{bibliography entry title}{size=\bibtinyfont}
+\setbeamerfont{bibliography entry location}{size=\bibtinyfont}
+\setbeamerfont{bibliography entry note}{size=\bibtinyfont}
+\makeatletter
+\def\bstctlcite{\@ifnextchar[{\@bstctlcite}{\@bstctlcite[@auxout]}}
+\def\@bstctlcite[#1]#2{\@bsphack
+	\@for\@citeb:=#2\do{%
+		\edef\@citeb{\expandafter\@firstofone\@citeb}%
+		\if@filesw\immediate\write\csname #1\endcsname{\string\citation{\@citeb}}\fi}%
+	\@esphack}
+\makeatother
 
 % Overview agenda entry: number, section name, one-line description.
 \newcommand{\agendaitem}[3]{%
@@ -41,26 +54,24 @@
 
 \begin{document}
 
+\bstctlcite{BSTcontrol}
+
 % =============================================================================
-% OPENING  (~3 min)
+% OPENING
 % =============================================================================
 \maketitle
-\note{%
-	Good morning, and thanks for coming. My thesis asks whether a small vision-language model, running entirely on my laptop, can control two robot arms well enough that they cooperate on shared tasks. The short answer is yes, mostly, and the interesting part is where it breaks. Everything is built from a fixed pool of twenty basic operations. There is no fine-tuning and no hard-coded task sequence.}
 
 % --- Overview / outline ------------------------------------------------------
 \begin{frame}{Overview}
 	\agendaitem{1}{The problem}{The reasoning--execution gap, and why cooperation is the hard case}
 	\agendaitem{2}{Pillar 1 --- Grounding}{A 20-operation vocabulary makes a small, local VLM reliable}
-	\agendaitem{3}{Pillar 2 --- Cooperation emerges}{Handoffs and parallelism composed by the model, never scripted}
+	\agendaitem{3}{Pillar 2 --- Cooperation emerges}{Handoffs and parallelism composed by the model}
 	\agendaitem{4}{Pillar 3 --- The boundary}{The one failing task, what the ablations really show, limitations}
-	\agendaitem{5}{Conclusion}{Contributions, the path to hardware, future work}
+	\agendaitem{5}{Conclusion}{The five contributions, the path to hardware, future work}
 \end{frame}
-\note{%
-	Quick roadmap. I frame the problem first, then spend most of the time on three claims: grounding makes the model reliable, cooperation emerges from its reasoning, and the one failure has a cause I can name. Conclusion and future work at the end.}
 
 % --- Slide 2: the answer first (pyramid apex) --------------------------------
-\begin{frame}{What this thesis shows}
+\begin{frame}{Condensed Results}
 	\begin{block}{Thesis in one sentence}
 		A \alert{locally hosted vision-language model (VLM)}, grounded in a structured pool of \alert{20 basic operations}, turns natural language into reliable \alert{robot behavior}, with \alert{no fine-tuning and no hard-coded sequencing}.
 	\end{block}
@@ -83,17 +94,15 @@
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	This slide is the whole talk. Single-robot tasks and the sequential handoff work every time. The coordination you'll see was not scripted by me, the model puts it together on its own. And one task, the simultaneous two-arm lift, fails for a reason I can point at exactly. The rest of the talk backs up these three boxes, in this order.}
 
 % =============================================================================
-% PROBLEM & POSITIONING  (~4 min)
+% PROBLEM & POSITIONING
 % =============================================================================
-\section{The problem}
+\section{The Problem}
 
-\begin{frame}{The reasoning--execution gap}
+\begin{frame}{The Reasoning--Execution Gap}
 	\begin{columns}[T]
-		\begin{column}{0.55\textwidth}
+		\begin{column}{0.6\textwidth}
 			\footnotesize
 			\begin{itemize}
 				\item Classical robots: precise, but caged. Rigid paths, no tolerance for the unexpected.
@@ -101,26 +110,24 @@
 				\item Models often ignore \alert{past physical state} when planning the next move.
 			\end{itemize}
 			\begin{block}{Why cooperation is the hard case}
-				Two arms must \textbf{avoid collision}, \textbf{share a workspace}, and \textbf{synchronize timing}. One prompt decides \emph{which} arm grasps and \emph{where} they meet, with no hard-coded sequencing.
+				Two arms must \textbf{avoid collision}, \textbf{share a workspace}, and \textbf{synchronize timing}.
 			\end{block}
 		\end{column}
-		\begin{column}{0.45\textwidth}
+		\begin{column}{0.4\textwidth}
 			\centering
-			\includegraphics[width=\linewidth,height=0.56\textheight,keepaspectratio]{14_robot_env.png}\\
-			\footnotesize Two AR4 arms, a shared workspace, and a stereo camera in Unity.
+			\includegraphics[width=\linewidth,height=0.5\textheight,keepaspectratio]{14_robot_env.png}\\
+			\footnotesize Two AR4~\cite{AnninRobotics2026} arms, a shared workspace, and a stereo camera in Unity~\cite{unity}.
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	Classical industrial robots are precise, but they live in cages and follow fixed paths; anything unexpected stops them. Language models have the opposite problem: plenty of world knowledge, no reliable way to turn it into motion. Two arms make this harder still, because now collisions, a shared workspace, and timing all come into play at once. I picked the two-arm setting on purpose. The tasks people actually want, assembly, handover, are the cooperative ones.}
 
-\begin{frame}{Two design commitments}
+\begin{frame}{Two Design Commitments}
 	\begin{columns}[t]
 		\begin{column}{0.5\textwidth}
 			\begin{block}{Run the model \emph{locally}}
 				\begin{itemize}\small
 					\item No cloud cost, no external dependency.
-					\item No sensitive scene data leaving the machine: data sovereignty.
+					\item No sensitive scene data leaving the machine.
 					\item A compact VLM is enough; no frontier model required.
 				\end{itemize}
 			\end{block}
@@ -129,48 +136,43 @@
 			\begin{block}{Ground the model in \emph{modular operations}}
 				\begin{itemize}\small
 					\item Reasoning restricted to a vocabulary of \emph{executable} actions.
-					\item Separates semantic understanding from physical execution, giving a predictable control rate at the edge.
-					\item Vision resolves targets live; no fine-tuning, no task-specific training.
+					\item Separates semantic understanding from physical execution, giving a predictable control rate.
+					\item Vision resolves targets live; no task-specific training.
 				\end{itemize}
 			\end{block}
 		\end{column}
 	\end{columns}
 	\vfill
-	\centering\small Backend model: \textbf{Magistral Small 2509 (24B, 4-bit)} --- open, vision-capable, runs on a laptop.
+	\centering\small Default backend model: \textbf{Magistral Small 2509 (24B, 4-bit)~\cite{mistral_magistral_small_2025}}
 \end{frame}
-\note{%
-	Two decisions shaped everything else. First, the model runs locally, on my MacBook. Partly cost and privacy, but also a point I want to make: this problem doesn't need a frontier model. Second, the model never touches the robot directly. It only picks from a fixed pool of operations, and the execution layer handles the physics. That split is what keeps the control rate predictable. The backend is Magistral Small, a 24-billion-parameter open model, quantized to 4 bits.}
 
-\begin{frame}{Where this sits --- and the gap it fills}
+\begin{frame}{Background}
 	\begin{itemize}
-		\item \textbf{End-to-end VLA} (RT-2, PaLM-E): great generalization, but data-hungry, opaque, and too slow for the edge.
-		\item \textbf{Code-as-Policies}: compositional and transparent, but tied to its API set.
-		\item \textbf{Framework-scale} (ROS-LLM, AutoRT): practical scaffolding, but each robot acts on its \emph{own} assignment.
-		\item \textbf{RoCo}: per-robot agents negotiate, the direct inspiration for my protocol.
+		\item \textbf{End-to-end VLA} (RT-2, PaLM-E)~\cite{brohan2023rt2visionlanguageactionmodelstransfer,driess2023palmeembodiedmultimodallanguage}: great generalization, but data-hungry and opaque.
+		\item \textbf{Code-as-Policies}~\cite{liang2023codepolicieslanguagemodel}: compositional and transparent, but tied to its API set.
+		\item \textbf{Framework-scale} (ROS-LLM, AutoRT)~\cite{Mower_2026,ahn2024autortembodiedfoundationmodels}: practical scaffolding, but no joint reasoning over a \emph{shared} object.
+		\item \textbf{RoCo}~\cite{mandi2023rocodialecticmultirobotcollaboration}: per-robot agents negotiate, but free-form way-points.
 	\end{itemize}
 	\vfill
 	\begin{alertblock}{Research gap}
 		Two arms reasoning \emph{jointly} about a single shared object, cooperation that \emph{emerges} from reasoning rather than being engineered from outside, is comparatively unexplored.
 	\end{alertblock}
 \end{frame}
-\note{%
-	Quick positioning. End-to-end models like RT-2 generalize impressively but need enormous data and are too heavy for the edge. Code-as-Policies is transparent but tied to its API. Frameworks like AutoRT scale up, yet each robot still works its own assignment. RoCo is the closest relative; its per-robot negotiation inspired mine. What nobody had really looked at is two arms reasoning jointly about one shared object, where the cooperation comes out of the reasoning instead of being engineered in. That's the gap I went after.}
 
 % =============================================================================
-% PILLAR 1 — GROUNDING -> RELIABILITY  (~7 min)
+% PILLAR 1 — GROUNDING -> RELIABILITY
 % =============================================================================
 \section{Pillar 1 --- Grounding}
 
-\begin{frame}{System architecture --- four layers}
+\begin{frame}{System Architecture}
 	\centering
-	\includegraphics[height=0.78\textheight]{16_system_flow.png}
+	\includegraphics[height=0.75\textheight]{16_system_flow.png}\\
+	\scriptsize Built on Unity, ROS~2~\cite{Macenski_2022}, and MoveIt~\cite{coleman2014reducingbarrierentrycomplex}.
 \end{frame}
-\note{%
-	Walk the diagram top to bottom. The command comes in, RAG pulls the relevant operations, the model writes a JSON plan, and the sequence executor dispatches it, including signal/wait and parallel groups. Motion then runs through ROS and MoveIt for collision-aware planning, with Unity's own IK as fallback. The knowledge graph on the side can feed spatial context in, optionally. Under it all sit Unity, a Python backend, and a Docker container with the ROS stack. Don't linger here, the next slides zoom into the pieces.}
 
-\begin{frame}{The vocabulary: a 20-operation registry}
+\begin{frame}{The Operation Pool}
 	\begin{columns}[c]
-		\begin{column}{0.46\textwidth}
+		\begin{column}{0.5\textwidth}
 			\footnotesize
 			Operations organized by \textbf{complexity}, four tiers:
 			\begin{description}\footnotesize
@@ -179,47 +181,29 @@
 				\item[Intermediate (4)] composite single-robot: placement, stereo detection, scene analysis.
 				\item[Complex (2)] full pipelines: grasp planning, handoff reception.
 			\end{description}
-			\vspace{0.4em}
-			\textbf{Why tiers?} Failure diagnosis: if a Complex task fails, verify its lower-level parts in isolation.
+			\vspace{0.3em}
+			\textbf{Why it grounds:} model can only express plans the robot can actually run.
 		\end{column}
-		\begin{column}{0.54\textwidth}
+		\begin{column}{0.5\textwidth}
 			\centering
 			\includegraphics[width=\linewidth]{09_operation_map.png}
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	Twenty operations, four tiers, from bare gripper commands up to the full grasp and handoff pipelines. The tiers earn their keep in debugging: when a complex task fails, I can test its parts in isolation and find the broken level. They also happen to match the benchmark ordering, so the evaluation climbs the same ladder the registry defines.}
 
-\begin{frame}{The command pipeline --- RAG-grounded planning}
-	\centering
-	\includegraphics[width=0.92\linewidth]{13_rag.png}
-	\vspace{0.3em}
-	\begin{columns}[t]
-		\begin{column}{0.5\textwidth}\footnotesize
-			\textbf{Retrieve, don't enumerate:} embed the instruction, query the operation vector store by cosine similarity, inject only the relevant operations and schemas.
-		\end{column}
-		\begin{column}{0.5\textwidth}\footnotesize
-			\textbf{Why it matters:} the model sees only plausible operations. Without retrieval, smaller models hallucinated operation names and invalid parameters. Variable-passing threads \texttt{detect $\to$ \$target $\to$ move} at runtime.
-		\end{column}
-	\end{columns}
-\end{frame}
-\note{%
-	The instruction gets embedded, the vector store returns the handful of operations that actually fit, and only those go into the prompt with their schemas and examples. This design came out of a real failure: early on, the smaller models kept inventing operations that don't exist. Once they only see valid ones, that stops. The executor also threads results forward at runtime, so a detection result from one step becomes the movement target of a later one.}
-
-\begin{frame}{Two more grounding components}
+\begin{frame}{Two more Grounding Components}
 	\begin{columns}[t]
 		\begin{column}{0.5\textwidth}
 			\begin{block}{Reflection recovery}
 				\begin{itemize}\small
-					\item On failure, re-query the model with a structured \emph{hint} and recovery suggestions (Reflexion-style verbal feedback).
+					\item On failure, re-query the model with a structured \emph{hint} and recovery suggestions (Reflexion-style verbal feedback~\cite{shinn2023reflexionlanguageagentsverbal}).
 					\item Closes the perception--action loop at the language level.
 					\item Eligibility is gated: no point re-querying a sync barrier.
 				\end{itemize}
 			\end{block}
 		\end{column}
 		\begin{column}{0.5\textwidth}
-			\begin{block}{Knowledge graph (optional)}
+			\begin{block}{Knowledge graph}
 				\begin{itemize}\small
 					\item Robots / objects / regions as nodes; reachability, proximity, grasps as edges.
 					\item Answers ``who can reach X?'', ``viable handoff?'' via multi-hop queries.
@@ -229,19 +213,17 @@
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	Two smaller pieces. Reflection: when an operation fails, the error and a recovery hint go back to the model and it re-plans. Feedback in words, not gradient updates. And it only fires where a re-plan can help; there's no point re-querying a sync barrier. The second piece is the optional knowledge graph, which answers spatial questions like who can reach what. I'll say it now rather than bury it: the graph did not pay off in the ablations, and I'll show that in pillar three.}
 
-\begin{frame}{Evidence: grounding $\Rightarrow$ reliability}
+\begin{frame}{Grounding $\Rightarrow$ Reliability}
 	\begin{columns}[c]
 		\begin{column}{0.5\textwidth}
 			\begin{itemize}\small
-				\item \textbf{B1--B5} (navigate $\to$ grasp $\to$ full pick-and-place): \alert{1.000 across all 25 runs}, zero hallucinated ops, zero retries.
-				\item \emph{Identical} operation sequence on all 5 runs of each benchmark: determinism without prompt engineering.
+				\item \textbf{B1--B5} (navigate $\to$ grasp $\to$ full pick-and-place): \alert{success over all 25 runs}, zero hallucinated ops, zero retries.
+				\item \emph{Identical} operation sequence on all 5 runs of each benchmark.
 				\item \textbf{B8} (long chain): 20 sub-tasks, \textbf{85 operations}/run, 5 cycles, all executed, no cascading errors.
 			\end{itemize}
 			\vspace{0.4em}
-			\footnotesize Cost is dominated by \emph{contact-rich} primitives (\texttt{grasp\_object}, \texttt{place\_object}), not plan length.
+			\footnotesize Cost is dominated by \emph{contact-rich} primitives (\texttt{grasp\_object}, \texttt{place\_object}).
 		\end{column}
 		\begin{column}{0.5\textwidth}
 			\centering
@@ -250,16 +232,14 @@
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	So does grounding actually buy reliability? B1 through B5: 1.000 over all 25 runs, no hallucinated operations, no retries, and the exact same plan in every single run, which I didn't expect going in. B8 is the endurance test, 85 operations per run across five cycles, and every operation executes. One nuance if asked: under the benchmark's strict plan-matching rule, one B8 run counts as failed, but all its operations still succeeded. Runtime goes into the physical contact steps, grasping and placing, not into plan length. On the figure: four of the six models clear this whole tier. The Qwen3 models are the ones that fall over, and they fail by truncating plans, not by bad motion.}
 
 % =============================================================================
-% PILLAR 2 — COOPERATION EMERGES  (~7 min)
+% PILLAR 2 — COOPERATION EMERGES
 % =============================================================================
 \section{Pillar 2 --- Cooperation Emerges}
 
-\begin{frame}{The model composes coordination itself}
-	\begin{block}{Two general primitives --- no fixed pattern}
+\begin{frame}{The Model Composes}
+	\begin{block}{Two general primitives}
 		\begin{itemize}
 			\item \texttt{signal} / \texttt{wait\_for\_signal}: one robot pauses at a checkpoint until the other signals readiness.
 			\item \textbf{Parallel groups}: operations dispatched concurrently when no ordering is needed.
@@ -267,81 +247,61 @@
 	\end{block}
 	\vfill
 	The executor imposes \alert{no} coordination policy. The model decides \emph{where} synchronization is needed and \emph{which} steps can run in parallel, guided only by general rules in the prompt, never an explicit script.
-	\vfill
-	\footnotesize The low-level control layer is unaware any coordination is happening.
 \end{frame}
-\note{%
-	Everything coordination-related is built from two primitives: a signal/wait pair, and parallel groups. The executor doesn't impose any pattern of its own; it runs whatever the model emits. So when a synchronization barrier shows up in the right place, that came from the model's reasoning, not from my code. That's the sense in which I call the next results emergent. And the low-level controllers never even know coordination is happening above them.}
 
-\begin{frame}{B6 --- the handoff, solved}
+\begin{frame}{The Handoff}
 	\begin{columns}[c]
 		\begin{column}{0.5\textwidth}
-			\footnotesize
-			Prompt: \emph{``Robot1 grasps the red cube and hands it to Robot2.''}
-			\vspace{0.4em}
 			\begin{itemize}
-				\item Magistral: \alert{1.000} success rate, 5/5 runs; 47/47 operations succeed first try.
-				\item 4/5 runs: the \emph{identical} 9-operation plan.
-				\item The plan places a \textbf{synchronization barrier} so Robot2 receives only after Robot1 signals --- \alert{not in the task instruction}; the model reliably applies the prompt's handoff rule.
-				\item Ministral also solves it (1.000); Gemma-4B partial (3/5); the Qwen3 models and Gemma-2B break down at plan construction.
+				\item Magistral and Ministral: 5/5 runs; all operations succeed first try.
+				\item The plan places a \textbf{synchronization barrier} so Robot2 receives only after Robot1 signals.
+				\item Gemma-4B partial (3/5); the Qwen3 models and Gemma-2B break down at plan construction.
 			\end{itemize}
 		\end{column}
 		\begin{column}{0.5\textwidth}
 			\centering
-			\includegraphics[width=\linewidth]{07_coordination_timeline.png}\\
-			\footnotesize Top: successful handoff. Bottom: the B7 failure (Pillar 3).
+			\includegraphics[width=\linewidth]{18_handoff_sequence_example.png}\\
+			\footnotesize Handoff sequence.
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	B6 is the result I'd show anyone first. One sentence in, nine operations out, and the plan makes Robot2 wait until Robot1 signals before it reaches for the object. The task sentence never mentions synchronizing; the ordering comes from the handoff rule in the system prompt, and the model applies it reliably --- during development it sometimes composed the barrier without the rule, just not consistently, which is why the rule exists. Five out of five runs, all 47 operations on the first try, and four of the five runs produced literally the same plan. Ministral solves it too. Gemma-4B gets three of five, and the rest fail before execution even starts, at planning. The top timeline is the clean handoff; the bottom one is B7, which we get to later.}
 
-\begin{frame}{B10 --- emergent parallelism}
-	\footnotesize Prompt: two robots, two \emph{disjoint} pick-and-place tasks, no shared resources.
-	\vspace{0.5em}
+\begin{frame}{Emergent Parallelism}
 	\begin{itemize}
-		\item \alert{1.000} success rate, 40/40 operations, zero retries.
-		\item Applying the prompt's independent-parallel rule, the model emitted a \textbf{parallelism ratio of 0.75}, identical across all 5 runs.
+		\item 4/6 models: 40/40 operations, zero retries.
+		\item Applying the prompt's independent-parallel rule.
 		\item Heavy manipulation phases run concurrently; detection kept sequential, a conservative, stable choice.
-		\item Reliable across backends: 4/6 models reach the same 1.000, 0.75 plan (both Gemma variants are the exceptions).
 	\end{itemize}
 	\vfill
 	\begin{exampleblock}{Takeaway}
 		The model expresses physical simultaneity when the task allows it, the same capability that matters for the unsolved B7.
 	\end{exampleblock}
 \end{frame}
-\note{%
-	B10 is the mirror image: instead of taking turns, can the arms work at the same time? Two unrelated pick-and-place jobs. The model spots that they're independent, puts the heavy manipulation into parallel groups, and keeps detection sequential. That's the 0.75 ratio, and it comes out identical in every run, with four of the six backends producing the same plan. Worth holding onto for later: the model clearly can schedule simultaneous motion. B7 will show what's still missing on top of that.}
 
-\begin{frame}{Negotiation --- distributing the reasoning}
+\begin{frame}{Negotiation}
 	\begin{columns}[T]
 		\begin{column}{0.55\textwidth}
 			\footnotesize
-			A single model planning for both arms under-specifies roles and emits \emph{implicit conflicts} that surface only at execution.
-			\vspace{0.4em}
-
-			\textbf{Protocol} (central hub, up to 3 rounds):
-			\begin{enumerate}
-				\item \textbf{Analyze}: each robot's agent assesses its own role (parallel).
-				\item \textbf{Propose}: one agent per round drafts a \emph{complete} plan (round-robin).
-				\item \textbf{Evaluate}: peers accept/reject with justification; \alert{unanimity} required. On reject, justifications feed the next round's proposal.
+			A single model planning both arms under-specifies roles; \emph{implicit conflicts} surface only at execution.
+			\vfill
+			\textbf{Protocol}:
+			\begin{enumerate}\setlength{\itemsep}{0pt}
+				\item \textbf{Analyze}: each agent assesses its own role (parallel).
+				\item \textbf{Propose}: one agent/round drafts a \emph{complete} plan (round-robin).
+				\item \textbf{Evaluate}: peers accept/reject with justification; \alert{unanimity} required. Rejections feed the next proposal.
 			\end{enumerate}
-			\vspace{0.3em}
-			No consensus after 3 rounds, fall back to single-model parsing.
+			No consensus in 3 rounds $\to$ single-model parsing.
 		\end{column}
-		\begin{column}{0.45\textwidth}
-			\begin{block}{Design intent}
-				\footnotesize Surface disagreements \emph{as language}, before they become collisions. Inspired by RoCo; each robot reasons from its own perspective.
-			\end{block}
+		\begin{column}{0.48\textwidth}
+			\centering
+			\includegraphics[height=0.8\textheight]{19_negotiation.png}
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	When roles are ambiguous, one model planning for both arms tends to bake in conflicts that only surface at execution. So I gave each robot its own agent. They analyze in parallel, then take turns proposing a complete plan, and a proposal only goes through if every agent accepts it. Three rounds at most, then it falls back to the normal single-model path. The idea, borrowed from RoCo, is that a disagreement in language is much cheaper than a disagreement between two moving arms.}
 
-\begin{frame}{B13 --- negotiation pays off}
+\begin{frame}{Negotiation Pays Off}
 	\begin{columns}[c]
-		\begin{column}{0.52\textwidth}
+		\begin{column}{0.5\textwidth}
 			\begin{table}\footnotesize
 				\begin{tabular}{lcc}
 					\toprule
@@ -355,223 +315,208 @@
 			\vspace{0.4em}
 			\footnotesize
 			\begin{itemize}
-				\item \alert{+10 pp} task success --- but only for the \textbf{default model} (0.613 $\to$ 0.713, $n=20$).
-				\item Roughly neutral for three backends; \emph{negative} for two ($-19$, $-21$ pp); net $-6$ pp pooled.
+				\item \alert{+10 pp} task success for the \textbf{default model}.
+				\item Roughly neutral for three backends; \emph{negative} for two ($-19$, $-21$ pp).
 				\item Pays off when the single-shot plan is already close to correct; doesn't rescue weaker planners from role conflicts.
-				\item Cost is \textbf{front-loaded} (multiple negotiation rounds), not per-step.
 			\end{itemize}
 		\end{column}
-		\begin{column}{0.48\textwidth}
+		\begin{column}{0.5\textwidth}
 			\centering
 			\includegraphics[width=\linewidth]{08_ablation.png}\\
 			\footnotesize Per-component ablation deltas (Magistral; $n=20$ for B11--B13, B16; $n=5$ for B14--B15).
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	Does it help? For the default model, yes: 0.613 to 0.713 task success on the twenty-run set, plus ten points, and that gap held from the five-run sample. But I have to be upfront that this is the only model it helps. On the wider sweep three backends are roughly neutral and two get clearly worse, minus nineteen and minus twenty-one, pooling to a net minus six. The extra rounds can't repair plans that were broken from the start. Negotiation refines a nearly-correct plan; it doesn't rescue a bad one. On cost: it's a fixed number of rounds before execution begins, the per-step execution rate is untouched.}
 
 % =============================================================================
 % PILLAR 3 — THE BOUNDARY  (~6 min)
 % =============================================================================
 \section{Pillar 3 --- The Boundary}
 
-\begin{frame}{B7 --- concurrent bimanual lift: the one that fails}
-	\footnotesize Task: Robot1 grasps to stabilize, Robot2 grasps the opposite side, \emph{both lift together}.
-	\vspace{0.3em}
+\begin{frame}{Concurrent Bimanual Lift}
 	\begin{columns}[T]
 		\begin{column}{0.5\textwidth}
-			\textbf{0.000 task success, all six models.} Two failure modes:
+			\textbf{All six models fail.} Three failure modes:
 			\begin{enumerate}\footnotesize
-				\item \texttt{wait\_for\_signal} never dispatched once control crosses robots outside a \texttt{parallel\_group} (3/5 runs).
-				\item Final lift: two \emph{independently} chosen targets land $\sim$0.10\,m apart, violating the 0.2\,m separation check (2/5 runs).
+				\item Signal primitives never dispatched once control crosses robots outside a parallel group.
+				\item Final lift: two \emph{independently} chosen targets land too close together, violating the separation check.
+				\item Deeper sim limit: a Unity \texttt{Transform} has one parent, so a single object can't attach to two grippers at once.
 			\end{enumerate}
 		\end{column}
 		\begin{column}{0.5\textwidth}
-			\begin{alertblock}{The gap is NOT a missing primitive}
+			\begin{block}{The gap}
 				\footnotesize
-				The registry deliberately has no dedicated bimanual-grasp operation --- and the task doesn't need one. What's missing: \alert{partner-aware target selection}. Each arm picks a valid target; nothing checks one \emph{against the other}.
-			\end{alertblock}
-			\footnotesize\vspace{0.3em}
-			Deeper sim limit: a Unity \texttt{Transform} has one parent, so a single object can't attach to two grippers at once.
+				\alert{Partner-aware target selection}. Each arm picks a valid target; nothing checks one \emph{against the other}.
+			\end{block}
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	And now the failure. Both arms grab one object and lift together: zero percent, every model. The runs die in two ways. Either the cross-robot wait never gets dispatched, or both arms reach the lift and pick targets that are each fine on their own but sit ten centimeters apart, which trips the separation check. I want to be precise about the diagnosis, because it's not a missing operation. I deliberately never added a bimanual-grasp primitive, and the task doesn't need one. What's missing is that neither arm considers the other's target when choosing its own. There's also a simulator confound worth admitting: a Unity object can only attach to one gripper at a time, so a true simultaneous hold is unwinnable in this sim no matter what the model plans. B7 really measures the planning, and the planning is what falls short.}
 
-\begin{frame}{Ablation synthesis --- what each piece really does}
+\begin{frame}{Ablation Synthesis}
 	\begin{table}\scriptsize
 		\begin{tabular}{lll}
 			\toprule
-			\textbf{Component}    & \textbf{Effect}     & \textbf{Reading}                                                     \\
+			\textbf{Component}                                                    & \textbf{Effect}   & \textbf{Reading}                                                     \\
 			\midrule
-			ROS/MoveIt (B16)      & \alert{+32 pp}      & Unity-only grasp timeouts (side approach);                           \\
-			                      & (Magi, $n=20$)      & \quad plus collision-aware planning                                  \\
-			Reflection (B12)      & +14 pp (task)       & Clears boundary-reach failures; +7 pp op; doubles time when it fires \\
-			Negotiation (B13)     & \alert{+10 pp}      & Default model only; neutral/negative on the other five               \\
-			RAG (B11)             & \alert{net cost}    & Helps no backend; \alert{hurts} 3 of 6 ($-7$ pp pooled)              \\
-			Knowledge graph (B14) & small \emph{cost}   & Prompt over-anchoring, not a broken component                        \\
-			VGN grasp (B15)       & \alert{+35 pp} Magi & center-of-object grasp, not predicted                                \\
-			                      & (+33 pp pooled)     & \quad orientation; held-and-lifted, all 6 models                     \\
+			ROS/MoveIt                                                            & +32 pp            & Unity-only grasp timeouts; plus collision-aware planning             \\
+			Reflection                                                            & +14 pp (task)     & Clears boundary-reach failures; +7 pp op; doubles time when it fires \\
+			Negotiation                                                           & +10 pp            & Default model only; neutral/negative on the other five               \\
+			RAG~\cite{lewis2021retrievalaugmentedgenerationknowledgeintensivenlp} & net cost          & Helps no backend; \alert{hurts} 3 of 6 ($-7$ pp pooled)              \\
+			Knowledge graph                                                       & small \emph{cost} & Prompt over-anchoring, not a broken component                        \\
+			VGN grasp                                                             & +35 pp Magi       & center-of-object grasp, not predicted orientation                    \\
+			                                                                      & (+33 pp pooled)   &                                                                      \\
 			\bottomrule
 		\end{tabular}
 	\end{table}
 	\vfill
-	\begin{alertblock}{Caveat}
-		\scriptsize Point estimates, one simulated environment: \textbf{$n=20$} per condition for B11--B13 and B16, $n=5$ for B14--B15 (VGN pooled $n=30$). Enough to expose deterministic failure modes, not to resolve effects within one standard deviation. Read them as ranges.
-	\end{alertblock}
+	\begin{block}{Caveat}
+		\scriptsize Point estimates, one simulated environment: \textbf{$n=20$} per condition for RAG, Reflection, Negotiation and ROS, $n=5$ for the knowledge graph and ROS. Enough to expose deterministic failure modes, not to resolve effects within one standard deviation.
+	\end{block}
 \end{frame}
-\note{%
-	This table is me being fair to my own components. ROS/MoveIt reads as plus 32 on the twenty-run Magistral set, and this one is real: the gap is grasp-execution, not perception. Detection misses are actually about equal across the two paths, but grasp_object timeouts happen only under direct Unity routing and never under ROS, for any of the six models. The cause is that the Unity grasp path forwards raw VGN orientations and skips the top-down selection and WorldState pose override the ROS path applies, so it approaches from the side and the controller stalls. So the argument for ROS is both collision-aware planning and this measured reliability gap. Reflection: plus 14 at task level, plus 7 at operation level on the twenty-run set. One thing the bigger sample exposed: when reflection fires it roughly doubles the run time, because it re-parses and re-runs on top of the timeout it already ate. So it's solid on success but not free. Negotiation: plus 10 for the default model, and that's the whole story. RAG surprised me. On twenty runs per condition it helps no backend: Ministral looked like a plus-ten winner at five runs but flattens to plus-two-and-a-half once resampled, and three backends actually get worse, pooling to minus seven. So retrieval should be a per-model switch, if used at all, not a default. The knowledge graph costs a little instead of helping. VGN is the big one: plus 35 for Magistral, 70 versus 35 percent held-and-lifted, plus 33 pooled, and it's the only effect that holds for all six models. One correction against my own earlier framing, in case it comes up: the audit showed the gain comes from where the grasp is placed. The VGN path grasps at the detected object center while the baseline picks an off-center contact point. It is not VGN's predicted orientation, which gets overridden by the same top-down heuristic in both conditions. And the caveat at the bottom applies to everything here: twenty runs per condition for B11 to B13 and B16, five for B14 and B15, one simulated environment, so read these as ranges.}
 
-\begin{frame}{AutoRT adaptation \& the safety gate (B17)}
-	\begin{columns}[c]
-		\begin{column}{0.52\textwidth}
-			\footnotesize
-			Re-targeted AutoRT for \emph{fixed-base} manipulation: observe $\to$ generate $\to$ filter $\to$ select, dropping locomotion, with a structured object manifest instead of raw images.
-			\vspace{0.4em}
+\begin{frame}{AutoRT Adaptation \& Safety Gate}
+\begin{columns}[c]
+\begin{column}{0.5\textwidth}
+	Re-targeted AutoRT for \emph{fixed-base} manipulation.
+	\vspace{0.4em}
 
-			\textbf{Two-layer safety (Robot Constitution):}
-			\begin{itemize}
-				\item Semantic VLM check (temp 0), plus
-				\item \alert{Hard kinematic check} the semantic layer can't override (bounds, velocity, separation).
-			\end{itemize}
-			\vspace{0.3em}
-			Result: \alert{false-accept rate 0.000}, never admits an unsafe task; reproducible confusion matrix every run. Slightly over-rejects aggressive-but-safe phrasing (false-reject 0.250).
-		\end{column}
-		\begin{column}{0.48\textwidth}
-			\centering
-			\includegraphics[width=\linewidth]{10_autort_safety.png}
-		\end{column}
-	\end{columns}
+	\textbf{Two-layer safety (Robot Constitution):}
+	\begin{itemize}
+		\item Semantic VLM check
+		\item Hard kinematic check the semantic layer can't override.
+	\end{itemize}
+	\vspace{0.3em}
+	Result: never admits an unsafe task. Slightly over-rejects aggressive-but-safe phrasing.
+\end{column}
+\begin{column}{0.5\textwidth}
+	\centering
+	\includegraphics[height=0.85\textheight]{20_autort.png}
+\end{column}
+\end{columns}
 \end{frame}
-\note{%
-	The last contribution is an AutoRT-style loop for the fixed-base arms: observe the scene, generate candidate tasks, filter, pick one. The filter is the part I care about. Two layers, an LLM safety check and, underneath it, a hard kinematic check in code that the LLM cannot override. The result: zero false accepts, ever, and because the semantic layer runs at temperature zero, the confusion matrix comes out identical run after run. The price is over-caution. It rejects about a quarter of tasks that sound aggressive but are actually safe, and that sits in the semantic layer, not in the kinematic guarantees. For a safety gate, that's a trade I'll take.}
 
-\begin{frame}{Limitations --- the real blockers}
+\begin{frame}{Limitations}
 	\begin{columns}[t]
 		\begin{column}{0.5\textwidth}
 			\begin{block}{Sensing}
-				\footnotesize Stereo depth degrades on textureless surfaces ($\sim$1.8$\times$ scale bias), so VGN's predicted poses are overridden by the top-down heuristic. No force-torque feedback.
+				\footnotesize Stereo depth degrades on textureless surfaces, so VGN's predicted poses are overridden by the top-down heuristic.
 			\end{block}
 			\begin{block}{Latency}
-				\footnotesize VLM parse $\approx$ \textbf{20\,s} median, which precludes \emph{reactive} control; re-plan only between motions, never during.
+				\footnotesize VLM parse $\approx$ \textbf{20\,s} median, which prevents \emph{reactive} control; re-plan only between motions, never during.
 			\end{block}
 		\end{column}
 		\begin{column}{0.5\textwidth}
 			\begin{block}{Sim-to-real}
-				\footnotesize PD gains, compliance, backlash, grasp-force thresholds all tuned for simulation, so they need revalidation on hardware.
+				\footnotesize Robot joint values all tuned for simulation, so they need revalidation on hardware.
 			\end{block}
-			\begin{block}{Validation \& scope}
-				\footnotesize 5/6 models forward impossible inputs (B9); the guard belongs downstream or pre-parse. B9 is $n=20$ per model, one sim environment.
+			\begin{block}{Validation}
+				\footnotesize 5/6 models forward impossible inputs; the guard must be pre-parse.
 			\end{block}
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	The real blockers. Sensing is the big one: stereo depth carries a systematic scale bias on textureless surfaces, which is exactly what keeps VGN's predicted poses unusable and forces the top-down fallback, and there's no force-torque sensing at all. Second, latency: the median parse is around 20 seconds, so the system re-plans between motions, never during one. Reactive control is simply out. Third, every gain and threshold was tuned in simulation and needs revalidating on hardware. And fourth, five of the six models will happily parse an impossible instruction, so that check has to live outside the parser. The run-budget caveat hangs over all of it.}
 
 % =============================================================================
-% CLOSE  (~3 min)
+% CLOSE
 % =============================================================================
 \section{Conclusion}
 
-\begin{frame}{Four contributions}
-	\begin{enumerate}
-		\item \textbf{LLM orchestration layer}: local VLM, RAG retrieval, two-phase chain-of-thought, runtime variable-passing. No hard-coded sequences, no fine-tuning.
-		\item \textbf{Hierarchical 20-operation registry}: four tiers; doubles as the reasoning vocabulary \emph{and} a failure-diagnosis tool.
-		\item \textbf{Dual-arm negotiation protocol}: per-robot agents, analyze/propose/evaluate; +10 pp on role-ambiguous tasks for the default model.
-		\item \textbf{AutoRT adaptation}: fixed-base task generation plus a two-layer Robot Constitution with hard kinematic guarantees.
+\begin{frame}{Five Contributions}
+	\begin{enumerate}\small
+		\item \textbf{Retrieval-grounded operation pipeline}: a hierarchical 20-operation registry retrieved on demand via RAG, with two-phase decomposition and runtime variable-passing. No hard-coded sequences, no fine-tuning.
+		\item \textbf{Runtime-composed coordination}: handoff, parallelism, and waiting built from general \texttt{signal}/\texttt{wait} and parallel-group primitives, not scripted into the executor.
+		\item \textbf{Consensus-gated negotiation}: per-robot agents analyze/propose/evaluate under unanimity; +10~pp on role-ambiguous tasks for the default model.
+		\item \textbf{Operation-gated reflection}: retry with functional recovery hints on eligible failures; +14~pp task success for the default model.
+		\item \textbf{AutoRT adaptation}: fixed-base task generation plus a two-layer Robot Constitution with a hard kinematic layer the semantic check cannot override.
 	\end{enumerate}
 \end{frame}
-\note{%
-	Four things I'm claiming. An orchestration layer that turns language into robot behavior without any fine-tuning. The tiered registry, which is both the model's vocabulary and my debugging tool. The negotiation protocol, a real but model-specific gain. And the AutoRT adaptation, where the safety guarantee lives in code, not in the model.}
 
-\begin{frame}{Path to a real robot --- a config change, not a rewrite}
+\begin{frame}{Path to a Real Robot}
 	\begin{itemize}
-		\item Hardware abstraction boundary: \texttt{--env real} swaps camera and hardware adapters, \alert{zero operation-code changes}.
-		\item Default \textbf{hybrid} control: ROS/MoveIt collision-aware planning, Unity fallback, the correct route for physical AR4 hardware, already dual-robot configured.
+		\item Hardware abstraction boundary: \texttt{--env real} swaps camera and hardware adapters.
+		\item Switch control to \textbf{ROS}: ROS/MoveIt collision-aware planning, the correct route for physical AR4 hardware, already dual-robot configured.
 	\end{itemize}
 	\vfill
 	\begin{block}{Two remaining blockers}
 		\footnotesize
-		\textbf{Depth sensing}: a RealSense/ToF source behind the existing
-		\texttt{get\_depth\_frame} stub unlocks the VGN pipeline unchanged.\\
+		\textbf{Depth sensing}: a LIDAR source unlocks the VGN pipeline.\\
 		\textbf{Force-torque feedback}: a wrist sensor replaces the contact-duration heuristic.
 	\end{block}
 \end{frame}
-\note{%
-	This was designed for hardware from the start. One flag swaps the camera and hardware adapters, and none of the operation code changes. The default hybrid mode already routes motion through ROS and MoveIt, which is the path a physical AR4 needs. What's actually missing is hardware, not software: a real depth sensor, which plugs in behind an existing stub and would finally unblock VGN properly, and a wrist force-torque sensor to replace the contact-duration guess.}
 
-\begin{frame}{Future work}
+\begin{frame}{Future Work}
 	\begin{itemize}
-		\item \textbf{Depth upgrade}: an active-stereo / ToF sensor fully unlocks VGN-grade grasping.
-		\item \textbf{Bimanual pre-pass}: detect ``simultaneous grasp'' language, route to a bimanual-aware prompt; directly attacks the B7 gap.
-		\item \textbf{Pre-parse validation}: robot-ID and object-existence checks before any model call (closes B9 deterministically).
-		\item \textbf{Faster inference}: distilled task-specific models plus speculative parsing to shrink the 20\,s window.
+		\item \textbf{Depth upgrade}: a LIDAR sensor fully unlocks VGN-grade grasping.
+		\item \textbf{Persistency}: a persistent volumetric map using SLAM
+		\item \textbf{Bimanual pre-pass}: detect simultaneous grasp language, route to a bimanual-aware prompt to solve bimanual gap.
+		\item \textbf{Pre-parse validation}: robot-ID and object-existence checks before any model call.
+		\item \textbf{Faster inference}: distilled task-specific models and/or speculative parsing to shrink the 20\,s window.
 	\end{itemize}
 \end{frame}
-\note{%
-	Future work follows straight from the limitations. A proper depth sensor. A bimanual pre-pass that catches simultaneous-grasp wording and hands the model a partner-aware prompt, which is the direct attack on B7. Deterministic pre-parse validation for the impossible-input problem. And smaller distilled models to shrink that 20-second parse window.}
 
-% =============================================================================
-% SUMMARY  (~1 min)
-% =============================================================================
 \section*{Summary}
 
-\begin{frame}{Summary --- results at a glance}
+\begin{frame}{Summary}
 	\begin{columns}[T]
 		\begin{column}{0.5\textwidth}
 			\footnotesize
 			\textbf{What works}
 			\begin{itemize}\scriptsize
-				\item Single-robot B1--B5: \alert{1.000}, 25/25 runs, deterministic plans.
-				\item Long chain B8: 85 ops/run, 5 cycles, no cascading errors.
-				\item Handoff B6: \alert{1.000}, correctly realized sync barrier.
-				\item Parallelism B10: 0.75 ratio, 4/6 backends.
-				\item Safety gate B17: false-accept \alert{0.0}, reproducible.
+				\item Single-robot: works in 25/25 runs.
+				\item Long chain: 85 ops/run, 5 cycles, no cascading errors.
+				\item Handoff: works and correctly realized sync barrier.
+				\item Parallelism: works for 4/6 backends.
+				\item Safety gate: no false-accept, reproducible.
 			\end{itemize}
-			\vspace{0.3em}
-			{\scriptsize B11--B13, B16 deltas $n=20$; B14--B15 $n=5$; read as ranges.}
+
 		\end{column}
 		\begin{column}{0.5\textwidth}
 			\footnotesize
 			\textbf{What each component contributes}
 			\begin{itemize}\scriptsize
-				\item VGN grasp (B15): \alert{+35 pp} Magistral, +33 pp pooled.
-				\item ROS/MoveIt (B16): +32 pp, Unity-only grasp timeouts.
-				\item Reflection (B12): +14 pp task.
-				\item Negotiation (B13): +10 pp, default model only.
-				\item RAG (B11): model-dependent; KG (B14): small cost.
+				\item VGN grasp: +35 pp Magistral, +33 pp pooled.
+				\item ROS/MoveIt: +32 pp, Unity-only grasp timeouts.
+				\item Reflection: +14 pp task.
+				\item Negotiation: +10 pp, default model only.
+				\item RAG: model-dependent; KG (B14): small cost.
 			\end{itemize}
 			\vspace{0.3em}
 			\textbf{The one open gap}
 			\begin{itemize}\scriptsize
-				\item Concurrent bimanual B7: \alert{0.000}, all six models.
-				\item Cause: \alert{partner-aware target selection}, not a missing primitive.
+				\item Concurrent bimanual B7: all six models fail.
+				\item Cause: partner-aware target selection.
 			\end{itemize}
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	One slide to catch everything before I close. Left column, what works: the full single-robot tier, the long-chain endurance test, the handoff with its self-inserted barrier, the emergent parallelism, and the safety gate. Right column, what each component is worth. If someone asks me to rank them: VGN matters most for grasping, ROS/MoveIt most for task success with its caveat attached, reflection is the most broadly useful, negotiation and RAG are model-specific, and the graph is a small net cost. Below that, the one open gap, B7, with its cause named. The sample-size caveat at the bottom carries through everything.}
 
-\begin{frame}[standout]{Thank you}
+% =============================================================================
+% END
+% =============================================================================
+
+\begin{frame}[standout]
 	\centering
-	Demo \& Questions?
+	Demo \& Questions
 	\vfill
 	\footnotesize \texttt{github.com/JanMStraub/Cooperative-Robot-Behavior-from-Basic-Action-Modules}
 \end{frame}
-\note{%
-	Close on the claim itself: single-robot and sequential cooperation are solved, the coordination is composed by the model rather than scripted, and the one unsolved task fails on a narrow, named gap. B10 shows the simultaneity half already works; what's missing is choosing mutually compatible targets. So the central claim stands: a foundation model can build cooperation out of a vocabulary of basic operations. Then thanks, demo offer, questions. Backup slides cover B7 per-run detail, the B15 mechanism, the collision-safety layers, the executed handoff, latencies, and the model--task matrix.}
+
+\begin{frame}[t]{References}
+	\begin{multicols}{2}
+		\bibliographystyle{IEEEtran}
+		\bibliography{references}
+	\end{multicols}
+\end{frame}
 
 % =============================================================================
 % BACKUP
 % =============================================================================
 \appendix
+\setbeamertemplate{frame numbering}{}  % no page numbers on backup/reference slides
 
-\begin{frame}{Backup --- B7 per-run outcomes}
+\section*{Additional Slides}
+
+\begin{frame}[noframenumbering]{Backup ---  Bimanual Lift per-run Outcomes}
 	\begin{table}\footnotesize
 		\begin{tabular}{ccll}
 			\toprule
@@ -587,9 +532,8 @@
 	\end{table}
 	\footnotesize Two clusters: mis-realized barrier, never executed (1,2,5), and lift-target collision at $\sim$0.10\,m (3,4).
 \end{frame}
-\note{B7 detail: three runs fail at the cross-robot wait, which is recorded as failed without ever executing; two reach the lift and collide at ~0.10 m.}
 
-\begin{frame}{Backup --- B15: what VGN actually changes}
+\begin{frame}[noframenumbering]{Backup --- What VGN~\cite{breyer2021volumetricgraspingnetworkrealtime} changes}
 	\begin{columns}[T]
 		\begin{column}{0.47\textwidth}
 			\begin{table}\scriptsize
@@ -605,7 +549,7 @@
 			\footnotesize
 			\begin{itemize}\footnotesize
 				\item Every backend improves: +20\,pp (Ministral) to +65\,pp (Gemma-4B).
-				\item Success = held and lifted clear of the table, \emph{not} the gripper-close ack.
+				\item Success = held and lifted clear of the table.
 			\end{itemize}
 		\end{column}
 		\begin{column}{0.53\textwidth}
@@ -616,23 +560,21 @@
 					\item \textbf{The difference is position}: VGN grasps the detected object \emph{center}; the baseline's contact point sits off-center on angled cubes and slips.
 				\end{itemize}
 			\end{block}
-			\begin{alertblock}{Scope}
+			\begin{block}{Scope}
 				\footnotesize Position comes from the WorldState oracle, so B15 isolates grasp \emph{positioning}. Recovering VGN's learned pose needs a real depth sensor.
-			\end{alertblock}
+			\end{block}
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	If B15 comes up in questions, this is the honest version. The numbers are real and large, 70 versus 35 percent for Magistral, plus 33 pooled, and every single backend improves. But the audit showed both conditions execute the same top-down orientation; VGN's own predicted poses get discarded because they don't survive motion planning on the sparse stereo volumes. What differs is where the gripper closes: at the detected object center versus at an off-center contact point that slips on angled cubes. So B15 measures grasp positioning, not VGN's learned pose. Getting the actual 6-DOF contribution back is exactly why the depth sensor is first on the future-work list.}
 
-\begin{frame}{Backup --- collision safety: three layers}
+\begin{frame}[noframenumbering]{Backup --- Collision Safety Layers}
 	\begin{columns}[T]
 		\begin{column}{0.52\textwidth}
 			\footnotesize
 			\begin{enumerate}\footnotesize
-				\item \textbf{Static pre-check} (Python, before dispatch): \texttt{CoordinationVerifier} --- workspace bounds, object conflicts, deadlock detection on the planned targets.
+				\item \textbf{Static pre-check} (Python, before dispatch): \texttt{CoordinationVerifier} checks workspace bounds, object conflicts, deadlock detection on the planned targets.
 				\item \textbf{Workspace regions}: left / right / shared zones; a contested zone is handed over explicitly via \texttt{yield\_workspace}.
-				\item \textbf{Runtime guard} (Unity, every physics step): \texttt{ProximityGuard} freezes motion at 0.25\,m end-effector distance, resumes at 0.35\,m (hysteresis); link-to-link limit 0.15\,m.
+				\item \textbf{Runtime guard} (Unity, every physics step): \texttt{ProximityGuard} freezes motion at 0.25\,m end-effector distance, resumes at 0.35\,m; link-to-link limit 0.15\,m.
 			\end{enumerate}
 			\vspace{0.4em}
 			The LLM is never trusted for safety: layers 1 and 3 are code, not reasoning.
@@ -643,17 +585,8 @@
 		\end{column}
 	\end{columns}
 \end{frame}
-\note{%
-	If collision safety comes up: three layers, and the model isn't one of them. The verifier rejects conflicting plans before anything is dispatched, the workspace regions keep each arm in its own half unless a task explicitly claims the shared zone, and the proximity guard in Unity freezes whichever arm gets too close, with hysteresis so it doesn't chatter at the boundary. The B7 lift runs died on exactly this kind of check, which is the system working as intended: a bad plan gets stopped, not executed.}
 
-\begin{frame}{Backup --- the B6 handoff as executed}
-	\centering
-	\includegraphics[width=0.92\linewidth,height=0.78\textheight,keepaspectratio]{18_handoff_sequence_example.png}
-\end{frame}
-\note{%
-	The B6 handoff as it actually runs in the simulator, for anyone who wants to see the sequence rather than the timeline abstraction.}
-
-\begin{frame}{Backup --- single-robot operation latencies}
+\begin{frame}[noframenumbering]{Backup --- Single-Robot Operation Latencies}
 	\begin{table}\footnotesize
 		\begin{tabular}{llcc}
 			\toprule
@@ -669,12 +602,10 @@
 	\end{table}
 	\footnotesize Perception is cheap and stable; contact-rich manipulation dominates and varies with object pose.
 \end{frame}
-\note{Latency backup: perception under a second; grasp and place dominate and depend on object pose.}
 
-\begin{frame}{Backup --- model $\times$ task matrix}
+\begin{frame}[noframenumbering]{Backup --- Model $\times$ Task Matrix}
 	\centering
 	\includegraphics[height=0.8\textheight]{02_model_task_heatmap.png}
 \end{frame}
-\note{Full model-by-task matrix. Note B9: at twenty runs per model only Gemma-2B refuses the impossible task with any consistency (0.800), and it does so by emitting no plan at all --- Qwen-30B's clean five-run result was a small-sample artifact (0.250 at n=20). Parse-level rejection tracks capability limits, not a safety disposition.}
 
 \end{document}
