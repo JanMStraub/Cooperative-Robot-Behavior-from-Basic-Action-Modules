@@ -1,7 +1,7 @@
 MAIN = msc-thesis
 PRES = msc-presentation
 
-.PHONY: all pdf watch format clean distclean presentation presentation-notes
+.PHONY: all pdf watch format clean distclean presentation
 
 all: pdf
 
@@ -24,10 +24,10 @@ format:
 # Removes LaTeX build byproducts but keeps the PDF.
 clean:
 	latexmk -c $(MAIN).tex
-	latexmk -c $(PRES).tex $(PRES)-notes.tex
+	latexmk -c $(PRES).tex
 	rm -f chapters/*.bak[0-9]* $(MAIN).bak[0-9]* indent.log chapters/indent.log
 
 # Also removes the PDF itself.
 distclean: clean
 	latexmk -C $(MAIN).tex
-	latexmk -C $(PRES).tex $(PRES)-notes.tex
+	latexmk -C $(PRES).tex
