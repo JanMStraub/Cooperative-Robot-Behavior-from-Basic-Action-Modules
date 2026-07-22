@@ -92,7 +92,6 @@ ml-agents/
 
 # Custom Project-Specific Directories
 temp/
-images/
 
 # macOS system files
 .DS_Store

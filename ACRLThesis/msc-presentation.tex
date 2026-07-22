@@ -83,8 +83,8 @@
 			\end{exampleblock}
 		\end{column}
 		\begin{column}{0.33\textwidth}
-			\begin{exampleblock}{Reasoned}
-				Cooperation is reasoned, not scripted. Negotiation lifts the default model's dual-robot success.
+			\begin{exampleblock}{Composed}
+				Cooperation is composed at runtime from general primitives, not a hard-coded. Negotiation adds explicit reasoning, but lifts only the default model.
 			\end{exampleblock}
 		\end{column}
 		\begin{column}{0.33\textwidth}
@@ -234,17 +234,17 @@
 		\end{itemize}
 	\end{block}
 	\vfill
-	The executor imposes \textbf{no} coordination policy. The model decides \emph{where} synchronization is needed and \emph{which} steps can run in parallel, guided only by general rules in the prompt, never an explicit script.
+	The executor holds \textbf{no} coordination policy. Guided by prompt rules and retrieved examples, the model places the synchronization barriers and parallel groups; the physical coordination, approach geometry and release timing, lives in the operations, not the plan.
 \end{frame}
 
 \begin{frame}{The Handoff}
 	\begin{columns}[c]
 		\begin{column}{0.5\textwidth}
 			\begin{itemize}
-				\item Magistral and Ministral: 5/5 runs; all operations succeed first try.
-				\item The plan places a \textbf{synchronization barrier} so Robot2 receives only after Robot1 signals.
-				\item Gemma-4B partial (3/5); the Qwen3 models and Gemma-2B break down at plan construction.
-				\item Same primitives also \textbf{parallelize} independent pick-and-places automatically (4/6 backends).
+				\item Magistral and Ministral: 5/5 runs; all operations first try.
+				\item Ordering and the signal/wait barrier are set by an prompt rule.
+				\item Gemma-4B partial (3/5); Qwen3 and Gemma-2B fail at plan construction.
+				\item \textbf{Parallelism}: the same primitives schedule independent pick-and-places (4/6 backends).
 			\end{itemize}
 		\end{column}
 		\begin{column}{0.5\textwidth}
@@ -328,7 +328,7 @@
 				\item \textbf{ROS/MoveIt +32 pp}: Unity-only grasp timeouts; plus collision-aware planning.
 				\item \textbf{Reflection +14 pp}: clears boundary-reach failures; doubles time when it fires.
 				\item \textbf{Negotiation +10 pp}: default model only; neutral/negative on the other five.
-				\item \textbf{VGN +35 pp} (33 pooled): center-of-object grasp, not predicted orientation.
+				\item \textbf{VGN +14 pp} (+35 on grasp-held): center-of-object grasp, not predicted orientation.
 				\item \textbf{RAG / KG: net cost}: prompt over-anchoring, helps no backend.
 			\end{itemize}
 		\end{column}
@@ -369,7 +369,7 @@
 \begin{frame}{Five Contributions}
 	\begin{enumerate}\itemsep4pt
 		\item \textbf{Grounded control framework}: a hierarchical 20-operation registry, retrieved on demand, turning language into verified behavior with no fine-tuning.
-		\item \textbf{Runtime-composed coordination}: the model builds handoffs and parallelism from \texttt{signal}/\texttt{wait} and parallel groups over a \emph{shared} object.
+		\item \textbf{Runtime-composed coordination}: the model \emph{sequences} handoff steps and parallelizes independent tasks with \texttt{signal}/\texttt{wait} and parallel groups; the physical transfer itself is an engineered operation it invokes.
 		\item \textbf{Consensus-gated negotiation}: helps only an already-capable planner (+10~pp default; neutral-to-negative for the rest).
 		\item \textbf{Operation-gated reflection}: gated verbal repair; +14~pp for the default model.
 		\item \textbf{AutoRT safety adaptation}: a hard kinematic gate the semantic check can't override.
@@ -469,14 +469,33 @@
 \end{frame}
 
 \begin{frame}[noframenumbering]{Backup: Prompt-Driven Parallelism}
-	\begin{itemize}
+	\begin{columns}[T]
+		\begin{column}{0.46\textwidth}
+			\footnotesize\textbf{General rule in the prompt}
+			\begin{block}{}\scriptsize\ttfamily
+			Same parallel\_group = concurrent.\\
+			Later group waits for all prior.\\
+			VAR DEPENDENCY LAW: if B reads a\\
+			\$var captured by A, B must be in a\\
+			strictly higher parallel\_group.
+			\end{block}
+		\end{column}
+		\begin{column}{0.52\textwidth}
+			\footnotesize\textbf{B10 plan the model emitted}
+			\begin{block}{}\scriptsize\ttfamily
+			g1: detect(R1,blue) $\parallel$ detect(R2,green)\\
+			g2: grasp(R1) $\parallel$ grasp(R2)\\
+			g3: field(R1,A) $\parallel$ field(R2,B)\\
+			g4: place(R1) $\parallel$ place(R2)
+			\end{block}
+		\end{column}
+	\end{columns}
+	\begin{itemize}\footnotesize
 		\item 4/6 models: 40/40 operations, zero retries.
-		\item Applying the prompt's independent-parallel rule.
-		\item Manipulation phases run concurrently; detection kept sequential.
+		\item Each grasp waits only on its own detection (\$var dependency); the two arms otherwise run fully in parallel.
 	\end{itemize}
-	\vfill
 	\begin{exampleblock}{Takeaway}
-		The model expresses physical simultaneity when the task allows it.
+		General rule in $\to$ task-specific parallel schedule out, with no matching example. The handoff, by contrast, follows an explicit ordering rule in the prompt.
 	\end{exampleblock}
 \end{frame}
 
