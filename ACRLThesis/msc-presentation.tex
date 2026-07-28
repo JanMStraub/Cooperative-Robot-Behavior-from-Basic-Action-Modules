@@ -33,18 +33,18 @@
 \makeatletter
 \def\bstctlcite{\@ifnextchar[{\@bstctlcite}{\@bstctlcite[@auxout]}}
 \def\@bstctlcite[#1]#2{\@bsphack
-	\@for\@citeb:=#2\do{%
-		\edef\@citeb{\expandafter\@firstofone\@citeb}%
-		\if@filesw\immediate\write\csname #1\endcsname{\string\citation{\@citeb}}\fi}%
-	\@esphack}
+ \@for\@citeb:=#2\do{%
+  \edef\@citeb{\expandafter\@firstofone\@citeb}%
+  \if@filesw\immediate\write\csname #1\endcsname{\string\citation{\@citeb}}\fi}%
+ \@esphack}
 \makeatother
 
 % Overview agenda entry: number, section name, one-line description.
 \newcommand{\agendaitem}[3]{%
-	\parbox[t]{1.8em}{{\color{hdred}\large\bfseries #1}}%
-	\parbox[t]{\dimexpr\linewidth-1.8em\relax}{%
-		\textbf{#2}\\[0.15em]
-		{\small\color{black!55} #3}}\\[0.85em]}
+ \parbox[t]{1.8em}{{\color{hdred}\large\bfseries #1}}%
+ \parbox[t]{\dimexpr\linewidth-1.8em\relax}{%
+  \textbf{#2}\\[0.15em]
+  {\small\color{black!55} #3}}\\[0.85em]}
 
 \title{Building Cooperative Robot Behavior\\from Basic Action Modules}
 \subtitle{An LLM-driven control framework for two cooperating AR4 arms}
@@ -56,21 +56,17 @@
 
 \bstctlcite{BSTcontrol}
 
-% =============================================================================
-% OPENING
-% =============================================================================
 \maketitle
 
-% --- Overview / outline ------------------------------------------------------
 \begin{frame}{Overview}
-	\agendaitem{1}{The problem}{The reasoning--execution gap, and why cooperation is the hard case}
+	\agendaitem{1}{The Problem}{The reasoning--execution gap}
 	\agendaitem{2}{Pillar 1: Grounding}{An operation vocabulary makes a small, local VLM reliable}
 	\agendaitem{3}{Pillar 2: Cooperation}{Handoffs and parallelism composed by the model}
-	\agendaitem{4}{Pillar 3: Boundary}{The failing task, what the ablations really show, limitations}
-	\agendaitem{5}{Conclusion}{The five contributions, the path to hardware, future work}
+	\agendaitem{4}{Boundary}{The failing task}
+	\agendaitem{5}{Results}{What the ablations really show, limitations}
+	\agendaitem{6}{Conclusion}{Contributions, future work}
 \end{frame}
 
-% --- Slide 2: the answer first (pyramid apex) --------------------------------
 \begin{frame}{Condensed Results}
 	\begin{block}{Thesis in one sentence}
 		A \textbf{locally hosted vision-language model (VLM)}, grounded in a structured pool of \textbf{20 basic operations}, turns natural language into \textbf{reliable} robot behavior, with \textbf{no fine-tuning}.
@@ -84,20 +80,17 @@
 		\end{column}
 		\begin{column}{0.33\textwidth}
 			\begin{exampleblock}{Composed}
-				\small Cooperation is composed at runtime from general primitives, not hard-coded.
+				\small Cooperation is composed at runtime from general primitives.
 			\end{exampleblock}
 		\end{column}
 		\begin{column}{0.33\textwidth}
 			\begin{alertblock}{Gap}
-				\small Concurrent bimanual lift: mis-realized sync barrier, non-partner-aware targets, single-parent attachment.
+				\small Concurrent bimanual lift.
 			\end{alertblock}
 		\end{column}
 	\end{columns}
 \end{frame}
 
-% =============================================================================
-% PROBLEM & POSITIONING
-% =============================================================================
 \section{The Problem}
 
 \begin{frame}{The Reasoning--Execution Gap}
@@ -119,6 +112,19 @@
 			\footnotesize Two AR4~\cite{AnninRobotics2026} arms, a shared workspace, and a stereo camera in Unity~\cite{unity}.
 		\end{column}
 	\end{columns}
+\end{frame}
+
+\begin{frame}{Background}
+	\begin{itemize}
+		\item \textbf{End-to-end VLA} (RT-2)~\cite{brohan2023rt2visionlanguageactionmodelstransfer}: great generalization, but data-hungry and opaque.
+		\item \textbf{Code-as-Policies}~\cite{liang2023codepolicieslanguagemodel}: compositional and transparent, but tied to its API set.
+		\item \textbf{Framework-scale} (AutoRT)~\cite{ahn2024autortembodiedfoundationmodels}: practical scaffolding, but no joint reasoning over a \textit{shared} object.
+		\item \textbf{RoCo}~\cite{mandi2023rocodialecticmultirobotcollaboration}: per-robot agents negotiate, but free-form way-points.
+	\end{itemize}
+	\vfill
+	\begin{block}{Research gap}
+		\textit{Two independent} arms compose object coordination from a fixed \textit{grounded} vocabulary of operations, on a local compact model.
+	\end{block}
 \end{frame}
 
 \begin{frame}{Two Design Commitments}
@@ -145,22 +151,6 @@
 	\centering\small Default backend model: \textbf{Magistral Small 2509 (24B, 4-bit)~\cite{mistral_magistral_small_2025}}
 \end{frame}
 
-\begin{frame}{Background}
-	\begin{itemize}
-		\item \textbf{End-to-end VLA} (RT-2)~\cite{brohan2023rt2visionlanguageactionmodelstransfer}: great generalization, but data-hungry and opaque.
-		\item \textbf{Code-as-Policies}~\cite{liang2023codepolicieslanguagemodel}: compositional and transparent, but tied to its API set.
-		\item \textbf{Framework-scale} (AutoRT)~\cite{ahn2024autortembodiedfoundationmodels}: practical scaffolding, but no joint reasoning over a \textit{shared} object.
-		\item \textbf{RoCo}~\cite{mandi2023rocodialecticmultirobotcollaboration}: per-robot agents negotiate, but free-form way-points.
-	\end{itemize}
-	\vfill
-	\begin{block}{Research gap}
-		\textit{Two independent} arms compose object coordination from a fixed \textit{grounded} vocabulary of operations, on a local compact model.
-	\end{block}
-\end{frame}
-
-% =============================================================================
-% PILLAR 1 - GROUNDING -> RELIABILITY
-% =============================================================================
 \section{Pillar 1: Grounding}
 
 \begin{frame}{System Architecture}
@@ -182,6 +172,8 @@
 			\end{description}
 			\vspace{0.3em}
 			\textbf{Why it grounds:} model can only express plans the robot can run.
+			\\[0.3em]
+			{\scriptsize\color{black!70} \textbf{RAG Index (31 items):} Alongside the 20 operations, RAG indexes 7 workflow patterns and 4 context documents to supply multi-step exemplars and spatial priors.}
 		\end{column}
 		\begin{column}{0.5\textwidth}
 			\centering
@@ -207,20 +199,16 @@
 			\begin{itemize}\small
 				\item \textbf{B1--B5}: \textbf{success over all 25 runs}, zero hallucinated ops, zero retries.
 				\item \textit{Identical} operation sequence on all 5 runs of each benchmark.
-				\item \textbf{B8} (long chain): 20 sub-tasks, \textbf{85 operations}/run, 5 cycles, all executed, no cascading errors.
 			\end{itemize}
 		\end{column}
 		\begin{column}{0.55\textwidth}
 			\centering
-			\includegraphics[width=\linewidth]{01_success_rate_by_model.png}\\
+			\includegraphics[width=\linewidth]{21_success_rate_by_model_b1-b5.png}\\
 			\footnotesize Magistral, Ministral, and both Gemma~4 models clear the full single-robot gradient; the Qwen3-VL models fail from B3 onward by truncating plans.
 		\end{column}
 	\end{columns}
 \end{frame}
 
-% =============================================================================
-% PILLAR 2 - COOPERATION
-% =============================================================================
 \section{Pillar 2: Cooperation}
 
 \begin{frame}{The Model Composes}
@@ -231,17 +219,15 @@
 		\end{itemize}
 	\end{block}
 	\vfill
-	The executor holds \textbf{no} coordination policy: guided by prompt rules, the model places the barriers and parallel groups. Physical coordination (approach geometry, release timing) lives in the operations, not the plan.
+	The executor has \textbf{no} coordination policy, but physical coordination (approach geometry, release timing) is handled in the operations, not the plan.
 \end{frame}
 
 \begin{frame}{The Handoff}
 	\begin{columns}[c]
 		\begin{column}{0.5\textwidth}
 			\begin{itemize}
-				\item Magistral and Ministral: 5/5 runs; all operations first try.
+				\item Default model: 5/5 runs; all operations first try.
 				\item Ordering and the signal/wait barrier are set by a prompt rule.
-				\item Gemma-4B partial (3/5); Qwen3 and Gemma-2B fail at plan construction.
-				\item \textbf{Parallelism}: the same primitives schedule independent pick-and-places (4/6 backends).
 			\end{itemize}
 		\end{column}
 		\begin{column}{0.5\textwidth}
@@ -292,10 +278,7 @@
 	\end{itemize}
 \end{frame}
 
-% =============================================================================
-% PILLAR 3 - THE BOUNDARY  (~6 min)
-% =============================================================================
-\section{Pillar 3: Boundary}
+\section{Boundary}
 
 \begin{frame}{Concurrent Bimanual Lift}
 	\begin{columns}[T]
@@ -312,19 +295,23 @@
 				\footnotesize
 				\textbf{Partner-aware target selection}. Each arm picks a valid target; nothing checks one \textit{against the other}.
 			\end{block}
+			\centering
+			\includegraphics[width=0.8\linewidth]{22_bilift_sketch.png}\\
+			\scriptsize Sketch of the envisioned concurrent bimanual lift.
 		\end{column}
 	\end{columns}
 \end{frame}
 
+\section{Results}
 \begin{frame}{Ablation Synthesis}
 	\begin{columns}[c]
 		\begin{column}{0.5\textwidth}
 			\footnotesize
-			\begin{itemize}\itemsep2pt
+			\begin{itemize}
 				\item \textbf{ROS/MoveIt +32 pp}: Unity-only grasp timeouts; plus collision-aware planning.
 				\item \textbf{Reflection +14 pp}: clears boundary-reach failures; doubles time when it fires.
 				\item \textbf{Negotiation +10 pp}: default model only; neutral/negative on the other five.
-				\item \textbf{VGN~\cite{breyer2021volumetricgraspingnetworkrealtime} +14 pp} (+35 on grasp-held): center-of-object grasp, not predicted orientation.
+				\item \textbf{VGN~\cite{breyer2021volumetricgraspingnetworkrealtime} +14 pp} (+35 pp on grasp-held): center-of-object grasp, not predicted orientation.
 				\item \textbf{RAG / KG: net cost}: prompt over-anchoring, helps no backend.
 			\end{itemize}
 		\end{column}
@@ -338,37 +325,33 @@
 
 \begin{frame}{Limitations}
 	\begin{columns}[t]
-		\begin{column}{0.5\textwidth}
+		\begin{column}{0.33\textwidth}
 			\begin{block}{Sensing}
 				\footnotesize Cube features too small to match, so the \textit{dense} stereo cloud is sparse; per-object localization stays robust.
 			\end{block}
+		\end{column}
+		\begin{column}{0.33\textwidth}
 			\begin{block}{Latency}
 				\footnotesize VLM parse $\approx$ \textbf{20\,s} median prevents \textit{reactive} control; re-plan between motions, never during.
 			\end{block}
 		\end{column}
-		\begin{column}{0.5\textwidth}
+		\begin{column}{0.33\textwidth}
 			\begin{block}{Sim-to-real}
 				\footnotesize Robot joints and grasp-force thresholds tuned for sim physics, so they need revalidation on hardware.
-			\end{block}
-			\begin{block}{Validation}
-				\footnotesize 5/6 models forward impossible inputs; the guard must be pre-parse.
 			\end{block}
 		\end{column}
 	\end{columns}
 \end{frame}
 
-% =============================================================================
-% CLOSE
-% =============================================================================
 \section{Conclusion}
 
 \begin{frame}{Five Contributions}
-	\begin{enumerate}\itemsep4pt
-		\item \textbf{Grounded control framework}: a hierarchical 20-operation registry, retrieved on demand, turning language into verified behavior with no fine-tuning.
-		\item \textbf{Runtime-composed coordination}: the model \textit{sequences} handoff steps and parallelizes independent tasks with \texttt{signal}/\texttt{wait} and parallel groups; the physical transfer is an engineered operation it invokes.
-		\item \textbf{Consensus-gated negotiation}: helps only an already-capable planner (+10~pp default; neutral-to-negative for the rest).
-		\item \textbf{Operation-gated reflection}: gated verbal repair; +14~pp for the default model.
-		\item \textbf{AutoRT safety adaptation}: a hard kinematic gate the semantic check can't override.
+	\begin{enumerate}
+		\item \textbf{Grounded Control Framework}: A hierarchical 20-operation registry, retrieved on demand, turning language into verified behavior with no fine-tuning.
+		\item \textbf{Runtime-Composed Coordination}: The model \textit{sequences} handoff steps and parallelizes independent tasks with \texttt{signal}/\texttt{wait} and parallel groups.
+		\item \textbf{Capability-Gated Negotiation}: Helps only already capable planners, while degrading weaker models. (\textit{adapting RoCo~\cite{mandi2023rocodialecticmultirobotcollaboration}})
+		\item \textbf{Operation-Gated Reflection}: Uses semantic repair to fix physical execution errors. (\textit{adapting Reflexion~\cite{shinn2023reflexionlanguageagentsverbal}})
+		\item \textbf{Two-Layer Safety Adaptation}: Adapts AutoRT~\cite{ahn2024autortembodiedfoundationmodels} to fixed-base manipulators by pairing an LLM semantic constitution with a hard kinematic gate the model cannot override.
 	\end{enumerate}
 \end{frame}
 
@@ -377,26 +360,21 @@
 		\begin{column}{0.5\textwidth}
 			\textbf{Deployment}
 			\begin{itemize}\footnotesize
-				\item \texttt{--env real} swaps camera and hardware adapters at the abstraction boundary.
-				\item Control switches to ROS/MoveIt collision-aware planning, already dual-robot configured.
+				\item \texttt{--env real} swaps camera adapter at the abstraction boundary.
+				\item Control switches to ROS/MoveIt collision-aware planning, already configured for dual-robot operation.
 			\end{itemize}
 		\end{column}
 		\begin{column}{0.5\textwidth}
 			\textbf{Remaining work}
 			\begin{itemize}\footnotesize
-				\item \textbf{Depth}: LIDAR or per-robot stereo unlocks VGN-grade grasping; a SLAM volumetric map adds object permanence.
-				\item \textbf{Force-torque}: a wrist sensor replaces the contact-duration heuristic.
+				\item \textbf{Depth}: LIDAR or per-robot stereo unlocks VGN-grade grasping.
 				\item \textbf{Bimanual}: partner-aware target selection closes the boundary gap.
-				\item \textbf{Pre-parse validation}: robot-ID / object-existence checks before any model call.
 				\item \textbf{Faster inference}: distilled task-specific models or speculative decoding to shrink the 20\,s window.
 			\end{itemize}
 		\end{column}
 	\end{columns}
 \end{frame}
 
-% =============================================================================
-% END - Summary doubles as the demo / Q&A backdrop
-% =============================================================================
 \begin{frame}{Demo \& Questions}
 	\begin{columns}[T]
 		\begin{column}{0.5\textwidth}
@@ -613,7 +591,32 @@
 
 \begin{frame}[noframenumbering]{Backup: Model $\times$ Task Matrix}
 	\centering
-	\includegraphics[height=0.8\textheight]{02_model_task_heatmap.png}
+	\includegraphics[height=0.7\textheight]{02_model_task_heatmap.png}\\
+	\footnotesize Task-level success rates across all six VLM backends for benchmarks B1--B10, highlighting single-robot completion and multi-robot capability separation.
+\end{frame}
+
+\begin{frame}[noframenumbering]{Backup: Complete Success Rate Graph}
+	\centering
+	\includegraphics[width=0.85\textwidth]{01_success_rate_by_model.png}\\
+	\footnotesize Comparative success rate breakdown per benchmark tier across all six evaluated models (five runs per condition).
+\end{frame}
+
+\begin{frame}[noframenumbering]{Backup: Network Map}
+	\centering
+	\includegraphics[width=0.85\textwidth]{23_network_map.png}\\
+	\footnotesize Distributed system architecture showing TCP socket bridges connecting the Python sequence executor, Unity simulation, WorldState server, and ROS 2/MoveIt stack.
+\end{frame}
+
+\begin{frame}[noframenumbering]{Backup: RAG}
+	\centering
+	\includegraphics[width=0.85\textwidth]{13_rag.png}\\
+	\footnotesize Retrieval-Augmented Generation workflow: converts natural language instructions into query embeddings to retrieve top-k operations and workflow exemplars for prompt assembly.
+\end{frame}
+
+\begin{frame}[noframenumbering]{Backup: Model Leaderboard}
+	\centering
+	\includegraphics[width=0.8\textwidth]{03_model_leaderboard.png}\\
+	\footnotesize Comprehensive model ranking based on task completion rate, operation execution reliability, and plan formatting conformance.
 \end{frame}
 
 \end{document}
