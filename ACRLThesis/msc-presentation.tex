@@ -117,7 +117,7 @@
 \begin{frame}{Background}
 	\begin{itemize}
 		\item \textbf{End-to-end VLA} (RT-2)~\cite{brohan2023rt2visionlanguageactionmodelstransfer}: great generalization, but data-hungry and opaque.
-		\item \textbf{Code-as-Policies}~\cite{liang2023codepolicieslanguagemodel}: compositional and transparent, but tied to its API set.
+		\item \textbf{Code-as-Policies}~\cite{liang2023codepolicieslanguagemodel}: flexible and transparent, but tied to hand-build API set.
 		\item \textbf{Framework-scale} (AutoRT)~\cite{ahn2024autortembodiedfoundationmodels}: practical scaffolding, but no joint reasoning over a \textit{shared} object.
 		\item \textbf{RoCo}~\cite{mandi2023rocodialecticmultirobotcollaboration}: per-robot agents negotiate, but free-form way-points.
 	\end{itemize}
@@ -172,8 +172,6 @@
 			\end{description}
 			\vspace{0.3em}
 			\textbf{Why it grounds:} model can only express plans the robot can run.
-			\\[0.3em]
-			{\scriptsize\color{black!70} \textbf{RAG Index (31 items):} Alongside the 20 operations, RAG indexes 7 workflow patterns and 4 context documents to supply multi-step exemplars and spatial priors.}
 		\end{column}
 		\begin{column}{0.5\textwidth}
 			\centering
@@ -186,7 +184,7 @@
 	\begin{block}{Gated retry on failure}
 		\begin{itemize}
 			\item On an eligible failure, re-query the model with a structured \textit{hint} (Reflexion-style verbal feedback~\cite{shinn2023reflexionlanguageagentsverbal}).
-			\item Eligibility is gated to Navigation / Manipulation / Perception: no point re-querying a sync barrier.
+			\item Gated to Navigation / Manipulation / Perception: no point re-querying a sync barrier.
 		\end{itemize}
 	\end{block}
 	\vfill
@@ -219,7 +217,7 @@
 		\end{itemize}
 	\end{block}
 	\vfill
-	The executor has \textbf{no} coordination policy, but physical coordination (approach geometry, release timing) is handled in the operations, not the plan.
+	The executor has \textbf{no} coordination policy.
 \end{frame}
 
 \begin{frame}{The Handoff}
@@ -349,8 +347,8 @@
 	\begin{enumerate}
 		\item \textbf{Grounded Control Framework}: A hierarchical 20-operation registry, retrieved on demand, turning language into verified behavior with no fine-tuning.
 		\item \textbf{Runtime-Composed Coordination}: The model \textit{sequences} handoff steps and parallelizes independent tasks with \texttt{signal}/\texttt{wait} and parallel groups.
-		\item \textbf{Capability-Gated Negotiation}: Helps only already capable planners, while degrading weaker models. (\textit{adapting RoCo~\cite{mandi2023rocodialecticmultirobotcollaboration}})
-		\item \textbf{Operation-Gated Reflection}: Uses semantic repair to fix physical execution errors. (\textit{adapting Reflexion~\cite{shinn2023reflexionlanguageagentsverbal}})
+		\item \textbf{Capability-Gated Negotiation}: Helps only already capable planners, while degrading weaker models.
+		\item \textbf{Operation-Gated Reflection}: Uses semantic repair to fix physical execution errors.
 		\item \textbf{Two-Layer Safety Adaptation}: Adapts AutoRT~\cite{ahn2024autortembodiedfoundationmodels} to fixed-base manipulators by pairing an LLM semantic constitution with a hard kinematic gate the model cannot override.
 	\end{enumerate}
 \end{frame}
